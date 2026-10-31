@@ -11,7 +11,7 @@ npm run dev           # Vite dev server
 php artisan serve     # app at http://localhost:8000
 ```
 
-Design notes live in [`docs/`](docs): budgets, enveloppes, ledgers and shared
+Design notes live in [`docs/`](docs): budgets, envelopes, ledgers and shared
 finances. Read the relevant one before touching its domain — the permission
 model in particular is stricter than it looks.
 
@@ -55,7 +55,7 @@ specification:
 
 - Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`,
   `ci`, `chore`, `revert`.
-- Scope (optional): the area touched, e.g. `ledger`, `budget`, `enveloppe`,
+- Scope (optional): the area touched, e.g. `ledger`, `budget`, `envelope`,
   `ui`, `e2e`.
 - Reference the issue it closes or relates to in the message (e.g.
   `fix(ledger): reject duplicate month entries (#42)`). If there is no issue,

@@ -179,22 +179,22 @@ class BudgetTest extends TestCase
     // Show & authorization
     // ------------------------------------------------------------------
 
-    public function test_show_returns_enveloppes_and_shares_for_owner(): void
+    public function test_show_returns_envelopes_and_shares_for_owner(): void
     {
         $budget = $this->createBudget($this->user);
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Groceries', 'type' => 'expense', 'color' => '#10b981',
         ]);
-        $budget->enveloppes()->create([
-            'enveloppe_id' => $enveloppe->id, 'amount' => -800, 'type' => 'variable',
+        $budget->envelopes()->create([
+            'envelope_id' => $envelope->id, 'amount' => -800, 'type' => 'variable',
         ]);
 
         $response = $this->actingAs($this->user)->getJson("/api/budgets/{$budget->id}");
 
         $response->assertOk()
             ->assertJsonPath('budget.id', $budget->id)
-            ->assertJsonPath('budget.enveloppes.0.name', 'Groceries')
-            ->assertJsonPath('budget.enveloppes.0.amount', -800)
+            ->assertJsonPath('budget.envelopes.0.name', 'Groceries')
+            ->assertJsonPath('budget.envelopes.0.amount', -800)
             ->assertJsonPath('budget.shares.0.permission', 'owner');
     }
 
@@ -215,8 +215,8 @@ class BudgetTest extends TestCase
             ->assertOk()->assertJsonPath('budget.permission', 'viewer');
 
         // ...but cannot mutate.
-        $this->actingAs($this->member)->postJson("/api/budgets/{$budget->id}/enveloppes", [
-            'enveloppe_id' => 1, 'type' => 'fixed', 'amount' => 100,
+        $this->actingAs($this->member)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => 1, 'type' => 'fixed', 'amount' => 100,
         ])->assertForbidden();
         $this->actingAs($this->member)->postJson("/api/budgets/{$budget->id}/publish")
             ->assertForbidden();
@@ -229,11 +229,11 @@ class BudgetTest extends TestCase
     public function test_owner_can_delete_a_budget(): void
     {
         $budget = $this->createBudget($this->user);
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
-        $budget->enveloppes()->create([
-            'enveloppe_id' => $enveloppe->id, 'amount' => -100, 'type' => 'fixed',
+        $budget->envelopes()->create([
+            'envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed',
         ]);
 
         $this->actingAs($this->user)->deleteJson("/api/budgets/{$budget->id}")
@@ -241,7 +241,7 @@ class BudgetTest extends TestCase
 
         $this->assertDatabaseMissing('budgets', ['id' => $budget->id]);
         $this->assertDatabaseMissing('budget_permissions', ['budget_id' => $budget->id]);
-        $this->assertDatabaseMissing('budget_enveloppes', ['budget_id' => $budget->id]);
+        $this->assertDatabaseMissing('budget_envelopes', ['budget_id' => $budget->id]);
     }
 
     public function test_only_the_owner_can_delete_a_budget(): void
@@ -255,59 +255,59 @@ class BudgetTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Enveloppe assignments
+    // Envelope assignments
     // ------------------------------------------------------------------
 
-    public function test_add_enveloppe_stores_signed_amounts(): void
+    public function test_add_envelope_stores_signed_amounts(): void
     {
         $budget = $this->createBudget($this->user);
-        $expense = $this->user->enveloppes()->create([
+        $expense = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
-        $revenue = $this->user->enveloppes()->create([
+        $revenue = $this->user->envelopes()->create([
             'name' => 'Salary', 'type' => 'revenue', 'color' => '#10b981',
         ]);
 
-        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/enveloppes", [
-            'enveloppe_id' => $expense->id, 'type' => 'fixed', 'amount' => 1300,
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $expense->id, 'type' => 'fixed', 'amount' => 1300,
         ])->assertCreated();
 
-        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/enveloppes", [
-            'enveloppe_id' => $revenue->id, 'type' => 'variable', 'amount' => 3000,
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $revenue->id, 'type' => 'variable', 'amount' => 3000,
         ])->assertCreated();
 
-        $this->assertDatabaseHas('budget_enveloppes', [
-            'enveloppe_id' => $expense->id, 'amount' => -1300, 'type' => 'fixed',
+        $this->assertDatabaseHas('budget_envelopes', [
+            'envelope_id' => $expense->id, 'amount' => -1300, 'type' => 'fixed',
         ]);
-        $this->assertDatabaseHas('budget_enveloppes', [
-            'enveloppe_id' => $revenue->id, 'amount' => 3000, 'type' => 'variable',
+        $this->assertDatabaseHas('budget_envelopes', [
+            'envelope_id' => $revenue->id, 'amount' => 3000, 'type' => 'variable',
         ]);
     }
 
-    public function test_add_enveloppe_rejects_metadata_only_enveloppes_of_profile_members(): void
+    public function test_add_envelope_rejects_metadata_only_envelopes_of_profile_members(): void
     {
         $budget = $this->createBudget($this->user);
-        $membersEnveloppe = $this->member->enveloppes()->create([
+        $membersEnvelope = $this->member->envelopes()->create([
             'name' => 'Partner Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
 
-        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/enveloppes", [
-            'enveloppe_id' => $membersEnveloppe->id, 'type' => 'fixed', 'amount' => 100,
-        ])->assertUnprocessable()->assertJsonValidationErrors('enveloppe_id');
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $membersEnvelope->id, 'type' => 'fixed', 'amount' => 100,
+        ])->assertUnprocessable()->assertJsonValidationErrors('envelope_id');
     }
 
-    public function test_add_enveloppe_allows_profile_members_enveloppes_shared_as_contributor(): void
+    public function test_add_envelope_allows_profile_members_envelopes_shared_as_contributor(): void
     {
         $budget = $this->createBudget($this->user);
-        $membersEnveloppe = $this->member->enveloppes()->create([
+        $membersEnvelope = $this->member->envelopes()->create([
             'name' => 'Partner Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
-        $membersEnveloppe->permissions()->create([
+        $membersEnvelope->permissions()->create([
             'user_id' => $this->user->id, 'permission' => ResourcePermissions::CONTRIBUTOR,
         ]);
 
-        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/enveloppes", [
-            'enveloppe_id' => $membersEnveloppe->id, 'type' => 'fixed', 'amount' => 100,
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $membersEnvelope->id, 'type' => 'fixed', 'amount' => 100,
         ])->assertCreated();
     }
 
@@ -319,105 +319,105 @@ class BudgetTest extends TestCase
         ])->assertForbidden();
     }
 
-    public function test_add_enveloppe_rejects_amounts_that_are_not_positive_integers(): void
+    public function test_add_envelope_rejects_amounts_that_are_not_positive_integers(): void
     {
         $budget = $this->createBudget($this->user);
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
 
         foreach ([-100, 0, 10.5, 'abc'] as $amount) {
-            $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/enveloppes", [
-                'enveloppe_id' => $enveloppe->id, 'type' => 'fixed', 'amount' => $amount,
+            $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+                'envelope_id' => $envelope->id, 'type' => 'fixed', 'amount' => $amount,
             ])->assertUnprocessable()->assertJsonValidationErrors('amount');
         }
     }
 
-    public function test_add_enveloppe_rejects_invisible_enveloppes(): void
+    public function test_add_envelope_rejects_invisible_envelopes(): void
     {
         $budget = $this->createBudget($this->user);
-        $enveloppe = $this->stranger->enveloppes()->create([
+        $envelope = $this->stranger->envelopes()->create([
             'name' => 'Theirs', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
 
-        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/enveloppes", [
-            'enveloppe_id' => $enveloppe->id, 'type' => 'fixed', 'amount' => 100,
-        ])->assertUnprocessable()->assertJsonValidationErrors('enveloppe_id');
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $envelope->id, 'type' => 'fixed', 'amount' => 100,
+        ])->assertUnprocessable()->assertJsonValidationErrors('envelope_id');
     }
 
-    public function test_add_enveloppe_rejects_duplicates(): void
+    public function test_add_envelope_rejects_duplicates(): void
     {
         $budget = $this->createBudget($this->user);
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
 
-        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/enveloppes", [
-            'enveloppe_id' => $enveloppe->id, 'type' => 'fixed', 'amount' => 100,
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $envelope->id, 'type' => 'fixed', 'amount' => 100,
         ])->assertCreated();
 
-        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/enveloppes", [
-            'enveloppe_id' => $enveloppe->id, 'type' => 'fixed', 'amount' => 200,
-        ])->assertUnprocessable()->assertJsonValidationErrors('enveloppe_id');
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $envelope->id, 'type' => 'fixed', 'amount' => 200,
+        ])->assertUnprocessable()->assertJsonValidationErrors('envelope_id');
     }
 
-    public function test_enveloppes_cannot_be_modified_once_published(): void
+    public function test_envelopes_cannot_be_modified_once_published(): void
     {
         $budget = $this->createBudget($this->user, [
             'published_at' => now(),
             'effective_year' => now()->year,
             'effective_month' => now()->month,
         ]);
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
-        $budget->enveloppes()->create([
-            'enveloppe_id' => $enveloppe->id, 'amount' => -100, 'type' => 'fixed',
+        $budget->envelopes()->create([
+            'envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed',
         ]);
 
-        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/enveloppes", [
-            'enveloppe_id' => $enveloppe->id, 'type' => 'fixed', 'amount' => 100,
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $envelope->id, 'type' => 'fixed', 'amount' => 100,
         ])->assertUnprocessable();
 
-        $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/enveloppes/{$enveloppe->id}", [
+        $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$envelope->id}", [
             'amount' => 200,
         ])->assertUnprocessable();
 
-        $this->actingAs($this->user)->deleteJson("/api/budgets/{$budget->id}/enveloppes/{$enveloppe->id}")
+        $this->actingAs($this->user)->deleteJson("/api/budgets/{$budget->id}/envelopes/{$envelope->id}")
             ->assertUnprocessable();
     }
 
-    public function test_update_enveloppe_amount(): void
+    public function test_update_envelope_amount(): void
     {
         $budget = $this->createBudget($this->user);
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
-        $budget->enveloppes()->create([
-            'enveloppe_id' => $enveloppe->id, 'amount' => -100, 'type' => 'fixed',
+        $budget->envelopes()->create([
+            'envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed',
         ]);
 
-        $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/enveloppes/{$enveloppe->id}", [
+        $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$envelope->id}", [
             'amount' => 250,
-        ])->assertOk()->assertJsonPath('enveloppe.amount', -250);
+        ])->assertOk()->assertJsonPath('envelope.amount', -250);
 
-        $this->assertDatabaseHas('budget_enveloppes', ['enveloppe_id' => $enveloppe->id, 'amount' => -250]);
+        $this->assertDatabaseHas('budget_envelopes', ['envelope_id' => $envelope->id, 'amount' => -250]);
     }
 
-    public function test_remove_enveloppe(): void
+    public function test_remove_envelope(): void
     {
         $budget = $this->createBudget($this->user);
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
-        $budget->enveloppes()->create([
-            'enveloppe_id' => $enveloppe->id, 'amount' => -100, 'type' => 'fixed',
+        $budget->envelopes()->create([
+            'envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed',
         ]);
 
-        $this->actingAs($this->user)->deleteJson("/api/budgets/{$budget->id}/enveloppes/{$enveloppe->id}")
+        $this->actingAs($this->user)->deleteJson("/api/budgets/{$budget->id}/envelopes/{$envelope->id}")
             ->assertNoContent();
 
-        $this->assertDatabaseMissing('budget_enveloppes', ['budget_id' => $budget->id]);
+        $this->assertDatabaseMissing('budget_envelopes', ['budget_id' => $budget->id]);
     }
 
     // ------------------------------------------------------------------
@@ -518,16 +518,16 @@ class BudgetTest extends TestCase
             'effective_month' => $now->month,
         ]);
         $ledger = $this->createLedger();
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
-        $previous->enveloppes()->create([
-            'enveloppe_id' => $enveloppe->id, 'amount' => -100, 'type' => 'fixed',
+        $previous->envelopes()->create([
+            'envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed',
         ]);
         Transaction::create([
             'ledger_id' => $ledger->id,
             'user_id' => $this->user->id,
-            'enveloppe_id' => $enveloppe->id,
+            'envelope_id' => $envelope->id,
             'budget_id' => $previous->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
@@ -552,13 +552,13 @@ class BudgetTest extends TestCase
             'effective_month' => $now->month,
         ]);
         $ledger = $this->createLedger();
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
         $transaction = Transaction::create([
             'ledger_id' => $ledger->id,
             'user_id' => $this->user->id,
-            'enveloppe_id' => $enveloppe->id,
+            'envelope_id' => $envelope->id,
             'budget_id' => $previous->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
@@ -584,13 +584,13 @@ class BudgetTest extends TestCase
             'effective_month' => $now->month,
         ]);
         $ledger = $this->createLedger();
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
         Transaction::create([
             'ledger_id' => $ledger->id,
             'user_id' => $this->user->id,
-            'enveloppe_id' => $enveloppe->id,
+            'envelope_id' => $envelope->id,
             'budget_id' => $previous->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
@@ -614,18 +614,18 @@ class BudgetTest extends TestCase
     // Clone
     // ------------------------------------------------------------------
 
-    public function test_clone_creates_a_draft_copy_with_enveloppes(): void
+    public function test_clone_creates_a_draft_copy_with_envelopes(): void
     {
         $budget = $this->createBudget($this->user, [
             'published_at' => now(),
             'effective_year' => now()->year,
             'effective_month' => now()->month,
         ]);
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
-        $budget->enveloppes()->create([
-            'enveloppe_id' => $enveloppe->id, 'amount' => -1300, 'type' => 'fixed',
+        $budget->envelopes()->create([
+            'envelope_id' => $envelope->id, 'amount' => -1300, 'type' => 'fixed',
         ]);
 
         $response = $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/clone", [
@@ -635,11 +635,11 @@ class BudgetTest extends TestCase
         $response->assertCreated();
         $draft = Budget::whereNull('published_at')->firstOrFail();
         $this->assertEquals('EUR', $draft->currency);
-        $this->assertDatabaseHas('budget_enveloppes', [
-            'budget_id' => $draft->id, 'enveloppe_id' => $enveloppe->id, 'amount' => -1300,
+        $this->assertDatabaseHas('budget_envelopes', [
+            'budget_id' => $draft->id, 'envelope_id' => $envelope->id, 'amount' => -1300,
         ]);
-        $this->assertDatabaseHas('budget_enveloppes', [
-            'budget_id' => $budget->id, 'enveloppe_id' => $enveloppe->id,
+        $this->assertDatabaseHas('budget_envelopes', [
+            'budget_id' => $budget->id, 'envelope_id' => $envelope->id,
         ]);
     }
 
@@ -799,23 +799,23 @@ class BudgetTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Enveloppe deletion is blocked while referenced by budgets
+    // Envelope deletion is blocked while referenced by budgets
     // ------------------------------------------------------------------
 
-    public function test_referenced_enveloppes_cannot_be_deleted(): void
+    public function test_referenced_envelopes_cannot_be_deleted(): void
     {
         $budget = $this->createBudget($this->user);
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
-        $budget->enveloppes()->create([
-            'enveloppe_id' => $enveloppe->id, 'amount' => -100, 'type' => 'fixed',
+        $budget->envelopes()->create([
+            'envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed',
         ]);
 
-        $this->actingAs($this->user)->delete('/enveloppes/'.$enveloppe->id)
-            ->assertSessionHasErrors('enveloppe');
+        $this->actingAs($this->user)->delete('/envelopes/'.$envelope->id)
+            ->assertSessionHasErrors('envelope');
 
-        $this->assertDatabaseHas('enveloppes', ['id' => $enveloppe->id]);
+        $this->assertDatabaseHas('envelopes', ['id' => $envelope->id]);
     }
 
     private function createLedger(): Ledger

@@ -2,7 +2,7 @@
 
 /**
  * Playwright seed: resets the playwright@example.com user to a known state —
- * one draft budget with the enveloppes used by e2e/budget.spec.ts.
+ * one draft budget with the envelopes used by e2e/budget.spec.ts.
  *
  * Run order: seed.php first, then seed-ledger.php — both reuse the same
  * default profile of the playwright user (seed.php wipes budgets/ledgers, so
@@ -32,11 +32,11 @@ $profile = FinancialProfile::query()
     ->first() ?? FinancialProfile::createDefaultFor($u);
 
 // Clear in dependency order: transactions → ledgers → budgets (the profile
-// and enveloppe foreign keys are restrict-on-delete).
+// and envelope foreign keys are restrict-on-delete).
 Transaction::whereIn('ledger_id', Ledger::query()->where('profile_id', $profile->id)->select('id'))->delete();
 Ledger::query()->where('profile_id', $profile->id)->get()->each(fn (Ledger $l) => $l->delete());
 Budget::query()->where('profile_id', $profile->id)->get()->each(fn (Budget $b) => $b->delete());
-$u->enveloppes()->delete();
+$u->envelopes()->delete();
 
 $b = Budget::create([
     'profile_id' => $profile->id,
@@ -47,7 +47,7 @@ $b = Budget::create([
 $b->permissions()->create(['user_id' => $u->id, 'permission' => BudgetPermission::PERMISSION_OWNER]);
 
 $mk = function (string $name, string $type, string $color) use ($u) {
-    return $u->enveloppes()->create(['name' => $name, 'type' => $type, 'color' => $color]);
+    return $u->envelopes()->create(['name' => $name, 'type' => $type, 'color' => $color]);
 };
 $salary = $mk('Paychecks', 'revenue', '#10b981');
 $side = $mk('Passive income', 'revenue', '#3b82f6');
@@ -57,8 +57,8 @@ $gas = $mk('Gas', 'expense', '#8b5cf6');
 $stream = $mk('Streaming', 'expense', '#14b8a6');
 
 $add = function ($cat, int $amount, string $type) use ($b) {
-    $b->enveloppes()->create([
-        'enveloppe_id' => $cat->id,
+    $b->envelopes()->create([
+        'envelope_id' => $cat->id,
         'amount' => $cat->type === 'expense' ? -$amount : $amount,
         'type' => $type,
     ]);

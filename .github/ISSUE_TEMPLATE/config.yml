@@ -2,4 +2,4 @@ blank_issues_enabled: false
 contact_links:
     - name: Project documentation
       url: https://github.com/mind2soft/prospera/tree/main/docs
-      about: Design notes on budgets, enveloppes, ledgers and shared finances.
+      about: Design notes on budgets, envelopes, ledgers and shared finances.

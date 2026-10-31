@@ -1,6 +1,6 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue';
 import { useQueryClient } from 'vue-query';
-import { budgetApi, type AddEnveloppeInput } from '@/lib/budgetApi';
+import { budgetApi, type AddEnvelopeInput } from '@/lib/budgetApi';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useMutation, useQuery, type QueryKey } from '@/composables/query';
 
@@ -94,12 +94,12 @@ export function useDeleteBudget() {
     });
 }
 
-export function useAddEnveloppe() {
+export function useAddEnvelope() {
     const queryClient = useQueryClient();
 
     return useMutation(
-        ({ budgetId, input }: { budgetId: number; input: AddEnveloppeInput }) =>
-            budgetApi.addEnveloppe(budgetId, input),
+        ({ budgetId, input }: { budgetId: number; input: AddEnvelopeInput }) =>
+            budgetApi.addEnvelope(budgetId, input),
         {
             onSuccess: (_data, { budgetId }) => {
                 void queryClient.invalidateQueries(budgetKeys.detail(budgetId));
@@ -108,19 +108,19 @@ export function useAddEnveloppe() {
     );
 }
 
-export function useUpdateEnveloppe() {
+export function useUpdateEnvelope() {
     const queryClient = useQueryClient();
 
     return useMutation(
         ({
             budgetId,
-            enveloppeId,
+            envelopeId,
             amount,
         }: {
             budgetId: number;
-            enveloppeId: number;
+            envelopeId: number;
             amount: number;
-        }) => budgetApi.updateEnveloppe(budgetId, enveloppeId, { amount }),
+        }) => budgetApi.updateEnvelope(budgetId, envelopeId, { amount }),
         {
             onSuccess: (_data, { budgetId }) => {
                 void queryClient.invalidateQueries(budgetKeys.detail(budgetId));
@@ -129,17 +129,12 @@ export function useUpdateEnveloppe() {
     );
 }
 
-export function useRemoveEnveloppe() {
+export function useRemoveEnvelope() {
     const queryClient = useQueryClient();
 
     return useMutation(
-        ({
-            budgetId,
-            enveloppeId,
-        }: {
-            budgetId: number;
-            enveloppeId: number;
-        }) => budgetApi.removeEnveloppe(budgetId, enveloppeId),
+        ({ budgetId, envelopeId }: { budgetId: number; envelopeId: number }) =>
+            budgetApi.removeEnvelope(budgetId, envelopeId),
         {
             onSuccess: (_data, { budgetId }) => {
                 void queryClient.invalidateQueries(budgetKeys.detail(budgetId));

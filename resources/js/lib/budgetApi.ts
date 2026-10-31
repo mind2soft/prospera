@@ -1,7 +1,7 @@
 import { api, setResourceShare } from '@/lib/api';
-import type { Budget, BudgetDetail, BudgetEnveloppe } from '@/types';
+import type { Budget, BudgetDetail, BudgetEnvelope } from '@/types';
 
-export type EnveloppeOption = {
+export type EnvelopeOption = {
     id: number;
     name: string;
     direction: 'expense' | 'revenue';
@@ -9,9 +9,9 @@ export type EnveloppeOption = {
     permission: 'owner' | 'contributor' | 'viewer' | 'none';
 };
 
-export type AddEnveloppeInput = {
-    enveloppe_id: number;
-    type: BudgetEnveloppe['type'];
+export type AddEnvelopeInput = {
+    envelope_id: number;
+    type: BudgetEnvelope['type'];
     amount: number;
 };
 
@@ -42,24 +42,24 @@ export const budgetApi = {
             body: currency ? { currency } : undefined,
         }),
 
-    addEnveloppe: (
+    addEnvelope: (
         id: number,
-        input: AddEnveloppeInput,
-    ): Promise<{ enveloppe: BudgetEnveloppe }> =>
-        api(`/api/budgets/${id}/enveloppes`, { method: 'POST', body: input }),
+        input: AddEnvelopeInput,
+    ): Promise<{ envelope: BudgetEnvelope }> =>
+        api(`/api/budgets/${id}/envelopes`, { method: 'POST', body: input }),
 
-    updateEnveloppe: (
+    updateEnvelope: (
         id: number,
-        enveloppeId: number,
+        envelopeId: number,
         input: { amount: number },
-    ): Promise<{ enveloppe: BudgetEnveloppe }> =>
-        api(`/api/budgets/${id}/enveloppes/${enveloppeId}`, {
+    ): Promise<{ envelope: BudgetEnvelope }> =>
+        api(`/api/budgets/${id}/envelopes/${envelopeId}`, {
             method: 'PATCH',
             body: input,
         }),
 
-    removeEnveloppe: (id: number, enveloppeId: number): Promise<void> =>
-        api(`/api/budgets/${id}/enveloppes/${enveloppeId}`, {
+    removeEnvelope: (id: number, envelopeId: number): Promise<void> =>
+        api(`/api/budgets/${id}/envelopes/${envelopeId}`, {
             method: 'DELETE',
         }),
 
@@ -78,6 +78,6 @@ export const budgetApi = {
             body: { user_id: userId },
         }),
 
-    enveloppeOptions: (): Promise<{ enveloppes: EnveloppeOption[] }> =>
-        api('/api/enveloppes'),
+    envelopeOptions: (): Promise<{ envelopes: EnvelopeOption[] }> =>
+        api('/api/envelopes'),
 };

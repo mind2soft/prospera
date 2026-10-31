@@ -12,14 +12,14 @@ return new class extends Migration
             $table->id();
             $table->foreignId('ledger_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
-            $table->foreignId('enveloppe_id')->constrained('enveloppes')->restrictOnDelete();
+            $table->foreignId('envelope_id')->constrained('envelopes')->restrictOnDelete();
             $table->foreignId('budget_id')->constrained()->restrictOnDelete();
             $table->integer('amount'); // signed: positive for revenue, negative for expense
             $table->timestamp('event_at'); // stored at 00:00:00
             $table->timestamps();
 
             $table->index(['ledger_id', 'event_at']);
-            $table->index(['enveloppe_id', 'event_at']); // enveloppe totals/history
+            $table->index(['envelope_id', 'event_at']); // envelope totals/history
             $table->index('budget_id'); // retired-budget sweep
         });
     }

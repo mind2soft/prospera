@@ -41,14 +41,14 @@ import {
     useTransferLedgerOwnership,
 } from '@/composables/ledgerQueries';
 import { budgetKeys, useBudget, useBudgets } from '@/composables/budgetQueries';
-import { useEnveloppeOptions } from '@/composables/enveloppeQueries';
+import { useEnvelopeOptions } from '@/composables/envelopeQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { ApiError } from '@/lib/api';
 import { ledger as ledgerRoute } from '@/routes';
 import type {
     AddTransactionInput,
     CreateLedgerInput,
-    PickerEnveloppe,
+    PickerEnvelope,
 } from '@/lib/ledgerApi';
 import type { ResourcePermission } from '@/types';
 
@@ -158,26 +158,26 @@ const budgetLoading = computed(
 
 const currency = computed(() => budget.value?.currency ?? '');
 
-const enveloppesQuery = useEnveloppeOptions();
+const envelopesQuery = useEnvelopeOptions();
 
 /**
- * The transaction picker: enveloppes from the published budget on which the
+ * The transaction picker: envelopes from the published budget on which the
  * current user is owner or contributor (docs/ledger.md — adding a
  * transaction).
  */
-const pickerEnveloppes = computed<PickerEnveloppe[]>(() => {
-    const budgetEnveloppeIds = new Set(
-        (budget.value?.enveloppes ?? []).map((e) => e.enveloppe_id),
+const pickerEnvelopes = computed<PickerEnvelope[]>(() => {
+    const budgetEnvelopeIds = new Set(
+        (budget.value?.envelopes ?? []).map((e) => e.envelope_id),
     );
-    return (enveloppesQuery.data.value ?? [])
+    return (envelopesQuery.data.value ?? [])
         .filter(
             (option) =>
-                budgetEnveloppeIds.has(option.id) &&
+                budgetEnvelopeIds.has(option.id) &&
                 (option.permission === 'owner' ||
                     option.permission === 'contributor'),
         )
         .map((option) => ({
-            enveloppe_id: option.id,
+            envelope_id: option.id,
             name: option.name,
             color: option.color,
             direction: option.direction,
@@ -191,7 +191,7 @@ const mayAddTransactions = computed(() => {
     if (permission === 'owner') {
         return true;
     }
-    return permission === 'contributor' && pickerEnveloppes.value.length > 0;
+    return permission === 'contributor' && pickerEnvelopes.value.length > 0;
 });
 
 const canAddTransaction = computed(
@@ -501,13 +501,13 @@ const onRemoveTransaction = (transactionId: number) => {
                                 >New transaction</CardTitle
                             >
                             <CardDescription>
-                                Pick a day on the calendar, select an enveloppe
+                                Pick a day on the calendar, select an envelope
                                 and enter the amount.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <AddTransactionForm
-                                :enveloppes="pickerEnveloppes"
+                                :envelopes="pickerEnvelopes"
                                 :currency="currency"
                                 :selected-date="selectedDate"
                                 @confirm="onAddTransaction"

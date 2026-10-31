@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\BudgetController;
-use App\Http\Controllers\EnveloppeController;
+use App\Http\Controllers\EnvelopeController;
 use App\Http\Controllers\FinancialProfileController;
 use App\Http\Controllers\FinancialProfileInviteController;
 use App\Http\Controllers\LedgerController;
@@ -26,10 +26,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
     Route::inertia('budget', 'Budget')->name('budget');
     Route::inertia('ledger', 'Ledger')->name('ledger');
-    Route::get('enveloppes', [EnveloppeController::class, 'index'])->name('enveloppes');
-    Route::post('enveloppes', [EnveloppeController::class, 'store'])->name('enveloppes.store');
-    Route::put('enveloppes/{enveloppe}', [EnveloppeController::class, 'update'])->name('enveloppes.update');
-    Route::delete('enveloppes/{enveloppe}', [EnveloppeController::class, 'destroy'])->name('enveloppes.destroy');
+    Route::get('envelopes', [EnvelopeController::class, 'index'])->name('envelopes');
+    Route::post('envelopes', [EnvelopeController::class, 'store'])->name('envelopes.store');
+    Route::put('envelopes/{envelope}', [EnvelopeController::class, 'update'])->name('envelopes.update');
+    Route::delete('envelopes/{envelope}', [EnvelopeController::class, 'destroy'])->name('envelopes.destroy');
 
     Route::prefix('api')->name('api.')->group(function () {
         Route::post('invites/{inviteKey}/accept', [FinancialProfileInviteController::class, 'accept'])
@@ -58,9 +58,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('{budget}', [BudgetController::class, 'destroy'])->name('destroy');
             Route::post('{budget}/publish', [BudgetController::class, 'publish'])->name('publish');
             Route::post('{budget}/clone', [BudgetController::class, 'clone'])->name('clone');
-            Route::post('{budget}/enveloppes', [BudgetController::class, 'addEnveloppe'])->name('enveloppes.store');
-            Route::patch('{budget}/enveloppes/{enveloppeId}', [BudgetController::class, 'updateEnveloppe'])->name('enveloppes.update');
-            Route::delete('{budget}/enveloppes/{enveloppeId}', [BudgetController::class, 'removeEnveloppe'])->name('enveloppes.destroy');
+            Route::post('{budget}/envelopes', [BudgetController::class, 'addEnvelope'])->name('envelopes.store');
+            Route::patch('{budget}/envelopes/{envelopeId}', [BudgetController::class, 'updateEnvelope'])->name('envelopes.update');
+            Route::delete('{budget}/envelopes/{envelopeId}', [BudgetController::class, 'removeEnvelope'])->name('envelopes.destroy');
             Route::get('{budget}/shares', [BudgetController::class, 'permissionsIndex'])->name('shares.index');
             Route::post('{budget}/shares', [BudgetController::class, 'addPermission'])->name('shares.store');
             Route::patch('{budget}/shares/{userId}', [BudgetController::class, 'updatePermission'])->name('shares.update');
@@ -83,16 +83,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('{ledger}', [LedgerController::class, 'destroy'])->name('destroy');
         })->whereNumber('ledger');
 
-        Route::prefix('enveloppes')->name('enveloppes.')->group(function () {
-            Route::get('/', [EnveloppeController::class, 'apiIndex'])->name('index');
-            Route::get('{enveloppe}/totals', [EnveloppeController::class, 'totals'])->name('totals');
-            Route::get('{enveloppe}/transactions', [EnveloppeController::class, 'apiTransactions'])->name('transactions.index');
-            Route::get('{enveloppe}/shares', [EnveloppeController::class, 'permissionsIndex'])->name('shares.index');
-            Route::post('{enveloppe}/shares', [EnveloppeController::class, 'addPermission'])->name('shares.store');
-            Route::patch('{enveloppe}/shares/{userId}', [EnveloppeController::class, 'updatePermission'])->name('shares.update');
-            Route::delete('{enveloppe}/shares/{userId}', [EnveloppeController::class, 'removePermission'])->name('shares.destroy');
-            Route::post('{enveloppe}/transfer-ownership', [EnveloppeController::class, 'transferOwnership'])->name('transfer-ownership');
-        })->whereNumber('enveloppe');
+        Route::prefix('envelopes')->name('envelopes.')->group(function () {
+            Route::get('/', [EnvelopeController::class, 'apiIndex'])->name('index');
+            Route::get('{envelope}/totals', [EnvelopeController::class, 'totals'])->name('totals');
+            Route::get('{envelope}/transactions', [EnvelopeController::class, 'apiTransactions'])->name('transactions.index');
+            Route::get('{envelope}/shares', [EnvelopeController::class, 'permissionsIndex'])->name('shares.index');
+            Route::post('{envelope}/shares', [EnvelopeController::class, 'addPermission'])->name('shares.store');
+            Route::patch('{envelope}/shares/{userId}', [EnvelopeController::class, 'updatePermission'])->name('shares.update');
+            Route::delete('{envelope}/shares/{userId}', [EnvelopeController::class, 'removePermission'])->name('shares.destroy');
+            Route::post('{envelope}/transfer-ownership', [EnvelopeController::class, 'transferOwnership'])->name('transfer-ownership');
+        })->whereNumber('envelope');
 
         Route::delete('transactions/{transaction}', [LedgerController::class, 'destroyTransaction'])
             ->name('transactions.destroy')->whereNumber('transaction');

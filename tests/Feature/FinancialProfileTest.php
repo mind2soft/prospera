@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Budget;
 use App\Models\BudgetPermission;
-use App\Models\Enveloppe;
+use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
 use App\Models\User;
@@ -223,14 +223,14 @@ class FinancialProfileTest extends TestCase
 
     public function test_member_removal_is_atomic_when_a_transfer_fails(): void
     {
-        // A member-owned budget and a member-owned enveloppe referenced by
+        // A member-owned budget and a member-owned envelope referenced by
         // it: both would transfer to the profile owner during removal; make
-        // the enveloppe save fail mid-way.
-        $enveloppe = Enveloppe::create(['name' => 'Shared', 'type' => 'expense', 'user_id' => $this->member->id]);
+        // the envelope save fail mid-way.
+        $envelope = Envelope::create(['name' => 'Shared', 'type' => 'expense', 'user_id' => $this->member->id]);
         $budget = $this->shareBudget($this->member, $this->profile);
-        $budget->enveloppes()->create(['enveloppe_id' => $enveloppe->id, 'amount' => -100, 'type' => 'fixed']);
+        $budget->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed']);
 
-        Enveloppe::updated(fn () => throw new \RuntimeException('boom'));
+        Envelope::updated(fn () => throw new \RuntimeException('boom'));
 
         try {
             $this->profile->removeMember($this->member);
@@ -248,8 +248,8 @@ class FinancialProfileTest extends TestCase
             'user_id' => $this->member->id,
             'permission' => 'owner',
         ]);
-        $this->assertDatabaseHas('enveloppes', [
-            'id' => $enveloppe->id,
+        $this->assertDatabaseHas('envelopes', [
+            'id' => $envelope->id,
             'user_id' => $this->member->id,
         ]);
     }
@@ -371,24 +371,24 @@ class FinancialProfileTest extends TestCase
         $this->assertDatabaseHas('financial_profile_user', ['profile_id' => $this->profile->id, 'user_id' => $other->id]);
     }
 
-    public function test_member_removal_transfers_only_profile_referenced_enveloppes(): void
+    public function test_member_removal_transfers_only_profile_referenced_envelopes(): void
     {
-        $referenced = Enveloppe::create(['name' => 'Referenced', 'type' => 'expense', 'user_id' => $this->member->id]);
-        $unreferenced = Enveloppe::create(['name' => 'Personal', 'type' => 'revenue', 'user_id' => $this->member->id]);
+        $referenced = Envelope::create(['name' => 'Referenced', 'type' => 'expense', 'user_id' => $this->member->id]);
+        $unreferenced = Envelope::create(['name' => 'Personal', 'type' => 'revenue', 'user_id' => $this->member->id]);
 
         $budget = $this->shareBudget($this->owner, $this->profile);
-        $budget->enveloppes()->create(['enveloppe_id' => $referenced->id, 'amount' => -100, 'type' => 'fixed']);
+        $budget->envelopes()->create(['envelope_id' => $referenced->id, 'amount' => -100, 'type' => 'fixed']);
 
         $this->actingAs($this->owner)->deleteJson("/api/profiles/{$this->profile->id}/members/{$this->member->id}")
             ->assertNoContent();
 
-        // Referenced enveloppes transfer to the profile owner...
-        $this->assertDatabaseHas('enveloppes', [
+        // Referenced envelopes transfer to the profile owner...
+        $this->assertDatabaseHas('envelopes', [
             'id' => $referenced->id,
             'user_id' => $this->owner->id,
         ]);
         // ...unreferenced ones stay owned by the removed member.
-        $this->assertDatabaseHas('enveloppes', [
+        $this->assertDatabaseHas('envelopes', [
             'id' => $unreferenced->id,
             'user_id' => $this->member->id,
         ]);

@@ -10,11 +10,11 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Shared CRUD/validation for resource permission rows (budget_permissions,
- * ledger_permissions, enveloppe_permissions) — the backend of the Share drawer
+ * ledger_permissions, envelope_permissions) — the backend of the Share drawer
  * (docs/shared-finances.md — permission model).
  *
  * Profile-scoped resources (budgets, ledgers) grant to members of the
- * resource's profile; user-owned resources (enveloppes) grant to members of
+ * resource's profile; user-owned resources (envelopes) grant to members of
  * the owner's profiles.
  */
 final class ResourcePermissionService
@@ -111,7 +111,7 @@ final class ResourcePermissionService
 
         if ($target === null || ! FinancialProfile::membersShareAProfile($owner, $target)) {
             throw ValidationException::withMessages([
-                'user_id' => __('The target user must share a profile with the enveloppe owner.'),
+                'user_id' => __('The target user must share a profile with the envelope owner.'),
             ]);
         }
 
@@ -261,13 +261,13 @@ final class ResourcePermissionService
 
         if ($target === null || ! FinancialProfile::membersShareAProfile($owner, $target)) {
             throw ValidationException::withMessages([
-                'user_id' => __('The target user must share a profile with the enveloppe owner.'),
+                'user_id' => __('The target user must share a profile with the envelope owner.'),
             ]);
         }
 
         if ($target->id === $owner->id) {
             throw ValidationException::withMessages([
-                'user_id' => __('This user already owns this enveloppe.'),
+                'user_id' => __('This user already owns this envelope.'),
             ]);
         }
 

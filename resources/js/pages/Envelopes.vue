@@ -6,11 +6,11 @@ import {
     destroy,
     store,
     update,
-} from '@/actions/App/Http/Controllers/EnveloppeController';
+} from '@/actions/App/Http/Controllers/EnvelopeController';
 import Heading from '@/components/Heading.vue';
 import Icon from '@/components/Icon.vue';
 import InputError from '@/components/InputError.vue';
-import EnveloppeShareDrawer from '@/components/Enveloppes/EnveloppeShareDrawer.vue';
+import EnvelopeShareDrawer from '@/components/Envelopes/EnvelopeShareDrawer.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -30,26 +30,26 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { enveloppes } from '@/routes';
-import type { Enveloppe } from '@/types';
+import { envelopes } from '@/routes';
+import type { Envelope } from '@/types';
 
 defineOptions({
     layout: {
         breadcrumbs: [
             {
-                title: 'Enveloppes',
-                href: enveloppes(),
+                title: 'Envelopes',
+                href: envelopes(),
             },
         ],
     },
 });
 
 type Props = {
-    enveloppes?: Enveloppe[];
+    envelopes?: Envelope[];
 };
 
 const props = withDefaults(defineProps<Props>(), {
-    enveloppes: () => [],
+    envelopes: () => [],
 });
 
 const meId = computed(() => usePage().props.auth.user.id);
@@ -77,15 +77,15 @@ const form = useForm(defaults);
 
 const dialogOpen = ref(false);
 const deleteDialogOpen = ref(false);
-const toDelete = ref<Enveloppe | null>(null);
-const editing = ref<Enveloppe | null>(null);
+const toDelete = ref<Envelope | null>(null);
+const editing = ref<Envelope | null>(null);
 const shareTargetId = ref<number | null>(null);
 
-const expenseEnveloppes = computed(() =>
-    props.enveloppes.filter((c) => c.direction === 'expense'),
+const expenseEnvelopes = computed(() =>
+    props.envelopes.filter((c) => c.direction === 'expense'),
 );
 const revenueEnvelopes = computed(() =>
-    props.enveloppes.filter((c) => c.direction === 'revenue'),
+    props.envelopes.filter((c) => c.direction === 'revenue'),
 );
 
 const openCreate = () => {
@@ -95,13 +95,13 @@ const openCreate = () => {
     dialogOpen.value = true;
 };
 
-const openEdit = (enveloppe: Enveloppe) => {
-    editing.value = enveloppe;
+const openEdit = (envelope: Envelope) => {
+    editing.value = envelope;
     form.defaults({ ...defaults });
     form.reset();
-    form.name = enveloppe.name;
-    form.type = enveloppe.direction;
-    form.color = enveloppe.color;
+    form.name = envelope.name;
+    form.type = envelope.direction;
+    form.color = envelope.color;
     dialogOpen.value = true;
 };
 
@@ -146,8 +146,8 @@ const save = () => {
     }
 };
 
-const confirmDelete = (enveloppe: Enveloppe) => {
-    toDelete.value = enveloppe;
+const confirmDelete = (envelope: Envelope) => {
+    toDelete.value = envelope;
     deleteDialogOpen.value = true;
 };
 
@@ -168,7 +168,7 @@ const remove = () => {
 };
 
 const shareTarget = computed(
-    () => props.enveloppes.find((c) => c.id === shareTargetId.value) ?? null,
+    () => props.envelopes.find((c) => c.id === shareTargetId.value) ?? null,
 );
 
 const roleLabel: Record<string, string> = {
@@ -180,16 +180,16 @@ const roleLabel: Record<string, string> = {
 </script>
 
 <template>
-    <Head title="Enveloppes" />
+    <Head title="Envelopes" />
 
     <div class="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4">
         <div class="flex flex-wrap items-center justify-between gap-4">
             <Heading
-                title="Enveloppes"
+                title="Envelopes"
                 description="Give every euro, dollar or franc a home — the classic envelope system, minus the paper."
             />
             <Button
-                v-if="props.enveloppes.length"
+                v-if="props.envelopes.length"
                 class="gap-2"
                 @click="openCreate"
             >
@@ -200,7 +200,7 @@ const roleLabel: Record<string, string> = {
 
         <!-- Empty state -->
         <Card
-            v-if="!props.enveloppes.length"
+            v-if="!props.envelopes.length"
             class="relative overflow-hidden border-sidebar-border/70 dark:border-sidebar-border"
         >
             <div
@@ -249,7 +249,7 @@ const roleLabel: Record<string, string> = {
             </CardContent>
         </Card>
 
-        <!-- Enveloppe groups -->
+        <!-- Envelope groups -->
         <div v-else class="space-y-8">
             <section
                 v-for="group in [
@@ -279,45 +279,45 @@ const roleLabel: Record<string, string> = {
                 <div
                     v-if="
                         group.type === 'expense'
-                            ? expenseEnveloppes.length
+                            ? expenseEnvelopes.length
                             : revenueEnvelopes.length
                     "
                     class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
                 >
                     <Card
-                        v-for="enveloppe in group.type === 'expense'
-                            ? expenseEnveloppes
+                        v-for="envelope in group.type === 'expense'
+                            ? expenseEnvelopes
                             : revenueEnvelopes"
-                        :key="enveloppe.id"
+                        :key="envelope.id"
                         class="group border-sidebar-border/70 py-0 transition-all hover:border-primary/30 hover:shadow-md dark:border-sidebar-border"
                     >
                         <CardContent class="flex items-center gap-3 p-4">
                             <div
                                 class="flex size-10 shrink-0 items-center justify-center rounded-xl text-lg font-semibold"
                                 :style="{
-                                    backgroundColor: enveloppe.color + '1a',
-                                    color: enveloppe.color,
+                                    backgroundColor: envelope.color + '1a',
+                                    color: envelope.color,
                                 }"
                             >
-                                {{ enveloppe.name.charAt(0).toUpperCase() }}
+                                {{ envelope.name.charAt(0).toUpperCase() }}
                             </div>
 
                             <div class="min-w-0 flex-1">
                                 <p class="truncate text-sm font-medium">
-                                    {{ enveloppe.name }}
+                                    {{ envelope.name }}
                                 </p>
                             </div>
 
                             <Badge
-                                v-if="enveloppe.permission !== 'owner'"
+                                v-if="envelope.permission !== 'owner'"
                                 variant="secondary"
                                 class="shrink-0"
                             >
-                                {{ roleLabel[enveloppe.permission] }}
+                                {{ roleLabel[envelope.permission] }}
                             </Badge>
 
                             <DropdownMenu
-                                v-if="enveloppe.permission === 'owner'"
+                                v-if="envelope.permission === 'owner'"
                             >
                                 <DropdownMenuTrigger as-child>
                                     <Button
@@ -332,7 +332,7 @@ const roleLabel: Record<string, string> = {
                                 <DropdownMenuContent align="end">
                                     <DropdownMenuItem
                                         class="gap-2"
-                                        @select="openEdit(enveloppe)"
+                                        @select="openEdit(envelope)"
                                     >
                                         <Icon
                                             name="edit"
@@ -343,7 +343,7 @@ const roleLabel: Record<string, string> = {
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         class="gap-2"
-                                        @select="shareTargetId = enveloppe.id"
+                                        @select="shareTargetId = envelope.id"
                                     >
                                         <Icon
                                             name="group"
@@ -354,7 +354,7 @@ const roleLabel: Record<string, string> = {
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         class="gap-2 text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
-                                        @select="confirmDelete(enveloppe)"
+                                        @select="confirmDelete(envelope)"
                                     >
                                         <Icon
                                             name="delete"
@@ -379,9 +379,9 @@ const roleLabel: Record<string, string> = {
         </div>
 
         <!-- Share drawer -->
-        <EnveloppeShareDrawer
+        <EnvelopeShareDrawer
             v-if="shareTarget !== null"
-            :enveloppe-id="shareTarget.id"
+            :envelope-id="shareTarget.id"
             :open="shareTargetId !== null"
             :can-manage="shareTarget.permission === 'owner'"
             :current-user-id="meId"
@@ -406,9 +406,9 @@ const roleLabel: Record<string, string> = {
 
                 <form class="space-y-5" @submit.prevent="save">
                     <div class="grid gap-2">
-                        <Label for="enveloppe-name">Name</Label>
+                        <Label for="envelope-name">Name</Label>
                         <Input
-                            id="enveloppe-name"
+                            id="envelope-name"
                             v-model="form.name"
                             type="text"
                             placeholder="e.g. Groceries"

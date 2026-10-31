@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Budget;
-use App\Models\BudgetEnveloppe;
-use App\Models\Enveloppe;
+use App\Models\BudgetEnvelope;
+use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\Transaction;
 use App\Models\User;
@@ -90,7 +90,7 @@ class BudgetController extends Controller
     }
 
     /**
-     * Budget detail with enveloppes and shares.
+     * Budget detail with envelopes and shares.
      */
     public function show(Request $request, Budget $budget): JsonResponse
     {
@@ -191,14 +191,14 @@ class BudgetController extends Controller
                 'permission' => ResourcePermissions::OWNER,
             ]);
 
-            $budget->load('enveloppes');
+            $budget->load('envelopes');
 
-            $draft->enveloppes()->createMany(
-                $budget->enveloppes
-                    ->map(fn (BudgetEnveloppe $enveloppe) => [
-                        'enveloppe_id' => $enveloppe->enveloppe_id,
-                        'amount' => $enveloppe->amount,
-                        'type' => $enveloppe->type,
+            $draft->envelopes()->createMany(
+                $budget->envelopes
+                    ->map(fn (BudgetEnvelope $envelope) => [
+                        'envelope_id' => $envelope->envelope_id,
+                        'amount' => $envelope->amount,
+                        'type' => $envelope->type,
                     ])
                     ->all()
             );
@@ -212,7 +212,7 @@ class BudgetController extends Controller
     }
 
     /**
-     * Delete a budget (cascades its shares and enveloppe assignments).
+     * Delete a budget (cascades its shares and envelope assignments).
      * Blocked when transactions reference the budget (data integrity).
      */
     public function destroy(Request $request, Budget $budget): JsonResponse
@@ -231,85 +231,85 @@ class BudgetController extends Controller
     }
 
     /**
-     * Assign an enveloppe to a draft budget. The caller needs contributor+
-     * permission on the enveloppe (their own, or shared with them as
-     * contributor); metadata-only enveloppes cannot be assigned.
+     * Assign an envelope to a draft budget. The caller needs contributor+
+     * permission on the envelope (their own, or shared with them as
+     * contributor); metadata-only envelopes cannot be assigned.
      */
-    public function addEnveloppe(Request $request, Budget $budget): JsonResponse
+    public function addEnvelope(Request $request, Budget $budget): JsonResponse
     {
         $this->authorize($request, $budget, ResourcePermissions::OWNER);
         $this->abortUnlessDraft($budget);
 
         $validated = $request->validate([
-            'enveloppe_id' => ['required', 'integer'],
-            'type' => ['required', 'string', Rule::in(BudgetEnveloppe::TYPES)],
+            'envelope_id' => ['required', 'integer'],
+            'type' => ['required', 'string', Rule::in(BudgetEnvelope::TYPES)],
             'amount' => ['required', 'integer', 'min:1', 'max:999999999'],
         ]);
 
-        /** @var Enveloppe|null $enveloppe */
-        $enveloppe = Enveloppe::query()->find($validated['enveloppe_id']);
+        /** @var Envelope|null $envelope */
+        $envelope = Envelope::query()->find($validated['envelope_id']);
 
-        if ($enveloppe === null || ! $this->permissions->isAtLeast($enveloppe->permissionFor($request->user()), ResourcePermissions::CONTRIBUTOR)) {
+        if ($envelope === null || ! $this->permissions->isAtLeast($envelope->permissionFor($request->user()), ResourcePermissions::CONTRIBUTOR)) {
             throw ValidationException::withMessages([
-                'enveloppe_id' => __('This enveloppe is not available.'),
+                'envelope_id' => __('This envelope is not available.'),
             ]);
         }
 
-        if ($budget->enveloppes()->where('enveloppe_id', $enveloppe->id)->exists()) {
+        if ($budget->envelopes()->where('envelope_id', $envelope->id)->exists()) {
             throw ValidationException::withMessages([
-                'enveloppe_id' => __('This enveloppe is already assigned to the budget.'),
+                'envelope_id' => __('This envelope is already assigned to the budget.'),
             ]);
         }
 
-        $assignment = $budget->enveloppes()->create([
-            'enveloppe_id' => $enveloppe->id,
-            'amount' => $enveloppe->signedAmount($validated['amount']),
+        $assignment = $budget->envelopes()->create([
+            'envelope_id' => $envelope->id,
+            'amount' => $envelope->signedAmount($validated['amount']),
             'type' => $validated['type'],
         ]);
 
         return response()->json([
-            'enveloppe' => $this->serializeEnveloppe($assignment->load('enveloppe')),
+            'envelope' => $this->serializeEnvelope($assignment->load('envelope')),
         ], 201);
     }
 
     /**
-     * Update the amount (and type) of an assigned enveloppe.
+     * Update the amount (and type) of an assigned envelope.
      */
-    public function updateEnveloppe(Request $request, Budget $budget, int $enveloppeId): JsonResponse
+    public function updateEnvelope(Request $request, Budget $budget, int $envelopeId): JsonResponse
     {
         $this->authorize($request, $budget, ResourcePermissions::OWNER);
         $this->abortUnlessDraft($budget);
 
         $validated = $request->validate([
             'amount' => ['required', 'integer', 'min:1', 'max:999999999'],
-            'type' => ['sometimes', 'string', Rule::in(BudgetEnveloppe::TYPES)],
+            'type' => ['sometimes', 'string', Rule::in(BudgetEnvelope::TYPES)],
         ]);
 
-        $assignment = $budget->enveloppes()
-            ->with('enveloppe')
-            ->where('enveloppe_id', $enveloppeId)
+        $assignment = $budget->envelopes()
+            ->with('envelope')
+            ->where('envelope_id', $envelopeId)
             ->firstOrFail();
 
         $assignment->update([
-            'amount' => $assignment->enveloppe->signedAmount($validated['amount']),
+            'amount' => $assignment->envelope->signedAmount($validated['amount']),
             'type' => $validated['type'] ?? $assignment->type,
         ]);
 
         return response()->json([
-            'enveloppe' => $this->serializeEnveloppe($assignment->fresh('enveloppe')),
+            'envelope' => $this->serializeEnvelope($assignment->fresh('envelope')),
         ]);
     }
 
     /**
-     * Remove an enveloppe assignment from a draft budget.
+     * Remove an envelope assignment from a draft budget.
      */
-    public function removeEnveloppe(Request $request, Budget $budget, int $enveloppeId): JsonResponse
+    public function removeEnvelope(Request $request, Budget $budget, int $envelopeId): JsonResponse
     {
         $this->authorize($request, $budget, ResourcePermissions::OWNER);
         $this->abortUnlessDraft($budget);
 
-        $assignment = $budget->enveloppes()
-            ->where('enveloppe_id', $enveloppeId)
+        $assignment = $budget->envelopes()
+            ->where('envelope_id', $envelopeId)
             ->firstOrFail();
 
         $assignment->delete();
@@ -424,19 +424,19 @@ class BudgetController extends Controller
     }
 
     /**
-     * Full budget payload with enveloppes and shares, as consumed by the
+     * Full budget payload with envelopes and shares, as consumed by the
      * frontend's `BudgetDetail` type.
      *
      * @return array<string, array<int|string, array<string, int|string|null>>|int|string|null>
      */
     private function serializeDetail(Budget $budget, User $user): array
     {
-        $budget->loadMissing(['enveloppes.enveloppe', 'permissions.user']);
+        $budget->loadMissing(['envelopes.envelope', 'permissions.user']);
 
         return [
             ...$this->serializeBudget($budget, $user),
-            'enveloppes' => $budget->enveloppes
-                ->map(fn (BudgetEnveloppe $enveloppe) => $this->serializeEnveloppe($enveloppe))
+            'envelopes' => $budget->envelopes
+                ->map(fn (BudgetEnvelope $envelope) => $this->serializeEnvelope($envelope))
                 ->values()
                 ->all(),
             'shares' => $this->permissionService->profilePermissions($budget->profile, 'budget_permissions', 'budget_id', $budget->id),
@@ -464,13 +464,13 @@ class BudgetController extends Controller
     /**
      * @return array<string, string|int>
      */
-    private function serializeEnveloppe(BudgetEnveloppe $assignment): array
+    private function serializeEnvelope(BudgetEnvelope $assignment): array
     {
         return [
-            'enveloppe_id' => $assignment->enveloppe_id,
-            'name' => $assignment->enveloppe->name,
-            'color' => $assignment->enveloppe->color,
-            'direction' => $assignment->enveloppe->type,
+            'envelope_id' => $assignment->envelope_id,
+            'name' => $assignment->envelope->name,
+            'color' => $assignment->envelope->color,
+            'direction' => $assignment->envelope->type,
             'amount' => $assignment->amount,
             'type' => $assignment->type,
         ];

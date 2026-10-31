@@ -2,11 +2,11 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Enveloppe;
+use App\Models\Envelope;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
-class EnveloppeRequest extends FormRequest
+class EnvelopeRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -23,12 +23,12 @@ class EnveloppeRequest extends FormRequest
                 'required',
                 'string',
                 'max:60',
-                Rule::unique('enveloppes')
+                Rule::unique('envelopes')
                     ->where('user_id', $this->user()->id)
-                    ->ignore($this->route('enveloppe')),
+                    ->ignore($this->route('envelope')),
             ],
-            // The enveloppe's direction (exposed as `direction` in API payloads).
-            'type' => ['required', 'string', Rule::in(Enveloppe::DIRECTIONS)],
+            // The envelope's direction (exposed as `direction` in API payloads).
+            'type' => ['required', 'string', Rule::in(Envelope::DIRECTIONS)],
             'color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
         ];
     }

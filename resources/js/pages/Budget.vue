@@ -17,14 +17,14 @@ import {
 } from '@/components/ui/dialog';
 import BudgetSelector from '@/components/Budget/BudgetSelector.vue';
 import BudgetFlowBar from '@/components/Budget/BudgetFlowBar.vue';
-import BudgetEnveloppeTable from '@/components/Budget/BudgetEnveloppeTable.vue';
+import BudgetEnvelopeTable from '@/components/Budget/BudgetEnvelopeTable.vue';
 import CreateBudgetDialog from '@/components/Budget/CreateBudgetDialog.vue';
 import CloneBudgetDialog from '@/components/Budget/CloneBudgetDialog.vue';
-import AddEnveloppeDialog from '@/components/Budget/AddEnveloppeDialog.vue';
+import AddEnvelopeDialog from '@/components/Budget/AddEnvelopeDialog.vue';
 import ResourceShareDrawer from '@/components/share/ResourceShareDrawer.vue';
 import {
     budgetKeys,
-    useAddEnveloppe,
+    useAddEnvelope,
     useBudget,
     useBudgets,
     useCloneBudget,
@@ -32,15 +32,15 @@ import {
     useDeleteBudget,
     usePublishBudget,
     useRemoveBudgetShare,
-    useRemoveEnveloppe,
+    useRemoveEnvelope,
     useSetBudgetShare,
     useTransferBudgetOwnership,
-    useUpdateEnveloppe,
+    useUpdateEnvelope,
 } from '@/composables/budgetQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { ApiError } from '@/lib/api';
 import { budget as budgetRoute } from '@/routes';
-import type { AddEnveloppeInput } from '@/lib/budgetApi';
+import type { AddEnvelopeInput } from '@/lib/budgetApi';
 import type { BudgetDetail, ResourcePermission } from '@/types';
 
 defineOptions({
@@ -69,9 +69,9 @@ const budgetQuery = useBudget(budgetId);
 const budget = computed(() => budgetQuery.data.value ?? null);
 
 const max = computed(() => {
-    const enveloppes = budget.value?.enveloppes ?? [];
+    const envelopes = budget.value?.envelopes ?? [];
     const total = (direction: 'revenue' | 'expense') =>
-        enveloppes
+        envelopes
             .filter((e) => e.direction === direction)
             .reduce((sum, e) => sum + Math.abs(e.amount), 0);
     return Math.max(1, total('revenue'), total('expense'));
@@ -82,10 +82,10 @@ const isDraft = computed(
 );
 
 const toSegments = (direction: 'revenue' | 'expense') =>
-    (budget.value?.enveloppes ?? [])
+    (budget.value?.envelopes ?? [])
         .filter((e) => e.direction === direction)
         .map((e) => ({
-            id: e.enveloppe_id,
+            id: e.envelope_id,
             name: e.name,
             color: e.color,
             amount: Math.abs(e.amount),
@@ -119,23 +119,23 @@ const createBudget = useCreateBudget();
 const publishBudget = usePublishBudget();
 const cloneBudget = useCloneBudget();
 const deleteBudget = useDeleteBudget();
-const addEnveloppe = useAddEnveloppe();
-const updateEnveloppe = useUpdateEnveloppe();
-const removeEnveloppe = useRemoveEnveloppe();
+const addEnvelope = useAddEnvelope();
+const updateEnvelope = useUpdateEnvelope();
+const removeEnvelope = useRemoveEnvelope();
 const setShare = useSetBudgetShare();
 const revokeShare = useRemoveBudgetShare();
 const transferOwnership = useTransferBudgetOwnership();
 
-const pendingEnveloppeId = ref<number | null>(null);
+const pendingEnvelopeId = ref<number | null>(null);
 const working = computed(
     () =>
         createBudget.isLoading.value ||
         publishBudget.isLoading.value ||
         cloneBudget.isLoading.value ||
         deleteBudget.isLoading.value ||
-        addEnveloppe.isLoading.value ||
-        updateEnveloppe.isLoading.value ||
-        removeEnveloppe.isLoading.value ||
+        addEnvelope.isLoading.value ||
+        updateEnvelope.isLoading.value ||
+        removeEnvelope.isLoading.value ||
         setShare.isLoading.value ||
         revokeShare.isLoading.value ||
         transferOwnership.isLoading.value,
@@ -148,7 +148,7 @@ const fail = (e: unknown) => {
 // --- dialogs ---------------------------------------------------------------
 const showCreate = ref(false);
 const showClone = ref(false);
-const showAddEnveloppe = ref(false);
+const showAddEnvelope = ref(false);
 const showShare = ref(false);
 const confirmKind = ref<'publish' | 'delete' | null>(null);
 
@@ -268,17 +268,17 @@ const onClone = (currency: string) => {
     );
 };
 
-const onAddEnveloppe = (input: AddEnveloppeInput) => {
+const onAddEnvelope = (input: AddEnvelopeInput) => {
     const id = budgetId.value;
     if (id === null) {
         return;
     }
-    addEnveloppe.mutate(
+    addEnvelope.mutate(
         { budgetId: id, input },
         {
             onSuccess: () => {
-                showAddEnveloppe.value = false;
-                toast.success('Enveloppe added.');
+                showAddEnvelope.value = false;
+                toast.success('Envelope added.');
             },
             onError: fail,
         },
@@ -297,7 +297,7 @@ const pendingSaves = new Map<
     { timer: ReturnType<typeof setTimeout>; budgetId: number; amount: number }
 >();
 
-const onEditAmount = (enveloppeId: number, amount: number) => {
+const onEditAmount = (envelopeId: number, amount: number) => {
     const id = budgetId.value;
     const current = budget.value;
     if (id === null || current === null) {
@@ -307,8 +307,8 @@ const onEditAmount = (enveloppeId: number, amount: number) => {
     queryClient.setQueryData<{ budget: BudgetDetail }>(budgetKeys.detail(id), {
         budget: {
             ...current,
-            enveloppes: current.enveloppes.map((e) =>
-                e.enveloppe_id === enveloppeId
+            envelopes: current.envelopes.map((e) =>
+                e.envelope_id === envelopeId
                     ? {
                           ...e,
                           amount: e.direction === 'expense' ? -amount : amount,
@@ -318,13 +318,13 @@ const onEditAmount = (enveloppeId: number, amount: number) => {
         },
     });
 
-    const existing = pendingSaves.get(enveloppeId);
+    const existing = pendingSaves.get(envelopeId);
     if (existing !== undefined) {
         clearTimeout(existing.timer);
     }
-    pendingSaves.set(enveloppeId, {
+    pendingSaves.set(envelopeId, {
         timer: setTimeout(
-            () => saveAmount(enveloppeId, id, amount),
+            () => saveAmount(envelopeId, id, amount),
             SAVE_DELAY_MS,
         ),
         budgetId: id,
@@ -333,13 +333,13 @@ const onEditAmount = (enveloppeId: number, amount: number) => {
 };
 
 const saveAmount = (
-    enveloppeId: number,
+    envelopeId: number,
     budgetIdValue: number,
     amount: number,
 ) => {
-    pendingSaves.delete(enveloppeId);
-    updateEnveloppe.mutate(
-        { budgetId: budgetIdValue, enveloppeId, amount },
+    pendingSaves.delete(envelopeId);
+    updateEnvelope.mutate(
+        { budgetId: budgetIdValue, envelopeId, amount },
         {
             onError: (error) => {
                 fail(error);
@@ -352,26 +352,26 @@ const saveAmount = (
 };
 
 onBeforeUnmount(() => {
-    for (const [enveloppeId, pending] of pendingSaves) {
+    for (const [envelopeId, pending] of pendingSaves) {
         clearTimeout(pending.timer);
-        saveAmount(enveloppeId, pending.budgetId, pending.amount);
+        saveAmount(envelopeId, pending.budgetId, pending.amount);
     }
     pendingSaves.clear();
 });
 
-const onRemoveEnveloppe = (enveloppeId: number) => {
+const onRemoveEnvelope = (envelopeId: number) => {
     const id = budgetId.value;
     if (id === null) {
         return;
     }
-    pendingEnveloppeId.value = enveloppeId;
-    removeEnveloppe.mutate(
-        { budgetId: id, enveloppeId },
+    pendingEnvelopeId.value = envelopeId;
+    removeEnvelope.mutate(
+        { budgetId: id, envelopeId },
         {
             onSettled: () => {
-                pendingEnveloppeId.value = null;
+                pendingEnvelopeId.value = null;
             },
-            onSuccess: () => toast.success('Enveloppe removed.'),
+            onSuccess: () => toast.success('Envelope removed.'),
             onError: fail,
         },
     );
@@ -433,7 +433,7 @@ const onRemoveEnveloppe = (enveloppeId: number) => {
                 <p
                     class="mt-3 max-w-xl text-sm leading-relaxed text-balance text-muted-foreground sm:text-base"
                 >
-                    Start with a draft: pick your currency, add your enveloppes,
+                    Start with a draft: pick your currency, add your envelopes,
                     then publish when it feels right.
                 </p>
 
@@ -491,14 +491,14 @@ const onRemoveEnveloppe = (enveloppeId: number) => {
                     :currency="budget.currency"
                 />
 
-                <BudgetEnveloppeTable
-                    :enveloppes="budget.enveloppes"
+                <BudgetEnvelopeTable
+                    :envelopes="budget.envelopes"
                     :currency="budget.currency"
                     :editable="canEdit"
-                    :pending-id="pendingEnveloppeId"
-                    @add="showAddEnveloppe = true"
+                    :pending-id="pendingEnvelopeId"
+                    @add="showAddEnvelope = true"
                     @update-amount="onEditAmount"
-                    @remove="onRemoveEnveloppe"
+                    @remove="onRemoveEnvelope"
                 />
             </template>
         </template>
@@ -511,10 +511,10 @@ const onRemoveEnveloppe = (enveloppeId: number) => {
             @confirm="onClone"
         />
 
-        <AddEnveloppeDialog
-            v-model:open="showAddEnveloppe"
-            :excluded-ids="budget?.enveloppes.map((e) => e.enveloppe_id) ?? []"
-            @confirm="onAddEnveloppe"
+        <AddEnvelopeDialog
+            v-model:open="showAddEnvelope"
+            :excluded-ids="budget?.envelopes.map((e) => e.envelope_id) ?? []"
+            @confirm="onAddEnvelope"
         />
 
         <ResourceShareDrawer
@@ -550,7 +550,7 @@ const onRemoveEnveloppe = (enveloppeId: number) => {
                         </template>
                         <template v-else>
                             This permanently removes the budget with all of its
-                            enveloppe assignments and shares.
+                            envelope assignments and shares.
                         </template>
                     </DialogDescription>
                 </DialogHeader>

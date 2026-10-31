@@ -15,8 +15,8 @@
  */
 
 use App\Models\Budget;
-use App\Models\Enveloppe;
-use App\Models\EnveloppePermission;
+use App\Models\Envelope;
+use App\Models\EnvelopePermission;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileInvite;
 use App\Models\Ledger;
@@ -27,8 +27,8 @@ use App\Models\User;
 Transaction::query()->delete();
 Ledger::query()->delete();
 Budget::query()->delete();
-EnveloppePermission::query()->delete();
-Enveloppe::query()->delete();
+EnvelopePermission::query()->delete();
+Envelope::query()->delete();
 FinancialProfileInvite::query()->delete();
 FinancialProfile::query()->delete();
 User::query()->delete();

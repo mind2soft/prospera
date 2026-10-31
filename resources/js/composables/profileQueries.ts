@@ -51,7 +51,7 @@ export function usePendingInvites(
 
 /**
  * Deduplicated members across all the user's profiles — the candidate pool
- * for sharing user-owned resources (enveloppes): a user may grant a
+ * for sharing user-owned resources (envelopes): a user may grant a
  * permission only to members who share a profile with the resource owner.
  */
 export function useProfileCircle(enabled?: MaybeRefOrGetter<boolean>) {

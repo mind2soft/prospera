@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\Budget;
 use App\Models\BudgetPermission;
-use App\Models\Enveloppe;
-use App\Models\EnveloppePermission;
+use App\Models\Envelope;
+use App\Models\EnvelopePermission;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
 use App\Models\Transaction;
@@ -58,7 +58,7 @@ class LedgerTest extends TestCase
 
     /**
      * A published budget for the profile with one expense and one revenue
-     * enveloppe, assigned amounts of 100 (revenue) and 200 (expense).
+     * envelope, assigned amounts of 100 (revenue) and 200 (expense).
      */
     private function createPublishedBudget(User $user, bool $published = true): Budget
     {
@@ -75,18 +75,18 @@ class LedgerTest extends TestCase
             'permission' => BudgetPermission::PERMISSION_OWNER,
         ]);
 
-        $revenue = $user->enveloppes()->create([
+        $revenue = $user->envelopes()->create([
             'name' => 'Salary', 'type' => 'revenue', 'color' => '#10b981',
         ]);
-        $expense = $user->enveloppes()->create([
+        $expense = $user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
 
-        $budget->enveloppes()->create([
-            'enveloppe_id' => $revenue->id, 'amount' => 100, 'type' => 'fixed',
+        $budget->envelopes()->create([
+            'envelope_id' => $revenue->id, 'amount' => 100, 'type' => 'fixed',
         ]);
-        $budget->enveloppes()->create([
-            'enveloppe_id' => $expense->id, 'amount' => -200, 'type' => 'fixed',
+        $budget->envelopes()->create([
+            'envelope_id' => $expense->id, 'amount' => -200, 'type' => 'fixed',
         ]);
 
         return $budget;
@@ -264,10 +264,10 @@ class LedgerTest extends TestCase
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user, published: false);
-        $enveloppe = $budget->enveloppes()->first();
+        $envelope = $budget->envelopes()->first();
 
         $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'amount' => 42,
             'event_at' => '2026-06-15',
         ])->assertUnprocessable()->assertJsonValidationErrors('budget');
@@ -275,7 +275,7 @@ class LedgerTest extends TestCase
         $budget->update(['published_at' => now()]);
 
         $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'amount' => 42,
             'event_at' => '2026-06-15',
         ])->assertCreated();
@@ -285,10 +285,10 @@ class LedgerTest extends TestCase
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
-        [$revenueAssignment, $expenseAssignment] = $budget->enveloppes()->orderByDesc('amount')->get();
+        [$revenueAssignment, $expenseAssignment] = $budget->envelopes()->orderByDesc('amount')->get();
 
         $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $revenueAssignment->enveloppe_id,
+            'envelope_id' => $revenueAssignment->envelope_id,
             'amount' => 42,
             'event_at' => '2026-06-15',
         ])->assertCreated();
@@ -297,7 +297,7 @@ class LedgerTest extends TestCase
         // omits it.
         $this->assertArrayNotHasKey('remaining_allocated', $this->actingAs($this->user)
             ->postJson("/api/ledgers/{$ledger->id}/transactions", [
-                'enveloppe_id' => $expenseAssignment->enveloppe_id,
+                'envelope_id' => $expenseAssignment->envelope_id,
                 'amount' => 75,
                 'event_at' => '2026-06-20',
             ])->assertCreated()->json('transaction'));
@@ -316,7 +316,7 @@ class LedgerTest extends TestCase
     public function test_retired_budgets_never_qualify_as_the_snapshot(): void
     {
         $ledger = $this->createLedger($this->user);
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
 
@@ -331,36 +331,36 @@ class LedgerTest extends TestCase
         ]);
 
         $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $enveloppe->id,
+            'envelope_id' => $envelope->id,
             'amount' => 10,
             'event_at' => '2026-06-15',
         ])->assertUnprocessable()->assertJsonValidationErrors('budget');
     }
 
-    public function test_adding_a_transaction_rejects_enveloppes_outside_the_budget(): void
+    public function test_adding_a_transaction_rejects_envelopes_outside_the_budget(): void
     {
         $ledger = $this->createLedger($this->user);
         $this->createPublishedBudget($this->user);
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Not in budget', 'type' => 'expense', 'color' => '#111111',
         ]);
 
         $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $enveloppe->id,
+            'envelope_id' => $envelope->id,
             'amount' => 10,
             'event_at' => '2026-06-15',
-        ])->assertUnprocessable()->assertJsonValidationErrors('enveloppe_id');
+        ])->assertUnprocessable()->assertJsonValidationErrors('envelope_id');
     }
 
     public function test_adding_a_transaction_requires_a_valid_amount(): void
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
-        $enveloppe = $budget->enveloppes()->first();
+        $envelope = $budget->envelopes()->first();
 
         foreach ([-10, 0, 1.5, 'abc'] as $amount) {
             $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-                'enveloppe_id' => $enveloppe->enveloppe_id,
+                'envelope_id' => $envelope->envelope_id,
                 'amount' => $amount,
                 'event_at' => '2026-06-15',
             ])->assertUnprocessable()->assertJsonValidationErrors('amount');
@@ -371,16 +371,16 @@ class LedgerTest extends TestCase
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
-        $enveloppe = $budget->enveloppes()->first();
+        $envelope = $budget->envelopes()->first();
 
         $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'amount' => 10,
             'event_at' => '2025-12-31',
         ])->assertUnprocessable()->assertJsonValidationErrors('event_at');
 
         $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'amount' => 10,
             'event_at' => '2027-01-01',
         ])->assertUnprocessable()->assertJsonValidationErrors('event_at');
@@ -390,14 +390,14 @@ class LedgerTest extends TestCase
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
-        $enveloppe = $budget->enveloppes()->first();
+        $envelope = $budget->envelopes()->first();
 
         foreach (['2026-05-01', '2026-05-10', '2026-06-01'] as $date) {
             $ledger->transactions()->create([
                 'user_id' => $this->user->id,
-                'enveloppe_id' => $enveloppe->enveloppe_id,
+                'envelope_id' => $envelope->envelope_id,
                 'budget_id' => $budget->id,
-                'amount' => $enveloppe->amount > 0 ? 10 : -10,
+                'amount' => $envelope->amount > 0 ? 10 : -10,
                 'event_at' => $date.' 00:00:00',
             ]);
         }
@@ -421,10 +421,10 @@ class LedgerTest extends TestCase
     {
         $ledger = $this->createLedger($this->user, ['closed_at' => now()]);
         $budget = $this->createPublishedBudget($this->user);
-        $enveloppe = $budget->enveloppes()->first();
+        $envelope = $budget->envelopes()->first();
 
         $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'amount' => 10,
             'event_at' => '2026-06-15',
         ])->assertUnprocessable()->assertJsonValidationErrors('ledger');
@@ -434,10 +434,10 @@ class LedgerTest extends TestCase
     {
         $ledger = $this->createLedger($this->user, ['closed_at' => now()]);
         $budget = $this->createPublishedBudget($this->user);
-        $enveloppe = $budget->enveloppes()->first();
+        $envelope = $budget->envelopes()->first();
         $transaction = $ledger->transactions()->create([
             'user_id' => $this->user->id,
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
@@ -451,10 +451,10 @@ class LedgerTest extends TestCase
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
-        $enveloppe = $budget->enveloppes()->first();
+        $envelope = $budget->envelopes()->first();
         $transaction = $ledger->transactions()->create([
             'user_id' => $this->user->id,
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
@@ -474,18 +474,18 @@ class LedgerTest extends TestCase
             'permission' => 'contributor',
         ]);
         $budget = $this->createPublishedBudget($this->user);
-        $enveloppe = $budget->enveloppes()->first();
+        $envelope = $budget->envelopes()->first();
 
         $ownerEntry = $ledger->transactions()->create([
             'user_id' => $this->user->id,
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
         ]);
         $contributorEntry = $ledger->transactions()->create([
             'user_id' => $this->member->id,
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-16 00:00:00',
@@ -500,7 +500,7 @@ class LedgerTest extends TestCase
         // A viewer (implicit member) cannot delete anything.
         $other = $ledger->transactions()->create([
             'user_id' => $this->user->id,
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-17 00:00:00',
@@ -532,10 +532,10 @@ class LedgerTest extends TestCase
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
-        $enveloppe = $budget->enveloppes()->first();
+        $envelope = $budget->envelopes()->first();
         $transaction = $ledger->transactions()->create([
             'user_id' => $this->user->id,
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
@@ -553,10 +553,10 @@ class LedgerTest extends TestCase
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
-        $enveloppe = $budget->enveloppes()->first();
+        $envelope = $budget->envelopes()->first();
         $ledger->transactions()->create([
             'user_id' => $this->user->id,
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
@@ -568,58 +568,58 @@ class LedgerTest extends TestCase
         $this->assertDatabaseHas('budgets', ['id' => $budget->id]);
     }
 
-    public function test_enveloppes_used_in_transactions_cannot_be_deleted(): void
+    public function test_envelopes_used_in_transactions_cannot_be_deleted(): void
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
-        $assignment = $budget->enveloppes()->first();
-        $enveloppe = $this->user->enveloppes()->whereKey($assignment->enveloppe_id)->firstOrFail();
+        $assignment = $budget->envelopes()->first();
+        $envelope = $this->user->envelopes()->whereKey($assignment->envelope_id)->firstOrFail();
 
         $ledger->transactions()->create([
             'user_id' => $this->user->id,
-            'enveloppe_id' => $assignment->enveloppe_id,
+            'envelope_id' => $assignment->envelope_id,
             'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
         ]);
 
-        $this->actingAs($this->user)->delete('/enveloppes/'.$enveloppe->id)
-            ->assertSessionHasErrors('enveloppe');
+        $this->actingAs($this->user)->delete('/envelopes/'.$envelope->id)
+            ->assertSessionHasErrors('envelope');
 
-        $this->assertDatabaseHas('enveloppes', ['id' => $enveloppe->id]);
+        $this->assertDatabaseHas('envelopes', ['id' => $envelope->id]);
     }
 
     // ------------------------------------------------------------------
     // Masking
     // ------------------------------------------------------------------
 
-    public function test_transactions_on_unshared_enveloppes_are_masked(): void
+    public function test_transactions_on_unshared_envelopes_are_masked(): void
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
-        $salaryAssignment = $budget->enveloppes()->where('amount', 100)->firstOrFail();
-        $rentAssignment = $budget->enveloppes()->where('amount', -200)->firstOrFail();
+        $salaryAssignment = $budget->envelopes()->where('amount', 100)->firstOrFail();
+        $rentAssignment = $budget->envelopes()->where('amount', -200)->firstOrFail();
 
         $salary = $ledger->transactions()->create([
             'user_id' => $this->user->id,
-            'enveloppe_id' => $salaryAssignment->enveloppe_id,
+            'envelope_id' => $salaryAssignment->envelope_id,
             'budget_id' => $budget->id,
             'amount' => 10,
             'event_at' => '2026-06-01 00:00:00',
         ]);
         $rent = $ledger->transactions()->create([
             'user_id' => $this->user->id,
-            'enveloppe_id' => $rentAssignment->enveloppe_id,
+            'envelope_id' => $rentAssignment->envelope_id,
             'budget_id' => $budget->id,
             'amount' => -50,
             'event_at' => '2026-06-02 00:00:00',
         ]);
 
-        // The member has viewer permission on the Salary enveloppe only.
-        Enveloppe::query()->findOrFail($salaryAssignment->enveloppe_id)
+        // The member has viewer permission on the Salary envelope only.
+        Envelope::query()->findOrFail($salaryAssignment->envelope_id)
             ->permissions()->create([
                 'user_id' => $this->member->id,
-                'permission' => EnveloppePermission::PERMISSION_VIEWER,
+                'permission' => EnvelopePermission::PERMISSION_VIEWER,
             ]);
 
         $response = $this->actingAs($this->member)->getJson(
@@ -650,11 +650,11 @@ class LedgerTest extends TestCase
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
-        $rentAssignment = $budget->enveloppes()->where('amount', -200)->firstOrFail();
+        $rentAssignment = $budget->envelopes()->where('amount', -200)->firstOrFail();
 
         $ledger->transactions()->create([
             'user_id' => $this->member->id,
-            'enveloppe_id' => $rentAssignment->enveloppe_id,
+            'envelope_id' => $rentAssignment->envelope_id,
             'budget_id' => $budget->id,
             'amount' => -50,
             'event_at' => '2026-06-02 00:00:00',
@@ -675,7 +675,7 @@ class LedgerTest extends TestCase
         $ledger = $this->createLedger($this->user);
         $now = now();
 
-        // Revision A: published, enveloppe allocated -200, one transaction.
+        // Revision A: published, envelope allocated -200, one transaction.
         $revisionA = Budget::create([
             'profile_id' => $this->profile->id,
             'currency' => 'CAD',
@@ -684,14 +684,14 @@ class LedgerTest extends TestCase
             'published_at' => $now,
         ]);
         $revisionA->permissions()->create(['user_id' => $this->user->id, 'permission' => 'owner']);
-        $enveloppe = $this->user->enveloppes()->create([
+        $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
-        $revisionA->enveloppes()->create(['enveloppe_id' => $enveloppe->id, 'amount' => -200, 'type' => 'fixed']);
+        $revisionA->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => -200, 'type' => 'fixed']);
 
         $first = $ledger->transactions()->create([
             'user_id' => $this->user->id,
-            'enveloppe_id' => $enveloppe->id,
+            'envelope_id' => $envelope->id,
             'budget_id' => $revisionA->id,
             'amount' => -50,
             'event_at' => '2026-06-05 00:00:00',
@@ -706,14 +706,14 @@ class LedgerTest extends TestCase
             'effective_month' => 0,
         ]);
         $revisionB->permissions()->create(['user_id' => $this->user->id, 'permission' => 'owner']);
-        $revisionB->enveloppes()->create(['enveloppe_id' => $enveloppe->id, 'amount' => -300, 'type' => 'fixed']);
+        $revisionB->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => -300, 'type' => 'fixed']);
 
         $this->actingAs($this->user)->postJson("/api/budgets/{$revisionB->id}/publish")->assertOk();
         $this->assertNotNull($revisionA->fresh()->retired_at);
 
         $second = $ledger->transactions()->create([
             'user_id' => $this->user->id,
-            'enveloppe_id' => $enveloppe->id,
+            'envelope_id' => $envelope->id,
             'budget_id' => $revisionB->id,
             'amount' => -80,
             'event_at' => '2026-06-20 00:00:00',
@@ -731,10 +731,10 @@ class LedgerTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Ledger contributor gated by enveloppe permission
+    // Ledger contributor gated by envelope permission
     // ------------------------------------------------------------------
 
-    public function test_a_ledger_contributor_needs_enveloppe_contributor_access(): void
+    public function test_a_ledger_contributor_needs_envelope_contributor_access(): void
     {
         $ledger = $this->createLedger($this->user);
         $ledger->permissions()->create([
@@ -742,31 +742,31 @@ class LedgerTest extends TestCase
             'permission' => 'contributor',
         ]);
         $budget = $this->createPublishedBudget($this->user);
-        [$revenueAssignment, $expenseAssignment] = $budget->enveloppes()->orderByDesc('amount')->get();
+        [$revenueAssignment, $expenseAssignment] = $budget->envelopes()->orderByDesc('amount')->get();
 
-        // Without enveloppe contributor access: rejected.
+        // Without envelope contributor access: rejected.
         $this->actingAs($this->member)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $expenseAssignment->enveloppe_id,
+            'envelope_id' => $expenseAssignment->envelope_id,
             'amount' => 10,
             'event_at' => '2026-06-15',
-        ])->assertUnprocessable()->assertJsonValidationErrors('enveloppe_id');
+        ])->assertUnprocessable()->assertJsonValidationErrors('envelope_id');
 
-        // Grant enveloppe contributor access on the expense enveloppe.
-        Enveloppe::query()->findOrFail($expenseAssignment->enveloppe_id)
+        // Grant envelope contributor access on the expense envelope.
+        Envelope::query()->findOrFail($expenseAssignment->envelope_id)
             ->permissions()->create([
                 'user_id' => $this->member->id,
-                'permission' => EnveloppePermission::PERMISSION_CONTRIBUTOR,
+                'permission' => EnvelopePermission::PERMISSION_CONTRIBUTOR,
             ]);
 
         $this->actingAs($this->member)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $expenseAssignment->enveloppe_id,
+            'envelope_id' => $expenseAssignment->envelope_id,
             'amount' => 10,
             'event_at' => '2026-06-15',
         ])->assertCreated();
 
-        // The ledger owner records regardless of enveloppe permissions.
+        // The ledger owner records regardless of envelope permissions.
         $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $revenueAssignment->enveloppe_id,
+            'envelope_id' => $revenueAssignment->envelope_id,
             'amount' => 10,
             'event_at' => '2026-06-16',
         ])->assertCreated();
@@ -776,10 +776,10 @@ class LedgerTest extends TestCase
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
-        $enveloppe = $budget->enveloppes()->first();
+        $envelope = $budget->envelopes()->first();
 
         $this->actingAs($this->member)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $enveloppe->enveloppe_id,
+            'envelope_id' => $envelope->envelope_id,
             'amount' => 10,
             'event_at' => '2026-06-15',
         ])->assertForbidden();

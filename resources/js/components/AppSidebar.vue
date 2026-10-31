@@ -13,7 +13,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { budget, dashboard, ledger, enveloppes } from '@/routes';
+import { budget, dashboard, ledger, envelopes } from '@/routes';
 import { materialSymbol } from '@/lib/materialIcon';
 import type { NavItem } from '@/types';
 
@@ -34,8 +34,8 @@ const mainNavItems: NavItem[] = [
         icon: materialSymbol('receipt-long'),
     },
     {
-        title: 'Enveloppes',
-        href: enveloppes(),
+        title: 'Envelopes',
+        href: envelopes(),
         icon: materialSymbol('category'),
     },
 ];

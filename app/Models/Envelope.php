@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-class Enveloppe extends Model
+class Envelope extends Model
 {
     public const DIRECTION_EXPENSE = 'expense';
 
@@ -29,12 +29,12 @@ class Enveloppe extends Model
 
     public const DIRECTIONS = [self::DIRECTION_EXPENSE, self::DIRECTION_REVENUE];
 
-    protected $table = 'enveloppes';
+    protected $table = 'envelopes';
 
     protected $fillable = ['user_id', 'name', 'type', 'color'];
 
     /**
-     * The user owning this enveloppe (enveloppes stay user-owned).
+     * The user owning this envelope (envelopes stay user-owned).
      *
      * @return BelongsTo<User, $this>
      */
@@ -44,39 +44,39 @@ class Enveloppe extends Model
     }
 
     /**
-     * The enveloppe's permission rows.
+     * The envelope's permission rows.
      *
-     * @return HasMany<EnveloppePermission, $this>
+     * @return HasMany<EnvelopePermission, $this>
      */
     public function permissions(): HasMany
     {
-        return $this->hasMany(EnveloppePermission::class, 'enveloppe_id');
+        return $this->hasMany(EnvelopePermission::class, 'envelope_id');
     }
 
     /**
-     * The budget assignments referencing this enveloppe.
+     * The budget assignments referencing this envelope.
      *
-     * @return HasMany<BudgetEnveloppe, $this>
+     * @return HasMany<BudgetEnvelope, $this>
      */
-    public function budgetEnveloppes(): HasMany
+    public function budgetEnvelopes(): HasMany
     {
-        return $this->hasMany(BudgetEnveloppe::class, 'enveloppe_id');
+        return $this->hasMany(BudgetEnvelope::class, 'envelope_id');
     }
 
     /**
-     * The transactions recorded against this enveloppe.
+     * The transactions recorded against this envelope.
      *
      * @return HasMany<Transaction, $this>
      */
     public function transactions(): HasMany
     {
-        return $this->hasMany(Transaction::class, 'enveloppe_id');
+        return $this->hasMany(Transaction::class, 'envelope_id');
     }
 
     /**
-     * The permission the given user has on this enveloppe: "owner",
+     * The permission the given user has on this envelope: "owner",
      * "contributor", "viewer" — or "none" (metadata-only) for users who
-     * merely share a profile with the owner. Enveloppes are not
+     * merely share a profile with the owner. Envelopes are not
      * profile-scoped, so there is no implicit viewer visibility.
      */
     public function permissionFor(User $user): string
@@ -85,7 +85,7 @@ class Enveloppe extends Model
             return ResourcePermissions::OWNER;
         }
 
-        /** @var EnveloppePermission|null $share */
+        /** @var EnvelopePermission|null $share */
         $share = $this->relationLoaded('permissions')
             ? $this->permissions->firstWhere('user_id', $user->id)
             : $this->permissions()->where('user_id', $user->id)->first();
@@ -98,7 +98,7 @@ class Enveloppe extends Model
     }
 
     /**
-     * Whether the enveloppe is owned by the given user.
+     * Whether the envelope is owned by the given user.
      */
     public function isOwner(User $user): bool
     {
@@ -106,10 +106,10 @@ class Enveloppe extends Model
     }
 
     /**
-     * Scope enveloppes visible to the given user: their own, ones shared with
+     * Scope envelopes visible to the given user: their own, ones shared with
      * them, and metadata-only ones via profile membership with the owner.
      *
-     * @param  Builder<Enveloppe>  $query
+     * @param  Builder<Envelope>  $query
      */
     #[Scope]
     protected function visibleTo(Builder $query, User $user): void
@@ -125,9 +125,9 @@ class Enveloppe extends Model
     }
 
     /**
-     * Transfer ownership to the given profile member: the enveloppe becomes
+     * Transfer ownership to the given profile member: the envelope becomes
      * theirs (name collisions resolved with "(imported)") and the previous
-     * owner becomes a contributor via an enveloppe_permissions row.
+     * owner becomes a contributor via an envelope_permissions row.
      */
     public function transferOwnershipTo(User $target): void
     {
@@ -148,7 +148,7 @@ class Enveloppe extends Model
     }
 
     /**
-     * Transfer ownership of this enveloppe to the given user, resolving name
+     * Transfer ownership of this envelope to the given user, resolving name
      * collisions (unique per owner) by appending " (imported)". The new
      * owner's former share row is dropped (ownership supersedes it).
      */
@@ -158,7 +158,7 @@ class Enveloppe extends Model
             return;
         }
 
-        $takenNames = Enveloppe::query()
+        $takenNames = Envelope::query()
             ->where('user_id', $target->id)
             ->where('name', 'like', $this->name.'%')
             ->pluck('name')
@@ -178,7 +178,7 @@ class Enveloppe extends Model
     }
 
     /**
-     * Sign a positive amount from the enveloppe's direction: expenses are
+     * Sign a positive amount from the envelope's direction: expenses are
      * stored negative, revenues positive.
      */
     public function signedAmount(int $amount): int
@@ -187,25 +187,25 @@ class Enveloppe extends Model
     }
 
     /**
-     * The given user's effective permission on each of the given enveloppes
-     * in two queries (instead of one per enveloppe), keyed by enveloppe id.
+     * The given user's effective permission on each of the given envelopes
+     * in two queries (instead of one per envelope), keyed by envelope id.
      * Unknown ids are omitted.
      *
-     * @param  array<int, int>  $enveloppeIds
+     * @param  array<int, int>  $envelopeIds
      * @return Collection<int, string>
      */
-    public static function permissionsFor(User $user, array $enveloppeIds): Collection
+    public static function permissionsFor(User $user, array $envelopeIds): Collection
     {
-        if ($enveloppeIds === []) {
+        if ($envelopeIds === []) {
             return collect();
         }
 
         return self::query()
-            ->whereIn('id', $enveloppeIds)
+            ->whereIn('id', $envelopeIds)
             ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
             ->get()
-            ->mapWithKeys(fn (Enveloppe $enveloppe): array => [
-                $enveloppe->id => $enveloppe->permissionFor($user),
+            ->mapWithKeys(fn (Envelope $envelope): array => [
+                $envelope->id => $envelope->permissionFor($user),
             ]);
     }
 }

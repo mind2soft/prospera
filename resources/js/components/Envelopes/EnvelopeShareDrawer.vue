@@ -28,32 +28,32 @@ import {
 } from '@/components/ui/sheet';
 import { useProfileCircle } from '@/composables/profileQueries';
 import {
-    useEnveloppeShares,
-    useRemoveEnveloppeShare,
-    useSetEnveloppeShare,
-    useTransferEnveloppeOwnership,
-} from '@/composables/enveloppeQueries';
+    useEnvelopeShares,
+    useRemoveEnvelopeShare,
+    useSetEnvelopeShare,
+    useTransferEnvelopeOwnership,
+} from '@/composables/envelopeQueries';
 import { ApiError } from '@/lib/api';
 import type { ResourceMember, ResourcePermission } from '@/types';
 
 const props = defineProps<{
-    enveloppeId: number;
+    envelopeId: number;
     open: boolean;
-    /** True when the current user owns the enveloppe. */
+    /** True when the current user owns the envelope. */
     canManage: boolean;
     currentUserId: number;
 }>();
 
 const emit = defineEmits<{ (e: 'update:open', value: boolean): void }>();
 
-const sharesQuery = useEnveloppeShares(
-    computed(() => (props.open ? props.enveloppeId : null)),
+const sharesQuery = useEnvelopeShares(
+    computed(() => (props.open ? props.envelopeId : null)),
 );
 const circleQuery = useProfileCircle(computed(() => props.open));
 
-const setShare = useSetEnveloppeShare();
-const removeShare = useRemoveEnveloppeShare();
-const transferOwnership = useTransferEnveloppeOwnership();
+const setShare = useSetEnvelopeShare();
+const removeShare = useRemoveEnvelopeShare();
+const transferOwnership = useTransferEnvelopeOwnership();
 
 const fail = (e: unknown) => {
     toast.error(e instanceof ApiError ? e.firstError : 'Something went wrong.');
@@ -79,7 +79,7 @@ const add = () => {
     }
     setShare.mutate(
         {
-            enveloppeId: props.enveloppeId,
+            envelopeId: props.envelopeId,
             userId: newUserId.value,
             permission: newPermission.value,
         },
@@ -100,7 +100,7 @@ const onPermissionChange = (share: ResourceMember, permission: string) => {
     }
     setShare.mutate(
         {
-            enveloppeId: props.enveloppeId,
+            envelopeId: props.envelopeId,
             userId: share.user_id,
             permission: permission as ResourcePermission,
         },
@@ -113,7 +113,7 @@ const onPermissionChange = (share: ResourceMember, permission: string) => {
 
 const onRevoke = (share: ResourceMember) => {
     removeShare.mutate(
-        { enveloppeId: props.enveloppeId, userId: share.user_id },
+        { envelopeId: props.envelopeId, userId: share.user_id },
         {
             onSuccess: () => toast.success('Access revoked.'),
             onError: fail,
@@ -138,7 +138,7 @@ const confirmTransfer = () => {
     }
     confirmingTransfer.value = false;
     transferOwnership.mutate(
-        { enveloppeId: props.enveloppeId, userId: transferTarget.value },
+        { envelopeId: props.envelopeId, userId: transferTarget.value },
         {
             onSuccess: () => {
                 transferTarget.value = null;
@@ -170,7 +170,7 @@ watch(
     <Sheet :open="open" @update:open="(value) => emit('update:open', value)">
         <SheetContent class="flex flex-col gap-6 overflow-y-auto sm:max-w-md">
             <SheetHeader>
-                <SheetTitle>Share enveloppe</SheetTitle>
+                <SheetTitle>Share envelope</SheetTitle>
                 <SheetDescription
                     >People who share a profile with you.</SheetDescription
                 >
@@ -360,7 +360,7 @@ watch(
                                 circle.find((m) => m.id === transferTarget)
                                     ?.name
                             }}
-                            will become the owner of this enveloppe and get full
+                            will become the owner of this envelope and get full
                             control over it. You will become a contributor.
                         </DialogDescription>
                     </DialogHeader>

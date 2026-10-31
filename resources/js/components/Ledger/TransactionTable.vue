@@ -89,7 +89,7 @@ const stampLabel = (createdAt: string): string =>
                     class="border-b bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase"
                 >
                     <th class="px-4 py-2.5 font-medium">Day</th>
-                    <th class="px-4 py-2.5 font-medium">Enveloppe</th>
+                    <th class="px-4 py-2.5 font-medium">Envelope</th>
                     <th class="px-4 py-2.5 text-right font-medium">Amount</th>
                     <th class="px-4 py-2.5 text-right font-medium">
                         Remaining

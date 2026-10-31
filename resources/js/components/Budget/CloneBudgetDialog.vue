@@ -53,7 +53,7 @@ const confirm = () => {
                 <DialogTitle>Create a new budget?</DialogTitle>
                 <DialogDescription>
                     A draft copy of this budget will be created — same
-                    enveloppes, ready for your adjustments. The currency is
+                    envelopes, ready for your adjustments. The currency is
                     pre-filled from the current budget.
                 </DialogDescription>
             </DialogHeader>

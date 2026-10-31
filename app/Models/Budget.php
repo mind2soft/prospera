@@ -61,13 +61,13 @@ class Budget extends Model
     }
 
     /**
-     * The enveloppes assigned to this budget.
+     * The envelopes assigned to this budget.
      *
-     * @return HasMany<BudgetEnveloppe, $this>
+     * @return HasMany<BudgetEnvelope, $this>
      */
-    public function enveloppes(): HasMany
+    public function envelopes(): HasMany
     {
-        return $this->hasMany(BudgetEnveloppe::class);
+        return $this->hasMany(BudgetEnvelope::class);
     }
 
     /**

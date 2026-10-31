@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Budget;
-use App\Models\BudgetEnveloppe;
-use App\Models\Enveloppe;
+use App\Models\BudgetEnvelope;
+use App\Models\Envelope;
 use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
@@ -138,7 +138,7 @@ class LedgerController extends Controller
 
     /**
      * Transactions for the ledger within a from_date/to_date range. Rows on
-     * enveloppes the requester lacks enveloppe-viewer+ permission on are
+     * envelopes the requester lacks envelope-viewer+ permission on are
      * masked server-side: amount null + masked true (metadata only).
      */
     public function transactions(Request $request, Ledger $ledger): JsonResponse
@@ -154,7 +154,7 @@ class LedgerController extends Controller
         $to = Carbon::parse($validated['to_date'])->endOfDay();
 
         $transactions = $ledger->transactions()
-            ->with('enveloppe', 'user')
+            ->with('envelope', 'user')
             ->whereBetween('event_at', [$from, $to])
             ->orderBy('event_at')
             ->orderBy('id')
@@ -162,33 +162,33 @@ class LedgerController extends Controller
 
         // Remaining allocated is computed per budget snapshot: transactions
         // recorded against a budget revision subtract from that revision's
-        // own allocation, not from other revisions of the same enveloppe.
+        // own allocation, not from other revisions of the same envelope.
         $totals = DB::table('transactions')
             ->where('ledger_id', $ledger->id)
             ->whereBetween('event_at', [$from, $to])
-            ->groupBy('budget_id', 'enveloppe_id')
-            ->get(['budget_id', 'enveloppe_id', DB::raw('sum(amount) as total')])
+            ->groupBy('budget_id', 'envelope_id')
+            ->get(['budget_id', 'envelope_id', DB::raw('sum(amount) as total')])
             ->mapWithKeys(fn (object $row): array => [
-                (string) $row->budget_id.'-'.(string) $row->enveloppe_id => (int) $row->total,
+                (string) $row->budget_id.'-'.(string) $row->envelope_id => (int) $row->total,
             ]);
 
-        $allocations = BudgetEnveloppe::query()
-            ->whereIn('enveloppe_id', $transactions->pluck('enveloppe_id')->unique())
+        $allocations = BudgetEnvelope::query()
+            ->whereIn('envelope_id', $transactions->pluck('envelope_id')->unique())
             ->whereIn('budget_id', $transactions->pluck('budget_id')->unique())
             ->get()
-            ->keyBy(fn (BudgetEnveloppe $assignment) => $assignment->budget_id.'-'.$assignment->enveloppe_id)
+            ->keyBy(fn (BudgetEnvelope $assignment) => $assignment->budget_id.'-'.$assignment->envelope_id)
             ->toBase();
 
-        $enveloppePermissions = Enveloppe::permissionsFor(
+        $envelopePermissions = Envelope::permissionsFor(
             $request->user(),
-            $transactions->pluck('enveloppe_id')->unique()->all(),
+            $transactions->pluck('envelope_id')->unique()->all(),
         );
 
         return response()->json([
             'transactions' => $transactions
                 ->map(fn (Transaction $transaction) => $this->serializeTransaction(
                     $transaction,
-                    $enveloppePermissions->get($transaction->enveloppe_id, ResourcePermissions::NONE),
+                    $envelopePermissions->get($transaction->envelope_id, ResourcePermissions::NONE),
                     $this->remainingAllocated($transaction, $allocations, $totals),
                 ))
                 ->values(),
@@ -196,10 +196,10 @@ class LedgerController extends Controller
     }
 
     /**
-     * Record a transaction against the ledger's enveloppes. Ledger owners and
-     * contributors can record, but only against enveloppes on which they are
+     * Record a transaction against the ledger's envelopes. Ledger owners and
+     * contributors can record, but only against envelopes on which they are
      * also contributor (or owner). The amount is
-     * signed from the enveloppe's direction; the budget snapshot is the
+     * signed from the envelope's direction; the budget snapshot is the
      * latest published (non-retired) budget of the profile.
      */
     public function addTransaction(Request $request, Ledger $ledger): JsonResponse
@@ -207,7 +207,7 @@ class LedgerController extends Controller
         $ledgerPermission = $this->authorize($request, $ledger, ResourcePermissions::VIEWER);
 
         $validated = $request->validate([
-            'enveloppe_id' => ['required', 'integer'],
+            'envelope_id' => ['required', 'integer'],
             'amount' => ['required', 'integer', 'min:1', 'max:999999999'],
             'event_at' => ['required', 'date'],
         ]);
@@ -222,14 +222,14 @@ class LedgerController extends Controller
             abort(403);
         }
 
-        /** @var Enveloppe|null $enveloppe */
-        $enveloppe = Enveloppe::query()->find($validated['enveloppe_id']);
+        /** @var Envelope|null $envelope */
+        $envelope = Envelope::query()->find($validated['envelope_id']);
 
-        $enveloppePermission = $enveloppe?->permissionFor($request->user()) ?? ResourcePermissions::NONE;
+        $envelopePermission = $envelope?->permissionFor($request->user()) ?? ResourcePermissions::NONE;
 
-        if ($enveloppe === null || ! $this->permissions->isAtLeast($enveloppePermission, ResourcePermissions::CONTRIBUTOR)) {
+        if ($envelope === null || ! $this->permissions->isAtLeast($envelopePermission, ResourcePermissions::CONTRIBUTOR)) {
             throw ValidationException::withMessages([
-                'enveloppe_id' => __('You need contributor access to this enveloppe to record transactions.'),
+                'envelope_id' => __('You need contributor access to this envelope to record transactions.'),
             ]);
         }
 
@@ -258,24 +258,24 @@ class LedgerController extends Controller
             ]);
         }
 
-        if (! $budget->enveloppes()->where('enveloppe_id', $enveloppe->id)->exists()) {
+        if (! $budget->envelopes()->where('envelope_id', $envelope->id)->exists()) {
             throw ValidationException::withMessages([
-                'enveloppe_id' => __('This enveloppe is not part of the published budget.'),
+                'envelope_id' => __('This envelope is not part of the published budget.'),
             ]);
         }
 
         $transaction = $ledger->transactions()->create([
             'user_id' => $request->user()->id,
-            'enveloppe_id' => $enveloppe->id,
+            'envelope_id' => $envelope->id,
             'budget_id' => $budget->id,
-            'amount' => $enveloppe->signedAmount($validated['amount']),
+            'amount' => $envelope->signedAmount($validated['amount']),
             'event_at' => $eventAt,
         ]);
 
         return response()->json([
             'transaction' => $this->serializeTransaction(
                 $transaction,
-                $enveloppePermission,
+                $envelopePermission,
                 null,
                 withRemaining: false,
             ),
@@ -315,22 +315,22 @@ class LedgerController extends Controller
     }
 
     /**
-     * The enveloppe's allocated amount on the transaction's budget snapshot,
+     * The envelope's allocated amount on the transaction's budget snapshot,
      * minus the transactions recorded against that same snapshot budget
      * within the queried range ("remaining allocated").
      *
-     * @param  Collection<string, BudgetEnveloppe>  $allocations
+     * @param  Collection<string, BudgetEnvelope>  $allocations
      * @param  Collection<string, int>  $totals
      */
     private function remainingAllocated(Transaction $transaction, Collection $allocations, Collection $totals): ?int
     {
-        $allocation = $allocations->get($transaction->budget_id.'-'.$transaction->enveloppe_id)?->amount;
+        $allocation = $allocations->get($transaction->budget_id.'-'.$transaction->envelope_id)?->amount;
 
         if ($allocation === null) {
             return null;
         }
 
-        return (int) $allocation - $totals->get($transaction->budget_id.'-'.$transaction->enveloppe_id, 0);
+        return (int) $allocation - $totals->get($transaction->budget_id.'-'.$transaction->envelope_id, 0);
     }
 
     /**
@@ -436,9 +436,9 @@ class LedgerController extends Controller
     }
 
     /**
-     * Transaction payload with the enveloppe's display info and the entering
-     * user ("Former member" for deleted users). Rows on enveloppes the user
-     * lacks enveloppe-viewer+ permission on are masked server-side.
+     * Transaction payload with the envelope's display info and the entering
+     * user ("Former member" for deleted users). Rows on envelopes the user
+     * lacks envelope-viewer+ permission on are masked server-side.
      *
      * @return array<string, string|int|null|bool|array<string, string|int|null>>
      */
@@ -448,18 +448,18 @@ class LedgerController extends Controller
         ?int $remainingAllocated,
         bool $withRemaining = true,
     ): array {
-        $transaction->loadMissing(['enveloppe', 'user']);
+        $transaction->loadMissing(['envelope', 'user']);
 
         $masked = $permission === ResourcePermissions::NONE;
 
         $payload = [
             'id' => $transaction->id,
             'ledger_id' => $transaction->ledger_id,
-            'enveloppe_id' => $transaction->enveloppe_id,
+            'envelope_id' => $transaction->envelope_id,
             'budget_id' => $transaction->budget_id,
-            'name' => $transaction->enveloppe->name,
-            'color' => $transaction->enveloppe->color,
-            'direction' => $transaction->enveloppe->type,
+            'name' => $transaction->envelope->name,
+            'color' => $transaction->envelope->color,
+            'direction' => $transaction->envelope->type,
             'amount' => $masked ? null : $transaction->amount,
             'masked' => $masked,
             'event_at' => $transaction->event_at->toDateString(),

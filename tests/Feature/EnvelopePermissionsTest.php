@@ -3,8 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Budget;
-use App\Models\Enveloppe;
-use App\Models\EnveloppePermission;
+use App\Models\Envelope;
+use App\Models\EnvelopePermission;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
 use App\Models\Transaction;
@@ -12,7 +12,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class EnveloppePermissionsTest extends TestCase
+class EnvelopePermissionsTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -24,7 +24,7 @@ class EnveloppePermissionsTest extends TestCase
 
     private FinancialProfile $profile;
 
-    private Enveloppe $enveloppe;
+    private Envelope $envelope;
 
     protected function setUp(): void
     {
@@ -37,7 +37,7 @@ class EnveloppePermissionsTest extends TestCase
         $this->profile = FinancialProfile::createOwnedBy($this->owner, 'Family');
         $this->profile->members()->attach($this->member->id, ['is_owner' => false]);
 
-        $this->enveloppe = $this->owner->enveloppes()->create([
+        $this->envelope = $this->owner->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
     }
@@ -55,7 +55,7 @@ class EnveloppePermissionsTest extends TestCase
 
         return $ledger->transactions()->create([
             'user_id' => $this->owner->id,
-            'enveloppe_id' => $this->enveloppe->id,
+            'envelope_id' => $this->envelope->id,
             'budget_id' => Budget::create([
                 'profile_id' => $this->profile->id,
                 'currency' => 'CAD',
@@ -68,70 +68,70 @@ class EnveloppePermissionsTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // GET /api/enveloppes
+    // GET /api/envelopes
     // ------------------------------------------------------------------
 
-    public function test_api_index_lists_own_shared_and_metadata_only_enveloppes_with_permissions(): void
+    public function test_api_index_lists_own_shared_and_metadata_only_envelopes_with_permissions(): void
     {
-        $this->owner->enveloppes()->create(['name' => 'Own', 'type' => 'revenue', 'color' => '#111111']);
+        $this->owner->envelopes()->create(['name' => 'Own', 'type' => 'revenue', 'color' => '#111111']);
 
         // Shared with the member: contributor.
-        $this->enveloppe->permissions()->create([
+        $this->envelope->permissions()->create([
             'user_id' => $this->member->id,
-            'permission' => EnveloppePermission::PERMISSION_CONTRIBUTOR,
+            'permission' => EnvelopePermission::PERMISSION_CONTRIBUTOR,
         ]);
-        $shared = $this->owner->enveloppes()->create(['name' => 'Shared', 'type' => 'expense', 'color' => '#222222']);
+        $shared = $this->owner->envelopes()->create(['name' => 'Shared', 'type' => 'expense', 'color' => '#222222']);
         $shared->permissions()->create([
             'user_id' => $this->member->id,
-            'permission' => EnveloppePermission::PERMISSION_VIEWER,
+            'permission' => EnvelopePermission::PERMISSION_VIEWER,
         ]);
 
         // Metadata-only: the member shares a profile with the owner but has
-        // no permission row on this enveloppe.
-        $metadataOnly = $this->owner->enveloppes()->create(['name' => 'Hidden', 'type' => 'expense', 'color' => '#333333']);
+        // no permission row on this envelope.
+        $metadataOnly = $this->owner->envelopes()->create(['name' => 'Hidden', 'type' => 'expense', 'color' => '#333333']);
 
-        // The stranger's enveloppe is not visible at all.
-        $strangerEnveloppe = $this->stranger->enveloppes()->create(['name' => 'Theirs', 'type' => 'expense', 'color' => '#444444']);
+        // The stranger's envelope is not visible at all.
+        $strangerEnvelope = $this->stranger->envelopes()->create(['name' => 'Theirs', 'type' => 'expense', 'color' => '#444444']);
 
-        $response = $this->actingAs($this->member)->getJson('/api/enveloppes');
+        $response = $this->actingAs($this->member)->getJson('/api/envelopes');
 
         $response->assertOk();
-        $rows = collect($response->json('enveloppes'))->keyBy('id');
+        $rows = collect($response->json('envelopes'))->keyBy('id');
 
-        $this->assertEquals('contributor', $rows->get($this->enveloppe->id)['permission']);
+        $this->assertEquals('contributor', $rows->get($this->envelope->id)['permission']);
         $this->assertEquals('viewer', $rows->get($shared->id)['permission']);
         $this->assertEquals('none', $rows->get($metadataOnly->id)['permission']);
-        $this->assertNull($rows->get($strangerEnveloppe->id));
+        $this->assertNull($rows->get($strangerEnvelope->id));
 
-        // The owner sees "owner" on their own enveloppes.
-        $ownerResponse = $this->actingAs($this->owner)->getJson('/api/enveloppes');
-        $ownerRows = collect($ownerResponse->json('enveloppes'))->keyBy('id');
-        $this->assertEquals('owner', $ownerRows->get($this->enveloppe->id)['permission']);
+        // The owner sees "owner" on their own envelopes.
+        $ownerResponse = $this->actingAs($this->owner)->getJson('/api/envelopes');
+        $ownerRows = collect($ownerResponse->json('envelopes'))->keyBy('id');
+        $this->assertEquals('owner', $ownerRows->get($this->envelope->id)['permission']);
     }
 
     // ------------------------------------------------------------------
     // Totals & transactions endpoints
     // ------------------------------------------------------------------
 
-    public function test_totals_are_403_without_enveloppe_viewer_permission(): void
+    public function test_totals_are_403_without_envelope_viewer_permission(): void
     {
         $this->createLedgerWithTransaction(-100);
 
         // Co-member without a permission row: metadata-only.
-        $this->actingAs($this->member)->getJson("/api/enveloppes/{$this->enveloppe->id}/totals")
+        $this->actingAs($this->member)->getJson("/api/envelopes/{$this->envelope->id}/totals")
             ->assertForbidden();
 
         // A stranger: also forbidden (never leaks amounts).
-        $this->actingAs($this->stranger)->getJson("/api/enveloppes/{$this->enveloppe->id}/totals")
+        $this->actingAs($this->stranger)->getJson("/api/envelopes/{$this->envelope->id}/totals")
             ->assertForbidden();
 
         // With viewer permission: allowed.
-        $this->enveloppe->permissions()->create([
+        $this->envelope->permissions()->create([
             'user_id' => $this->member->id,
-            'permission' => EnveloppePermission::PERMISSION_VIEWER,
+            'permission' => EnvelopePermission::PERMISSION_VIEWER,
         ]);
 
-        $response = $this->actingAs($this->member)->getJson("/api/enveloppes/{$this->enveloppe->id}/totals");
+        $response = $this->actingAs($this->member)->getJson("/api/envelopes/{$this->envelope->id}/totals");
 
         $response->assertOk()
             ->assertJsonPath('totals.total', -100)
@@ -145,23 +145,23 @@ class EnveloppePermissionsTest extends TestCase
         $this->createLedgerWithTransaction(-50, '2026-06-20');
 
         $this->actingAs($this->owner)->getJson(
-            "/api/enveloppes/{$this->enveloppe->id}/totals?from_date=2026-06-01&to_date=2026-06-30"
+            "/api/envelopes/{$this->envelope->id}/totals?from_date=2026-06-01&to_date=2026-06-30"
         )->assertOk()->assertJsonPath('totals.total', -50)->assertJsonPath('totals.count', 1);
     }
 
-    public function test_transactions_endpoint_is_403_without_enveloppe_viewer_permission(): void
+    public function test_transactions_endpoint_is_403_without_envelope_viewer_permission(): void
     {
         $this->createLedgerWithTransaction(-100);
 
-        $this->actingAs($this->member)->getJson("/api/enveloppes/{$this->enveloppe->id}/transactions")
+        $this->actingAs($this->member)->getJson("/api/envelopes/{$this->envelope->id}/transactions")
             ->assertForbidden();
 
-        $this->enveloppe->permissions()->create([
+        $this->envelope->permissions()->create([
             'user_id' => $this->member->id,
-            'permission' => EnveloppePermission::PERMISSION_VIEWER,
+            'permission' => EnvelopePermission::PERMISSION_VIEWER,
         ]);
 
-        $response = $this->actingAs($this->member)->getJson("/api/enveloppes/{$this->enveloppe->id}/transactions");
+        $response = $this->actingAs($this->member)->getJson("/api/envelopes/{$this->envelope->id}/transactions");
 
         $response->assertOk();
         $row = $response->json('transactions.0');
@@ -176,18 +176,18 @@ class EnveloppePermissionsTest extends TestCase
 
     public function test_shares_must_target_profile_members_of_the_owner(): void
     {
-        $this->actingAs($this->owner)->postJson("/api/enveloppes/{$this->enveloppe->id}/shares", [
+        $this->actingAs($this->owner)->postJson("/api/envelopes/{$this->envelope->id}/shares", [
             'user_id' => $this->stranger->id,
             'permission' => 'viewer',
         ])->assertUnprocessable()->assertJsonValidationErrors('user_id');
 
-        $this->actingAs($this->owner)->postJson("/api/enveloppes/{$this->enveloppe->id}/shares", [
+        $this->actingAs($this->owner)->postJson("/api/envelopes/{$this->envelope->id}/shares", [
             'user_id' => $this->member->id,
             'permission' => 'contributor',
         ])->assertCreated();
 
-        $this->assertDatabaseHas('enveloppe_permissions', [
-            'enveloppe_id' => $this->enveloppe->id,
+        $this->assertDatabaseHas('envelope_permissions', [
+            'envelope_id' => $this->envelope->id,
             'user_id' => $this->member->id,
             'permission' => 'contributor',
         ]);
@@ -195,7 +195,7 @@ class EnveloppePermissionsTest extends TestCase
 
     public function test_the_owner_permission_cannot_be_granted(): void
     {
-        $this->actingAs($this->owner)->postJson("/api/enveloppes/{$this->enveloppe->id}/shares", [
+        $this->actingAs($this->owner)->postJson("/api/envelopes/{$this->envelope->id}/shares", [
             'user_id' => $this->member->id,
             'permission' => 'owner',
         ])->assertUnprocessable()->assertJsonValidationErrors('permission');
@@ -203,65 +203,65 @@ class EnveloppePermissionsTest extends TestCase
 
     public function test_share_management_is_owner_only(): void
     {
-        $this->enveloppe->permissions()->create([
+        $this->envelope->permissions()->create([
             'user_id' => $this->member->id,
-            'permission' => EnveloppePermission::PERMISSION_VIEWER,
+            'permission' => EnvelopePermission::PERMISSION_VIEWER,
         ]);
 
         // The member (co-member of the owner) can list shares but not manage.
-        $this->actingAs($this->member)->getJson("/api/enveloppes/{$this->enveloppe->id}/shares")
+        $this->actingAs($this->member)->getJson("/api/envelopes/{$this->envelope->id}/shares")
             ->assertOk()->assertJsonCount(1, 'shares');
 
-        $this->actingAs($this->member)->patchJson("/api/enveloppes/{$this->enveloppe->id}/shares/{$this->member->id}", [
+        $this->actingAs($this->member)->patchJson("/api/envelopes/{$this->envelope->id}/shares/{$this->member->id}", [
             'permission' => 'contributor',
         ])->assertNotFound();
 
-        $this->actingAs($this->member)->deleteJson("/api/enveloppes/{$this->enveloppe->id}/shares/{$this->member->id}")
+        $this->actingAs($this->member)->deleteJson("/api/envelopes/{$this->envelope->id}/shares/{$this->member->id}")
             ->assertNotFound();
 
         // Strangers cannot even list.
-        $this->actingAs($this->stranger)->getJson("/api/enveloppes/{$this->enveloppe->id}/shares")
+        $this->actingAs($this->stranger)->getJson("/api/envelopes/{$this->envelope->id}/shares")
             ->assertNotFound();
     }
 
     public function test_owner_can_update_and_revoke_shares(): void
     {
-        $this->enveloppe->permissions()->create([
+        $this->envelope->permissions()->create([
             'user_id' => $this->member->id,
-            'permission' => EnveloppePermission::PERMISSION_VIEWER,
+            'permission' => EnvelopePermission::PERMISSION_VIEWER,
         ]);
 
-        $this->actingAs($this->owner)->patchJson("/api/enveloppes/{$this->enveloppe->id}/shares/{$this->member->id}", [
+        $this->actingAs($this->owner)->patchJson("/api/envelopes/{$this->envelope->id}/shares/{$this->member->id}", [
             'permission' => 'contributor',
         ])->assertOk()->assertJsonPath('shares.0.permission', 'contributor');
 
-        $this->assertDatabaseHas('enveloppe_permissions', [
-            'enveloppe_id' => $this->enveloppe->id,
+        $this->assertDatabaseHas('envelope_permissions', [
+            'envelope_id' => $this->envelope->id,
             'user_id' => $this->member->id,
             'permission' => 'contributor',
         ]);
 
-        $this->actingAs($this->owner)->deleteJson("/api/enveloppes/{$this->enveloppe->id}/shares/{$this->member->id}")
+        $this->actingAs($this->owner)->deleteJson("/api/envelopes/{$this->envelope->id}/shares/{$this->member->id}")
             ->assertNoContent();
 
-        $this->assertDatabaseMissing('enveloppe_permissions', [
-            'enveloppe_id' => $this->enveloppe->id,
+        $this->assertDatabaseMissing('envelope_permissions', [
+            'envelope_id' => $this->envelope->id,
             'user_id' => $this->member->id,
         ]);
     }
 
     public function test_ownership_transfer_demotes_the_previous_owner_to_contributor(): void
     {
-        $this->actingAs($this->owner)->postJson("/api/enveloppes/{$this->enveloppe->id}/transfer-ownership", [
+        $this->actingAs($this->owner)->postJson("/api/envelopes/{$this->envelope->id}/transfer-ownership", [
             'user_id' => $this->member->id,
         ])->assertOk();
 
-        $this->enveloppe->refresh();
-        $this->assertTrue($this->enveloppe->isOwner($this->member));
-        $this->assertEquals('Rent', $this->enveloppe->name);
+        $this->envelope->refresh();
+        $this->assertTrue($this->envelope->isOwner($this->member));
+        $this->assertEquals('Rent', $this->envelope->name);
 
-        $this->assertDatabaseHas('enveloppe_permissions', [
-            'enveloppe_id' => $this->enveloppe->id,
+        $this->assertDatabaseHas('envelope_permissions', [
+            'envelope_id' => $this->envelope->id,
             'user_id' => $this->owner->id,
             'permission' => 'contributor',
         ]);
@@ -269,16 +269,16 @@ class EnveloppePermissionsTest extends TestCase
 
     public function test_ownership_transfer_resolves_name_collisions(): void
     {
-        $this->member->enveloppes()->create([
+        $this->member->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#111111',
         ]);
 
-        $this->actingAs($this->owner)->postJson("/api/enveloppes/{$this->enveloppe->id}/transfer-ownership", [
+        $this->actingAs($this->owner)->postJson("/api/envelopes/{$this->envelope->id}/transfer-ownership", [
             'user_id' => $this->member->id,
         ])->assertOk();
 
-        $this->assertDatabaseHas('enveloppes', [
-            'id' => $this->enveloppe->id,
+        $this->assertDatabaseHas('envelopes', [
+            'id' => $this->envelope->id,
             'user_id' => $this->member->id,
             'name' => 'Rent (imported)',
         ]);
@@ -286,7 +286,7 @@ class EnveloppePermissionsTest extends TestCase
 
     public function test_ownership_transfer_requires_a_member_target(): void
     {
-        $this->actingAs($this->owner)->postJson("/api/enveloppes/{$this->enveloppe->id}/transfer-ownership", [
+        $this->actingAs($this->owner)->postJson("/api/envelopes/{$this->envelope->id}/transfer-ownership", [
             'user_id' => $this->stranger->id,
         ])->assertUnprocessable()->assertJsonValidationErrors('user_id');
     }

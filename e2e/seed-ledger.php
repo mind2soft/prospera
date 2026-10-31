@@ -37,7 +37,7 @@ $profile = FinancialProfile::query()
 Transaction::whereIn('ledger_id', Ledger::query()->where('profile_id', $profile->id)->select('id'))->delete();
 Ledger::query()->where('profile_id', $profile->id)->get()->each(fn (Ledger $l) => $l->delete());
 Budget::query()->where('profile_id', $profile->id)->get()->each(fn (Budget $b) => $b->delete());
-$u->enveloppes()->delete();
+$u->envelopes()->delete();
 
 $b = Budget::create([
     'profile_id' => $profile->id,
@@ -49,15 +49,15 @@ $b = Budget::create([
 $b->permissions()->create(['user_id' => $u->id, 'permission' => BudgetPermission::PERMISSION_OWNER]);
 
 $mk = function (string $name, string $type, string $color) use ($u) {
-    return $u->enveloppes()->create(['name' => $name, 'type' => $type, 'color' => $color]);
+    return $u->envelopes()->create(['name' => $name, 'type' => $type, 'color' => $color]);
 };
 $salary = $mk('Paychecks', 'revenue', '#10b981');
 $food = $mk('Food', 'expense', '#f59e0b');
 $rent = $mk('Mortgage', 'expense', '#f43f5e');
 
 $add = function ($cat, int $amount, string $type) use ($b) {
-    return $b->enveloppes()->create([
-        'enveloppe_id' => $cat->id,
+    return $b->envelopes()->create([
+        'envelope_id' => $cat->id,
         'amount' => $cat->type === 'expense' ? -$amount : $amount,
         'type' => $type,
     ]);
@@ -79,9 +79,9 @@ $tx = function ($assignment, int $amount, string $date, int $offsetSeconds) use 
     Transaction::create([
         'ledger_id' => $ledger->id,
         'user_id' => $u->id,
-        'enveloppe_id' => $assignment->enveloppe_id,
+        'envelope_id' => $assignment->envelope_id,
         'budget_id' => $b->id,
-        'amount' => $assignment->enveloppe->type === 'expense' ? -$amount : $amount,
+        'amount' => $assignment->envelope->type === 'expense' ? -$amount : $amount,
         'event_at' => $date.' 00:00:00',
         'created_at' => now()->addSeconds($offsetSeconds),
         'updated_at' => now()->addSeconds($offsetSeconds),
@@ -89,10 +89,10 @@ $tx = function ($assignment, int $amount, string $date, int $offsetSeconds) use 
 };
 
 // October 2026 (current view month): Paychecks 2000, Food 120, Rent 1300.
-$tx($b->enveloppes()->where('enveloppe_id', $salary->id)->first(), 1800, '2026-10-01', 1);
-$tx($b->enveloppes()->where('enveloppe_id', $food->id)->first(), 120, '2026-10-15', 2);
-$tx($b->enveloppes()->where('enveloppe_id', $rent->id)->first(), 1250, '2026-10-20', 3);
+$tx($b->envelopes()->where('envelope_id', $salary->id)->first(), 1800, '2026-10-01', 1);
+$tx($b->envelopes()->where('envelope_id', $food->id)->first(), 120, '2026-10-15', 2);
+$tx($b->envelopes()->where('envelope_id', $rent->id)->first(), 1250, '2026-10-20', 3);
 // September 2026 (for month navigation checks).
-$tx($b->enveloppes()->where('enveloppe_id', $food->id)->first(), 90, '2026-09-10', 4);
+$tx($b->envelopes()->where('envelope_id', $food->id)->first(), 90, '2026-09-10', 4);
 
 echo 'seeded profile_id='.$profile->id.' budget_id='.$b->id.' ledger_id='.$ledger->id.PHP_EOL;

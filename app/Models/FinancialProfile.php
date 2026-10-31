@@ -153,10 +153,10 @@ class FinancialProfile extends Model
     /**
      * Remove a member: their owned resources in the profile auto-transfer to
      * the profile owner and their share rows on the profile's resources are
-     * deleted. Only the member's enveloppes referenced by this profile's
+     * deleted. Only the member's envelopes referenced by this profile's
      * budgets/ledgers transfer — the member still exists as a user and keeps
-     * their unreferenced enveloppes. When the member is merely leaving (not
-     * deleting their account), enveloppes they still use in another of their
+     * their unreferenced envelopes. When the member is merely leaving (not
+     * deleting their account), envelopes they still use in another of their
      * profiles stay theirs and the profile owner gets contributor access.
      */
     public function removeMember(User $member, bool $accountDeletion = false): void
@@ -168,8 +168,8 @@ class FinancialProfile extends Model
             $this->deleteBudgetPermissionsFor($member);
             $this->transferLedgersOwnedBy($member, $owner);
             $this->deleteLedgerPermissionsFor($member);
-            $this->deleteEnveloppePermissionsFor($member);
-            $this->transferReferencedEnveloppesOwnedBy($member, $owner, keepSharedElsewhere: ! $accountDeletion);
+            $this->deleteEnvelopePermissionsFor($member);
+            $this->transferReferencedEnvelopesOwnedBy($member, $owner, keepSharedElsewhere: ! $accountDeletion);
 
             $this->members()->detach($member);
         });
@@ -228,13 +228,13 @@ class FinancialProfile extends Model
     }
 
     /**
-     * Delete the member's enveloppe share rows that were granted by owners
+     * Delete the member's envelope share rows that were granted by owners
      * who are members of this profile (grants target profile members only).
      */
-    public function deleteEnveloppePermissionsFor(User $member): void
+    public function deleteEnvelopePermissionsFor(User $member): void
     {
-        DB::table('enveloppe_permissions')
-            ->whereIn('enveloppe_id', Enveloppe::query()
+        DB::table('envelope_permissions')
+            ->whereIn('envelope_id', Envelope::query()
                 ->whereIn('user_id', $this->members()->select('users.id'))
                 ->select('id'))
             ->where('user_id', $member->id)
@@ -290,16 +290,16 @@ class FinancialProfile extends Model
     }
 
     /**
-     * Transfer the member's enveloppes referenced by this profile's budgets
+     * Transfer the member's envelopes referenced by this profile's budgets
      * or ledgers to the target user, resolving name collisions with the
-     * "(imported)" suffix. Unreferenced enveloppes stay owned by the member.
+     * "(imported)" suffix. Unreferenced envelopes stay owned by the member.
      *
-     * With $keepSharedElsewhere, enveloppes also referenced by another
+     * With $keepSharedElsewhere, envelopes also referenced by another
      * profile the member still belongs to are not transferred (that would
      * break the member's other profile); the target gets contributor access
      * instead so this profile's budgets and ledgers keep working.
      */
-    public function transferReferencedEnveloppesOwnedBy(User $member, ?User $target, bool $keepSharedElsewhere = false): void
+    public function transferReferencedEnvelopesOwnedBy(User $member, ?User $target, bool $keepSharedElsewhere = false): void
     {
         if ($target === null || $target->id === $member->id) {
             return;
@@ -309,21 +309,21 @@ class FinancialProfile extends Model
             ? $member->profiles()->whereKeyNot($this->id)->pluck('financial_profiles.id')
             : collect();
 
-        self::referencingEnveloppes(Enveloppe::query()->where('user_id', $member->id), [$this->id])
+        self::referencingEnvelopes(Envelope::query()->where('user_id', $member->id), [$this->id])
             ->get()
-            ->each(function (Enveloppe $enveloppe) use ($target, $otherProfileIds): void {
-                $usedElsewhere = $otherProfileIds->isNotEmpty() && self::referencingEnveloppes(
-                    Enveloppe::query()->whereKey($enveloppe->id),
+            ->each(function (Envelope $envelope) use ($target, $otherProfileIds): void {
+                $usedElsewhere = $otherProfileIds->isNotEmpty() && self::referencingEnvelopes(
+                    Envelope::query()->whereKey($envelope->id),
                     $otherProfileIds->all(),
                 )->exists();
 
                 if (! $usedElsewhere) {
-                    $enveloppe->transferTo($target);
+                    $envelope->transferTo($target);
 
                     return;
                 }
 
-                $enveloppe->permissions()->updateOrCreate(
+                $envelope->permissions()->updateOrCreate(
                     ['user_id' => $target->id],
                     ['permission' => ResourcePermissions::CONTRIBUTOR],
                 );
@@ -331,17 +331,17 @@ class FinancialProfile extends Model
     }
 
     /**
-     * Constrain an enveloppe query to the ones referenced by the given
+     * Constrain an envelope query to the ones referenced by the given
      * profiles' budgets or ledger transactions.
      *
-     * @param  Builder<Enveloppe>  $query
+     * @param  Builder<Envelope>  $query
      * @param  array<int, int>  $profileIds
-     * @return Builder<Enveloppe>
+     * @return Builder<Envelope>
      */
-    private static function referencingEnveloppes(Builder $query, array $profileIds): Builder
+    private static function referencingEnvelopes(Builder $query, array $profileIds): Builder
     {
         return $query->where(fn (Builder $query) => $query
-            ->whereHas('budgetEnveloppes.budget', fn (Builder $budget) => $budget->whereIn('budgets.profile_id', $profileIds))
+            ->whereHas('budgetEnvelopes.budget', fn (Builder $budget) => $budget->whereIn('budgets.profile_id', $profileIds))
             ->orWhereHas('transactions.ledger', fn (Builder $ledger) => $ledger->whereIn('ledgers.profile_id', $profileIds)));
     }
 
@@ -356,7 +356,7 @@ class FinancialProfile extends Model
             Ledger::query()->where('profile_id', $this->id)->get()
                 ->each(fn (Ledger $ledger) => $ledger->deleteWithTransactions());
 
-            // Budget children (permissions, enveloppe assignments) cascade.
+            // Budget children (permissions, envelope assignments) cascade.
             Budget::query()->where('profile_id', $this->id)->delete();
 
             $this->delete();

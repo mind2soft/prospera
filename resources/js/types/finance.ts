@@ -2,8 +2,8 @@
 
 export type ResourcePermission = 'owner' | 'contributor' | 'viewer';
 
-/** Enveloppes add "none" (metadata-only visibility). */
-export type EnveloppePermission = ResourcePermission | 'none';
+/** Envelopes add "none" (metadata-only visibility). */
+export type EnvelopePermission = ResourcePermission | 'none';
 
 export type FinancialProfile = {
     id: number;
@@ -45,19 +45,19 @@ export type ResourceMember = {
     permission: ResourcePermission;
 };
 
-// ---- Enveloppe (docs/enveloppe.md) -----------------------------------------
+// ---- Envelope (docs/envelope.md) -----------------------------------------
 
-export type Enveloppe = {
+export type Envelope = {
     id: number;
     name: string;
     direction: 'expense' | 'revenue';
     color: string;
-    permission: EnveloppePermission;
+    permission: EnvelopePermission;
 };
 
 // ---- Budget (docs/budget.md) -----------------------------------------------
 
-export type BudgetEnveloppeType = 'fixed' | 'variable';
+export type BudgetEnvelopeType = 'fixed' | 'variable';
 
 export type Budget = {
     id: number;
@@ -71,17 +71,17 @@ export type Budget = {
     permission: ResourcePermission;
 };
 
-export type BudgetEnveloppe = {
-    enveloppe_id: number;
+export type BudgetEnvelope = {
+    envelope_id: number;
     name: string;
     color: string;
     direction: 'expense' | 'revenue';
     amount: number; // signed: positive for revenue, negative for expense
-    type: BudgetEnveloppeType;
+    type: BudgetEnvelopeType;
 };
 
 export type BudgetDetail = Budget & {
-    enveloppes: BudgetEnveloppe[];
+    envelopes: BudgetEnvelope[];
     shares: ResourceMember[];
 };
 
@@ -105,12 +105,12 @@ export type Ledger = {
 export type Transaction = {
     id: number;
     ledger_id: number;
-    enveloppe_id: number;
+    envelope_id: number;
     budget_id: number;
-    name: string; // enveloppe name
+    name: string; // envelope name
     color: string;
     direction: 'expense' | 'revenue';
-    /** null + masked: true when the enveloppe is metadata-only for the user. */
+    /** null + masked: true when the envelope is metadata-only for the user. */
     amount: number | null;
     masked: boolean;
     event_at: string; // ISO date "2026-10-15" (stored at 00:00:00)

@@ -11,14 +11,14 @@ export type CreateLedgerInput = {
 };
 
 export type AddTransactionInput = {
-    enveloppe_id: number;
+    envelope_id: number;
     amount: number; // positive integer
     event_at: string; // ISO date ("2026-10-30")
 };
 
-/** An enveloppe offered by the transaction picker (published budget ∩ contributor+). */
-export type PickerEnveloppe = {
-    enveloppe_id: number;
+/** An envelope offered by the transaction picker (published budget ∩ contributor+). */
+export type PickerEnvelope = {
+    envelope_id: number;
     name: string;
     color: string;
     direction: 'expense' | 'revenue';

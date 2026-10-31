@@ -13,8 +13,8 @@
 
 use App\Models\Budget;
 use App\Models\BudgetPermission;
-use App\Models\Enveloppe;
-use App\Models\EnveloppePermission;
+use App\Models\Envelope;
+use App\Models\EnvelopePermission;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileInvite;
 use App\Models\Ledger;
@@ -22,13 +22,13 @@ use App\Models\Transaction;
 use App\Models\User;
 
 // Full reset (dependency order): transactions → ledgers → budgets →
-// enveloppe permissions → enveloppes → invites → profiles (cascades memberships)
+// envelope permissions → envelopes → invites → profiles (cascades memberships)
 // → users.
 Transaction::query()->delete();
 Ledger::query()->delete();
 Budget::query()->delete();
-EnveloppePermission::query()->delete();
-Enveloppe::query()->delete();
+EnvelopePermission::query()->delete();
+Envelope::query()->delete();
 FinancialProfileInvite::query()->delete();
 FinancialProfile::query()->delete();
 User::query()->delete();
@@ -65,7 +65,7 @@ $b = Budget::create([
 ]);
 $b->permissions()->create(['user_id' => $owner->id, 'permission' => BudgetPermission::PERMISSION_OWNER]);
 
-$mk = fn (string $name, string $type, string $color) => $owner->enveloppes()->create([
+$mk = fn (string $name, string $type, string $color) => $owner->envelopes()->create([
     'name' => $name,
     'type' => $type,
     'color' => $color,
@@ -73,7 +73,7 @@ $mk = fn (string $name, string $type, string $color) => $owner->enveloppes()->cr
 $salary = $mk('Paychecks', 'revenue', '#10b981');
 $food = $mk('Food', 'expense', '#f59e0b');
 
-$b->enveloppes()->create(['enveloppe_id' => $salary->id, 'amount' => 2000, 'type' => 'fixed']);
-$b->enveloppes()->create(['enveloppe_id' => $food->id, 'amount' => -800, 'type' => 'variable']);
+$b->envelopes()->create(['envelope_id' => $salary->id, 'amount' => 2000, 'type' => 'fixed']);
+$b->envelopes()->create(['envelope_id' => $food->id, 'amount' => -800, 'type' => 'variable']);
 
 echo 'seeded default_profile='.$default->id.' family_profile='.$family->id.PHP_EOL;

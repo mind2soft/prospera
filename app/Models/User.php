@@ -51,13 +51,13 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     }
 
     /**
-     * The user's enveloppes.
+     * The user's envelopes.
      *
-     * @return HasMany<Enveloppe, $this>
+     * @return HasMany<Envelope, $this>
      */
-    public function enveloppes(): HasMany
+    public function envelopes(): HasMany
     {
-        return $this->hasMany(Enveloppe::class);
+        return $this->hasMany(Envelope::class);
     }
 
     /**

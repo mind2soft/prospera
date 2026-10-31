@@ -19,8 +19,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { useEnveloppeOptions } from '@/composables/enveloppeQueries';
-import type { AddEnveloppeInput } from '@/lib/budgetApi';
+import { useEnvelopeOptions } from '@/composables/envelopeQueries';
+import type { AddEnvelopeInput } from '@/lib/budgetApi';
 
 const props = defineProps<{
     open: boolean;
@@ -29,13 +29,13 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'update:open', value: boolean): void;
-    (e: 'confirm', input: AddEnveloppeInput): void;
+    (e: 'confirm', input: AddEnvelopeInput): void;
 }>();
 
-const optionsQuery = useEnveloppeOptions();
+const optionsQuery = useEnvelopeOptions();
 const options = computed(() =>
-    // Only enveloppes the user may plan against (owner or contributor);
-    // metadata-only enveloppes are rejected by the server.
+    // Only envelopes the user may plan against (owner or contributor);
+    // metadata-only envelopes are rejected by the server.
     (optionsQuery.data.value ?? []).filter(
         (option) =>
             !props.excludedIds?.includes(option.id) &&
@@ -44,20 +44,20 @@ const options = computed(() =>
     ),
 );
 
-const enveloppeId = ref<number | null>(null);
+const envelopeId = ref<number | null>(null);
 const type = ref<'fixed' | 'variable'>('fixed');
 const amount = ref('');
 
 const selected = computed(
     () =>
-        options.value.find((option) => option.id === enveloppeId.value) ?? null,
+        options.value.find((option) => option.id === envelopeId.value) ?? null,
 );
 
 watch(
     () => props.open,
     (open) => {
         if (open) {
-            enveloppeId.value = null;
+            envelopeId.value = null;
             type.value = 'fixed';
             amount.value = '';
         }
@@ -79,7 +79,7 @@ const confirm = () => {
         return;
     }
     emit('confirm', {
-        enveloppe_id: selected.value.id,
+        envelope_id: selected.value.id,
         type: type.value,
         amount: Number(amount.value),
     });
@@ -91,24 +91,24 @@ const confirm = () => {
     <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
         <DialogContent class="sm:max-w-md">
             <DialogHeader>
-                <DialogTitle>Add an enveloppe</DialogTitle>
+                <DialogTitle>Add an envelope</DialogTitle>
                 <DialogDescription>
-                    Assign one of your enveloppes to this budget with its
-                    planned amount.
+                    Assign one of your envelopes to this budget with its planned
+                    amount.
                 </DialogDescription>
             </DialogHeader>
 
             <div class="grid gap-4">
                 <div class="grid gap-2">
-                    <Label>Enveloppe</Label>
+                    <Label>Envelope</Label>
                     <Select
-                        :model-value="enveloppeId ?? undefined"
+                        :model-value="envelopeId ?? undefined"
                         @update:model-value="
-                            (value) => (enveloppeId = Number(value))
+                            (value) => (envelopeId = Number(value))
                         "
                     >
                         <SelectTrigger class="w-full">
-                            <SelectValue placeholder="Choose an enveloppe" />
+                            <SelectValue placeholder="Choose an envelope" />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem
@@ -144,7 +144,7 @@ const confirm = () => {
                             class="mr-1 inline size-3.5"
                             aria-hidden="true"
                         />
-                        All your enveloppes are already in this budget.
+                        All your envelopes are already in this budget.
                     </p>
                 </div>
 
@@ -186,7 +186,7 @@ const confirm = () => {
                     >Cancel</Button
                 >
                 <Button :disabled="!valid" @click="confirm"
-                    >Add enveloppe</Button
+                    >Add envelope</Button
                 >
             </DialogFooter>
         </DialogContent>

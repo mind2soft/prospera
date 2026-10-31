@@ -4,12 +4,12 @@ namespace App\Services;
 
 /**
  * Resource-level permission resolution, shared by the budget, ledger and
- * enveloppe controllers (docs/shared-finances.md — permission model).
+ * envelope controllers (docs/shared-finances.md — permission model).
  *
  * Effective permissions are "owner" | "contributor" | "viewer" | "none":
  * - budgets and ledgers: the resource's permission row, or implicit
  *   viewer-equivalent read-only for profile members;
- * - enveloppes: the enveloppe's permission row, "owner" for the creator, or
+ * - envelopes: the envelope's permission row, "owner" for the creator, or
  *   "none" (metadata-only) — no implicit viewer visibility.
  */
 final class ResourcePermissions

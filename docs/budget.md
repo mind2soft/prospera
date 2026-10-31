@@ -4,11 +4,11 @@ A budget represents expected spending and earnings for a single month.
 
 ## Concepts
 
-- **Enveloppe** — groups transactions by purpose (e.g. mortgage, groceries); a
-  named spending/income bucket (`enveloppes`), owned by a user, with a
-  name, a direction (`expense` or `revenue`) and a color. Enveloppes are managed on the
-  _Enveloppes_ page and referenced by budgets.
-- **Budget** — a set of enveloppes with a planned amount each, for one month.
+- **Envelope** — groups transactions by purpose (e.g. mortgage, groceries); a
+  named spending/income bucket (`envelopes`), owned by a user, with a
+  name, a direction (`expense` or `revenue`) and a color. Envelopes are managed on the
+  _Envelopes_ page and referenced by budgets.
+- **Budget** — a set of envelopes with a planned amount each, for one month.
 - **Draft budget** — a budget being prepared. `effective_year` and `effective_month` are `0`.
 - **Published budget** — a budget in read-only mode. Publishing stamps the budget with the
   current month and year.
@@ -46,13 +46,13 @@ type BudgetPermission = {
 
 // fixed    - bills, recurrent payments, e.g. a mortgage, insurance, utilities
 // variable - discretionary spending, e.g. gas, groceries, entertainment
-type BudgetEnveloppeType = 'fixed' | 'variable';
+type BudgetEnvelopeType = 'fixed' | 'variable';
 
-type BudgetEnveloppe = {
+type BudgetEnvelope = {
     budget_id: number; // FK: budgets.id
-    enveloppe_id: number; // FK: enveloppes.id
+    envelope_id: number; // FK: envelopes.id
     amount: number; // integer; signed (see "Amount sign convention")
-    type: BudgetEnveloppeType;
+    type: BudgetEnvelopeType;
 };
 ```
 
@@ -70,13 +70,13 @@ read-only visibility by default and escalate via the Share drawer (see
 Amounts are **always displayed positive** and user input is enforced to be a positive
 integer. They are **stored signed** so arithmetic works naturally in SQL:
 
-- revenue enveloppes (direction `revenue`) are stored positive;
-- expense enveloppes (direction `expense`) are stored negative.
+- revenue envelopes (direction `revenue`) are stored positive;
+- expense envelopes (direction `expense`) are stored negative.
 
 This makes totals trivial: `SUM(amount) = net`, or
-`SUM(amount WHERE enveloppe is revenue) - SUM(amount WHERE enveloppe is expense) = balance`.
+`SUM(amount WHERE envelope is revenue) - SUM(amount WHERE envelope is expense) = balance`.
 
-The sign is derived from the enveloppe's direction — the client never sends a negative
+The sign is derived from the envelope's direction — the client never sends a negative
 number; the server negates expense amounts on write.
 
 ### Budget lifecycle
@@ -94,7 +94,7 @@ number; the server negates expense amounts on write.
   when the last transaction referencing it is deleted. The publish confirmation
   dialog must warn about this replacement.
 - **"New Budget"** on a published budget creates a **clone** of it in draft mode
-  (same currency and same enveloppe assignments). The clone dialog asks for
+  (same currency and same envelope assignments). The clone dialog asks for
   confirmation (and the currency, pre-filled from the source budget).
 - The app always shows the **latest** budget by default — newest `created_at` first.
   A dropdown lists all **non-retired** budgets (draft first, then published, newest
@@ -116,13 +116,13 @@ owner (see [Shared Finances](shared-finances.md)).
 
 ### Referential integrity
 
-- Deleting a budget cascades its shares and enveloppe assignments, **unless
+- Deleting a budget cascades its shares and envelope assignments, **unless
   transactions reference the budget** — then deletion is blocked with a
   validation error (data integrity is enforced, not cascaded; see
   [Ledger](ledger.md)). Retired budgets (replaced by a revision while still
   referenced) are deleted automatically when their last referencing
   transaction is deleted.
-- **Deleting an enveloppe that is referenced by any budget or transaction is
+- **Deleting an envelope that is referenced by any budget or transaction is
   blocked** with a validation error (data integrity is enforced, not cascaded).
 
 ## Permissions
@@ -134,10 +134,10 @@ owner (see [Shared Finances](shared-finances.md)).
 | `viewer`      | Read-only                                               | Read-only    |
 
 The budget `contributor` role grants **nothing on transactions**: adding
-transactions is tied to the ledger/enveloppe side — a member records
+transactions is tied to the ledger/envelope side — a member records
 transactions through the [Ledger](ledger.md), where the ledger owner or
-contributor must also be `contributor`+ on the target enveloppe (see
-[Enveloppe](enveloppe.md)). It currently behaves like `viewer` on the budget
+contributor must also be `contributor`+ on the target envelope (see
+[Envelope](envelope.md)). It currently behaves like `viewer` on the budget
 and exists for symmetry and future use. Profile members have read-only visibility of
 the profile's budgets by default (see
 [Shared Finances](shared-finances.md)).
@@ -147,22 +147,22 @@ the profile's budgets by default (see
 All endpoints require authentication (session + CSRF). The frontend consumes them via
 **vue-query** — this is an application-wide requirement for server data fetching.
 
-| Method   | Path                                             | Description                                                                                                                                                  |
-| -------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GET`    | `/api/budgets`                                   | List budgets of the given `profile_id` (optional query param; the current profile is tracked client-side) — without it, budgets of all the caller's profiles |
-| `POST`   | `/api/budgets`                                   | Create a draft in the current profile (`currency` required; profile owner only)                                                                              |
-| `GET`    | `/api/budgets/{budget}`                          | Budget detail with enveloppes and shares                                                                                                                     |
-| `DELETE` | `/api/budgets/{budget}`                          | Delete the budget (owner only; blocked when transactions reference it — retired budgets are deleted automatically)                                           |
-| `POST`   | `/api/budgets/{budget}/publish`                  | Publish draft (budget owner **and** profile owner)                                                                                                           |
-| `POST`   | `/api/budgets/{budget}/clone`                    | Clone published budget into a draft (profile owner; `viewer`+ on the budget)                                                                                 |
-| `POST`   | `/api/budgets/{budget}/enveloppes`               | Assign an enveloppe (`enveloppe_id`, `type`, `amount`) to a draft — requires `contributor`+ on the enveloppe (`none`/`viewer` → `422` on `enveloppe_id`)     |
-| `PATCH`  | `/api/budgets/{budget}/enveloppes/{enveloppeId}` | Update amount (and type)                                                                                                                                     |
-| `DELETE` | `/api/budgets/{budget}/enveloppes/{enveloppeId}` | Remove an assignment                                                                                                                                         |
-| `GET`    | `/api/budgets/{budget}/shares`                   | List shares (profile members only)                                                                                                                           |
-| `POST`   | `/api/budgets/{budget}/shares`                   | Assign a permission to a **profile member** (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                  |
-| `PATCH`  | `/api/budgets/{budget}/shares/{userId}`          | Change a member's permission (owner only; `owner` is rejected — use transfer-ownership)                                                                      |
-| `DELETE` | `/api/budgets/{budget}/shares/{userId}`          | Revoke a share                                                                                                                                               |
-| `POST`   | `/api/budgets/{budget}/transfer-ownership`       | Transfer ownership to a member (`user_id`); the previous owner becomes `contributor`                                                                         |
+| Method   | Path                                           | Description                                                                                                                                                  |
+| -------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET`    | `/api/budgets`                                 | List budgets of the given `profile_id` (optional query param; the current profile is tracked client-side) — without it, budgets of all the caller's profiles |
+| `POST`   | `/api/budgets`                                 | Create a draft in the current profile (`currency` required; profile owner only)                                                                              |
+| `GET`    | `/api/budgets/{budget}`                        | Budget detail with envelopes and shares                                                                                                                      |
+| `DELETE` | `/api/budgets/{budget}`                        | Delete the budget (owner only; blocked when transactions reference it — retired budgets are deleted automatically)                                           |
+| `POST`   | `/api/budgets/{budget}/publish`                | Publish draft (budget owner **and** profile owner)                                                                                                           |
+| `POST`   | `/api/budgets/{budget}/clone`                  | Clone published budget into a draft (profile owner; `viewer`+ on the budget)                                                                                 |
+| `POST`   | `/api/budgets/{budget}/envelopes`              | Assign an envelope (`envelope_id`, `type`, `amount`) to a draft — requires `contributor`+ on the envelope (`none`/`viewer` → `422` on `envelope_id`)         |
+| `PATCH`  | `/api/budgets/{budget}/envelopes/{envelopeId}` | Update amount (and type)                                                                                                                                     |
+| `DELETE` | `/api/budgets/{budget}/envelopes/{envelopeId}` | Remove an assignment                                                                                                                                         |
+| `GET`    | `/api/budgets/{budget}/shares`                 | List shares (profile members only)                                                                                                                           |
+| `POST`   | `/api/budgets/{budget}/shares`                 | Assign a permission to a **profile member** (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                  |
+| `PATCH`  | `/api/budgets/{budget}/shares/{userId}`        | Change a member's permission (owner only; `owner` is rejected — use transfer-ownership)                                                                      |
+| `DELETE` | `/api/budgets/{budget}/shares/{userId}`        | Revoke a share                                                                                                                                               |
+| `POST`   | `/api/budgets/{budget}/transfer-ownership`     | Transfer ownership to a member (`user_id`); the previous owner becomes `contributor`                                                                         |
 
 ## User Interface
 
@@ -196,7 +196,7 @@ three-dots button — with actions for the selected budget:
 ### Income vs expense bars
 
 Underneath the selector, two rows — **Revenues** and **Expenses** — each showing a bar
-segmented with the corresponding enveloppes. The bars let the user see whether spending
+segmented with the corresponding envelopes. The bars let the user see whether spending
 is greater than, equal to, or less than the incomes.
 
 ```text
@@ -216,24 +216,24 @@ Expenses
 
 - Labels are angled (single row) so they do not visually overlap.
 - All segments are sorted from largest to smallest amount.
-- Segments use the enveloppe's color.
+- Segments use the envelope's color.
 - Both bars are normalized against the same total (the larger of the two), so the
   comparison is visual. The `###` area above illustrates the leftover space when
   income exceeds expenses (the opposite is possible too).
 
-### Enveloppes table
+### Envelopes table
 
-Below the bars, a table of enveloppes: the enveloppe, its type (fixed or variable),
+Below the bars, a table of envelopes: the envelope, its type (fixed or variable),
 the amount assigned, the remaining sum and a delete button.
 
 Planned amounts are **budget data**: they are visible to anyone with read
-access to the budget and are **never masked** by enveloppe permissions —
-enveloppe amount privacy governs transaction data only (see
-[Enveloppe](enveloppe.md)).
+access to the budget and are **never masked** by envelope permissions —
+envelope amount privacy governs transaction data only (see
+[Envelope](envelope.md)).
 
-- In draft mode the amount is editable and a button to add a new enveloppe is visible.
+- In draft mode the amount is editable and a button to add a new envelope is visible.
 - When published, editing controls disappear and the table is view-only.
-- Revenue enveloppes are listed first; the first cell indicates the kind with an
+- Revenue envelopes are listed first; the first cell indicates the kind with an
   icon + colour.
 - Only positive integers are allowed.
 - **Left to spend** for expense rows is the running balance:
@@ -243,7 +243,7 @@ enveloppe amount privacy governs transaction data only (see
 - Variable amounts are expected values and may be re-adjusted with a budget revision
   (a new draft) — a hint below the table communicates this.
 
-| Enveloppe        | Type     | Amount | Left to spend |     |
+| Envelope         | Type     | Amount | Left to spend |     |
 | ---------------- | -------- | ------ | ------------- | --- |
 | + Paychecks      | Fixed    | 2,000  |               | x   |
 | + Passive income | Variable | 1,000  |               | x   |

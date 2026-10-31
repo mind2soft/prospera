@@ -9,7 +9,7 @@ or yield dividends.
 - **Ledger** — a yearly financial record spanning a `start_date` → `end_date`
   range, with a **starting balance** (cash, investments, debts) and an
   **open**/**closed** state.
-- **Transaction** — a money movement recorded against an enveloppe of the
+- **Transaction** — a money movement recorded against an envelope of the
   **latest published budget** of the profile (see below). Stored in the ledger.
 - **Closed ledger** — a ledger that is read-only: transactions can no longer
   be added or deleted. Closed manually via the actions menu (and can be
@@ -44,14 +44,14 @@ type Transaction = {
     id: number; // PK
     ledger_id: number; // FK: ledgers.id
     user_id: number; // FK: users.id, nullable with nullOnDelete — who entered the transaction
-    enveloppe_id: number; // FK: enveloppes.id
+    envelope_id: number; // FK: envelopes.id
     budget_id: number; // FK: budgets.id — snapshot of the latest published budget at entry time
-    amount: number; // same number rule as for BudgetEnveloppe
+    amount: number; // same number rule as for BudgetEnvelope
     event_at: string; // ISO date time, stored at 00:00:00
     created_at: string; // ISO date time
 };
 
-// The transaction payload also carries the enveloppe's display info:
+// The transaction payload also carries the envelope's display info:
 // { name, color, direction } and the entering user's { id, name }
 // ("Former member" for deleted users).
 ```
@@ -61,7 +61,7 @@ type Transaction = {
 ### Amount sign convention
 
 Same as for budgets: user input is always a **positive integer**; the server
-negates amounts for enveloppes with direction `expense`, so arithmetic works
+negates amounts for envelopes with direction `expense`, so arithmetic works
 naturally in SQL. Revenues are stored positive.
 
 ### Starting balance
@@ -89,7 +89,7 @@ transactions keep the budget they were recorded against.
   A budget replaced by a revision while still referenced becomes **retired**
   and is deleted automatically when its last referencing transaction is
   deleted (see [Budget — Budget lifecycle](budget.md#budget-lifecycle)).
-- Enveloppes referenced by transactions also cannot be deleted.
+- Envelopes referenced by transactions also cannot be deleted.
 
 ### Ledger lifecycle
 
@@ -116,29 +116,29 @@ account is deleted, the ledger auto-transfers to the profile owner (see
 
 ## Permissions
 
-| Permission    | Ledger                                                       | Transactions                                                                                                      |
-| ------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `owner`       | Full control (create, close/reopen, share, transfer, delete) | Can add transactions — only to enveloppes on which they are `contributor`+; can delete **any** transaction        |
-| `contributor` | Read-only on the ledger itself (no close/delete)             | Can add transactions — only to enveloppes on which they are `contributor`+; can delete **only their own** entries |
-| `viewer`      | Read-only                                                    | Read-only (no add, no delete)                                                                                     |
+| Permission    | Ledger                                                       | Transactions                                                                                                     |
+| ------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `owner`       | Full control (create, close/reopen, share, transfer, delete) | Can add transactions — only to envelopes on which they are `contributor`+; can delete **any** transaction        |
+| `contributor` | Read-only on the ledger itself (no close/delete)             | Can add transactions — only to envelopes on which they are `contributor`+; can delete **only their own** entries |
+| `viewer`      | Read-only                                                    | Read-only (no add, no delete)                                                                                    |
 
 - **Profile members can view ledgers by default** (viewer-equivalent), even
   without a permission row.
 - **Only the owner can add transactions**, unless a member is explicitly
   granted `contributor` on the ledger — and **everyone**, the ledger owner
-  included, may only add transactions to enveloppes on which they are
-  `contributor`+ (see [Enveloppe](enveloppe.md)).
+  included, may only add transactions to envelopes on which they are
+  `contributor`+ (see [Envelope](envelope.md)).
 - **Only the profile owner can create ledgers**; collaborators get `403`, and
   non-members (or unknown profiles) get `404`.
 - **Transaction deletion** (open ledgers only): the ledger owner can delete
   any transaction; a ledger contributor can delete only their own entries;
   viewers cannot delete.
-- **Amount masking** — transaction rows on enveloppes the user lacks
-  enveloppe-`viewer`+ permission on show the enveloppe's metadata with masked
+- **Amount masking** — transaction rows on envelopes the user lacks
+  envelope-`viewer`+ permission on show the envelope's metadata with masked
   amounts (`—`) and masked "remaining allocated"; the server masks them
   (amount `null` + `masked` flag) — raw amounts never reach such clients (see
-  [Enveloppe](enveloppe.md)). Budget planned amounts are budget data and are
-  not masked by enveloppe permissions.
+  [Envelope](envelope.md)). Budget planned amounts are budget data and are
+  not masked by envelope permissions.
 
 ## API
 
@@ -146,21 +146,21 @@ All endpoints require authentication (session + CSRF). The frontend consumes
 them via **vue-query** — this is an application-wide requirement for server
 data fetching.
 
-| Method   | Path                                       | Description                                                                                                                                                                                                                                      |
-| -------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `GET`    | `/api/ledgers`                             | List ledgers of the given `profile_id` (optional query param; the current profile is tracked client-side) — without it, ledgers of all the caller's profiles (newest first)                                                                      |
-| `POST`   | `/api/ledgers`                             | Create a ledger in the current profile (`name`, `start_date`, `end_date`, `starting_balance` — always sent positive, `starting_balance_type` = `cash` \| `debt` selects the stored sign; profile owner only)                                     |
-| `DELETE` | `/api/ledgers/{ledger}`                    | Delete the ledger **and all of its transactions** (owner only)                                                                                                                                                                                   |
-| `POST`   | `/api/ledgers/{ledger}/close`              | Close the ledger (read-only; owner only)                                                                                                                                                                                                         |
-| `POST`   | `/api/ledgers/{ledger}/reopen`             | Re-open a closed ledger (owner only)                                                                                                                                                                                                             |
-| `GET`    | `/api/ledgers/{ledger}/transactions`       | Transactions filtered by `from_date` and `to_date` (query params). Rows on enveloppes the requester lacks enveloppe-`viewer`+ permission on are **masked server-side**: `amount: null` + `masked: true` (metadata only — name, color, direction) |
-| `POST`   | `/api/ledgers/{ledger}/transactions`       | Add a transaction (`enveloppe_id`, `amount`, `event_at`) — ledger owner or contributor, who must also be contributor+ on the target enveloppe                                                                                                    |
-| `DELETE` | `/api/transactions/{transaction}`          | Delete a transaction (open ledgers only; ledger owner: any transaction; ledger contributor: own entries only; viewer: none)                                                                                                                      |
-| `GET`    | `/api/ledgers/{ledger}/shares`             | List shares (profile members only)                                                                                                                                                                                                               |
-| `POST`   | `/api/ledgers/{ledger}/shares`             | Assign a permission to a **profile member** (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                                                                                                      |
-| `PATCH`  | `/api/ledgers/{ledger}/shares/{userId}`    | Change a member's permission (owner only; `owner` is rejected — use transfer-ownership)                                                                                                                                                          |
-| `DELETE` | `/api/ledgers/{ledger}/shares/{userId}`    | Revoke a share                                                                                                                                                                                                                                   |
-| `POST`   | `/api/ledgers/{ledger}/transfer-ownership` | Transfer ownership to a member (`user_id`); the previous owner becomes `contributor`                                                                                                                                                             |
+| Method   | Path                                       | Description                                                                                                                                                                                                                                    |
+| -------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/ledgers`                             | List ledgers of the given `profile_id` (optional query param; the current profile is tracked client-side) — without it, ledgers of all the caller's profiles (newest first)                                                                    |
+| `POST`   | `/api/ledgers`                             | Create a ledger in the current profile (`name`, `start_date`, `end_date`, `starting_balance` — always sent positive, `starting_balance_type` = `cash` \| `debt` selects the stored sign; profile owner only)                                   |
+| `DELETE` | `/api/ledgers/{ledger}`                    | Delete the ledger **and all of its transactions** (owner only)                                                                                                                                                                                 |
+| `POST`   | `/api/ledgers/{ledger}/close`              | Close the ledger (read-only; owner only)                                                                                                                                                                                                       |
+| `POST`   | `/api/ledgers/{ledger}/reopen`             | Re-open a closed ledger (owner only)                                                                                                                                                                                                           |
+| `GET`    | `/api/ledgers/{ledger}/transactions`       | Transactions filtered by `from_date` and `to_date` (query params). Rows on envelopes the requester lacks envelope-`viewer`+ permission on are **masked server-side**: `amount: null` + `masked: true` (metadata only — name, color, direction) |
+| `POST`   | `/api/ledgers/{ledger}/transactions`       | Add a transaction (`envelope_id`, `amount`, `event_at`) — ledger owner or contributor, who must also be contributor+ on the target envelope                                                                                                    |
+| `DELETE` | `/api/transactions/{transaction}`          | Delete a transaction (open ledgers only; ledger owner: any transaction; ledger contributor: own entries only; viewer: none)                                                                                                                    |
+| `GET`    | `/api/ledgers/{ledger}/shares`             | List shares (profile members only)                                                                                                                                                                                                             |
+| `POST`   | `/api/ledgers/{ledger}/shares`             | Assign a permission to a **profile member** (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                                                                                                    |
+| `PATCH`  | `/api/ledgers/{ledger}/shares/{userId}`    | Change a member's permission (owner only; `owner` is rejected — use transfer-ownership)                                                                                                                                                        |
+| `DELETE` | `/api/ledgers/{ledger}/shares/{userId}`    | Revoke a share                                                                                                                                                                                                                                 |
+| `POST`   | `/api/ledgers/{ledger}/transfer-ownership` | Transfer ownership to a member (`user_id`); the previous owner becomes `contributor`                                                                                                                                                           |
 
 ## User Interface
 
@@ -196,11 +196,11 @@ transactions in the table to the selected month.
 
 ### Adding a transaction
 
-Entering a transaction should be as easy as selecting the available enveloppe
-(from the published budget) and entering an amount. The enveloppe picker
-client-side filters `GET /api/enveloppes` (see [Enveloppe](enveloppe.md)) to
+Entering a transaction should be as easy as selecting the available envelope
+(from the published budget) and entering an amount. The envelope picker
+client-side filters `GET /api/envelopes` (see [Envelope](envelope.md)) to
 entries with `permission` `owner` or `contributor`, further filtered to
-enveloppes referenced by the published budget. The transaction date
+envelopes referenced by the published budget. The transaction date
 (`event_at`) defaults to today; the month calendar doubles as the date
 picker — clicking a day selects it. Time is irrelevant: transactions are
 stored at `00:00:00`.
@@ -208,12 +208,12 @@ stored at `00:00:00`.
 The table (sorted chronologically ascending) shows:
 
 - the day of the transaction (`event_at`),
-- the enveloppe name (colour-coded chip),
+- the envelope name (colour-coded chip),
 - the amount (positive for revenue, negative for expenses) — **masked** (`—`)
-  for enveloppes the user lacks enveloppe-`viewer`+ permission on
+  for envelopes the user lacks envelope-`viewer`+ permission on
   (server-masked; see [Permissions](#permissions)),
-- the **remaining enveloppe's allocated budget** — allocated amount minus
-  transactions for that enveloppe within the displayed month — masked (`—`)
+- the **remaining envelope's allocated budget** — allocated amount minus
+  transactions for that envelope within the displayed month — masked (`—`)
   under the same rule,
 - the user avatar (user name and formatted `created_at` as tooltip) —
   "Former member" for deleted users,
@@ -228,7 +228,7 @@ The table (sorted chronologically ascending) shows:
 - **No published budget** — an informational banner states that a published
   budget is required before recording transactions.
 - **Insufficient permission** — members without the right to add transactions
-  (viewer, or contributor lacking enveloppe permission) get the entry form
+  (viewer, or contributor lacking envelope permission) get the entry form
   hidden with an informational banner.
 
 ## UX Conventions

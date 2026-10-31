@@ -22,7 +22,7 @@ test.beforeAll(() => {
     execSync('npm run e2e:seed -- seed-masked.php', { cwd: '.' });
 });
 
-test('transactions on non-permitted enveloppes render masked amounts', async ({
+test('transactions on non-permitted envelopes render masked amounts', async ({
     page,
 }) => {
     await login(page);
@@ -31,7 +31,7 @@ test('transactions on non-permitted enveloppes render masked amounts', async ({
     const row = page.locator('tbody tr').filter({ hasText: 'Secret savings' });
     await expect(row).toHaveCount(1);
 
-    // The enveloppe metadata (name, colour chip) is visible…
+    // The envelope metadata (name, colour chip) is visible…
     await expect(row).toContainText('Secret savings');
 
     // …but the amount and remaining allocated are masked with an em dash.

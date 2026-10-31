@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $ledger_id
  * @property int|null $user_id
- * @property int $enveloppe_id
+ * @property int $envelope_id
  * @property int $budget_id
  * @property int $amount
  * @property Carbon $event_at
@@ -19,7 +19,7 @@ use Illuminate\Support\Carbon;
  */
 class Transaction extends Model
 {
-    protected $fillable = ['ledger_id', 'user_id', 'enveloppe_id', 'budget_id', 'amount', 'event_at'];
+    protected $fillable = ['ledger_id', 'user_id', 'envelope_id', 'budget_id', 'amount', 'event_at'];
 
     protected $casts = [
         'event_at' => 'datetime',
@@ -55,13 +55,13 @@ class Transaction extends Model
     }
 
     /**
-     * The enveloppe this transaction draws from.
+     * The envelope this transaction draws from.
      *
-     * @return BelongsTo<Enveloppe, $this>
+     * @return BelongsTo<Envelope, $this>
      */
-    public function enveloppe(): BelongsTo
+    public function envelope(): BelongsTo
     {
-        return $this->belongsTo(Enveloppe::class, 'enveloppe_id');
+        return $this->belongsTo(Envelope::class, 'envelope_id');
     }
 
     /**

@@ -4,7 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Budget;
 use App\Models\BudgetPermission;
-use App\Models\Enveloppe;
+use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
 use App\Models\Transaction;
@@ -107,7 +107,7 @@ class AccountDeletionTest extends TestCase
         $profile = FinancialProfile::createOwnedBy($owner);
 
         $budget = $this->shareBudget($owner, $profile);
-        $enveloppe = Enveloppe::create(['name' => 'Rent', 'type' => 'expense', 'user_id' => $owner->id]);
+        $envelope = Envelope::create(['name' => 'Rent', 'type' => 'expense', 'user_id' => $owner->id]);
         $ledger = $this->createLedger($owner, $profile);
 
         $this->actingAs($owner)->delete('/settings/account', ['password' => 'password'])->assertRedirect('/');
@@ -115,7 +115,7 @@ class AccountDeletionTest extends TestCase
         $this->assertDatabaseMissing('financial_profiles', ['id' => $profile->id]);
         $this->assertDatabaseMissing('budgets', ['id' => $budget->id]);
         $this->assertDatabaseMissing('ledgers', ['id' => $ledger->id]);
-        $this->assertDatabaseMissing('enveloppes', ['id' => $enveloppe->id]);
+        $this->assertDatabaseMissing('envelopes', ['id' => $envelope->id]);
     }
 
     public function test_account_deletion_sweeps_retired_budgets_referenced_by_solo_ledgers(): void
@@ -125,11 +125,11 @@ class AccountDeletionTest extends TestCase
 
         // A published budget replaced while referenced → retired.
         $retired = $this->shareBudget($owner, $profile, 'owner');
-        $enveloppe = Enveloppe::create(['name' => 'Rent', 'type' => 'expense', 'user_id' => $owner->id]);
+        $envelope = Envelope::create(['name' => 'Rent', 'type' => 'expense', 'user_id' => $owner->id]);
         $ledger = $this->createLedger($owner, $profile);
         $ledger->transactions()->create([
             'user_id' => $owner->id,
-            'enveloppe_id' => $enveloppe->id,
+            'envelope_id' => $envelope->id,
             'budget_id' => $retired->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
@@ -177,13 +177,13 @@ class AccountDeletionTest extends TestCase
             'effective_month' => now()->month,
         ])->save();
 
-        $enveloppe = Enveloppe::create(['name' => 'Rent', 'type' => 'expense', 'user_id' => $owner->id]);
+        $envelope = Envelope::create(['name' => 'Rent', 'type' => 'expense', 'user_id' => $owner->id]);
         $ledger = $this->createLedger($owner, $profile);
 
         $transaction = Transaction::create([
             'ledger_id' => $ledger->id,
             'user_id' => $entrant->id,
-            'enveloppe_id' => $enveloppe->id,
+            'envelope_id' => $envelope->id,
             'budget_id' => $budget->id,
             'amount' => -100,
             'event_at' => '2026-03-01 00:00:00',
@@ -192,7 +192,7 @@ class AccountDeletionTest extends TestCase
         $this->actingAs($entrant)->delete('/settings/account', ['password' => 'password'])->assertRedirect('/');
 
         $this->assertDatabaseHas('transactions', ['id' => $transaction->id, 'user_id' => null]);
-        $this->assertDatabaseHas('enveloppes', ['id' => $enveloppe->id]);
+        $this->assertDatabaseHas('envelopes', ['id' => $envelope->id]);
         $this->assertDatabaseHas('ledgers', ['id' => $ledger->id]);
 
         // Deleted users display as "Former member".
@@ -200,7 +200,7 @@ class AccountDeletionTest extends TestCase
             ->assertJsonPath('transactions.0.user.name', 'Former member');
     }
 
-    public function test_referenced_enveloppes_transfer_to_the_owner_of_the_earliest_referencing_profile(): void
+    public function test_referenced_envelopes_transfer_to_the_owner_of_the_earliest_referencing_profile(): void
     {
         $owner = User::factory()->create();
         $entrant = User::factory()->create();
@@ -211,23 +211,23 @@ class AccountDeletionTest extends TestCase
 
         $otherProfile = FinancialProfile::createOwnedBy($otherOwner, 'Other');
 
-        // The entrant's enveloppe is referenced by the other profile's budget;
+        // The entrant's envelope is referenced by the other profile's budget;
         // it must transfer to that profile's owner.
-        $enveloppe = Enveloppe::create(['name' => 'Groceries', 'type' => 'expense', 'user_id' => $entrant->id]);
+        $envelope = Envelope::create(['name' => 'Groceries', 'type' => 'expense', 'user_id' => $entrant->id]);
 
         $budget = $this->shareBudget($otherOwner, $otherProfile);
-        $budget->enveloppes()->create(['enveloppe_id' => $enveloppe->id, 'amount' => -100, 'type' => 'fixed']);
+        $budget->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed']);
 
         $this->actingAs($entrant)->delete('/settings/account', ['password' => 'password'])->assertRedirect('/');
 
-        $this->assertDatabaseHas('enveloppes', [
-            'id' => $enveloppe->id,
+        $this->assertDatabaseHas('envelopes', [
+            'id' => $envelope->id,
             'user_id' => $otherOwner->id,
             'name' => 'Groceries',
         ]);
     }
 
-    public function test_enveloppe_name_collisions_are_resolved_with_the_imported_suffix(): void
+    public function test_envelope_name_collisions_are_resolved_with_the_imported_suffix(): void
     {
         $owner = User::factory()->create();
         $entrant = User::factory()->create();
@@ -235,31 +235,31 @@ class AccountDeletionTest extends TestCase
         $profile = FinancialProfile::createOwnedBy($owner);
         $profile->members()->attach($entrant->id, ['is_owner' => false]);
 
-        Enveloppe::create(['name' => 'Groceries', 'type' => 'expense', 'user_id' => $owner->id]);
-        $enveloppe = Enveloppe::create(['name' => 'Groceries', 'type' => 'expense', 'user_id' => $entrant->id]);
+        Envelope::create(['name' => 'Groceries', 'type' => 'expense', 'user_id' => $owner->id]);
+        $envelope = Envelope::create(['name' => 'Groceries', 'type' => 'expense', 'user_id' => $entrant->id]);
 
-        // The collision only matters for referenced enveloppes: unreferenced
+        // The collision only matters for referenced envelopes: unreferenced
         // ones are deleted with the account.
         $budget = $this->shareBudget($owner, $profile);
-        $budget->enveloppes()->create(['enveloppe_id' => $enveloppe->id, 'amount' => -100, 'type' => 'fixed']);
+        $budget->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed']);
 
         $this->actingAs($entrant)->delete('/settings/account', ['password' => 'password'])->assertRedirect('/');
 
-        $this->assertDatabaseHas('enveloppes', [
-            'id' => $enveloppe->id,
+        $this->assertDatabaseHas('envelopes', [
+            'id' => $envelope->id,
             'user_id' => $owner->id,
             'name' => 'Groceries (imported)',
         ]);
     }
 
-    public function test_unreferenced_enveloppes_are_deleted_with_the_account(): void
+    public function test_unreferenced_envelopes_are_deleted_with_the_account(): void
     {
         $entrant = User::factory()->create();
 
-        $enveloppe = Enveloppe::create(['name' => 'Savings', 'type' => 'revenue', 'user_id' => $entrant->id]);
+        $envelope = Envelope::create(['name' => 'Savings', 'type' => 'revenue', 'user_id' => $entrant->id]);
 
         $this->actingAs($entrant)->delete('/settings/account', ['password' => 'password'])->assertRedirect('/');
 
-        $this->assertDatabaseMissing('enveloppes', ['id' => $enveloppe->id]);
+        $this->assertDatabaseMissing('envelopes', ['id' => $envelope->id]);
     }
 }

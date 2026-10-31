@@ -9,13 +9,13 @@ use Illuminate\Support\Carbon;
 /**
  * @property int $id
  * @property int $budget_id
- * @property int $enveloppe_id
+ * @property int $envelope_id
  * @property int $amount
  * @property string $type
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-class BudgetEnveloppe extends Model
+class BudgetEnvelope extends Model
 {
     public const TYPE_FIXED = 'fixed';
 
@@ -26,7 +26,7 @@ class BudgetEnveloppe extends Model
         self::TYPE_VARIABLE,
     ];
 
-    protected $fillable = ['budget_id', 'enveloppe_id', 'amount', 'type'];
+    protected $fillable = ['budget_id', 'envelope_id', 'amount', 'type'];
 
     /**
      * The budget this assignment belongs to.
@@ -39,12 +39,12 @@ class BudgetEnveloppe extends Model
     }
 
     /**
-     * The enveloppe this assignment points to.
+     * The envelope this assignment points to.
      *
-     * @return BelongsTo<Enveloppe, $this>
+     * @return BelongsTo<Envelope, $this>
      */
-    public function enveloppe(): BelongsTo
+    public function envelope(): BelongsTo
     {
-        return $this->belongsTo(Enveloppe::class, 'enveloppe_id');
+        return $this->belongsTo(Envelope::class, 'envelope_id');
     }
 }

@@ -14,7 +14,7 @@ use Tests\TestCase;
 
 /**
  * Regression tests for the authorization and integrity hardening:
- * owner-only profile-wide writes, enveloppe contributor checks, invite
+ * owner-only profile-wide writes, envelope contributor checks, invite
  * hygiene, ownership transfers and input validation.
  */
 class HardeningTest extends TestCase
@@ -105,34 +105,34 @@ class HardeningTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Enveloppe contributor checks
+    // Envelope contributor checks
     // ------------------------------------------------------------------
 
-    public function test_ledger_owners_cannot_record_against_metadata_only_enveloppes(): void
+    public function test_ledger_owners_cannot_record_against_metadata_only_envelopes(): void
     {
-        $foreign = $this->member->enveloppes()->create(['name' => 'Theirs', 'type' => 'expense', 'color' => '#000000']);
+        $foreign = $this->member->envelopes()->create(['name' => 'Theirs', 'type' => 'expense', 'color' => '#000000']);
 
         $budget = $this->budget($this->owner);
-        $budget->enveloppes()->create(['enveloppe_id' => $foreign->id, 'amount' => -100, 'type' => 'fixed']);
+        $budget->envelopes()->create(['envelope_id' => $foreign->id, 'amount' => -100, 'type' => 'fixed']);
         $ledger = $this->ledger($this->owner);
 
         $this->actingAs($this->owner)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'enveloppe_id' => $foreign->id,
+            'envelope_id' => $foreign->id,
             'amount' => 10,
             'event_at' => now()->toDateString(),
-        ])->assertUnprocessable()->assertJsonValidationErrors('enveloppe_id');
+        ])->assertUnprocessable()->assertJsonValidationErrors('envelope_id');
 
         $this->assertDatabaseCount('transactions', 0);
     }
 
-    public function test_enveloppe_totals_validate_dates(): void
+    public function test_envelope_totals_validate_dates(): void
     {
-        $enveloppe = $this->owner->enveloppes()->create(['name' => 'Mine', 'type' => 'expense', 'color' => '#000000']);
+        $envelope = $this->owner->envelopes()->create(['name' => 'Mine', 'type' => 'expense', 'color' => '#000000']);
 
-        $this->actingAs($this->owner)->getJson("/api/enveloppes/{$enveloppe->id}/totals?from_date=not-a-date")
+        $this->actingAs($this->owner)->getJson("/api/envelopes/{$envelope->id}/totals?from_date=not-a-date")
             ->assertUnprocessable()->assertJsonValidationErrors('from_date');
 
-        $this->actingAs($this->owner)->getJson("/api/enveloppes/{$enveloppe->id}/totals")
+        $this->actingAs($this->owner)->getJson("/api/envelopes/{$envelope->id}/totals")
             ->assertOk()->assertJsonPath('totals.total', 0)->assertJsonPath('totals.count', 0);
     }
 
@@ -140,39 +140,39 @@ class HardeningTest extends TestCase
     // Ownership transfers
     // ------------------------------------------------------------------
 
-    public function test_enveloppe_transfer_drops_the_new_owners_stale_share_row(): void
+    public function test_envelope_transfer_drops_the_new_owners_stale_share_row(): void
     {
-        $enveloppe = $this->owner->enveloppes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#000000']);
-        $enveloppe->permissions()->create(['user_id' => $this->member->id, 'permission' => ResourcePermissions::VIEWER]);
+        $envelope = $this->owner->envelopes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#000000']);
+        $envelope->permissions()->create(['user_id' => $this->member->id, 'permission' => ResourcePermissions::VIEWER]);
 
-        $this->actingAs($this->owner)->postJson("/api/enveloppes/{$enveloppe->id}/transfer-ownership", [
+        $this->actingAs($this->owner)->postJson("/api/envelopes/{$envelope->id}/transfer-ownership", [
             'user_id' => $this->member->id,
         ])->assertOk();
 
-        $this->assertDatabaseMissing('enveloppe_permissions', ['enveloppe_id' => $enveloppe->id, 'user_id' => $this->member->id]);
-        $this->assertDatabaseHas('enveloppe_permissions', [
-            'enveloppe_id' => $enveloppe->id,
+        $this->assertDatabaseMissing('envelope_permissions', ['envelope_id' => $envelope->id, 'user_id' => $this->member->id]);
+        $this->assertDatabaseHas('envelope_permissions', [
+            'envelope_id' => $envelope->id,
             'user_id' => $this->owner->id,
             'permission' => ResourcePermissions::CONTRIBUTOR,
         ]);
     }
 
-    public function test_leaving_keeps_enveloppes_still_used_in_the_members_other_profiles(): void
+    public function test_leaving_keeps_envelopes_still_used_in_the_members_other_profiles(): void
     {
-        $enveloppe = $this->member->enveloppes()->create(['name' => 'Shared', 'type' => 'expense', 'color' => '#000000']);
+        $envelope = $this->member->envelopes()->create(['name' => 'Shared', 'type' => 'expense', 'color' => '#000000']);
 
         $here = $this->budget($this->owner);
-        $here->enveloppes()->create(['enveloppe_id' => $enveloppe->id, 'amount' => -100, 'type' => 'fixed']);
+        $here->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed']);
 
         $other = FinancialProfile::createOwnedBy($this->member, 'Mine');
         $elsewhere = Budget::create(['profile_id' => $other->id, 'currency' => 'CAD', 'effective_year' => 0, 'effective_month' => 0]);
-        $elsewhere->enveloppes()->create(['enveloppe_id' => $enveloppe->id, 'amount' => -100, 'type' => 'fixed']);
+        $elsewhere->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed']);
 
         $this->actingAs($this->member)->deleteJson("/api/profiles/{$this->profile->id}/members/{$this->member->id}")
             ->assertNoContent();
 
-        $this->assertSame($this->member->id, $enveloppe->fresh()->user_id);
-        $this->assertSame(ResourcePermissions::CONTRIBUTOR, $enveloppe->fresh()->permissionFor($this->owner));
+        $this->assertSame($this->member->id, $envelope->fresh()->user_id);
+        $this->assertSame(ResourcePermissions::CONTRIBUTOR, $envelope->fresh()->permissionFor($this->owner));
     }
 
     // ------------------------------------------------------------------
@@ -181,13 +181,13 @@ class HardeningTest extends TestCase
 
     public function test_deleting_a_ledger_sweeps_retired_budgets_it_last_referenced(): void
     {
-        $enveloppe = $this->owner->enveloppes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#000000']);
+        $envelope = $this->owner->envelopes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#000000']);
         $retired = $this->budget($this->owner);
         $retired->forceFill(['retired_at' => now()])->save();
         $ledger = $this->ledger($this->owner);
 
         Transaction::create([
-            'ledger_id' => $ledger->id, 'user_id' => $this->owner->id, 'enveloppe_id' => $enveloppe->id,
+            'ledger_id' => $ledger->id, 'user_id' => $this->owner->id, 'envelope_id' => $envelope->id,
             'budget_id' => $retired->id, 'amount' => -10, 'event_at' => now()->startOfDay(),
         ]);
 

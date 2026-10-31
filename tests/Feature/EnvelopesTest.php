@@ -6,7 +6,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class EnveloppesTest extends TestCase
+class EnvelopesTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -14,33 +14,33 @@ class EnveloppesTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $user->enveloppes()->create([
+        $user->envelopes()->create([
             'name' => 'Groceries',
             'type' => 'expense',
             'color' => '#10b981',
         ]);
 
-        $response = $this->actingAs($user)->get('/enveloppes');
+        $response = $this->actingAs($user)->get('/envelopes');
 
         $response->assertOk()->assertInertia(fn ($page) => $page
-            ->component('Enveloppes')
-            ->has('enveloppes', 1)
-            ->where('enveloppes.0.name', 'Groceries')
+            ->component('Envelopes')
+            ->has('envelopes', 1)
+            ->where('envelopes.0.name', 'Groceries')
         );
     }
 
-    public function test_user_can_create_enveloppe(): void
+    public function test_user_can_create_envelope(): void
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->post('/enveloppes', [
+        $response = $this->actingAs($user)->post('/envelopes', [
             'name' => 'Salary',
             'type' => 'revenue',
             'color' => '#6366f1',
         ]);
 
-        $response->assertRedirect(route('enveloppes'));
-        $this->assertDatabaseHas('enveloppes', [
+        $response->assertRedirect(route('envelopes'));
+        $this->assertDatabaseHas('envelopes', [
             'user_id' => $user->id,
             'name' => 'Salary',
             'type' => 'revenue',
@@ -50,9 +50,9 @@ class EnveloppesTest extends TestCase
     public function test_name_must_be_unique_per_user(): void
     {
         $user = User::factory()->create();
-        $user->enveloppes()->create(['name' => 'Rent', 'type' => 'expense']);
+        $user->envelopes()->create(['name' => 'Rent', 'type' => 'expense']);
 
-        $response = $this->actingAs($user)->post('/enveloppes', [
+        $response = $this->actingAs($user)->post('/envelopes', [
             'name' => 'Rent',
             'type' => 'expense',
             'color' => '#f43f5e',
@@ -65,64 +65,64 @@ class EnveloppesTest extends TestCase
     {
         $owner = User::factory()->create();
         $other = User::factory()->create();
-        $owner->enveloppes()->create(['name' => 'Rent', 'type' => 'expense']);
+        $owner->envelopes()->create(['name' => 'Rent', 'type' => 'expense']);
 
-        $response = $this->actingAs($other)->post('/enveloppes', [
+        $response = $this->actingAs($other)->post('/envelopes', [
             'name' => 'Rent',
             'type' => 'expense',
             'color' => '#f43f5e',
         ]);
 
-        $response->assertRedirect(route('enveloppes'));
+        $response->assertRedirect(route('envelopes'));
     }
 
-    public function test_user_can_update_own_enveloppe(): void
+    public function test_user_can_update_own_envelope(): void
     {
         $user = User::factory()->create();
-        $enveloppe = $user->enveloppes()->create(['name' => 'Old', 'type' => 'expense']);
+        $envelope = $user->envelopes()->create(['name' => 'Old', 'type' => 'expense']);
 
-        $response = $this->actingAs($user)->put("/enveloppes/{$enveloppe->id}", [
+        $response = $this->actingAs($user)->put("/envelopes/{$envelope->id}", [
             'name' => 'New',
             'type' => 'revenue',
             'color' => '#0ea5e9',
         ]);
 
-        $response->assertRedirect(route('enveloppes'));
-        $this->assertDatabaseHas('enveloppes', ['id' => $enveloppe->id, 'name' => 'New']);
+        $response->assertRedirect(route('envelopes'));
+        $this->assertDatabaseHas('envelopes', ['id' => $envelope->id, 'name' => 'New']);
     }
 
-    public function test_user_cannot_update_someone_elses_enveloppe(): void
+    public function test_user_cannot_update_someone_elses_envelope(): void
     {
         $user = User::factory()->create();
         $intruder = User::factory()->create();
-        $enveloppe = $user->enveloppes()->create(['name' => 'Mine', 'type' => 'expense']);
+        $envelope = $user->envelopes()->create(['name' => 'Mine', 'type' => 'expense']);
 
-        $response = $this->actingAs($intruder)->put("/enveloppes/{$enveloppe->id}", [
+        $response = $this->actingAs($intruder)->put("/envelopes/{$envelope->id}", [
             'name' => 'Hacked',
             'type' => 'expense',
             'color' => '#000000',
         ]);
 
         $response->assertNotFound();
-        $this->assertDatabaseHas('enveloppes', ['id' => $enveloppe->id, 'name' => 'Mine']);
+        $this->assertDatabaseHas('envelopes', ['id' => $envelope->id, 'name' => 'Mine']);
     }
 
-    public function test_user_can_delete_own_enveloppe(): void
+    public function test_user_can_delete_own_envelope(): void
     {
         $user = User::factory()->create();
-        $enveloppe = $user->enveloppes()->create(['name' => 'Gone', 'type' => 'expense']);
+        $envelope = $user->envelopes()->create(['name' => 'Gone', 'type' => 'expense']);
 
-        $response = $this->actingAs($user)->delete("/enveloppes/{$enveloppe->id}");
+        $response = $this->actingAs($user)->delete("/envelopes/{$envelope->id}");
 
-        $response->assertRedirect(route('enveloppes'));
-        $this->assertModelMissing($enveloppe);
+        $response->assertRedirect(route('envelopes'));
+        $this->assertModelMissing($envelope);
     }
 
     public function test_invalid_type_is_rejected(): void
     {
         $user = User::factory()->create();
 
-        $response = $this->actingAs($user)->post('/enveloppes', [
+        $response = $this->actingAs($user)->post('/envelopes', [
             'name' => 'Weird',
             'type' => 'transfer',
             'color' => '#6366f1',
@@ -133,6 +133,6 @@ class EnveloppesTest extends TestCase
 
     public function test_guests_are_redirected(): void
     {
-        $this->get('/enveloppes')->assertRedirect('/login');
+        $this->get('/envelopes')->assertRedirect('/login');
     }
 }

@@ -5,10 +5,10 @@ import Currency from '@/components/Currency.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatMoney } from '@/lib/budget';
-import type { BudgetEnveloppe } from '@/types';
+import type { BudgetEnvelope } from '@/types';
 
 const props = defineProps<{
-    enveloppes: BudgetEnveloppe[];
+    envelopes: BudgetEnvelope[];
     currency: string;
     editable?: boolean;
     pendingId?: number | null;
@@ -16,20 +16,20 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     (e: 'add'): void;
-    (e: 'update-amount', enveloppeId: number, amount: number): void;
-    (e: 'remove', enveloppeId: number): void;
+    (e: 'update-amount', envelopeId: number, amount: number): void;
+    (e: 'remove', envelopeId: number): void;
 }>();
 
 const edits = reactive<Record<number, string>>({});
 
 watch(
-    () => props.enveloppes,
+    () => props.envelopes,
     (rows) => {
         const present = new Set<number>();
         for (const row of rows) {
-            present.add(row.enveloppe_id);
-            if (!(row.enveloppe_id in edits)) {
-                edits[row.enveloppe_id] = String(Math.abs(row.amount));
+            present.add(row.envelope_id);
+            if (!(row.envelope_id in edits)) {
+                edits[row.envelope_id] = String(Math.abs(row.amount));
             }
         }
         for (const key of Object.keys(edits)) {
@@ -56,13 +56,13 @@ const isValidAmount = (value: string): boolean => {
  * optimistic-updates the budget so the bars and totals follow along, and
  * persists the change (debounced) without waiting for a blur.
  */
-const onAmountInput = (row: BudgetEnveloppe, value: string) => {
-    edits[row.enveloppe_id] = value;
+const onAmountInput = (row: BudgetEnvelope, value: string) => {
+    edits[row.envelope_id] = value;
     if (!isValidAmount(value)) {
         return;
     }
     if (Number(value) !== Math.abs(row.amount)) {
-        emit('update-amount', row.enveloppe_id, Number(value));
+        emit('update-amount', row.envelope_id, Number(value));
     }
 };
 
@@ -70,29 +70,29 @@ const onAmountInput = (row: BudgetEnveloppe, value: string) => {
  * On blur, revert invalid (empty / non-integer / non-positive) edits back to
  * the current amount; valid edits are already applied and being saved.
  */
-const revertIfInvalid = (row: BudgetEnveloppe) => {
-    if (!isValidAmount(edits[row.enveloppe_id] ?? '')) {
-        edits[row.enveloppe_id] = String(Math.abs(row.amount));
+const revertIfInvalid = (row: BudgetEnvelope) => {
+    if (!isValidAmount(edits[row.envelope_id] ?? '')) {
+        edits[row.envelope_id] = String(Math.abs(row.amount));
     }
 };
 
 const ordered = computed(() =>
-    [...props.enveloppes].sort((a, b) =>
+    [...props.envelopes].sort((a, b) =>
         a.direction === b.direction ? 0 : a.direction === 'revenue' ? -1 : 1,
     ),
 );
 
 const hasVariable = computed(() =>
-    props.enveloppes.some((e) => e.type === 'variable'),
+    props.envelopes.some((e) => e.type === 'variable'),
 );
 
 const totalIncome = computed(() =>
-    props.enveloppes
+    props.envelopes
         .filter((e) => e.direction === 'revenue')
         .reduce((sum, e) => sum + Math.abs(e.amount), 0),
 );
 const totalExpenses = computed(() =>
-    props.enveloppes
+    props.envelopes
         .filter((e) => e.direction === 'expense')
         .reduce((sum, e) => sum + Math.abs(e.amount), 0),
 );
@@ -120,7 +120,7 @@ const runningLeft = computed(() => {
                 @click="emit('add')"
             >
                 <Icon name="add" class="size-4" aria-hidden="true" />
-                Add enveloppe
+                Add envelope
             </Button>
         </div>
 
@@ -130,7 +130,7 @@ const runningLeft = computed(() => {
                     <tr
                         class="border-b bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase"
                     >
-                        <th class="px-4 py-2.5 font-medium">Enveloppe</th>
+                        <th class="px-4 py-2.5 font-medium">Envelope</th>
                         <th class="px-4 py-2.5 font-medium">Type</th>
                         <th class="px-4 py-2.5 text-right font-medium">
                             Amount
@@ -146,7 +146,7 @@ const runningLeft = computed(() => {
                 <tbody>
                     <tr
                         v-for="(row, index) in ordered"
-                        :key="row.enveloppe_id"
+                        :key="row.envelope_id"
                         class="border-b last:border-0"
                     >
                         <td class="px-4 py-2.5">
@@ -177,7 +177,7 @@ const runningLeft = computed(() => {
                         <td class="px-4 py-2.5 text-right">
                             <template v-if="editable">
                                 <Input
-                                    :model-value="edits[row.enveloppe_id]"
+                                    :model-value="edits[row.envelope_id]"
                                     type="number"
                                     min="1"
                                     step="1"
@@ -211,9 +211,9 @@ const runningLeft = computed(() => {
                                 variant="ghost"
                                 size="icon-sm"
                                 class="text-destructive hover:bg-destructive hover:text-destructive"
-                                aria-label="Remove enveloppe"
-                                :disabled="pendingId === row.enveloppe_id"
-                                @click="emit('remove', row.enveloppe_id)"
+                                aria-label="Remove envelope"
+                                :disabled="pendingId === row.envelope_id"
+                                @click="emit('remove', row.envelope_id)"
                             >
                                 <Icon
                                     name="delete"
@@ -228,7 +228,7 @@ const runningLeft = computed(() => {
                             :colspan="editable ? 5 : 4"
                             class="px-4 py-8 text-center text-muted-foreground"
                         >
-                            No enveloppes assigned yet.
+                            No envelopes assigned yet.
                         </td>
                     </tr>
                 </tbody>

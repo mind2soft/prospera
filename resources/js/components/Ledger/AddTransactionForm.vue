@@ -11,10 +11,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import type { AddTransactionInput, PickerEnveloppe } from '@/lib/ledgerApi';
+import type { AddTransactionInput, PickerEnvelope } from '@/lib/ledgerApi';
 
 const props = defineProps<{
-    enveloppes: PickerEnveloppe[];
+    envelopes: PickerEnvelope[];
     currency: string;
     selectedDate: string; // "YYYY-MM-DD"
     disabled?: boolean;
@@ -24,13 +24,12 @@ const emit = defineEmits<{
     (e: 'confirm', input: AddTransactionInput): void;
 }>();
 
-const enveloppeId = ref<number | null>(null);
+const envelopeId = ref<number | null>(null);
 const amount = ref('');
 
 const selected = computed(
     () =>
-        props.enveloppes.find((e) => e.enveloppe_id === enveloppeId.value) ??
-        null,
+        props.envelopes.find((e) => e.envelope_id === envelopeId.value) ?? null,
 );
 
 const dateLabel = computed(() => {
@@ -62,7 +61,7 @@ const confirm = () => {
         return;
     }
     emit('confirm', {
-        enveloppe_id: selected.value.enveloppe_id,
+        envelope_id: selected.value.envelope_id,
         amount: Number(amount.value),
         event_at: props.selectedDate,
     });
@@ -73,20 +72,20 @@ const confirm = () => {
 <template>
     <form class="flex flex-wrap items-end gap-3" @submit.prevent="confirm">
         <div class="grid gap-1.5">
-            <Label>Enveloppe</Label>
+            <Label>Envelope</Label>
             <Select
-                :model-value="enveloppeId ?? undefined"
-                :disabled="disabled || enveloppes.length === 0"
-                @update:model-value="(value) => (enveloppeId = Number(value))"
+                :model-value="envelopeId ?? undefined"
+                :disabled="disabled || envelopes.length === 0"
+                @update:model-value="(value) => (envelopeId = Number(value))"
             >
                 <SelectTrigger class="w-52">
-                    <SelectValue placeholder="Choose an enveloppe" />
+                    <SelectValue placeholder="Choose an envelope" />
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem
-                        v-for="e in enveloppes"
-                        :key="e.enveloppe_id"
-                        :value="e.enveloppe_id"
+                        v-for="e in envelopes"
+                        :key="e.envelope_id"
+                        :value="e.envelope_id"
                     >
                         <span class="flex items-center gap-2">
                             <span

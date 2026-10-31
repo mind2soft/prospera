@@ -14,13 +14,13 @@ the filing cabinet.
 - **Dashboard** — your financial pulse at a glance
 - **Budget** — plan where your money goes before it goes anywhere
 - **Ledger** — a running log of expenses and revenues, one line at a time
-- **Enveloppes** — category envelopes (housing, groceries, fun…) with a name,
+- **Envelopes** — category envelopes (housing, groceries, fun…) with a name,
   a direction (expense/revenue) and a color. Fully CRUD-able.
 - **Shared finances** — financial profiles shared with invited members, with
   per-resource owner/contributor/viewer permissions.
 
 Design docs live in [`docs/`](docs/): [budget](docs/budget.md),
-[ledger](docs/ledger.md), [enveloppes](docs/enveloppe.md) and
+[ledger](docs/ledger.md), [envelopes](docs/envelope.md) and
 [shared finances](docs/shared-finances.md).
 
 ## Tech stack
@@ -85,7 +85,7 @@ card".
 
 Prospera digitises this: envelopes hold your categories, the ledger feeds them,
 and your budget shows which envelopes still have room. Start with
-**Enveloppes → create your first envelope**, then log transactions in
+**Envelopes → create your first envelope**, then log transactions in
 **Ledger**.
 
 ## License

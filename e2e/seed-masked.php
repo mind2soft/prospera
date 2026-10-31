@@ -3,7 +3,7 @@
 /**
  * Playwright seed for e2e/masked-ledger.spec.ts: a published budget owned by
  * the playwright user and an open ledger containing a transaction recorded by
- * a second member against their OWN enveloppe — the playwright user has no
+ * a second member against their OWN envelope — the playwright user has no
  * permission on it, so the server masks the amounts (amount null + masked).
  *
  * Runs against the isolated e2e database (.env.e2e — see
@@ -14,8 +14,8 @@
 
 use App\Models\Budget;
 use App\Models\BudgetPermission;
-use App\Models\Enveloppe;
-use App\Models\EnveloppePermission;
+use App\Models\Envelope;
+use App\Models\EnvelopePermission;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileInvite;
 use App\Models\Ledger;
@@ -27,8 +27,8 @@ use App\Models\User;
 Transaction::query()->delete();
 Ledger::query()->delete();
 Budget::query()->delete();
-EnveloppePermission::query()->delete();
-Enveloppe::query()->delete();
+EnvelopePermission::query()->delete();
+Envelope::query()->delete();
 FinancialProfileInvite::query()->delete();
 FinancialProfile::query()->delete();
 User::query()->delete();
@@ -50,7 +50,7 @@ $partner->forceFill(['email_verified_at' => now()])->save();
 $default = FinancialProfile::createDefaultFor($owner);
 $default->members()->attach($partner->id, ['is_owner' => false]);
 
-// Published budget owned by the playwright user (their enveloppes only).
+// Published budget owned by the playwright user (their envelopes only).
 $b = Budget::create([
     'profile_id' => $default->id,
     'currency' => 'CAD',
@@ -60,19 +60,19 @@ $b = Budget::create([
 ]);
 $b->permissions()->create(['user_id' => $owner->id, 'permission' => BudgetPermission::PERMISSION_OWNER]);
 
-$salary = $owner->enveloppes()->create([
+$salary = $owner->envelopes()->create([
     'name' => 'Paychecks', 'type' => 'revenue', 'color' => '#10b981',
 ]);
-$food = $owner->enveloppes()->create([
+$food = $owner->envelopes()->create([
     'name' => 'Food', 'type' => 'expense', 'color' => '#f59e0b',
 ]);
-$b->enveloppes()->create(['enveloppe_id' => $salary->id, 'amount' => 2000, 'type' => 'fixed']);
-$b->enveloppes()->create(['enveloppe_id' => $food->id, 'amount' => -800, 'type' => 'variable']);
+$b->envelopes()->create(['envelope_id' => $salary->id, 'amount' => 2000, 'type' => 'fixed']);
+$b->envelopes()->create(['envelope_id' => $food->id, 'amount' => -800, 'type' => 'variable']);
 
 // The partner may record against Food (contributor share) — those
 // transactions stay visible to the playwright user.
-EnveloppePermission::create([
-    'enveloppe_id' => $food->id,
+EnvelopePermission::create([
+    'envelope_id' => $food->id,
     'user_id' => $partner->id,
     'permission' => 'contributor',
 ]);
@@ -87,16 +87,16 @@ $ledger = Ledger::create([
 ]);
 $ledger->permissions()->create(['user_id' => $owner->id, 'permission' => LedgerPermission::PERMISSION_OWNER]);
 
-// The partner's own enveloppe — shared with NO ONE. A transaction recorded
+// The partner's own envelope — shared with NO ONE. A transaction recorded
 // against it by the partner is metadata-only for the playwright user.
-$secret = $partner->enveloppes()->create([
+$secret = $partner->envelopes()->create([
     'name' => 'Secret savings', 'type' => 'expense', 'color' => '#8b5cf6',
 ]);
 
 Transaction::create([
     'ledger_id' => $ledger->id,
     'user_id' => $partner->id,
-    'enveloppe_id' => $secret->id,
+    'envelope_id' => $secret->id,
     'budget_id' => $b->id,
     'amount' => -4321,
     'event_at' => '2026-10-10 00:00:00',
@@ -106,10 +106,10 @@ Transaction::create([
 Transaction::create([
     'ledger_id' => $ledger->id,
     'user_id' => $partner->id,
-    'enveloppe_id' => $food->id,
+    'envelope_id' => $food->id,
     'budget_id' => $b->id,
     'amount' => -250,
     'event_at' => '2026-10-11 00:00:00',
 ]);
 
-echo 'seeded ledger_id='.$ledger->id.' secret_enveloppe_id='.$secret->id.PHP_EOL;
+echo 'seeded ledger_id='.$ledger->id.' secret_envelope_id='.$secret->id.PHP_EOL;

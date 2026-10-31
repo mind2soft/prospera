@@ -9,13 +9,13 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
- * @property int $enveloppe_id
+ * @property int $envelope_id
  * @property int $user_id
  * @property string $permission
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-class EnveloppePermission extends Model
+class EnvelopePermission extends Model
 {
     public const PERMISSION_OWNER = ResourcePermissions::OWNER;
 
@@ -23,16 +23,16 @@ class EnveloppePermission extends Model
 
     public const PERMISSION_VIEWER = ResourcePermissions::VIEWER;
 
-    protected $fillable = ['enveloppe_id', 'user_id', 'permission'];
+    protected $fillable = ['envelope_id', 'user_id', 'permission'];
 
     /**
-     * The enveloppe this share belongs to.
+     * The envelope this share belongs to.
      *
-     * @return BelongsTo<Enveloppe, $this>
+     * @return BelongsTo<Envelope, $this>
      */
-    public function enveloppe(): BelongsTo
+    public function envelope(): BelongsTo
     {
-        return $this->belongsTo(Enveloppe::class, 'enveloppe_id');
+        return $this->belongsTo(Envelope::class, 'envelope_id');
     }
 
     /**
