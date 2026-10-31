@@ -8,7 +8,13 @@
         "budgeting",
         "personal-finance"
     ],
-    "license": "MIT",
+    "license": "CC-BY-NC-ND-4.0",
+    "authors": [
+        {
+            "name": "Yanick Rochon",
+            "email": "yanick.rochon@gmail.com"
+        }
+    ],
     "require": {
         "php": "^8.3",
         "inertiajs/inertia-laravel": "^3.0",

@@ -87,3 +87,9 @@ Prospera digitises this: envelopes hold your categories, the ledger feeds them,
 and your budget shows which envelopes still have room. Start with
 **Enveloppes → create your first envelope**, then log transactions in
 **Ledger**.
+
+## License
+
+Prospera — Copyright © 2026 Yanick Rochon.
+
+Licensed under the [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International license (CC BY-NC-ND 4.0)](https://creativecommons.org/licenses/by-nc-nd/4.0/). You may use, copy and deploy this software as-is for non-commercial purposes, provided that proper attribution is given and this copyright and license notice remain intact. You may not sell the software in part or as a whole, and you may not distribute modified versions: please contribute your changes back to the canonical repository instead.
