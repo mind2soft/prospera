@@ -1,5 +1,6 @@
 name: 'Backend issue: PHP'
 description: Report a backend bug (Laravel controllers, models, routes, jobs, tests)
+title: "[Issue:PHP] "
 labels: ["backend: PHP", "bug"]
 body:
     - type: markdown

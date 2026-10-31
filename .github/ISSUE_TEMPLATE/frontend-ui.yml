@@ -1,5 +1,6 @@
 name: 'Frontend issue: UI'
 description: Report a visual or layout problem in the UI (Vue + Tailwind)
+title: "[Issue:UI] "
 labels: ["frontend: UI", "bug"]
 body:
     - type: markdown

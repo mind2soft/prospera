@@ -1,5 +1,6 @@
 name: Feature request
 description: Suggest an idea or new functionality for Prospera
+title: "[Feature] "
 labels: ["enhancement"]
 body:
     - type: markdown

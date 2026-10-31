@@ -1,5 +1,6 @@
 name: CI issue
 description: Report a problem with the CI pipeline, GitHub Actions, linting or tooling
+title: "[CI] "
 labels: ["ci", "bug"]
 body:
     - type: markdown

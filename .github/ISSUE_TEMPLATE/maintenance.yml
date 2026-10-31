@@ -1,5 +1,6 @@
 name: Maintenance issue
 description: Dependency updates, security advisories, upgrades and general upkeep
+title: "[Maintenance] "
 labels: ["maintenance"]
 body:
     - type: markdown
