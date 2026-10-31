@@ -1,0 +1,60 @@
+name: Backend issue: PHP
+description: Report a backend bug (Laravel controllers, models, routes, jobs, tests)
+labels: ["backend: PHP", "bug"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for taking the time to report a backend issue. Please fill out the details below so we can reproduce and fix it.
+
+    - type: textarea
+      id: description
+      attributes:
+          label: Description
+          description: A clear description of the problem (incorrect behavior, broken endpoint, data issue, ...).
+      validations:
+          required: true
+
+    - type: textarea
+      id: steps
+      attributes:
+          label: Steps to reproduce
+          placeholder: |
+              1. Do '...'
+              2. Request '...'
+              3. See the problem
+      validations:
+          required: true
+
+    - type: textarea
+      id: expected
+      attributes:
+          label: Expected behavior
+          description: What you expected to happen instead.
+      validations:
+          required: true
+
+    - type: textarea
+      id: logs
+      attributes:
+          label: Logs / stack trace
+          description: Relevant excerpts from `storage/logs/laravel.log` or the exception stack trace.
+          render: shell
+      validations:
+          required: false
+
+    - type: input
+      id: versions
+      attributes:
+          label: Environment
+          description: PHP version and environment (e.g. PHP 8.5 / local, PHP 8.5 / staging).
+          placeholder: e.g. PHP 8.5 / local
+      validations:
+          required: true
+
+    - type: textarea
+      id: context
+      attributes:
+          label: Additional context
+      validations:
+          required: false

@@ -1,0 +1,50 @@
+name: CI issue
+description: Report a problem with the CI pipeline, GitHub Actions, linting or tooling
+labels: ["ci", "bug"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for taking the time to report a CI issue. Please fill out the details below.
+
+    - type: textarea
+      id: description
+      attributes:
+          label: Description
+          description: What is failing or misbehaving (build, lint, typecheck, tests, ...).
+      validations:
+          required: true
+
+    - type: input
+      id: run
+      attributes:
+          label: Workflow run link
+          description: Link to the failing GitHub Actions run, if applicable.
+          placeholder: https://github.com/mind2soft/prospera/actions/runs/...
+      validations:
+          required: false
+
+    - type: textarea
+      id: logs
+      attributes:
+          label: Relevant logs
+          description: The failing step's output (trim to the relevant part).
+          render: shell
+      validations:
+          required: false
+
+    - type: textarea
+      id: reproduction
+      attributes:
+          label: Local reproduction
+          description: Does it also fail locally? Which commands reproduce it?
+          placeholder: e.g. `composer ci:check` fails with ...
+      validations:
+          required: false
+
+    - type: textarea
+      id: context
+      attributes:
+          label: Additional context
+      validations:
+          required: false

@@ -1,0 +1,53 @@
+name: Maintenance issue
+description: Dependency updates, security advisories, upgrades and general upkeep
+labels: ["maintenance"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for taking the time to report a maintenance item. Please fill out the details below.
+
+    - type: dropdown
+      id: kind
+      attributes:
+          label: Kind
+          options:
+              - Dependencies
+              - Security
+              - Deprecation / upgrade
+              - Chores (config, docs, tooling)
+      validations:
+          required: true
+
+    - type: textarea
+      id: description
+      attributes:
+          label: Description
+          description: What needs maintenance and why (e.g. outdated package, published CVE, deprecated API).
+      validations:
+          required: true
+
+    - type: textarea
+      id: affected
+      attributes:
+          label: Affected components
+          description: Packages, lock files or configuration affected (with current versions where known).
+          placeholder: e.g. composer.lock — laravel/framework v12.x
+      validations:
+          required: false
+
+    - type: textarea
+      id: proposal
+      attributes:
+          label: Proposed action
+          description: What should be done (upgrade to X, patch Y, remove Z, ...).
+      validations:
+          required: false
+
+    - type: textarea
+      id: context
+      attributes:
+          label: Additional context
+          description: Links to advisories, changelogs or release notes.
+      validations:
+          required: false

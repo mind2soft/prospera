@@ -1,0 +1,59 @@
+name: Frontend issue: JS
+description: Report a JavaScript/TypeScript bug or runtime error in the frontend (Vue 3 + Inertia)
+labels: ["frontend: JS", "bug"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for taking the time to report a frontend issue. Please fill out the details below so we can reproduce and fix it.
+
+    - type: textarea
+      id: description
+      attributes:
+          label: Description
+          description: A clear description of the problem (what breaks, where it happens).
+      validations:
+          required: true
+
+    - type: textarea
+      id: steps
+      attributes:
+          label: Steps to reproduce
+          placeholder: |
+              1. Go to '...'
+              2. Click on '...'
+              3. See the problem
+      validations:
+          required: true
+
+    - type: textarea
+      id: expected
+      attributes:
+          label: Expected behavior
+          description: What you expected to happen instead.
+      validations:
+          required: true
+
+    - type: textarea
+      id: errors
+      attributes:
+          label: Console errors
+          description: Errors or warnings from the browser console and/or the network tab.
+          render: shell
+      validations:
+          required: false
+
+    - type: input
+      id: browser
+      attributes:
+          label: Browser & OS
+          placeholder: e.g. Firefox 141 / Linux, Chrome 141 / Windows 11
+      validations:
+          required: true
+
+    - type: textarea
+      id: context
+      attributes:
+          label: Additional context
+      validations:
+          required: false

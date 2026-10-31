@@ -1,0 +1,70 @@
+name: Frontend issue: UI
+description: Report a visual or layout problem in the UI (Vue + Tailwind)
+labels: ["frontend: UI", "bug"]
+body:
+    - type: markdown
+      attributes:
+          value: |
+              Thanks for taking the time to report a UI issue. Please fill out the details below so we can reproduce and fix it.
+
+    - type: textarea
+      id: description
+      attributes:
+          label: Description
+          description: A clear description of the problem (what looks wrong, where it happens).
+      validations:
+          required: true
+
+    - type: textarea
+      id: steps
+      attributes:
+          label: Steps to reproduce
+          placeholder: |
+              1. Go to '...'
+              2. Click on '...'
+              3. See the problem
+      validations:
+          required: true
+
+    - type: textarea
+      id: expected
+      attributes:
+          label: Expected behavior
+          description: What you expected to see instead.
+      validations:
+          required: true
+
+    - type: textarea
+      id: screenshots
+      attributes:
+          label: Screenshots
+          description: Attach screenshots or screen recordings (light and dark mode if relevant).
+          placeholder: Drag and drop images here.
+      validations:
+          required: false
+
+    - type: dropdown
+      id: theme
+      attributes:
+          label: Theme
+          options:
+              - Light
+              - Dark
+              - Both
+      validations:
+          required: true
+
+    - type: input
+      id: browser
+      attributes:
+          label: Browser & OS
+          placeholder: e.g. Firefox 141 / Linux, Chrome 141 / Windows 11
+      validations:
+          required: true
+
+    - type: textarea
+      id: context
+      attributes:
+          label: Additional context
+      validations:
+          required: false
