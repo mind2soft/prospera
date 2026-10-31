@@ -25,7 +25,9 @@ defineProps<Props>();
         :class="className"
         v-bind="$attrs"
     >
-        <path d="M5 12.5v11A2.5 2.5 0 0 0 7.5 26h17a2.5 2.5 0 0 0 2.5-2.5v-11" />
+        <path
+            d="M5 12.5v11A2.5 2.5 0 0 0 7.5 26h17a2.5 2.5 0 0 0 2.5-2.5v-11"
+        />
         <path d="m5 12.5 11 8 11-8" />
         <path d="m10 9.5 6-4.5 6 4.5" />
     </svg>

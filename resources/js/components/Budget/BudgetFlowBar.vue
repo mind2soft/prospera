@@ -34,7 +34,9 @@ const positions = computed(() => {
 });
 
 const fmt = (amount: number) =>
-    props.currency ? formatMoney(amount, props.currency) : amount.toLocaleString();
+    props.currency
+        ? formatMoney(amount, props.currency)
+        : amount.toLocaleString();
 </script>
 
 <template>
@@ -43,7 +45,9 @@ const fmt = (amount: number) =>
             <h3 class="text-sm font-medium text-muted-foreground">
                 {{ title }}
             </h3>
-            <span class="text-sm font-medium tabular-nums">{{ fmt(total) }}</span>
+            <span class="text-sm font-medium tabular-nums">{{
+                fmt(total)
+            }}</span>
         </div>
 
         <div

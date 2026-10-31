@@ -66,7 +66,7 @@ const features = [
                 class="absolute -top-40 left-1/2 h-[42rem] w-[72rem] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,oklch(0.85_0.12_165/0.45),transparent)] blur-2xl dark:bg-[radial-gradient(closest-side,oklch(0.45_0.12_165/0.35),transparent)]"
             />
             <div
-                class="absolute inset-0 [background-image:linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [background-size:56px_56px] opacity-50 [mask-image:radial-gradient(ellipse_at_top,black_20%,transparent_70%)]"
+                class="absolute inset-0 [background-image:linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_at_top,black_20%,transparent_70%)] [background-size:56px_56px] opacity-50"
             />
         </div>
 
@@ -77,7 +77,10 @@ const features = [
             <nav
                 class="mx-auto flex h-16 max-w-6xl items-center justify-between px-6"
             >
-                <Link :href="isSignedIn ? dashboard() : '/'" class="flex items-center gap-2.5">
+                <Link
+                    :href="isSignedIn ? dashboard() : '/'"
+                    class="flex items-center gap-2.5"
+                >
                     <span
                         class="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-emerald-700 text-white shadow-sm shadow-brand/30"
                     >
@@ -150,7 +153,11 @@ const features = [
                             :href="isSignedIn ? dashboard() : register()"
                             class="group inline-flex h-12 items-center gap-2 rounded-full bg-primary px-6 text-sm font-medium text-primary-foreground shadow-lg shadow-primary/20 transition hover:-translate-y-px hover:shadow-xl"
                         >
-                            {{ isSignedIn ? 'Open dashboard' : 'Start budgeting — free' }}
+                            {{
+                                isSignedIn
+                                    ? 'Open dashboard'
+                                    : 'Start budgeting — free'
+                            }}
                             <ArrowRight
                                 class="size-4 transition group-hover:translate-x-0.5"
                             />
@@ -166,12 +173,15 @@ const features = [
                 </div>
 
                 <!-- Product preview -->
-                <div class="relative mx-auto w-full max-w-md" aria-hidden="true">
+                <div
+                    class="relative mx-auto w-full max-w-md"
+                    aria-hidden="true"
+                >
                     <div
                         class="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-br from-brand/25 via-transparent to-sky-400/20 blur-2xl"
                     />
                     <div
-                        class="rounded-2xl border bg-card/90 p-6 shadow-2xl shadow-black/5 ring-1 ring-black/[0.02] backdrop-blur"
+                        class="rounded-2xl border bg-card/90 p-6 shadow-2xl ring-1 shadow-black/5 ring-black/[0.02] backdrop-blur"
                     >
                         <div class="flex items-baseline justify-between">
                             <span class="text-sm text-muted-foreground"
@@ -297,7 +307,11 @@ const features = [
                             :href="isSignedIn ? dashboard() : register()"
                             class="group mt-10 inline-flex h-12 items-center gap-2 rounded-full bg-background px-6 text-sm font-medium text-foreground transition hover:-translate-y-px"
                         >
-                            {{ isSignedIn ? 'Open dashboard' : 'Create your free account' }}
+                            {{
+                                isSignedIn
+                                    ? 'Open dashboard'
+                                    : 'Create your free account'
+                            }}
                             <ArrowRight
                                 class="size-4 transition group-hover:translate-x-0.5"
                             />
@@ -314,7 +328,10 @@ const features = [
                 <span class="font-display text-lg text-foreground"
                     >Prospera</span
                 >
-                <span>&copy; {{ new Date().getFullYear() }} Prospera. Money, envelopes, clarity.</span>
+                <span
+                    >&copy; {{ new Date().getFullYear() }} Prospera. Money,
+                    envelopes, clarity.</span
+                >
             </div>
         </footer>
     </div>

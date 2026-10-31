@@ -268,9 +268,7 @@ const roleLabel: Record<string, string> = {
                 class="space-y-4"
             >
                 <div class="flex items-center gap-3">
-                    <h3
-                        class="text-sm font-medium text-muted-foreground"
-                    >
+                    <h3 class="text-sm font-medium text-muted-foreground">
                         {{ group.title }}
                     </h3>
                     <div

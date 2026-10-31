@@ -708,9 +708,7 @@ const joinedLabel = (joinedAt: string): string =>
                                 v-if="!profile.is_default"
                                 class="space-y-2 border-t pt-4"
                             >
-                                <p
-                                    class="text-xs font-medium text-destructive"
-                                >
+                                <p class="text-xs font-medium text-destructive">
                                     Danger zone
                                 </p>
                                 <div
