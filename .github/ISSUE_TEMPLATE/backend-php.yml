@@ -1,4 +1,4 @@
-name: Backend issue: PHP
+name: 'Backend issue: PHP'
 description: Report a backend bug (Laravel controllers, models, routes, jobs, tests)
 labels: ["backend: PHP", "bug"]
 body:

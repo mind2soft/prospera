@@ -1,4 +1,4 @@
-name: Frontend issue: JS
+name: 'Frontend issue: JS'
 description: Report a JavaScript/TypeScript bug or runtime error in the frontend (Vue 3 + Inertia)
 labels: ["frontend: JS", "bug"]
 body:

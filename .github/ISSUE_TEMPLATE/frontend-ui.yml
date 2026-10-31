@@ -1,4 +1,4 @@
-name: Frontend issue: UI
+name: 'Frontend issue: UI'
 description: Report a visual or layout problem in the UI (Vue + Tailwind)
 labels: ["frontend: UI", "bug"]
 body:
