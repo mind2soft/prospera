@@ -92,4 +92,17 @@ and your budget shows which envelopes still have room. Start with
 
 Prospera — Copyright © 2026 Yanick Rochon.
 
-Licensed under the [Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International license (CC BY-NC-ND 4.0)](https://creativecommons.org/licenses/by-nc-nd/4.0/). You may use, copy and deploy this software as-is for non-commercial purposes, provided that proper attribution is given and this copyright and license notice remain intact. You may not sell the software in part or as a whole, and you may not distribute modified versions: please contribute your changes back to the canonical repository instead.
+Prospera is dual-licensed:
+
+- **[GNU Affero General Public License v3.0 (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0.html)** —
+  you may use, modify and redistribute Prospera under the terms of the AGPL-3.0.
+  If you run a modified version — even as a network service, without
+  distributing it — you must make its complete source available under the
+  same license.
+- **Commercial license** — if the terms of the AGPL-3.0 do not fit your use
+  case (e.g. you wish to distribute a modified or unmodified version without
+  being bound by its copyleft terms), contact the copyright holder for a
+  commercial license.
+
+Unless you have obtained a separate commercial license, your use of Prospera
+is governed by the AGPL-3.0 as published in [LICENSE](LICENSE).

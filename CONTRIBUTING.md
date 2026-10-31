@@ -102,8 +102,8 @@ If no AI was used, state `None`.
 ## License
 
 By contributing, you agree that your contributions are licensed under the
-project's [CC BY-NC-ND 4.0](LICENSE) license, and you grant the project
-maintainers the right to distribute and maintain them as part of the
-canonical source. Contributions must target the canonical repository —
-please do not publish modified forks; submit your changes here as PRs
-instead.
+project's dual license — [AGPL-3.0](LICENSE) or a commercial license, at the
+copyright holder's option — and you grant the project maintainers the right
+to distribute and maintain them as part of the canonical source under either
+of those licenses. Contributions must target the canonical repository;
+please submit your changes here as PRs.
