@@ -178,10 +178,12 @@ chmod -R ug+rwX "$SHARED_DIR/storage" "$RELEASE_DIR/bootstrap/cache" || true
 cd "$RELEASE_DIR"
 
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
+# Migrate first: optimize:clear flushes the database cache store, whose table
+# does not exist yet on a fresh database.
+php artisan migrate --force
 php artisan optimize:clear
 rm -rf public/storage
 php artisan storage:link
-php artisan migrate --force
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
