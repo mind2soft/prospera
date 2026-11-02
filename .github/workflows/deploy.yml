@@ -1,9 +1,11 @@
 name: deploy
 
+# Production is only ever deployed from a `v*` tag. Merges to `main` are
+# tested by tests.yml instead — see the release process in the README.
 on:
   push:
-    branches:
-      - main
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       action:
@@ -29,6 +31,10 @@ jobs:
   package:
     needs: tests
     runs-on: ubuntu-latest
+    # Tag pushes release under the tag name (e.g. "v1.2.3"); manual dispatches
+    # keep the default run-number + short-SHA release id.
+    env:
+      RELEASE_ID: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -75,6 +81,8 @@ jobs:
     concurrency:
       group: production
       cancel-in-progress: false
+    env:
+      RELEASE_ID: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
