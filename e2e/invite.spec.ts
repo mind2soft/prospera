@@ -77,13 +77,18 @@ test('a new user registers through the invite link and joins the profile', async
     await page.getByRole('button', { name: /Create account and join/ }).click();
 
     // Account created (Fortify routes new users to email verification).
-    await page.waitForURL((url) => !url.pathname.endsWith('/register'));
+    // The visitor stays on /invites/{key} while the form submits, so a
+    // "not /register" check would pass instantly and race the POST — wait
+    // for the verification page, which only exists once the user does.
+    await page.waitForURL((url) => url.pathname.endsWith('/email/verify'));
 
     // Membership is granted on email verification: simulate the invitee
     // clicking the verification link (marks verified + fires Verified).
+    // stdio: 'inherit' surfaces the command's stderr in CI logs — without it
+    // a failure prints only "Command failed" with no context.
     execSync(
         `php artisan tinker --env=e2e --execute="\\$u = App\\Models\\User::where('email', 'invitee@example.com')->firstOrFail(); \\$u->markEmailAsVerified(); event(new Illuminate\\Auth\\Events\\Verified(\\$u));"`,
-        { cwd: '.' },
+        { cwd: '.', stdio: 'inherit' },
     );
 
     // The invite was consumed and membership created: as the owner, the

@@ -38,8 +38,13 @@ return [
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
-            'busy_timeout' => null,
-            'journal_mode' => null,
+            // Wait for a held lock instead of failing instantly with
+            // SQLITE_BUSY — the e2e suite mixes `php artisan serve` traffic
+            // (database sessions write on every request) with concurrent
+            // tinker/seed writes to the same file.
+            'busy_timeout' => 5000,
+            // WAL lets readers proceed while a write transaction is open.
+            'journal_mode' => 'wal',
             'synchronous' => null,
             'transaction_mode' => 'DEFERRED',
         ],
