@@ -193,6 +193,12 @@ Underneath, a full-month calendar (sticky, on the left) and a table of
 transactions for that month to the right. Changing month changes the
 transactions in the table to the selected month.
 
+The calendar is bound to the ledger's period. Days outside of the ledger's
+start and end dates are disabled, as is month navigation that would leave the
+period. When a ledger is selected, the calendar points to the most recent day
+of its period: today while the ledger is open, its first day if it opens in
+the future, and its last day once it has ended.
+
 ### Adding a transaction
 
 Entering a transaction should be as easy as selecting one of the user's
