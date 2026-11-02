@@ -76,6 +76,26 @@ npm run build            # production build
 Expired invites are pruned daily (`php artisan invites:prune`). In production,
 run the scheduler (`php artisan schedule:run` every minute via cron).
 
+## Releases & deployment
+
+Production is **only ever deployed from a `v*` tag** — merging to `main` never
+deploys on its own:
+
+```bash
+git tag -a v1.2.3 -m "Release v1.2.3"
+git push origin v1.2.3
+```
+
+Pushing a tag runs the `deploy` workflow: the full test suite (including the
+Playwright e2e suite) runs first, then the app is packaged and deployed as
+release `v1.2.3` to [prospera.mind2soft.com](https://prospera.mind2soft.com).
+Failing tests abort the release.
+
+- **Merges to `main`** run the full test suite (unit, static analysis and e2e)
+  to catch regressions early — but never touch production.
+- **Rollback:** manually run the `deploy` workflow with `action: rollback`
+  (optionally naming a release ID; empty = the previous release).
+
 ## The envelope system, briefly
 
 The paper method works like this: when you get paid, you divide the cash into
