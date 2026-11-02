@@ -92,6 +92,13 @@ class LedgerTest extends TestCase
         return $budget;
     }
 
+    private function createEnvelope(string $name = 'Rent'): Envelope
+    {
+        return $this->user->envelopes()->create([
+            'name' => $name, 'type' => 'expense', 'color' => '#f43f5e',
+        ]);
+    }
+
     // ------------------------------------------------------------------
     // List & create
     // ------------------------------------------------------------------
@@ -260,25 +267,23 @@ class LedgerTest extends TestCase
     // Transactions
     // ------------------------------------------------------------------
 
-    public function test_adding_a_transaction_requires_a_published_budget(): void
+    public function test_adding_a_transaction_does_not_require_a_budget(): void
     {
         $ledger = $this->createLedger($this->user);
-        $budget = $this->createPublishedBudget($this->user, published: false);
-        $envelope = $budget->envelopes()->first();
+        $envelope = $this->createEnvelope();
 
         $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'envelope_id' => $envelope->envelope_id,
-            'amount' => 42,
-            'event_at' => '2026-06-15',
-        ])->assertUnprocessable()->assertJsonValidationErrors('budget');
-
-        $budget->update(['published_at' => now()]);
-
-        $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'envelope_id' => $envelope->envelope_id,
+            'envelope_id' => $envelope->id,
             'amount' => 42,
             'event_at' => '2026-06-15',
         ])->assertCreated();
+
+        $this->assertDatabaseHas('transactions', [
+            'ledger_id' => $ledger->id,
+            'envelope_id' => $envelope->id,
+            'budget_id' => null,
+            'amount' => -42, // expense envelope
+        ]);
     }
 
     public function test_adding_a_transaction_signs_the_amount_and_snapshots_the_budget(): void
@@ -316,9 +321,7 @@ class LedgerTest extends TestCase
     public function test_retired_budgets_never_qualify_as_the_snapshot(): void
     {
         $ledger = $this->createLedger($this->user);
-        $envelope = $this->user->envelopes()->create([
-            'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
-        ]);
+        $envelope = $this->createEnvelope();
 
         // An old published budget for the current month that is retired.
         Budget::create([
@@ -334,22 +337,32 @@ class LedgerTest extends TestCase
             'envelope_id' => $envelope->id,
             'amount' => 10,
             'event_at' => '2026-06-15',
-        ])->assertUnprocessable()->assertJsonValidationErrors('budget');
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('transactions', [
+            'envelope_id' => $envelope->id,
+            'budget_id' => null,
+        ]);
     }
 
-    public function test_adding_a_transaction_rejects_envelopes_outside_the_budget(): void
+    public function test_envelopes_outside_the_published_budget_record_without_a_snapshot(): void
     {
         $ledger = $this->createLedger($this->user);
-        $this->createPublishedBudget($this->user);
-        $envelope = $this->user->envelopes()->create([
-            'name' => 'Not in budget', 'type' => 'expense', 'color' => '#111111',
-        ]);
+        $budget = $this->createPublishedBudget($this->user);
+        $envelope = $this->createEnvelope('Not in budget');
 
         $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
             'envelope_id' => $envelope->id,
             'amount' => 10,
             'event_at' => '2026-06-15',
-        ])->assertUnprocessable()->assertJsonValidationErrors('envelope_id');
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('transactions', [
+            'ledger_id' => $ledger->id,
+            'envelope_id' => $envelope->id,
+            'budget_id' => null,
+        ]);
+        $this->assertDatabaseHas('budgets', ['id' => $budget->id]);
     }
 
     public function test_adding_a_transaction_requires_a_valid_amount(): void

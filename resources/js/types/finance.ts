@@ -106,7 +106,8 @@ export type Transaction = {
     id: number;
     ledger_id: number;
     envelope_id: number;
-    budget_id: number;
+    /** Budget snapshot — null when no published budget contained the envelope at entry time. */
+    budget_id: number | null;
     name: string; // envelope name
     color: string;
     direction: 'expense' | 'revenue';

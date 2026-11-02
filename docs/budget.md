@@ -269,9 +269,10 @@ envelope amount privacy governs transaction data only (see
 
 Future features, in priority order:
 
-1. **~~Transaction tracking against budgets~~ — implemented**: transactions are
-   recorded against the latest published budget and tracked in the
-   [Ledger](ledger.md).
+1. **~~Transaction tracking against budgets~~ — implemented**: transactions
+   are recorded in the [Ledger](ledger.md) against a budget snapshot (the
+   latest published budget containing the envelope, when one exists —
+   transactions are possible without any published budget).
 
 Email-based budget sharing is replaced by profile membership + per-resource
 permissions — see [Shared Finances](shared-finances.md). Profile invites and

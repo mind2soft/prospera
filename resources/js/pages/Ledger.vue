@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import { toast } from 'vue-sonner';
 import Icon from '@/components/Icon.vue';
 import Heading from '@/components/Heading.vue';
@@ -40,11 +40,11 @@ import {
     useSetLedgerShare,
     useTransferLedgerOwnership,
 } from '@/composables/ledgerQueries';
-import { budgetKeys, useBudget, useBudgets } from '@/composables/budgetQueries';
+import { useBudgets } from '@/composables/budgetQueries';
 import { useEnvelopeOptions } from '@/composables/envelopeQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { ApiError } from '@/lib/api';
-import { ledger as ledgerRoute } from '@/routes';
+import { envelopes as envelopesRoute, ledger as ledgerRoute } from '@/routes';
 import type {
     AddTransactionInput,
     CreateLedgerInput,
@@ -130,9 +130,32 @@ const transactionsQuery = useLedgerTransactions(
 );
 const transactions = computed(() => transactionsQuery.data.value ?? []);
 
-// --- budget context --------------------------------------------------------
+// --- envelope context -------------------------------------------------------
 const budgetsQuery = useBudgets();
-const latestPublished = computed(() => {
+const envelopesQuery = useEnvelopeOptions();
+
+/**
+ * The transaction picker: every envelope on which the current user is owner
+ * or contributor (docs/ledger.md — adding a transaction). No budget is
+ * required — budgets are only needed for reporting.
+ */
+const pickerEnvelopes = computed<PickerEnvelope[]>(() =>
+    (envelopesQuery.data.value ?? [])
+        .filter(
+            (option) =>
+                option.permission === 'owner' ||
+                option.permission === 'contributor',
+        )
+        .map((option) => ({
+            envelope_id: option.id,
+            name: option.name,
+            color: option.color,
+            direction: option.direction,
+        })),
+);
+
+/** The latest published budget's currency — budgets are for reporting only. */
+const currency = computed(() => {
     const published = (budgetsQuery.data.value ?? [])
         .filter((b) => b.published_at !== null)
         .sort(
@@ -140,48 +163,7 @@ const latestPublished = computed(() => {
                 new Date(b.published_at!).getTime() -
                 new Date(a.published_at!).getTime(),
         );
-    return published[0] ?? null;
-});
-
-const budgetQuery = useBudget(
-    computed(() => latestPublished.value?.id ?? null),
-);
-const budget = computed(() => budgetQuery.data.value ?? null);
-
-/**
- * Budget data is loading — banners and the entry form stay hidden until the
- * state is known (no "no published budget" flash).
- */
-const budgetLoading = computed(
-    () => budgetsQuery.isLoading.value || budgetQuery.isLoading.value,
-);
-
-const currency = computed(() => budget.value?.currency ?? '');
-
-const envelopesQuery = useEnvelopeOptions();
-
-/**
- * The transaction picker: envelopes from the published budget on which the
- * current user is owner or contributor (docs/ledger.md — adding a
- * transaction).
- */
-const pickerEnvelopes = computed<PickerEnvelope[]>(() => {
-    const budgetEnvelopeIds = new Set(
-        (budget.value?.envelopes ?? []).map((e) => e.envelope_id),
-    );
-    return (envelopesQuery.data.value ?? [])
-        .filter(
-            (option) =>
-                budgetEnvelopeIds.has(option.id) &&
-                (option.permission === 'owner' ||
-                    option.permission === 'contributor'),
-        )
-        .map((option) => ({
-            envelope_id: option.id,
-            name: option.name,
-            color: option.color,
-            direction: option.direction,
-        }));
+    return published[0]?.currency ?? '';
 });
 
 const meId = computed(() => usePage().props.auth.user.id);
@@ -195,11 +177,7 @@ const mayAddTransactions = computed(() => {
 });
 
 const canAddTransaction = computed(
-    () =>
-        !isClosed.value &&
-        budget.value !== null &&
-        ledger.value !== null &&
-        mayAddTransactions.value,
+    () => !isClosed.value && ledger.value !== null && mayAddTransactions.value,
 );
 
 // --- mutations -------------------------------------------------------------
@@ -462,7 +440,10 @@ const onRemoveTransaction = (transactionId: number) => {
                     </Card>
 
                     <Card
-                        v-else-if="!budgetLoading && budget === null"
+                        v-else-if="
+                            !envelopesQuery.isLoading.value &&
+                            pickerEnvelopes.length === 0
+                        "
                         class="border-amber-500/30"
                     >
                         <CardContent
@@ -473,13 +454,22 @@ const onRemoveTransaction = (transactionId: number) => {
                                 class="size-5 shrink-0 text-amber-500"
                                 aria-hidden="true"
                             />
-                            A published budget is required before recording
-                            transactions.
+                            <span>
+                                Envelopes are required to record transactions.
+                                <Link
+                                    :href="envelopesRoute()"
+                                    class="font-medium text-primary underline underline-offset-4"
+                                    >Manage envelopes</Link
+                                >
+                            </span>
                         </CardContent>
                     </Card>
 
                     <Card
-                        v-else-if="!budgetLoading && !canAddTransaction"
+                        v-else-if="
+                            !envelopesQuery.isLoading.value &&
+                            !canAddTransaction
+                        "
                         class="border-amber-500/30"
                     >
                         <CardContent
