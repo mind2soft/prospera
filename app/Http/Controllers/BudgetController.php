@@ -6,7 +6,6 @@ use App\Models\Budget;
 use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
-use App\Models\Transaction;
 use App\Models\User;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
@@ -24,9 +23,9 @@ class BudgetController extends Controller
     ) {}
 
     /**
-     * List a profile's non-retired budgets, newest first. The current
-     * profile is tracked client-side, so callers pass `profile_id`; without
-     * it, the budgets of all the caller's profiles are listed.
+     * List a profile's budgets, newest first. The current profile is
+     * tracked client-side, so callers pass `profile_id`; without it, the
+     * budgets of all the caller's profiles are listed.
      */
     public function index(Request $request): JsonResponse
     {
@@ -38,7 +37,7 @@ class BudgetController extends Controller
             $query = Budget::query()->visibleTo($request->user());
         }
 
-        $budgets = $query->nonRetired()
+        $budgets = $query
             ->with('permissions')
             ->orderByDesc('created_at')
             ->get()
@@ -103,12 +102,11 @@ class BudgetController extends Controller
 
     /**
      * Publish a draft budget: stamps the current month and replaces any
-     * previously published budget for the same month. A replaced budget is
-     * deleted unless transactions reference it — then it becomes retired
-     * (hidden from selectors, auto-deleted with its last transaction). The
-     * profile row is locked so the one-published-per-month replacement
-     * cannot race. Publishing replaces profile-wide data, so it requires
-     * both budget ownership and profile ownership.
+     * previously published budget for the same month (the replaced budget is
+     * deleted with its shares and assignments). The profile row is locked so
+     * the one-published-per-month replacement cannot race. Publishing
+     * replaces profile-wide data, so it requires both budget ownership and
+     * profile ownership.
      */
     public function publish(Request $request, Budget $budget): JsonResponse
     {
@@ -133,15 +131,7 @@ class BudgetController extends Controller
                 ->where('effective_month', $month)
                 ->whereKeyNot($budget->id)
                 ->get()
-                ->each(function (Budget $existing): void {
-                    if (Transaction::where('budget_id', $existing->id)->exists()) {
-                        $existing->forceFill(['retired_at' => now()])->save();
-
-                        return;
-                    }
-
-                    $existing->delete();
-                });
+                ->each(fn (Budget $existing) => $existing->delete());
 
             $budget->update([
                 'published_at' => now(),
@@ -213,17 +203,10 @@ class BudgetController extends Controller
 
     /**
      * Delete a budget (cascades its shares and envelope assignments).
-     * Blocked when transactions reference the budget (data integrity).
      */
     public function destroy(Request $request, Budget $budget): JsonResponse
     {
         $this->authorize($request, $budget, ResourcePermissions::OWNER);
-
-        if (Transaction::where('budget_id', $budget->id)->exists()) {
-            throw ValidationException::withMessages([
-                'budget' => __('This budget has transactions and cannot be deleted.'),
-            ]);
-        }
 
         $budget->delete();
 
@@ -455,7 +438,6 @@ class BudgetController extends Controller
             'effective_year' => $budget->effective_year,
             'effective_month' => $budget->effective_month,
             'published_at' => $budget->published_at?->toISOString(),
-            'retired_at' => $budget->retired_at?->toISOString(),
             'created_at' => $budget->created_at->toISOString(),
             'permission' => $budget->permissionFor($user, $isMember),
         ];

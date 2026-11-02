@@ -33,7 +33,7 @@ $profile = FinancialProfile::query()
     ->whereHas('members', fn ($q) => $q->whereKey($u->id))
     ->first() ?? FinancialProfile::createDefaultFor($u);
 
-// Transactions first (they reference the ledgers and budgets being deleted).
+// Transactions first (they reference the ledgers being deleted).
 Transaction::whereIn('ledger_id', Ledger::query()->where('profile_id', $profile->id)->select('id'))->delete();
 Ledger::query()->where('profile_id', $profile->id)->get()->each(fn (Ledger $l) => $l->delete());
 Budget::query()->where('profile_id', $profile->id)->get()->each(fn (Budget $b) => $b->delete());
@@ -75,12 +75,11 @@ $ledger = Ledger::create([
 ]);
 $ledger->permissions()->create(['user_id' => $u->id, 'permission' => LedgerPermission::PERMISSION_OWNER]);
 
-$tx = function ($assignment, int $amount, string $date, int $offsetSeconds) use ($ledger, $u, $b) {
+$tx = function ($assignment, int $amount, string $date, int $offsetSeconds) use ($ledger, $u) {
     Transaction::create([
         'ledger_id' => $ledger->id,
         'user_id' => $u->id,
         'envelope_id' => $assignment->envelope_id,
-        'budget_id' => $b->id,
         'amount' => $assignment->envelope->type === 'expense' ? -$amount : $amount,
         'event_at' => $date.' 00:00:00',
         'created_at' => now()->addSeconds($offsetSeconds),

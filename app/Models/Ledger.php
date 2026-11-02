@@ -63,18 +63,13 @@ class Ledger extends Model
     }
 
     /**
-     * Delete the ledger and all its transactions in bulk, then sweep the
-     * retired budgets those transactions were the last references to.
+     * Delete the ledger and all its transactions in bulk.
      */
     public function deleteWithTransactions(): void
     {
         DB::transaction(function (): void {
-            $budgetIds = $this->transactions()->distinct()->pluck('budget_id');
-
             $this->transactions()->delete();
             $this->delete();
-
-            Budget::sweepRetired($budgetIds);
         });
     }
 

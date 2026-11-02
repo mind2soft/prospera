@@ -94,10 +94,7 @@ class LedgerController extends Controller
     }
 
     /**
-     * Delete a ledger and ALL of its transactions (cascade). The
-     * transactions are deleted through Eloquent first so the model events
-     * fire — retired budgets whose last referencing transactions lived in
-     * this ledger are swept — then the ledger itself is deleted.
+     * Delete a ledger and ALL of its transactions (cascade).
      */
     public function destroy(Request $request, Ledger $ledger): JsonResponse
     {
@@ -160,24 +157,34 @@ class LedgerController extends Controller
             ->orderBy('id')
             ->get();
 
-        // Remaining allocated is computed per budget snapshot: transactions
-        // recorded against a budget revision subtract from that revision's
-        // own allocation, not from other revisions of the same envelope.
+        // Totals per envelope within the queried range.
         $totals = DB::table('transactions')
             ->where('ledger_id', $ledger->id)
             ->whereBetween('event_at', [$from, $to])
-            ->groupBy('budget_id', 'envelope_id')
-            ->get(['budget_id', 'envelope_id', DB::raw('sum(amount) as total')])
+            ->groupBy('envelope_id')
+            ->get(['envelope_id', DB::raw('sum(amount) as total')])
             ->mapWithKeys(fn (object $row): array => [
-                (string) $row->budget_id.'-'.(string) $row->envelope_id => (int) $row->total,
+                (string) $row->envelope_id => (int) $row->total,
             ]);
 
-        $allocations = BudgetEnvelope::query()
-            ->whereIn('envelope_id', $transactions->pluck('envelope_id')->unique())
-            ->whereIn('budget_id', $transactions->pluck('budget_id')->unique())
-            ->get()
-            ->keyBy(fn (BudgetEnvelope $assignment) => $assignment->budget_id.'-'.$assignment->envelope_id)
-            ->toBase();
+        // "Remaining allocated" comes from the published budget bound to the
+        // queried month (budgets are per month/year — see docs/budget.md):
+        // allocation minus the transactions for that envelope in the range.
+        // Envelopes without an allocation (or months without a published
+        // budget) report as unallocated.
+        $budget = Budget::query()
+            ->where('profile_id', $ledger->profile_id)
+            ->whereNotNull('published_at')
+            ->where('effective_year', $from->year)
+            ->where('effective_month', $from->month)
+            ->first();
+
+        $allocations = $budget === null
+            ? collect()
+            : BudgetEnvelope::query()
+                ->where('budget_id', $budget->id)
+                ->whereIn('envelope_id', $totals->keys())
+                ->pluck('amount', 'envelope_id');
 
         $envelopePermissions = Envelope::permissionsFor(
             $request->user(),
@@ -196,13 +203,31 @@ class LedgerController extends Controller
     }
 
     /**
+     * The envelope's allocated amount on the month's published budget, minus
+     * the transactions recorded against that envelope within the queried
+     * range ("remaining allocated"). Null when the envelope has no
+     * allocation (or the month has no published budget).
+     *
+     * @param  Collection<int|string, int>  $allocations
+     * @param  Collection<string, int>  $totals
+     */
+    private function remainingAllocated(Transaction $transaction, Collection $allocations, Collection $totals): ?int
+    {
+        $allocation = $allocations->get((string) $transaction->envelope_id);
+
+        if ($allocation === null) {
+            return null;
+        }
+
+        return (int) $allocation - $totals->get((string) $transaction->envelope_id, 0);
+    }
+
+    /**
      * Record a transaction against one of the user's envelopes — envelopes
-     * are the only dependency; no budget is required. Ledger owners and
+     * are the only dependency; no budget is involved. Ledger owners and
      * contributors can record, but only against envelopes on which they are
      * also contributor (or owner). The amount is signed from the envelope's
-     * direction; the budget snapshot is the latest published (non-retired)
-     * budget of the profile containing that envelope, null when there is
-     * none (budgets matter for reporting only).
+     * direction.
      */
     public function addTransaction(Request $request, Ledger $ledger): JsonResponse
     {
@@ -246,22 +271,9 @@ class LedgerController extends Controller
             ]);
         }
 
-        /** @var Budget|null $budget */
-        $budget = Budget::query()
-            ->where('profile_id', $ledger->profile_id)
-            ->whereNotNull('published_at')
-            ->whereNull('retired_at')
-            ->orderByDesc('published_at')
-            ->whereHas(
-                'envelopes',
-                fn ($query) => $query->where('envelope_id', $envelope->id),
-            )
-            ->first();
-
         $transaction = $ledger->transactions()->create([
             'user_id' => $request->user()->id,
             'envelope_id' => $envelope->id,
-            'budget_id' => $budget?->id,
             'amount' => $envelope->signedAmount($validated['amount']),
             'event_at' => $eventAt,
         ]);
@@ -306,25 +318,6 @@ class LedgerController extends Controller
         $transaction->delete();
 
         return response()->json(status: 204);
-    }
-
-    /**
-     * The envelope's allocated amount on the transaction's budget snapshot,
-     * minus the transactions recorded against that same snapshot budget
-     * within the queried range ("remaining allocated").
-     *
-     * @param  Collection<string, BudgetEnvelope>  $allocations
-     * @param  Collection<string, int>  $totals
-     */
-    private function remainingAllocated(Transaction $transaction, Collection $allocations, Collection $totals): ?int
-    {
-        $allocation = $allocations->get($transaction->budget_id.'-'.$transaction->envelope_id)?->amount;
-
-        if ($allocation === null) {
-            return null;
-        }
-
-        return (int) $allocation - $totals->get($transaction->budget_id.'-'.$transaction->envelope_id, 0);
     }
 
     /**
@@ -450,7 +443,6 @@ class LedgerController extends Controller
             'id' => $transaction->id,
             'ledger_id' => $transaction->ledger_id,
             'envelope_id' => $transaction->envelope_id,
-            'budget_id' => $transaction->budget_id,
             'name' => $transaction->envelope->name,
             'color' => $transaction->envelope->color,
             'direction' => $transaction->envelope->type,
