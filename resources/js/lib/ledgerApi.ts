@@ -16,7 +16,7 @@ export type AddTransactionInput = {
     event_at: string; // ISO date ("2026-10-30")
 };
 
-/** An envelope offered by the transaction picker (published budget ∩ contributor+). */
+/** An envelope offered by the transaction picker (contributor+; no budget required). */
 export type PickerEnvelope = {
     envelope_id: number;
     name: string;

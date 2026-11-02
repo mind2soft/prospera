@@ -11,7 +11,7 @@ use Illuminate\Support\Carbon;
  * @property int $ledger_id
  * @property int|null $user_id
  * @property int $envelope_id
- * @property int $budget_id
+ * @property int|null $budget_id
  * @property int $amount
  * @property Carbon $event_at
  * @property Carbon|null $created_at
@@ -30,7 +30,7 @@ class Transaction extends Model
         // Retired budgets are deleted automatically when their last
         // referencing transaction is deleted (docs/budget.md — lifecycle).
         static::deleted(function (Transaction $transaction): void {
-            Budget::sweepRetired([$transaction->budget_id]);
+            Budget::sweepRetired(array_filter([$transaction->budget_id]));
         });
     }
 
@@ -65,7 +65,8 @@ class Transaction extends Model
     }
 
     /**
-     * The budget (snapshot) the transaction was recorded against.
+     * The budget (snapshot) the transaction was recorded against — null when
+     * the envelope was not part of a published budget at entry time.
      *
      * @return BelongsTo<Budget, $this>
      */

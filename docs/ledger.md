@@ -9,8 +9,9 @@ or yield dividends.
 - **Ledger** — a yearly financial record spanning a `start_date` → `end_date`
   range, with a **starting balance** (cash, investments, debts) and an
   **open**/**closed** state.
-- **Transaction** — a money movement recorded against an envelope of the
-  **latest published budget** of the profile (see below). Stored in the ledger.
+- **Transaction** — a money movement recorded against one of the user's
+  envelopes — envelopes are the **only** requirement; no budget is needed (a
+  budget is only necessary for reporting, see below). Stored in the ledger.
 - **Closed ledger** — a ledger that is read-only: transactions can no longer
   be added or deleted. Closed manually via the actions menu (and can be
   re-opened).
@@ -45,7 +46,7 @@ type Transaction = {
     ledger_id: number; // FK: ledgers.id
     user_id: number; // FK: users.id, nullable with nullOnDelete — who entered the transaction
     envelope_id: number; // FK: envelopes.id
-    budget_id: number; // FK: budgets.id — snapshot of the latest published budget at entry time
+    budget_id: number | null; // FK: budgets.id — nullable snapshot of the latest published budget containing the envelope at entry time
     amount: number; // same number rule as for BudgetEnvelope
     event_at: string; // ISO date time, stored at 00:00:00
     created_at: string; // ISO date time
@@ -76,14 +77,17 @@ level and surfaces at closing time and in future dashboards/analytics.
 
 ### Budget snapshot
 
-The `budget_id` used is the **latest published budget** of the profile at the
-time the transaction is entered — a **retired** budget is never "the latest
-published budget" for new transactions (see
+A published budget is **not** required to record transactions — only
+envelopes are. When the profile has a published budget and the envelope
+belongs to it, the `budget_id` used is that budget — the **latest published
+budget of the profile containing the envelope** at the time the transaction
+is entered (a **retired** budget never qualifies — see
 [Budget — Budget lifecycle](budget.md#budget-lifecycle)). It is stored on the
 transaction (snapshot) — if a newer budget is published later, existing
-transactions keep the budget they were recorded against.
+transactions keep the budget they were recorded against. When there is no
+such budget, `budget_id` is stored as `null` and the transaction simply has
+no allocation reporting ("remaining allocated" shows as unallocated).
 
-- **If the profile has no published budget, transactions cannot be added.**
 - **When a transaction is associated with a budget, that budget cannot be
   deleted** (validation error, data integrity is enforced — not cascaded).
   A budget replaced by a revision while still referenced becomes **retired**
@@ -196,11 +200,10 @@ transactions in the table to the selected month.
 
 ### Adding a transaction
 
-Entering a transaction should be as easy as selecting the available envelope
-(from the published budget) and entering an amount. The envelope picker
+Entering a transaction should be as easy as selecting one of the user's
+envelopes and entering an amount — no budget is required. The envelope picker
 client-side filters `GET /api/envelopes` (see [Envelope](envelope.md)) to
-entries with `permission` `owner` or `contributor`, further filtered to
-envelopes referenced by the published budget. The transaction date
+entries with `permission` `owner` or `contributor`. The transaction date
 (`event_at`) defaults to today; the month calendar doubles as the date
 picker — clicking a day selects it. Time is irrelevant: transactions are
 stored at `00:00:00`.
@@ -214,7 +217,8 @@ The table (sorted chronologically ascending) shows:
   (server-masked; see [Permissions](#permissions)),
 - the **remaining envelope's allocated budget** — allocated amount minus
   transactions for that envelope within the displayed month — masked (`—`)
-  under the same rule,
+  under the same rule, and also `—` when the transaction has no budget
+  snapshot (see [Budget snapshot](#budget-snapshot)),
 - the user avatar (user name and formatted `created_at` as tooltip) —
   "Former member" for deleted users,
 - a delete button to remove the transaction (open ledgers only; the ledger
@@ -225,8 +229,9 @@ The table (sorted chronologically ascending) shows:
 
 - **Closed ledger** — an amber banner states the ledger is read-only; the
   entry form and delete buttons are hidden.
-- **No published budget** — an informational banner states that a published
-  budget is required before recording transactions.
+- **No envelopes** — when the user has no envelope they may record against,
+  an informational banner states that envelopes are required to record
+  transactions, with a link to manage envelopes.
 - **Insufficient permission** — members without the right to add transactions
   (viewer, or contributor lacking envelope permission) get the entry form
   hidden with an informational banner.

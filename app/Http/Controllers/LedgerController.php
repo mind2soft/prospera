@@ -196,11 +196,13 @@ class LedgerController extends Controller
     }
 
     /**
-     * Record a transaction against the ledger's envelopes. Ledger owners and
+     * Record a transaction against one of the user's envelopes — envelopes
+     * are the only dependency; no budget is required. Ledger owners and
      * contributors can record, but only against envelopes on which they are
-     * also contributor (or owner). The amount is
-     * signed from the envelope's direction; the budget snapshot is the
-     * latest published (non-retired) budget of the profile.
+     * also contributor (or owner). The amount is signed from the envelope's
+     * direction; the budget snapshot is the latest published (non-retired)
+     * budget of the profile containing that envelope, null when there is
+     * none (budgets matter for reporting only).
      */
     public function addTransaction(Request $request, Ledger $ledger): JsonResponse
     {
@@ -250,24 +252,16 @@ class LedgerController extends Controller
             ->whereNotNull('published_at')
             ->whereNull('retired_at')
             ->orderByDesc('published_at')
+            ->whereHas(
+                'envelopes',
+                fn ($query) => $query->where('envelope_id', $envelope->id),
+            )
             ->first();
-
-        if ($budget === null) {
-            throw ValidationException::withMessages([
-                'budget' => __('You need a published budget before recording transactions.'),
-            ]);
-        }
-
-        if (! $budget->envelopes()->where('envelope_id', $envelope->id)->exists()) {
-            throw ValidationException::withMessages([
-                'envelope_id' => __('This envelope is not part of the published budget.'),
-            ]);
-        }
 
         $transaction = $ledger->transactions()->create([
             'user_id' => $request->user()->id,
             'envelope_id' => $envelope->id,
-            'budget_id' => $budget->id,
+            'budget_id' => $budget?->id,
             'amount' => $envelope->signedAmount($validated['amount']),
             'event_at' => $eventAt,
         ]);

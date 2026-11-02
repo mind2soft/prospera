@@ -105,7 +105,8 @@ class Budget extends Model
      */
     public static function sweepRetired(iterable $budgetIds): void
     {
-        $ids = collect($budgetIds)->unique()->values();
+        // Nulls are expected since budget_id is nullable on transactions.
+        $ids = collect($budgetIds)->filter()->unique()->values();
 
         if ($ids->isEmpty()) {
             return;
