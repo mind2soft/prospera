@@ -66,7 +66,6 @@ export type Budget = {
     effective_year: number;
     effective_month: number;
     published_at: string | null;
-    retired_at: string | null;
     created_at: string;
     permission: ResourcePermission;
 };
@@ -106,8 +105,6 @@ export type Transaction = {
     id: number;
     ledger_id: number;
     envelope_id: number;
-    /** Budget snapshot — null when no published budget contained the envelope at entry time. */
-    budget_id: number | null;
     name: string; // envelope name
     color: string;
     direction: 'expense' | 'revenue';

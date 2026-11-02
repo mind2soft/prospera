@@ -50,7 +50,7 @@ defineOptions({
 });
 
 const budgetsQuery = useBudgets();
-/** Draft first, then published, newest first (retired budgets are excluded server-side). */
+/** Draft first, then published (each newest first). */
 const budgets = computed(() =>
     [...(budgetsQuery.data.value ?? [])].sort(
         (a, b) =>

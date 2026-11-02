@@ -97,7 +97,6 @@ Transaction::create([
     'ledger_id' => $ledger->id,
     'user_id' => $partner->id,
     'envelope_id' => $secret->id,
-    'budget_id' => $b->id,
     'amount' => -4321,
     'event_at' => '2026-10-10 00:00:00',
 ]);
@@ -107,7 +106,6 @@ Transaction::create([
     'ledger_id' => $ledger->id,
     'user_id' => $partner->id,
     'envelope_id' => $food->id,
-    'budget_id' => $b->id,
     'amount' => -250,
     'event_at' => '2026-10-11 00:00:00',
 ]);

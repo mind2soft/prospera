@@ -6,7 +6,6 @@ use App\Models\Budget;
 use App\Models\BudgetPermission;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
-use App\Models\Transaction;
 use App\Models\User;
 use App\Services\ResourcePermissions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -81,7 +80,7 @@ class BudgetTest extends TestCase
         $this->assertNull($data[0]['published_at']);
     }
 
-    public function test_index_excludes_other_profiles_and_retired_budgets(): void
+    public function test_index_excludes_other_profiles_budgets(): void
     {
         $this->createBudget($this->user);
 
@@ -95,22 +94,13 @@ class BudgetTest extends TestCase
         ]);
         $budget->permissions()->create(['user_id' => $this->stranger->id, 'permission' => 'owner']);
 
-        // A retired budget is hidden from the selector.
-        $retired = $this->createBudget($this->user, [
-            'published_at' => now(),
-            'effective_year' => now()->year,
-            'effective_month' => now()->month,
-            'retired_at' => now(),
-        ]);
-
         $response = $this->actingAs($this->user)->getJson('/api/budgets?profile_id='.$this->profile->id);
 
         $response->assertOk();
         $data = $response->json('budgets');
         $this->assertCount(1, $data);
         $this->assertNotNull($data[0]['id']);
-        $this->assertNotEquals($retired->id, $data[0]['id']);
-        $this->assertDatabaseHas('budgets', ['id' => $retired->id]);
+        $this->assertNotEquals($budget->id, $data[0]['id']);
     }
 
     public function test_guests_cannot_access_the_api(): void
@@ -506,10 +496,10 @@ class BudgetTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Retired lifecycle
+    // Revisions
     // ------------------------------------------------------------------
 
-    public function test_a_replaced_published_budget_referenced_by_transactions_becomes_retired(): void
+    public function test_publishing_replaces_a_published_budget_even_with_recorded_transactions(): void
     {
         $now = now();
         $previous = $this->createBudget($this->user, [
@@ -521,14 +511,9 @@ class BudgetTest extends TestCase
         $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
-        $previous->envelopes()->create([
-            'envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed',
-        ]);
-        Transaction::create([
-            'ledger_id' => $ledger->id,
+        $transaction = $ledger->transactions()->create([
             'user_id' => $this->user->id,
             'envelope_id' => $envelope->id,
-            'budget_id' => $previous->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
         ]);
@@ -536,78 +521,11 @@ class BudgetTest extends TestCase
         $draft = $this->createBudget($this->user);
         $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish")->assertOk();
 
-        $previous->refresh();
-        $this->assertNotNull($previous->retired_at);
-
-        // Retired budgets are hidden from the selector but not deleted.
-        $this->assertDatabaseHas('budgets', ['id' => $previous->id]);
-    }
-
-    public function test_a_retired_budget_is_deleted_when_its_last_referencing_transaction_is_deleted(): void
-    {
-        $now = now();
-        $previous = $this->createBudget($this->user, [
-            'published_at' => $now,
-            'effective_year' => $now->year,
-            'effective_month' => $now->month,
-        ]);
-        $ledger = $this->createLedger();
-        $envelope = $this->user->envelopes()->create([
-            'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
-        ]);
-        $transaction = Transaction::create([
-            'ledger_id' => $ledger->id,
-            'user_id' => $this->user->id,
-            'envelope_id' => $envelope->id,
-            'budget_id' => $previous->id,
-            'amount' => -10,
-            'event_at' => '2026-06-15 00:00:00',
-        ]);
-
-        $draft = $this->createBudget($this->user);
-        $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish")->assertOk();
-        $this->assertDatabaseHas('budgets', ['id' => $previous->id]);
-
-        // Deleting the last referencing transaction removes the retired budget.
-        $transaction->delete();
-
+        // Transactions do not reference budgets — the replaced budget is
+        // deleted immediately and the transaction is unaffected.
         $this->assertDatabaseMissing('budgets', ['id' => $previous->id]);
         $this->assertDatabaseMissing('budget_permissions', ['budget_id' => $previous->id]);
-    }
-
-    public function test_deleting_the_ledger_sweeps_its_retired_budgets(): void
-    {
-        $now = now();
-        $previous = $this->createBudget($this->user, [
-            'published_at' => $now,
-            'effective_year' => $now->year,
-            'effective_month' => $now->month,
-        ]);
-        $ledger = $this->createLedger();
-        $envelope = $this->user->envelopes()->create([
-            'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
-        ]);
-        Transaction::create([
-            'ledger_id' => $ledger->id,
-            'user_id' => $this->user->id,
-            'envelope_id' => $envelope->id,
-            'budget_id' => $previous->id,
-            'amount' => -10,
-            'event_at' => '2026-06-15 00:00:00',
-        ]);
-
-        $draft = $this->createBudget($this->user);
-        $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish")->assertOk();
-        $this->assertDatabaseHas('budgets', ['id' => $previous->id]);
-
-        // The ledger cascade would bypass model events at the DB level; the
-        // controller deletes the transactions through Eloquent first so the
-        // retired budget is swept.
-        $this->actingAs($this->user)->deleteJson("/api/ledgers/{$ledger->id}")
-            ->assertNoContent();
-
-        $this->assertDatabaseMissing('ledgers', ['id' => $ledger->id]);
-        $this->assertDatabaseMissing('budgets', ['id' => $previous->id]);
+        $this->assertDatabaseHas('transactions', ['id' => $transaction->id]);
     }
 
     // ------------------------------------------------------------------

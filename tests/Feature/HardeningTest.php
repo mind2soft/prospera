@@ -94,7 +94,7 @@ class HardeningTest extends TestCase
 
         $this->actingAs($this->member)->postJson("/api/budgets/{$draft->id}/publish")->assertForbidden();
 
-        $this->assertDatabaseHas('budgets', ['id' => $published->id, 'retired_at' => null]);
+        $this->assertDatabaseHas('budgets', ['id' => $published->id]);
     }
 
     public function test_collaborators_cannot_clone_budgets(): void
@@ -176,24 +176,21 @@ class HardeningTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Bulk deletion keeps the retired-budget sweep
+    // Bulk deletion
     // ------------------------------------------------------------------
 
-    public function test_deleting_a_ledger_sweeps_retired_budgets_it_last_referenced(): void
+    public function test_deleting_a_ledger_cascades_its_transactions(): void
     {
         $envelope = $this->owner->envelopes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#000000']);
-        $retired = $this->budget($this->owner);
-        $retired->forceFill(['retired_at' => now()])->save();
         $ledger = $this->ledger($this->owner);
 
         Transaction::create([
             'ledger_id' => $ledger->id, 'user_id' => $this->owner->id, 'envelope_id' => $envelope->id,
-            'budget_id' => $retired->id, 'amount' => -10, 'event_at' => now()->startOfDay(),
+            'amount' => -10, 'event_at' => now()->startOfDay(),
         ]);
 
         $this->actingAs($this->owner)->deleteJson("/api/ledgers/{$ledger->id}")->assertNoContent();
 
-        $this->assertDatabaseMissing('budgets', ['id' => $retired->id]);
         $this->assertDatabaseCount('transactions', 0);
     }
 

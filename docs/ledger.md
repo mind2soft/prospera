@@ -10,8 +10,8 @@ or yield dividends.
   range, with a **starting balance** (cash, investments, debts) and an
   **open**/**closed** state.
 - **Transaction** — a money movement recorded against one of the user's
-  envelopes — envelopes are the **only** requirement; no budget is needed (a
-  budget is only necessary for reporting, see below). Stored in the ledger.
+  envelopes — envelopes are the **only** requirement; budgets are only
+  necessary for reporting (see below). Stored in the ledger.
 - **Closed ledger** — a ledger that is read-only: transactions can no longer
   be added or deleted. Closed manually via the actions menu (and can be
   re-opened).
@@ -46,7 +46,6 @@ type Transaction = {
     ledger_id: number; // FK: ledgers.id
     user_id: number; // FK: users.id, nullable with nullOnDelete — who entered the transaction
     envelope_id: number; // FK: envelopes.id
-    budget_id: number | null; // FK: budgets.id — nullable snapshot of the latest published budget containing the envelope at entry time
     amount: number; // same number rule as for BudgetEnvelope
     event_at: string; // ISO date time, stored at 00:00:00
     created_at: string; // ISO date time
@@ -75,25 +74,21 @@ positive amount plus a **balance type** selector — `cash` (positive) or
 sign — the server negates the amount for `debt`. It is stored at ledger
 level and surfaces at closing time and in future dashboards/analytics.
 
-### Budget snapshot
+### Allocation reporting
 
-A published budget is **not** required to record transactions — only
-envelopes are. When the profile has a published budget and the envelope
-belongs to it, the `budget_id` used is that budget — the **latest published
-budget of the profile containing the envelope** at the time the transaction
-is entered (a **retired** budget never qualifies — see
-[Budget — Budget lifecycle](budget.md#budget-lifecycle)). It is stored on the
-transaction (snapshot) — if a newer budget is published later, existing
-transactions keep the budget they were recorded against. When there is no
-such budget, `budget_id` is stored as `null` and the transaction simply has
-no allocation reporting ("remaining allocated" shows as unallocated).
+Transactions are **independent of budgets** — no budget is required to
+record them, and they never reference one (there is no `budget_id` on
+transactions). Since budgets are bound to a month and year (see
+[Budget — Budget lifecycle](budget.md#budget-lifecycle)), allocation
+reporting simply matches transactions to the **published budget of their
+month**: for a displayed month, "remaining allocated" is the envelope's
+allocated amount on that month's published budget minus the transactions
+recorded against that envelope within the displayed month. Months without
+a published budget (or envelopes without an allocation on it) report as
+unallocated ("remaining allocated" shows as `—`).
 
-- **When a transaction is associated with a budget, that budget cannot be
-  deleted** (validation error, data integrity is enforced — not cascaded).
-  A budget replaced by a revision while still referenced becomes **retired**
-  and is deleted automatically when its last referencing transaction is
-  deleted (see [Budget — Budget lifecycle](budget.md#budget-lifecycle)).
-- Envelopes referenced by transactions also cannot be deleted.
+- Deleting a budget does not affect transactions (data is independent).
+- **Envelopes referenced by transactions cannot be deleted.**
 
 ### Ledger lifecycle
 
@@ -215,10 +210,11 @@ The table (sorted chronologically ascending) shows:
 - the amount (positive for revenue, negative for expenses) — **masked** (`—`)
   for envelopes the user lacks envelope-`viewer`+ permission on
   (server-masked; see [Permissions](#permissions)),
-- the **remaining envelope's allocated budget** — allocated amount minus
-  transactions for that envelope within the displayed month — masked (`—`)
-  under the same rule, and also `—` when the transaction has no budget
-  snapshot (see [Budget snapshot](#budget-snapshot)),
+- the **remaining envelope's allocated budget** — allocated amount on the
+  displayed month's published budget minus transactions for that envelope
+  within the displayed month — masked (`—`) under the same rule, and also
+  `—` when the envelope is unallocated for that month (see
+  [Allocation reporting](#allocation-reporting)),
 - the user avatar (user name and formatted `created_at` as tooltip) —
   "Former member" for deleted users,
 - a delete button to remove the transaction (open ledgers only; the ledger

@@ -52,7 +52,7 @@ const mayDelete = (transaction: Transaction): boolean => {
 
 /**
  * The server computes "remaining allocated" for the displayed month against
- * the transaction's budget snapshot (null when masked or unallocated).
+ * that month's published budget (null when masked or unallocated).
  * Expense rows are flipped so the value reads as "money left".
  */
 const remainingFor = (transaction: Transaction): number | null => {

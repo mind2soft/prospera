@@ -292,7 +292,6 @@ class EnvelopeController extends Controller
         return [
             'id' => $transaction->id,
             'ledger_id' => $transaction->ledger_id,
-            'budget_id' => $transaction->budget_id,
             'envelope_id' => $transaction->envelope_id,
             'amount' => $transaction->amount,
             'event_at' => $transaction->event_at->toDateString(),

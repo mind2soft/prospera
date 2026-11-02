@@ -14,10 +14,6 @@ A budget represents expected spending and earnings for a single month.
   current month and year.
 - **Revision** — a clone of a published budget created as a new draft, adjusted, then
   published again to replace the published budget for that month.
-- **Retired budget** — a previously published budget that was replaced by a
-  revision while transactions still reference it. Hidden from the budget
-  selector; deleted automatically when the last referencing transaction is
-  deleted.
 
 ## Data Schema
 
@@ -30,7 +26,6 @@ type Budget = {
     effective_month: number; // 1..12 (January..December); 0 while draft
     created_at: string; // ISO date time
     published_at: string | null; // ISO date time; null = draft
-    retired_at: string | null; // ISO date time; null = not retired
     permission: ResourcePermission | 'none'; // API only: the caller's effective permission
 };
 
@@ -87,18 +82,15 @@ number; the server negates expense amounts on write.
 - **Publishing** a draft sets `published_at = now`, `effective_year = current year` and
   `effective_month = current month`. Publishing is irreversible (read-only afterwards).
 - **One published budget per profile per month**: publishing a draft for a month that
-  already has a published budget **replaces** it. The previously published budget for
-  that month is deleted immediately (with its shares and assignments) **unless
-  transactions reference it** — in that case it becomes **retired** (hidden from
-  the budget selector; see [Concepts](#concepts)) and is deleted automatically
-  when the last transaction referencing it is deleted. The publish confirmation
-  dialog must warn about this replacement.
+  already has a published budget **replaces** it — the previously published budget for
+  that month is deleted immediately (with its shares and assignments). Transactions
+  are independent of budgets and are never blocked by (or blocking) this replacement.
+  The publish confirmation dialog must warn about this replacement.
 - **"New Budget"** on a published budget creates a **clone** of it in draft mode
   (same currency and same envelope assignments). The clone dialog asks for
   confirmation (and the currency, pre-filled from the source budget).
 - The app always shows the **latest** budget by default — newest `created_at` first.
-  A dropdown lists all **non-retired** budgets (draft first, then published, newest
-  first); retired budgets are excluded.
+  A dropdown lists all budgets (draft first, then published, newest first).
 
 ### Ownership
 
@@ -116,12 +108,9 @@ owner (see [Shared Finances](shared-finances.md)).
 
 ### Referential integrity
 
-- Deleting a budget cascades its shares and envelope assignments, **unless
-  transactions reference the budget** — then deletion is blocked with a
-  validation error (data integrity is enforced, not cascaded; see
-  [Ledger](ledger.md)). Retired budgets (replaced by a revision while still
-  referenced) are deleted automatically when their last referencing
-  transaction is deleted.
+- Deleting a budget cascades its shares and envelope assignments. Transactions
+  are independent of budgets (see [Ledger](ledger.md)) — they never block a
+  budget deletion and are unaffected by it.
 - **Deleting an envelope that is referenced by any budget or transaction is
   blocked** with a validation error (data integrity is enforced, not cascaded).
 
@@ -152,7 +141,7 @@ All endpoints require authentication (session + CSRF). The frontend consumes the
 | `GET`    | `/api/budgets`                                 | List budgets of the given `profile_id` (optional query param; the current profile is tracked client-side) — without it, budgets of all the caller's profiles |
 | `POST`   | `/api/budgets`                                 | Create a draft in the current profile (`currency` required; profile owner only)                                                                              |
 | `GET`    | `/api/budgets/{budget}`                        | Budget detail with envelopes and shares                                                                                                                      |
-| `DELETE` | `/api/budgets/{budget}`                        | Delete the budget (owner only; blocked when transactions reference it — retired budgets are deleted automatically)                                           |
+| `DELETE` | `/api/budgets/{budget}`                        | Delete the budget (owner only; cascades shares and envelope assignments)                                                                                     |
 | `POST`   | `/api/budgets/{budget}/publish`                | Publish draft (budget owner **and** profile owner)                                                                                                           |
 | `POST`   | `/api/budgets/{budget}/clone`                  | Clone published budget into a draft (profile owner; `viewer`+ on the budget)                                                                                 |
 | `POST`   | `/api/budgets/{budget}/envelopes`              | Assign an envelope (`envelope_id`, `type`, `amount`) to a draft — requires `contributor`+ on the envelope (`none`/`viewer` → `422` on `envelope_id`)         |
@@ -173,8 +162,8 @@ inserts a draft and asks for the **currency** (picker in the confirmation dialog
 
 ### Budget selector
 
-A dropdown on the top row shows the budget list — **non-retired budgets only**
-(draft first, then published, newest first; retired budgets are excluded):
+A dropdown on the top row shows the budget list — all budgets (draft first,
+then published, newest first):
 
 - One budget (draft): `New Budget (draft)`
 - One budget (published): `May 2026`
@@ -190,8 +179,7 @@ three-dots button — with actions for the selected budget:
 - **Share** — a Google Drive-like drawer (right side, not a dialog) listing
   the profile's members with their permission, allowing permission changes and
   ownership transfer (see [Shared Finances](shared-finances.md)).
-- **Delete** — owner only; deletes the budget; asks for confirmation (blocked
-  when transactions reference it).
+- **Delete** — owner only; deletes the budget; asks for confirmation.
 
 ### Income vs expense bars
 
@@ -270,9 +258,9 @@ envelope amount privacy governs transaction data only (see
 Future features, in priority order:
 
 1. **~~Transaction tracking against budgets~~ — implemented**: transactions
-   are recorded in the [Ledger](ledger.md) against a budget snapshot (the
-   latest published budget containing the envelope, when one exists —
-   transactions are possible without any published budget).
+   are recorded in the [Ledger](ledger.md). They are independent of budgets —
+   allocation reporting matches transactions to the published budget of
+   their month/year.
 
 Email-based budget sharing is replaced by profile membership + per-resource
 permissions — see [Shared Finances](shared-finances.md). Profile invites and

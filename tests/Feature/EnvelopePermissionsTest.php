@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\Budget;
 use App\Models\Envelope;
 use App\Models\EnvelopePermission;
 use App\Models\FinancialProfile;
@@ -56,12 +55,6 @@ class EnvelopePermissionsTest extends TestCase
         return $ledger->transactions()->create([
             'user_id' => $this->owner->id,
             'envelope_id' => $this->envelope->id,
-            'budget_id' => Budget::create([
-                'profile_id' => $this->profile->id,
-                'currency' => 'CAD',
-                'effective_year' => 0,
-                'effective_month' => 0,
-            ])->id,
             'amount' => $amount,
             'event_at' => $eventAt.' 00:00:00',
         ]);

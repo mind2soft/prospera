@@ -118,32 +118,6 @@ class AccountDeletionTest extends TestCase
         $this->assertDatabaseMissing('envelopes', ['id' => $envelope->id]);
     }
 
-    public function test_account_deletion_sweeps_retired_budgets_referenced_by_solo_ledgers(): void
-    {
-        $owner = User::factory()->create();
-        $profile = FinancialProfile::createOwnedBy($owner);
-
-        // A published budget replaced while referenced → retired.
-        $retired = $this->shareBudget($owner, $profile, 'owner');
-        $envelope = Envelope::create(['name' => 'Rent', 'type' => 'expense', 'user_id' => $owner->id]);
-        $ledger = $this->createLedger($owner, $profile);
-        $ledger->transactions()->create([
-            'user_id' => $owner->id,
-            'envelope_id' => $envelope->id,
-            'budget_id' => $retired->id,
-            'amount' => -10,
-            'event_at' => '2026-06-15 00:00:00',
-        ]);
-        $retired->forceFill(['retired_at' => now(), 'published_at' => now()])->save();
-
-        $this->actingAs($owner)->delete('/settings/account', ['password' => 'password'])->assertRedirect('/');
-
-        // The solo-profile cleanup deletes the transactions through Eloquent
-        // (sweeping the retired budget) before dropping the profile.
-        $this->assertDatabaseMissing('financial_profiles', ['id' => $profile->id]);
-        $this->assertDatabaseMissing('budgets', ['id' => $retired->id]);
-    }
-
     public function test_ledgers_owned_by_the_deleted_user_transfer_to_the_new_profile_owner(): void
     {
         $owner = User::factory()->create();
@@ -184,7 +158,6 @@ class AccountDeletionTest extends TestCase
             'ledger_id' => $ledger->id,
             'user_id' => $entrant->id,
             'envelope_id' => $envelope->id,
-            'budget_id' => $budget->id,
             'amount' => -100,
             'event_at' => '2026-03-01 00:00:00',
         ]);

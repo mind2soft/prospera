@@ -49,7 +49,7 @@ test('transactions can be recorded with envelopes only (no budget)', async ({
     // No published budget → no currency symbol, plain integer formatting.
     await expect(row).toContainText('(35)');
 
-    // No budget snapshot → no "remaining allocated" value.
+    // No published budget for the month → no "remaining allocated" value.
     await expect(row.locator('td:nth-child(4)')).toContainText('—');
 
     await page.screenshot({

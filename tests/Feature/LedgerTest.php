@@ -58,17 +58,20 @@ class LedgerTest extends TestCase
 
     /**
      * A published budget for the profile with one expense and one revenue
-     * envelope, assigned amounts of 100 (revenue) and 200 (expense).
+     * envelope, assigned amounts of 100 (revenue) and 200 (expense). The
+     * effective month defaults to the current month.
+     *
+     * @param  array<string, int|string|null>  $attributes
      */
-    private function createPublishedBudget(User $user, bool $published = true): Budget
+    private function createPublishedBudget(User $user, bool $published = true, array $attributes = []): Budget
     {
-        $budget = Budget::create([
+        $budget = Budget::create(array_merge([
             'profile_id' => $this->profile->id,
             'currency' => 'CAD',
             'effective_year' => now()->year,
             'effective_month' => now()->month,
             'published_at' => $published ? now() : null,
-        ]);
+        ], $attributes));
 
         $budget->permissions()->create([
             'user_id' => $user->id,
@@ -281,12 +284,11 @@ class LedgerTest extends TestCase
         $this->assertDatabaseHas('transactions', [
             'ledger_id' => $ledger->id,
             'envelope_id' => $envelope->id,
-            'budget_id' => null,
             'amount' => -42, // expense envelope
         ]);
     }
 
-    public function test_adding_a_transaction_signs_the_amount_and_snapshots_the_budget(): void
+    public function test_adding_a_transaction_signs_the_amount(): void
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
@@ -312,57 +314,8 @@ class LedgerTest extends TestCase
 
         $this->assertEquals($ledger->id, $revenue->ledger_id);
         $this->assertEquals($this->user->id, $revenue->user_id);
-        $this->assertEquals($budget->id, $revenue->budget_id);
-        $this->assertEquals($budget->id, $expense->budget_id);
         $this->assertEquals('2026-06-15 00:00:00', $revenue->event_at->format('Y-m-d H:i:s'));
         $this->assertEquals('2026-06-20 00:00:00', $expense->event_at->format('Y-m-d H:i:s'));
-    }
-
-    public function test_retired_budgets_never_qualify_as_the_snapshot(): void
-    {
-        $ledger = $this->createLedger($this->user);
-        $envelope = $this->createEnvelope();
-
-        // An old published budget for the current month that is retired.
-        Budget::create([
-            'profile_id' => $this->profile->id,
-            'currency' => 'CAD',
-            'effective_year' => now()->year,
-            'effective_month' => now()->month,
-            'published_at' => now()->subDay(),
-            'retired_at' => now(),
-        ]);
-
-        $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'envelope_id' => $envelope->id,
-            'amount' => 10,
-            'event_at' => '2026-06-15',
-        ])->assertCreated();
-
-        $this->assertDatabaseHas('transactions', [
-            'envelope_id' => $envelope->id,
-            'budget_id' => null,
-        ]);
-    }
-
-    public function test_envelopes_outside_the_published_budget_record_without_a_snapshot(): void
-    {
-        $ledger = $this->createLedger($this->user);
-        $budget = $this->createPublishedBudget($this->user);
-        $envelope = $this->createEnvelope('Not in budget');
-
-        $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
-            'envelope_id' => $envelope->id,
-            'amount' => 10,
-            'event_at' => '2026-06-15',
-        ])->assertCreated();
-
-        $this->assertDatabaseHas('transactions', [
-            'ledger_id' => $ledger->id,
-            'envelope_id' => $envelope->id,
-            'budget_id' => null,
-        ]);
-        $this->assertDatabaseHas('budgets', ['id' => $budget->id]);
     }
 
     public function test_adding_a_transaction_requires_a_valid_amount(): void
@@ -409,7 +362,6 @@ class LedgerTest extends TestCase
             $ledger->transactions()->create([
                 'user_id' => $this->user->id,
                 'envelope_id' => $envelope->envelope_id,
-                'budget_id' => $budget->id,
                 'amount' => $envelope->amount > 0 ? 10 : -10,
                 'event_at' => $date.' 00:00:00',
             ]);
@@ -451,7 +403,6 @@ class LedgerTest extends TestCase
         $transaction = $ledger->transactions()->create([
             'user_id' => $this->user->id,
             'envelope_id' => $envelope->envelope_id,
-            'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
         ]);
@@ -468,7 +419,6 @@ class LedgerTest extends TestCase
         $transaction = $ledger->transactions()->create([
             'user_id' => $this->user->id,
             'envelope_id' => $envelope->envelope_id,
-            'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
         ]);
@@ -492,14 +442,12 @@ class LedgerTest extends TestCase
         $ownerEntry = $ledger->transactions()->create([
             'user_id' => $this->user->id,
             'envelope_id' => $envelope->envelope_id,
-            'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
         ]);
         $contributorEntry = $ledger->transactions()->create([
             'user_id' => $this->member->id,
             'envelope_id' => $envelope->envelope_id,
-            'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-16 00:00:00',
         ]);
@@ -514,7 +462,6 @@ class LedgerTest extends TestCase
         $other = $ledger->transactions()->create([
             'user_id' => $this->user->id,
             'envelope_id' => $envelope->envelope_id,
-            'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-17 00:00:00',
         ]);
@@ -549,7 +496,6 @@ class LedgerTest extends TestCase
         $transaction = $ledger->transactions()->create([
             'user_id' => $this->user->id,
             'envelope_id' => $envelope->envelope_id,
-            'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
         ]);
@@ -562,23 +508,25 @@ class LedgerTest extends TestCase
         $this->assertDatabaseMissing('ledger_permissions', ['ledger_id' => $ledger->id]);
     }
 
-    public function test_deleting_a_budget_with_transactions_is_blocked(): void
+    public function test_a_budget_can_be_deleted_even_with_transactions(): void
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
         $envelope = $budget->envelopes()->first();
-        $ledger->transactions()->create([
+        $transaction = $ledger->transactions()->create([
             'user_id' => $this->user->id,
             'envelope_id' => $envelope->envelope_id,
-            'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
         ]);
 
         $this->actingAs($this->user)->deleteJson("/api/budgets/{$budget->id}")
-            ->assertUnprocessable()->assertJsonValidationErrors('budget');
+            ->assertNoContent();
 
-        $this->assertDatabaseHas('budgets', ['id' => $budget->id]);
+        $this->assertDatabaseMissing('budgets', ['id' => $budget->id]);
+
+        // Transactions do not reference budgets — they are unaffected.
+        $this->assertDatabaseHas('transactions', ['id' => $transaction->id]);
     }
 
     public function test_envelopes_used_in_transactions_cannot_be_deleted(): void
@@ -591,7 +539,6 @@ class LedgerTest extends TestCase
         $ledger->transactions()->create([
             'user_id' => $this->user->id,
             'envelope_id' => $assignment->envelope_id,
-            'budget_id' => $budget->id,
             'amount' => -10,
             'event_at' => '2026-06-15 00:00:00',
         ]);
@@ -609,21 +556,22 @@ class LedgerTest extends TestCase
     public function test_transactions_on_unshared_envelopes_are_masked(): void
     {
         $ledger = $this->createLedger($this->user);
-        $budget = $this->createPublishedBudget($this->user);
+        $budget = $this->createPublishedBudget($this->user, attributes: [
+            'effective_year' => 2026,
+            'effective_month' => 6,
+        ]);
         $salaryAssignment = $budget->envelopes()->where('amount', 100)->firstOrFail();
         $rentAssignment = $budget->envelopes()->where('amount', -200)->firstOrFail();
 
         $salary = $ledger->transactions()->create([
             'user_id' => $this->user->id,
             'envelope_id' => $salaryAssignment->envelope_id,
-            'budget_id' => $budget->id,
             'amount' => 10,
             'event_at' => '2026-06-01 00:00:00',
         ]);
         $rent = $ledger->transactions()->create([
             'user_id' => $this->user->id,
             'envelope_id' => $rentAssignment->envelope_id,
-            'budget_id' => $budget->id,
             'amount' => -50,
             'event_at' => '2026-06-02 00:00:00',
         ]);
@@ -662,13 +610,15 @@ class LedgerTest extends TestCase
     public function test_the_owner_sees_all_amounts_unmasked(): void
     {
         $ledger = $this->createLedger($this->user);
-        $budget = $this->createPublishedBudget($this->user);
+        $budget = $this->createPublishedBudget($this->user, attributes: [
+            'effective_year' => 2026,
+            'effective_month' => 6,
+        ]);
         $rentAssignment = $budget->envelopes()->where('amount', -200)->firstOrFail();
 
         $ledger->transactions()->create([
             'user_id' => $this->member->id,
             'envelope_id' => $rentAssignment->envelope_id,
-            'budget_id' => $budget->id,
             'amount' => -50,
             'event_at' => '2026-06-02 00:00:00',
         ]);
@@ -683,64 +633,82 @@ class LedgerTest extends TestCase
         $this->assertEquals(-150, $row['remaining_allocated']);
     }
 
-    public function test_remaining_allocated_follows_each_rows_own_budget_revision(): void
+    public function test_remaining_allocated_follows_the_displayed_months_budget(): void
     {
         $ledger = $this->createLedger($this->user);
-        $now = now();
-
-        // Revision A: published, envelope allocated -200, one transaction.
-        $revisionA = Budget::create([
-            'profile_id' => $this->profile->id,
-            'currency' => 'CAD',
-            'effective_year' => $now->year,
-            'effective_month' => $now->month,
-            'published_at' => $now,
-        ]);
-        $revisionA->permissions()->create(['user_id' => $this->user->id, 'permission' => 'owner']);
         $envelope = $this->user->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
         ]);
-        $revisionA->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => -200, 'type' => 'fixed']);
 
-        $first = $ledger->transactions()->create([
+        // Published budget for June 2026: Rent allocated -200.
+        $june = Budget::create([
+            'profile_id' => $this->profile->id,
+            'currency' => 'CAD',
+        ]);
+        $june->forceFill([
+            'published_at' => '2026-06-01 00:00:00',
+            'effective_year' => 2026,
+            'effective_month' => 6,
+        ])->save();
+        $june->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => -200, 'type' => 'fixed']);
+
+        // Published budget for July 2026: Rent allocated -300.
+        $july = Budget::create([
+            'profile_id' => $this->profile->id,
+            'currency' => 'CAD',
+        ]);
+        $july->forceFill([
+            'published_at' => '2026-07-01 00:00:00',
+            'effective_year' => 2026,
+            'effective_month' => 7,
+        ])->save();
+        $july->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => -300, 'type' => 'fixed']);
+
+        $ledger->transactions()->create([
             'user_id' => $this->user->id,
             'envelope_id' => $envelope->id,
-            'budget_id' => $revisionA->id,
+            'amount' => -50,
+            'event_at' => '2026-06-05 00:00:00',
+        ]);
+        $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -80,
+            'event_at' => '2026-07-20 00:00:00',
+        ]);
+
+        // June: -200 − (-50).
+        $juneRows = $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30")
+            ->assertOk()->json('transactions');
+        $this->assertEquals(-200 - -50, $juneRows[0]['remaining_allocated']);
+
+        // July: -300 − (-80).
+        $julyRows = $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-07-01&to_date=2026-07-31")
+            ->assertOk()->json('transactions');
+        $this->assertEquals(-300 - -80, $julyRows[0]['remaining_allocated']);
+    }
+
+    public function test_months_without_a_published_budget_report_no_remaining_allocated(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->createEnvelope();
+
+        $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
             'amount' => -50,
             'event_at' => '2026-06-05 00:00:00',
         ]);
 
-        // Revision B replaces A for the same month; A becomes retired while
-        // still referenced by the first transaction.
-        $revisionB = Budget::create([
-            'profile_id' => $this->profile->id,
-            'currency' => 'CAD',
-            'effective_year' => 0,
-            'effective_month' => 0,
-        ]);
-        $revisionB->permissions()->create(['user_id' => $this->user->id, 'permission' => 'owner']);
-        $revisionB->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => -300, 'type' => 'fixed']);
+        $row = $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30")
+            ->assertOk()->json('transactions.0');
 
-        $this->actingAs($this->user)->postJson("/api/budgets/{$revisionB->id}/publish")->assertOk();
-        $this->assertNotNull($revisionA->fresh()->retired_at);
-
-        $second = $ledger->transactions()->create([
-            'user_id' => $this->user->id,
-            'envelope_id' => $envelope->id,
-            'budget_id' => $revisionB->id,
-            'amount' => -80,
-            'event_at' => '2026-06-20 00:00:00',
-        ]);
-
-        $response = $this->actingAs($this->user)->getJson(
-            "/api/ledgers/{$ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30"
-        );
-
-        $rows = collect($response->json('transactions'))->keyBy('id');
-
-        // Each row computes remaining allocated against its own snapshot.
-        $this->assertEquals(-200 - -50, $rows->get($first->id)['remaining_allocated']);
-        $this->assertEquals(-300 - -80, $rows->get($second->id)['remaining_allocated']);
+        $this->assertFalse($row['masked']);
+        $this->assertEquals(-50, $row['amount']);
+        $this->assertNull($row['remaining_allocated']);
     }
 
     // ------------------------------------------------------------------
