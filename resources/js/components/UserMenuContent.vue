@@ -95,11 +95,7 @@ const menuProfiles = computed(() =>
                         class="block w-full cursor-pointer"
                         :href="editProfiles()"
                     >
-                        <Icon
-                            name="tune"
-                            class="mr-2 size-4"
-                            aria-hidden="true"
-                        />
+                        <Icon name="tune" class="size-4" aria-hidden="true" />
                         Manage profiles
                     </Link>
                 </DropdownMenuItem>
@@ -107,7 +103,7 @@ const menuProfiles = computed(() =>
         </DropdownMenuSub>
         <DropdownMenuItem :as-child="true">
             <Link class="block w-full cursor-pointer" :href="edit()" prefetch>
-                <Icon name="settings" class="mr-2 size-4" aria-hidden="true" />
+                <Icon name="settings" class="size-4" aria-hidden="true" />
                 Settings
             </Link>
         </DropdownMenuItem>
@@ -121,7 +117,7 @@ const menuProfiles = computed(() =>
             as="button"
             data-test="logout-button"
         >
-            <Icon name="logout" class="mr-2 size-4" aria-hidden="true" />
+            <Icon name="logout" class="size-4" aria-hidden="true" />
             Log out
         </Link>
     </DropdownMenuItem>

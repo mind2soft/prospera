@@ -67,6 +67,18 @@ const isoToday = (): string => {
 const viewMonth = ref(isoToday().slice(0, 8) + '01'); // first day of current month
 const selectedDate = ref(isoToday());
 
+/** Clamp `date` into the inclusive [min, max] ISO-date period. */
+const clampDate = (date: string, min?: string, max?: string): string => {
+    let clamped = date;
+    if (min !== undefined && clamped < min) {
+        clamped = min;
+    }
+    if (max !== undefined && clamped > max) {
+        clamped = max;
+    }
+    return clamped;
+};
+
 const monthRange = computed(() => {
     const [year, month] = viewMonth.value.split('-').map(Number);
     const first = new Date(year, month - 1, 1);
@@ -89,8 +101,15 @@ const navigateMonth = (direction: 'prev' | 'next') => {
     const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
     viewMonth.value = iso;
     if (selectedDate.value.slice(0, 8) !== iso.slice(0, 8)) {
-        selectedDate.value =
+        const candidate =
             isoToday().slice(0, 8) === iso.slice(0, 8) ? isoToday() : iso;
+        selectedDate.value = ledger.value
+            ? clampDate(
+                  candidate,
+                  ledger.value.start_date,
+                  ledger.value.end_date,
+              )
+            : candidate;
     }
 };
 
@@ -122,6 +141,22 @@ const ledger = computed(
 );
 const isClosed = computed(() => ledger.value?.status === 'closed');
 const ledgerPermission = computed(() => ledger.value?.permission ?? null);
+
+// Point the calendar at the most recent day of the selected ledger's period:
+// today while the ledger is open, its first day when it opens in the future,
+// and its last day once it has ended (issue #2).
+watch(
+    ledgerId,
+    (id) => {
+        const l = ledger.value;
+        if (id === null || !l) {
+            return;
+        }
+        selectedDate.value = clampDate(isoToday(), l.start_date, l.end_date);
+        viewMonth.value = selectedDate.value.slice(0, 8) + '01';
+    },
+    { immediate: true },
+);
 
 const transactionsQuery = useLedgerTransactions(
     ledgerId,
@@ -419,6 +454,8 @@ const onRemoveTransaction = (transactionId: number) => {
                     <MonthCalendar
                         :selected-date="selectedDate"
                         :view-month="viewMonth"
+                        :min-date="ledger?.start_date"
+                        :max-date="ledger?.end_date"
                         @select-date="onSelectDate"
                         @navigate-month="navigateMonth"
                     />

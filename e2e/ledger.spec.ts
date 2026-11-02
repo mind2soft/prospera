@@ -27,7 +27,10 @@ test.beforeAll(() => {
 async function openActionMenu(page: Page): Promise<void> {
     const menu = page.getByRole('menu');
     if (await menu.isVisible().catch(() => false)) {
-        return;
+        // The menu is still playing its closing animation; wait for it to
+        // fully unmount before reopening, or the next click races the
+        // detach and never stabilizes.
+        await expect(menu).toBeHidden();
     }
     await page.getByRole('button', { name: 'Ledger actions' }).click();
     await expect(menu).toBeVisible();
@@ -44,6 +47,40 @@ test('ledger page audit', async ({ page }) => {
 
     await login(page);
     await page.goto('/ledger');
+
+    // The calendar points to the most recent day of the ledger's period:
+    // today while it is open (2026-01-01..2026-12-31), otherwise a clamped
+    // bound (issue #2).
+    const isoOf = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const todayIso = isoOf(new Date());
+    const expectedDay =
+        todayIso < '2026-01-01'
+            ? '2026-01-01'
+            : todayIso > '2026-12-31'
+              ? '2026-12-31'
+              : todayIso;
+    await expect(page.getByTestId(`calendar-day-${expectedDay}`)).toHaveClass(
+        /bg-primary/,
+    );
+
+    const prevBtn = page.getByRole('button', { name: 'Previous month' });
+    const nextBtn = page.getByRole('button', { name: 'Next month' });
+
+    // The calendar opens on the most recent in-period month, which moves as
+    // time passes; navigate explicitly to the month holding the seeded
+    // transactions (October 2026).
+    const monthDiff = (fromIso: string, toIso: string): number => {
+        const [fy, fm] = fromIso.split('-').map(Number);
+        const [ty, tm] = toIso.split('-').map(Number);
+        return (ty - fy) * 12 + (tm - fm);
+    };
+    const steps = monthDiff(todayIso, '2026-10-22');
+    const navButton = steps <= 0 ? prevBtn : nextBtn;
+    for (let i = 0; i < Math.abs(steps); i += 1) {
+        await navButton.click();
+    }
+
     await expect(page.getByText('Food').first()).toBeVisible();
 
     // --- selector row -------------------------------------------------------
@@ -104,7 +141,7 @@ test('ledger page audit', async ({ page }) => {
     await expect(foodRow).toContainText('680');
 
     // --- month navigation -----------------------------------------------------
-    await page.getByRole('button', { name: 'Previous month' }).click();
+    await prevBtn.click();
     const sepRows = page.locator('tbody tr');
     await expect(sepRows.first().getByText('Sep 10')).toBeVisible();
     await expect(sepRows).toHaveCount(1);
@@ -114,8 +151,27 @@ test('ledger page audit', async ({ page }) => {
     );
     await page.screenshot({ path: SHOT('04-month-september'), fullPage: true });
 
-    await page.getByRole('button', { name: 'Next month' }).click();
+    await nextBtn.click();
     await expect(page.locator('tbody tr')).toHaveCount(3);
+
+    // --- calendar bounds -------------------------------------------------------
+    // The seeded ledger spans 2026-01-01..2026-12-31: navigation is disabled
+    // outside of the period and out-of-period days cannot be selected.
+    for (let i = 0; i < 9; i += 1) {
+        await prevBtn.click();
+    }
+    await expect(prevBtn).toBeDisabled();
+    await expect(nextBtn).toBeEnabled();
+    await expect(page.getByTestId('calendar-day-2025-12-31')).toBeDisabled();
+    await expect(page.getByTestId('calendar-day-2026-01-01')).toBeEnabled();
+
+    for (let i = 0; i < 11; i += 1) {
+        await nextBtn.click();
+    }
+    await expect(nextBtn).toBeDisabled();
+    await expect(prevBtn).toBeEnabled();
+    await expect(page.getByTestId('calendar-day-2026-12-31')).toBeEnabled();
+    await expect(page.getByTestId('calendar-day-2027-01-01')).toBeDisabled();
 
     // --- close / reopen --------------------------------------------------------
     await openActionMenu(page);

@@ -22,11 +22,29 @@ test.beforeAll(() => {
     execSync('npm run e2e:seed -- seed-masked.php', { cwd: '.' });
 });
 
+/**
+ * Open the ledger page and navigate the calendar to the month holding the
+ * seeded transactions (October 2026). The calendar opens on the most recent
+ * in-period month, which moves as time passes.
+ */
+async function openLedgerAtOctober(page: Page): Promise<void> {
+    await login(page);
+    await page.goto('/ledger');
+    const today = new Date();
+    const steps =
+        (2026 - today.getFullYear()) * 12 + (10 - (today.getMonth() + 1));
+    const button = page.getByRole('button', {
+        name: steps <= 0 ? 'Previous month' : 'Next month',
+    });
+    for (let i = 0; i < Math.abs(steps); i += 1) {
+        await button.click();
+    }
+}
+
 test('transactions on non-permitted envelopes render masked amounts', async ({
     page,
 }) => {
-    await login(page);
-    await page.goto('/ledger');
+    await openLedgerAtOctober(page);
 
     const row = page.locator('tbody tr').filter({ hasText: 'Secret savings' });
     await expect(row).toHaveCount(1);
@@ -46,8 +64,7 @@ test('transactions on non-permitted envelopes render masked amounts', async ({
 });
 
 test('permitted transactions still show their amounts', async ({ page }) => {
-    await login(page);
-    await page.goto('/ledger');
+    await openLedgerAtOctober(page);
 
     // Control: the partner's transaction on Food (contributor there) is
     // visible with its amount and computed remaining.

@@ -7,6 +7,10 @@ import { MONTH_NAMES } from '@/lib/budget';
 const props = defineProps<{
     selectedDate: string; // "YYYY-MM-DD"
     viewMonth: string; // "YYYY-MM-DD" — first day of the viewed month
+    /** Lower bound of the calendar's period, e.g. a ledger's start date. */
+    minDate?: string; // "YYYY-MM-DD"
+    /** Upper bound of the calendar's period, e.g. a ledger's end date. */
+    maxDate?: string; // "YYYY-MM-DD"
 }>();
 
 const emit = defineEmits<{
@@ -19,12 +23,44 @@ const iso = (d: Date): string =>
 
 const todayIso = computed(() => iso(new Date()));
 
+/** First day of the month `offset` months away from the viewed month, ISO. */
+const monthOffset = (offset: number): string => {
+    const [year, month] = props.viewMonth.split('-').map(Number);
+    return iso(new Date(year, month - 1 + offset, 1));
+};
+
+/**
+ * Bound month navigation to the calendar's period: a step is allowed only if
+ * the first day of the target month stays within [minDate, maxDate].
+ */
+const prevMonthDisabled = computed(
+    () =>
+        props.minDate !== undefined &&
+        monthOffset(-1) < props.minDate.slice(0, 8) + '01',
+);
+
+const nextMonthDisabled = computed(
+    () =>
+        props.maxDate !== undefined &&
+        monthOffset(1) > props.maxDate.slice(0, 8) + '01',
+);
+
+/** True when `date` falls outside of the calendar's period. */
+const isOutOfRange = (date: string): boolean =>
+    (props.minDate !== undefined && date < props.minDate) ||
+    (props.maxDate !== undefined && date > props.maxDate);
+
 const monthLabel = computed(() => {
     const [year, month] = props.viewMonth.split('-').map(Number);
     return `${MONTH_NAMES[month - 1] ?? month} ${year}`;
 });
 
-type CalendarDay = { date: string; day: number; inMonth: boolean };
+type CalendarDay = {
+    date: string;
+    day: number;
+    inMonth: boolean;
+    disabled: boolean;
+};
 
 const weeks = computed<CalendarDay[][]>(() => {
     const [year, month] = props.viewMonth.split('-').map(Number);
@@ -35,21 +71,32 @@ const weeks = computed<CalendarDay[][]>(() => {
     const cells: CalendarDay[] = [];
     for (let i = startOffset; i > 0; i -= 1) {
         const d = new Date(year, month - 1, 1 - i);
-        cells.push({ date: iso(d), day: d.getDate(), inMonth: false });
+        const cellDate = iso(d);
+        cells.push({
+            date: cellDate,
+            day: d.getDate(),
+            inMonth: false,
+            disabled: isOutOfRange(cellDate),
+        });
     }
     for (let i = 1; i <= daysInMonth; i += 1) {
+        const cellDate = iso(new Date(year, month - 1, i));
         cells.push({
-            date: iso(new Date(year, month - 1, i)),
+            date: cellDate,
             day: i,
             inMonth: true,
+            disabled: isOutOfRange(cellDate),
         });
     }
     const trailing = (7 - (cells.length % 7)) % 7;
     for (let i = 1; i <= trailing; i += 1) {
+        const d = new Date(year, month, i);
+        const cellDate = iso(d);
         cells.push({
-            date: iso(new Date(year, month, i)),
-            day: i,
+            date: cellDate,
+            day: d.getDate(),
             inMonth: false,
+            disabled: isOutOfRange(cellDate),
         });
     }
 
@@ -73,6 +120,7 @@ const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                 variant="ghost"
                 size="icon-sm"
                 class="rounded-lg"
+                :disabled="prevMonthDisabled"
                 aria-label="Previous month"
                 @click="emit('navigate-month', 'prev')"
             >
@@ -83,6 +131,7 @@ const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                 variant="ghost"
                 size="icon-sm"
                 class="rounded-lg"
+                :disabled="nextMonthDisabled"
                 aria-label="Next month"
                 @click="emit('navigate-month', 'next')"
             >
@@ -108,17 +157,18 @@ const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                     v-for="day in week"
                     :key="day.date"
                     type="button"
-                    class="flex h-9 w-full items-center justify-center rounded-lg text-sm tabular-nums transition-colors"
+                    class="flex h-9 w-full items-center justify-center rounded-lg text-sm tabular-nums transition-colors disabled:pointer-events-none disabled:opacity-30"
                     :class="[
-                        day.inMonth
-                            ? 'text-foreground hover:bg-muted'
-                            : 'text-muted-foreground/40',
-                        day.date === selectedDate
+                        day.disabled || !day.inMonth
+                            ? 'text-muted-foreground/40'
+                            : 'text-foreground hover:bg-muted',
+                        !day.disabled && day.date === selectedDate
                             ? 'bg-primary font-semibold text-primary-foreground hover:bg-primary'
-                            : day.date === todayIso
+                            : !day.disabled && day.date === todayIso
                               ? 'border border-primary/40'
                               : '',
                     ]"
+                    :disabled="day.disabled"
                     :data-testid="`calendar-day-${day.date}`"
                     @click="emit('select-date', day.date)"
                 >
