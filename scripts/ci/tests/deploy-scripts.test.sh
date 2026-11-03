@@ -42,9 +42,12 @@ case "$2" in
         fi ;;
     migrate)
         rm -f "$WORK/no-table"; touch "$WORK/ran"
-        [ "${MIGRATE_APPLY:-1}" = 1 ] && pending > "$WORK/pending" && cat "$WORK/pending" >> "$WORK/ran"
+        case "${MIGRATE_APPLY:-all}" in
+            all) pending >> "$WORK/ran" ;;
+            first) pending | head -n 1 >> "$WORK/ran" ;;
+        esac
         [ "${MIGRATE_EXIT:-0}" = 0 ] || exit "$MIGRATE_EXIT" ;;
-    help) [ "$3" = amounts:verify ] && [ ! -e "$rel/.has-verify" ] && exit 1 ;;
+    list) [ -e "$rel/.has-verify" ] && echo 'amounts:verify   Check that every encrypted amount decrypts' ;;
     down) mkdir -p "$rel/storage/framework" && : > "$rel/storage/framework/down" ;;
     up) rm -f "$rel/storage/framework/down" ;;
 esac
@@ -215,10 +218,72 @@ expect 'deploy: a release missing migrations the database ran is refused' \
     "$rc $(live) $(maintenance) $(ran 'migrate --force')" '1 old off no'
 
 setup
-rc=$(deploy MIGRATE_EXIT=1 MIGRATE_APPLY=0)
+rc=$(deploy MIGRATE_EXIT=1 MIGRATE_APPLY=none)
 rm "$WORK/pkg/database/migrations/b.php"
 rc=$(deploy)
 expect 'deploy: a fix dropping an unapplied migration is accepted' "$rc $(live) $(maintenance) $(consistent)" '0 new off yes'
+
+# migrate applies b only, then fails: the record holds the database's truth,
+# not the release's files.
+setup
+release "$WORK/pkg" 'ran verify' a b c
+rc=$(deploy MIGRATE_EXIT=1 MIGRATE_APPLY=first)
+expect 'deploy: a partial migration is recorded as run' "$(record)" 'a b '
+
+setup
+: > "$WORK/no-table"
+rc=$(deploy)
+expect 'deploy: a missing migrations table with a live release is refused' \
+    "$rc $(live) $(maintenance) $(ran 'migrate --force')" '1 old off no'
+
+setup
+rm "$APP/releases/old/storage"
+mkdir -p "$APP/releases/old/storage"
+rc=$(deploy)
+expect 'deploy: a live release outside the shared storage blocks migrations' \
+    "$rc $(live) $(ran 'down') $(ran 'migrate --force')" '1 old no no'
+
+setup
+release "$APP/releases/new" '' a
+ln -s "$APP/shared/storage" "$APP/releases/new/storage"
+ln -sfn "$APP/releases/new" "$APP/current"
+rc=$(deploy)
+expect 'deploy: the live release is never rebuilt in place' \
+    "$rc $(live) $(ls "$APP/releases/new/database/migrations" | tr '\n' ' ')$(ran 'migrations:ran')" '1 new a.php no'
+
+setup
+release "$APP/releases/new" '' a
+ln -sfn "$APP/releases/new" "$APP/previous"
+rc=$(deploy)
+expect 'deploy: the previous release is never rebuilt in place' \
+    "$rc $(live) $(ls "$APP/releases/new/database/migrations" | tr '\n' ' ')" '1 old a.php '
+
+# A failed deploy's marker left behind after a manual "php artisan up", then
+# an operator's maintenance mode.
+setup
+printf 'a\nb\n' > "$WORK/ran"
+: > "$APP/shared/deploy-maintenance"
+rc=$(deploy)
+mkdir -p "$APP/shared/storage/framework" && : > "$APP/shared/storage/framework/down"
+mv "$APP/releases/new" "$APP/releases/new2" && ln -sfn "$APP/releases/new2" "$APP/current"
+rm -f "$APP/previous"
+rc=$(deploy)
+expect "deploy: a stale marker never lifts an operator's maintenance" "$rc $(maintenance)" '0 on'
+
+setup
+printf 'a\nb\n' > "$WORK/ran"
+rc=$(deploy HEALTH_EXIT=22)
+expect 'deploy: a failed health check never reverts to a mismatched release' \
+    "$rc $(live) $(maintenance) $(consistent)" '1 new on yes'
+
+# The previous deploy left its (schema-matching but unhealthy) release in
+# maintenance: a failing fix keeps the maintenance instead of reverting.
+setup
+rc=$(deploy HEALTH_EXIT=22)
+mv "$APP/releases/new" "$APP/releases/new2" && ln -sfn "$APP/releases/new2" "$APP/current"
+rm -f "$APP/previous"
+rc=$(deploy HEALTH_EXIT=22)
+expect "deploy: a failed deploy's maintenance is kept when the fix fails too" "$rc $(live) $(maintenance)" '1 new on'
 
 # Legacy layout: the app lives directly in APP_ROOT.
 setup_legacy() {
@@ -308,6 +373,59 @@ mkdir -p "$APP/shared/storage/framework" && : > "$APP/shared/storage/framework/d
 : > "$APP/shared/deploy-maintenance"
 rc=$(rollback HEALTH_EXIT=22)
 expect "rollback: a failed health check restores a failed deploy's maintenance" "$rc $(live) $(maintenance)" '1 new on'
+
+setup_rollback
+rm "$APP/releases/new/.has-ran"
+: > "$APP/releases/old/.has-ran"
+printf 'a\n' > "$WORK/ran"
+rc=$(rollback)
+expect "rollback: the target's migrations:ran is used when the live release lacks it" "$rc $(live) $(consistent)" '0 old yes'
+
+setup_rollback
+rm "$APP/releases/new/.has-ran"
+printf 'a\n' > "$APP/shared/schema-migrations"
+printf 'a\n' > "$WORK/ran"
+rc=$(rollback)
+expect 'rollback: the record is used when no release has migrations:ran' "$rc $(live) $(consistent)" '0 old yes'
+
+setup_rollback
+rm "$APP/releases/new/.has-ran"
+release "$APP/releases/old" '' a b
+rc=$(rollback)
+expect 'rollback: without any knowledge of the schema it refuses' "$rc $(live)" '1 new'
+
+# A stale record (a b) while the database ran a only: the target ships a b,
+# matching the record, but has a pending migration.
+setup_rollback
+rm "$APP/releases/new/.has-ran"
+release "$APP/releases/old" '' a b
+printf 'a\nb\n' > "$APP/shared/schema-migrations"
+printf 'a\n' > "$WORK/ran"
+rc=$(rollback)
+expect 'rollback: pending target migrations are refused despite the record' "$rc $(live)" '1 new'
+
+setup_rollback
+release "$APP/releases/old" verify a b
+rc=$(rollback FAIL=list)
+expect 'rollback: a target that cannot list its commands is refused' "$rc $(live)" '1 new'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+: > "$APP/shared/deploy-maintenance"
+mkdir -p "$APP/shared/storage/framework" && : > "$APP/shared/storage/framework/down"
+rc=$(rollback)
+expect 'rollback: lifting a failed deploy'"'"'s maintenance clears its marker' \
+    "$rc $([ -e "$APP/shared/deploy-maintenance" ] && echo marker || echo none)" '0 none'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+: > "$APP/shared/deploy-maintenance"
+rc=$(rollback)
+mkdir -p "$APP/shared/storage/framework" && : > "$APP/shared/storage/framework/down"
+ln -sfn "$APP/releases/new" "$APP/current"
+ln -sfn "$APP/releases/old" "$APP/previous"
+rc=$(rollback)
+expect "rollback: a stale marker never lifts an operator's maintenance" "$rc $(live) $(maintenance)" '0 old on'
 
 if [ "$FAILURES" -ne 0 ]; then
     printf '%s deploy script test(s) failed\n' "$FAILURES" >&2

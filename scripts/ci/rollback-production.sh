@@ -88,9 +88,9 @@ fi
 # refuses migrate:rollback/reset there. Only switch to a release shipping
 # exactly the migrations the database ran — read live with
 # `php artisan migrations:ran` (from the current or the target release),
-# else from shared/schema-migrations (recorded by the last deploy), else the
-# live release's — otherwise it would read or write data it does not
-# understand (e.g. plaintext amounts into encrypted columns,
+# else from shared/schema-migrations (recorded by the last deploy); without
+# either it refuses — otherwise the target could read or write data it does
+# not understand (e.g. plaintext amounts into encrypted columns,
 # docs/encryption.md). Deploy a fix instead.
 SCHEMA_RECORD=$APP_ROOT/shared/schema-migrations
 DEPLOY_DOWN=$APP_ROOT/shared/deploy-maintenance
@@ -123,7 +123,13 @@ if (cd "$CURRENT_TARGET" && php artisan migrations:ran > "$TMP_DIR/ran" 2>/dev/n
 elif [ -f "$SCHEMA_RECORD" ]; then
     cp "$SCHEMA_RECORD" "$TMP_DIR/ran"
 else
-    migration_names "$CURRENT_TARGET" > "$TMP_DIR/ran"
+    printf 'Refusing to roll back: cannot tell which migrations the database ran\n' >&2
+    exit 1
+fi
+
+# A marker without maintenance mode is stale (lifted by hand).
+if [ ! -e "$DOWN_FILE" ]; then
+    rm -f "$DEPLOY_DOWN"
 fi
 
 migration_names "$TARGET_RELEASE" > "$TMP_DIR/shipped"
@@ -149,7 +155,12 @@ if ! php artisan config:cache; then
     exit 1
 fi
 
-if php artisan help amounts:verify >/dev/null 2>&1 && ! php artisan amounts:verify; then
+if ! php artisan list --raw > "$TMP_DIR/commands"; then
+    printf 'Refusing to roll back: %s cannot list its commands\n' "$(basename "$TARGET_RELEASE")" >&2
+    exit 1
+fi
+
+if grep -q '^amounts:verify[[:space:]]' "$TMP_DIR/commands" && ! php artisan amounts:verify; then
     printf 'Refusing to roll back: amounts do not all decrypt with %s\n' "$(basename "$TARGET_RELEASE")" >&2
     exit 1
 fi
@@ -174,8 +185,8 @@ fi
 
 if ! run_healthcheck; then
     if [ "$LIFTED" = 1 ]; then
-        : > "$DEPLOY_DOWN"
         php artisan down --retry=15
+        : > "$DEPLOY_DOWN"
     fi
 
     safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"

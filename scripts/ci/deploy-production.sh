@@ -115,10 +115,18 @@ record_schema() {
 # every release sharing it. An operator's maintenance mode is left untouched.
 maintenance_down() {
     if [ "$MAINTENANCE" = 0 ] && [ "$WAS_DOWN" = 0 ]; then
-        : > "$DEPLOY_DOWN"
         (cd "$RELEASE_DIR" && php artisan down --retry=15)
+        : > "$DEPLOY_DOWN"
         MAINTENANCE=1
     fi
+}
+
+# Whether release $1 ships exactly the migrations the database ran.
+matches_schema() {
+    migration_names "$1" > "$RELEASE_DIR/.migrations-other"
+
+    [ -z "$(lines_missing_from "$RELEASE_DIR/.migrations-ran" "$RELEASE_DIR/.migrations-other")" ] \
+        && [ -z "$(lines_missing_from "$RELEASE_DIR/.migrations-other" "$RELEASE_DIR/.migrations-ran")" ]
 }
 
 maintenance_up() {
@@ -145,7 +153,7 @@ on_exit() {
 rollback_current() {
     if [ -z "$CURRENT_TARGET" ]; then
         rm -f "$CURRENT_LINK"
-    elif [ "$MIGRATED" = 1 ] || [ "$TOOK_OVER" = 1 ]; then
+    elif [ "$MIGRATED" = 1 ] || [ "$TOOK_OVER" = 1 ] || ! matches_schema "$CURRENT_TARGET"; then
         # The previous release cannot run on this schema.
         maintenance_down
         printf 'Health check failed: keeping the new release in maintenance mode\n' >&2
@@ -228,11 +236,17 @@ migrate_legacy_layout() {
         mv "$APP_ROOT/public" "$legacy_release/public"
     fi
 
-    # Share the legacy storage so maintenance mode (file driver) covers the
-    # legacy release too.
+    # Share the legacy storage and .env like any release: maintenance mode
+    # (file driver) then covers the legacy release, and a rollback to it
+    # rebuilds its configuration from the current .env.
     if [ ! -e "$SHARED_DIR/storage" ] && [ -d "$legacy_release/storage" ] && [ ! -L "$legacy_release/storage" ]; then
         mv "$legacy_release/storage" "$SHARED_DIR/storage"
         ln -s "$SHARED_DIR/storage" "$legacy_release/storage"
+    fi
+
+    if [ ! -e "$SHARED_DIR/.env" ] && [ -f "$legacy_release/.env" ] && [ ! -L "$legacy_release/.env" ]; then
+        mv "$legacy_release/.env" "$SHARED_DIR/.env"
+        ln -s "$SHARED_DIR/.env" "$legacy_release/.env"
     fi
 
     safe_symlink "$legacy_release" "$CURRENT_LINK"
@@ -249,8 +263,26 @@ if [ -L "$CURRENT_LINK" ]; then
     CURRENT_TARGET=$(readlink "$CURRENT_LINK")
 fi
 
+# Never rebuild the live or the previous release in place: their code would
+# change under them (or the rollback target would be lost) before any check.
+if [ -d "$RELEASE_DIR" ]; then
+    _release=$(cd "$RELEASE_DIR" && pwd -P)
+
+    for _keep in "$CURRENT_TARGET" "$(readlink "$PREVIOUS_LINK" 2>/dev/null || true)"; do
+        if [ -n "$_keep" ] && [ "$_release" = "$(cd "$_keep" 2>/dev/null && pwd -P)" ]; then
+            printf 'Refusing to deploy: release %s is the live or the previous release; deploy under a new release id\n' "$RELEASE_ID" >&2
+            exit 1
+        fi
+    done
+fi
+
 # Maintenance mode already on: a failed deploy's (DEPLOY_DOWN) is taken over
-# and lifted once this release is verified; an operator's is never lifted.
+# and lifted once this release is verified; an operator's is never lifted. A
+# marker without maintenance mode is stale (lifted by hand).
+if [ ! -e "$SHARED_DIR/storage/framework/down" ]; then
+    rm -f "$DEPLOY_DOWN"
+fi
+
 if [ -e "$SHARED_DIR/storage/framework/down" ]; then
     if [ -e "$DEPLOY_DOWN" ]; then
         MAINTENANCE=1
