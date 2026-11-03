@@ -179,23 +179,48 @@ scripts compare releases with the migrations the database actually ran
 
 - `scripts/ci/deploy-production.sh` refuses a release that does not ship
   every migration the database ran, a deploy that cannot read them (except a
-  first install), and a release id that is the live or the previous release
-  (it would be rebuilt in place before any check).
+  first install), a release id that is not a single directory name
+  (`A-Za-z0-9._-`, not `.` or `..`; tags must follow it) and one that is, or
+  resolves to, the live or the previous release (it would be rebuilt in
+  place before any check). The uploaded `.env` replaces `shared/.env` only
+  once these checks passed; a refused deploy leaves it untouched.
 - It switches to maintenance mode before running pending migrations, so the
   previous release stops accepting requests (ones already in flight may still
   complete). `amounts:verify` must pass before the release goes live. Any
   failure during or after migrating — including a failed health check —
   **leaves the app in maintenance mode**: the previous release is not
   restored on the migrated schema. Recover by deploying a fix: once verified,
-  it lifts the maintenance mode the failed deploy set (marked by
-  `shared/deploy-maintenance`, written once the app is down and cleared when
-  maintenance mode is lifted, by hand or not). A failed health check without
-  pending migrations reverts to the previous release only if it ships exactly
-  the migrations the database ran and no failed deploy's maintenance was
-  pending; otherwise the new release stays in maintenance mode.
-- An operator's maintenance mode (on before the deploy, without that marker)
-  is never lifted nor modified, and the health check is skipped: lift it once
-  the live release is verified to match the schema.
+  it lifts the maintenance mode the failed deploy set. That maintenance mode
+  is identified by `shared/deploy-maintenance`, written right after
+  `php artisan down`: it only counts while the down file is not newer than
+  it. Lifting maintenance mode by hand and turning it on again (an
+  operator's) rewrites the down file, so the marker no longer applies and is
+  removed. A failed health check without pending migrations reverts to the
+  previous release (and restores the `previous` link) only if it ships
+  exactly the migrations the database ran and no failed deploy's maintenance
+  was pending; otherwise the new release stays in maintenance mode.
+- An operator's maintenance mode (on before the deploy, or not matching that
+  marker) is never lifted nor modified, and the health check is skipped: lift
+  it once the live release is verified to match the schema and the switch
+  wait below has elapsed.
+- **PHP's realpath cache.** The web server reaches the app through the
+  `current` symlink, and PHP caches resolved paths per worker process for
+  `realpath_cache_ttl` seconds (PHP default 120). A long-lived worker can
+  therefore keep running the release `current` pointed to before the switch
+  for that long (reproduced with a persistent PHP process). After switching
+  `current`, both scripts wait `realpath_cache_ttl + 5` seconds (read from
+  the host's CLI PHP; 125 if unreadable) before lifting maintenance mode and
+  before the health check, so neither happens while the replaced release may
+  still serve requests. Set the `DEPLOY_SWITCH_WAIT` repository variable (in
+  seconds; `0` disables it) when the web PHP's TTL differs from the CLI's, or
+  when the server resolves the symlink itself (nginx:
+  `fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;` and
+  `DOCUMENT_ROOT $realpath_root`). OPcache is not handled: on a host where
+  it is enabled for the web PHP, reset it (or reload PHP) as part of the
+  wait. On the production host (shared hosting, Apache, CloudLinux alt-php
+  8.4), checked on 2026-11-02: the docroot is `current/public`,
+  `realpath_cache_ttl` is 120 and OPcache is not loaded; the web handler's
+  process model could not be inspected, so the default wait applies.
 - After migrating (or failing to), the deploy records the migrations the
   database ran in `shared/schema-migrations`.
 - `scripts/ci/rollback-production.sh` only switches to a release shipping
@@ -203,8 +228,11 @@ scripts compare releases with the migrations the database actually ran
   else from that record; without either it refuses) with none pending. It rebuilds the target's
   configuration cache from the current `.env` (e.g. a rotated `APP_KEY`) and
   requires `amounts:verify` to pass with it when the target has that command;
-  otherwise it refuses without switching. It lifts a failed deploy's maintenance mode once the matching
-  release is live, never an operator's.
+  otherwise it refuses without switching. It refuses the live release (or an
+  alias of it) as target and an invalid release id. It lifts a failed
+  deploy's maintenance mode once the matching release is live (after the
+  switch wait), never an operator's; a failed health check restores both the
+  `current` and the `previous` links.
 - A legacy layout (the app directly in the deploy root) is moved into
   `releases/` with its storage and `.env` shared, so maintenance mode covers
   it and a rollback to it uses the current `.env`; a pending migration is
