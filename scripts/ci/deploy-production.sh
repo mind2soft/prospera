@@ -43,12 +43,15 @@ CURRENT_LINK=$APP_ROOT/current
 PREVIOUS_LINK=$APP_ROOT/previous
 RELEASE_DIR=$RELEASES_DIR/$RELEASE_ID
 CURRENT_TARGET=''
-# MIGRATED: this deploy ran a migration batch. MAINTENANCE: this deploy put
-# the app in maintenance mode. SWITCHED: the new release is live.
+# Production migrations are forward-only: DB::prohibitDestructiveCommands()
+# refuses migrate:rollback/reset there. A release whose migrations ran must
+# therefore never be swapped back for the previous release (which would run
+# on a schema it does not know — e.g. plaintext writes into encrypted amount
+# columns, docs/encryption.md): failures after migrating leave the app in
+# maintenance mode for a fix-forward deploy.
 MIGRATED=0
 MAINTENANCE=0
-SWITCHED=0
-NEW_MIGRATIONS=''
+WAS_DOWN=0
 
 safe_symlink() {
     _target=$1
@@ -67,67 +70,17 @@ cleanup() {
     rm -f "$ARCHIVE_PATH" "$ENV_UPLOAD_PATH"
 }
 
-# Migration files shipped by release $1 that release $2 does not have.
-new_migrations() {
-    for _file in "$1"/database/migrations/*.php; do
-        [ -e "$_file" ] || continue
-        _name=$(basename "$_file")
-        [ -e "$2/database/migrations/$_name" ] || printf '%s\n' "$_name"
-    done
-}
-
-# Roll back this release's new migrations — and only them: --path limits the
-# rollback to these files, so an older batch is never undone even when none
-# of them ran.
-rollback_new_migrations() {
-    _count=0
-    _paths=''
-
-    for _name in $NEW_MIGRATIONS; do
-        _count=$((_count + 1))
-        _paths="$_paths --path=database/migrations/$_name"
-    done
-
-    if [ "$_count" -eq 0 ]; then
-        return 0
-    fi
-
-    # shellcheck disable=SC2086 # migration file names contain no spaces
-    (cd "$RELEASE_DIR" && php artisan migrate:rollback --force --step="$_count" $_paths)
-}
-
 # Maintenance mode lives in the shared storage, so it covers both releases.
 maintenance_down() {
     (cd "$RELEASE_DIR" && php artisan down --retry=15)
     MAINTENANCE=1
 }
 
-maintenance_up() {
-    if [ "$MAINTENANCE" = 1 ]; then
-        (cd "$RELEASE_DIR" && php artisan up) || printf 'Leaving maintenance mode failed\n' >&2
-        MAINTENANCE=0
-    fi
-}
-
-# A failure after migrating but before the switch leaves the previous release
-# live: undo this release's new migrations so the schema matches it, then
-# leave maintenance mode. A failed rollback keeps the app in
-# maintenance — serving either release on a mismatched schema would corrupt
-# data (docs/encryption.md).
 on_exit() {
     status=$?
 
-    if [ "$status" -ne 0 ] && [ "$SWITCHED" = 0 ] && [ "$MIGRATED" = 1 ] && [ -n "$CURRENT_TARGET" ]; then
-        if rollback_new_migrations; then
-            MIGRATED=0
-        else
-            printf 'Migration rollback failed; the app stays in maintenance mode\n' >&2
-            MAINTENANCE=0
-        fi
-    fi
-
-    if [ "$status" -ne 0 ] || [ "$SWITCHED" = 1 ]; then
-        maintenance_up
+    if [ "$status" -ne 0 ] && [ "$MAINTENANCE" = 1 ]; then
+        printf 'Deployment failed during or after migrating: the app stays in maintenance mode (deploy a fix; see docs/encryption.md)\n' >&2
     fi
 
     cleanup
@@ -135,26 +88,15 @@ on_exit() {
 }
 
 rollback_current() {
-    if [ -n "$CURRENT_TARGET" ]; then
-        cd "$RELEASE_DIR"
-
-        if [ "$MIGRATED" = 1 ]; then
-            maintenance_down
-
-            if ! rollback_new_migrations; then
-                printf 'Migration rollback failed; keeping the new release in maintenance mode\n' >&2
-                MAINTENANCE=0
-                return 1
-            fi
-
-            MIGRATED=0
-        fi
-
-        safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
-        SWITCHED=0
-        maintenance_up
-    else
+    if [ -z "$CURRENT_TARGET" ]; then
         rm -f "$CURRENT_LINK"
+    elif [ "$MIGRATED" = 1 ]; then
+        # The previous release cannot run on the migrated schema.
+        maintenance_down
+        printf 'Health check failed after migrating: keeping the new release in maintenance mode\n' >&2
+    else
+        safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
+        printf 'Deployment health check failed; reverted current release\n' >&2
     fi
 }
 
@@ -245,13 +187,15 @@ if [ -L "$CURRENT_LINK" ]; then
     CURRENT_TARGET=$(readlink "$CURRENT_LINK")
 fi
 
+# Maintenance mode switched on before this deploy (by an operator or a failed
+# deploy) is never lifted by it.
+if [ -e "$SHARED_DIR/storage/framework/down" ]; then
+    WAS_DOWN=1
+fi
+
 rm -rf "$RELEASE_DIR"
 mkdir -p "$RELEASE_DIR"
 tar -xzf "$ARCHIVE_PATH" -C "$RELEASE_DIR"
-
-if [ -n "$CURRENT_TARGET" ]; then
-    NEW_MIGRATIONS=$(new_migrations "$RELEASE_DIR" "$CURRENT_TARGET")
-fi
 
 mv "$ENV_UPLOAD_PATH" "$SHARED_DIR/.env"
 chmod 600 "$SHARED_DIR/.env"
@@ -273,9 +217,9 @@ cd "$RELEASE_DIR"
 
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 # Migrate first: optimize:clear flushes the database cache store, whose table
-# does not exist yet on a fresh database. While migrating, the previous
-# release would serve requests against the new schema (e.g. plaintext writes
-# into encrypted amount columns): pending migrations run in maintenance mode.
+# does not exist yet on a fresh database. Pending migrations run in
+# maintenance mode so the previous release stops serving requests before the
+# schema changes under it.
 if ! php artisan migrate:status --pending=1 >/dev/null 2>&1; then
     if [ -n "$CURRENT_TARGET" ]; then
         maintenance_down
@@ -301,13 +245,19 @@ if [ -n "$CURRENT_TARGET" ]; then
 fi
 
 safe_symlink "$RELEASE_DIR" "$CURRENT_LINK"
-SWITCHED=1
-maintenance_up
 
-if ! run_healthcheck; then
-    rollback_current
-    printf 'Deployment health check failed; reverted current release\n' >&2
-    exit 1
+if [ "$WAS_DOWN" = 1 ]; then
+    printf 'Maintenance mode was on before this deploy: left on and health check skipped — run "php artisan up" once verified\n' >&2
+else
+    if [ "$MAINTENANCE" = 1 ]; then
+        (cd "$RELEASE_DIR" && php artisan up)
+        MAINTENANCE=0
+    fi
+
+    if ! run_healthcheck; then
+        rollback_current
+        exit 1
+    fi
 fi
 
 prune_old_releases

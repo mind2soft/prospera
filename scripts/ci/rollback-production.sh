@@ -84,62 +84,40 @@ else
     exit 1
 fi
 
-# Only the migrations the target release does not ship are rolled back, in
-# maintenance mode and before switching: --path limits the rollback to those
-# files, so a release without new migrations never undoes an older batch. If
-# the rollback fails, the current release stays live (its schema is intact).
-NEW_MIGRATIONS=''
-NEW_MIGRATION_COUNT=0
+# Production migrations are forward-only: DB::prohibitDestructiveCommands()
+# refuses migrate:rollback/reset there. Only switch to a release that runs on
+# the current schema as is — same migration files, none pending — otherwise
+# it would read or write data it does not understand (e.g. plaintext amounts
+# into encrypted columns, docs/encryption.md). Deploy a fix instead.
+migration_names() {
+    for _file in "$1"/database/migrations/*.php; do
+        if [ -e "$_file" ]; then
+            basename "$_file"
+        fi
+    done
+}
 
-for _file in "$CURRENT_TARGET"/database/migrations/*.php; do
-    [ -e "$_file" ] || continue
-    _name=$(basename "$_file")
+if [ "$(migration_names "$CURRENT_TARGET")" != "$(migration_names "$TARGET_RELEASE")" ]; then
+    printf 'Refusing to roll back: %s and %s ship different migrations (production migrations are forward-only; deploy a fix instead)\n' \
+        "$(basename "$CURRENT_TARGET")" "$(basename "$TARGET_RELEASE")" >&2
+    exit 1
+fi
 
-    if [ ! -e "$TARGET_RELEASE/database/migrations/$_name" ]; then
-        NEW_MIGRATIONS="$NEW_MIGRATIONS --path=database/migrations/$_name"
-        NEW_MIGRATION_COUNT=$((NEW_MIGRATION_COUNT + 1))
-    fi
-done
-
-cd "$CURRENT_TARGET"
-
-if [ "$NEW_MIGRATION_COUNT" -gt 0 ]; then
-    php artisan down --retry=15
-
-    # shellcheck disable=SC2086 # migration file names contain no spaces
-    if ! php artisan migrate:rollback --force --step="$NEW_MIGRATION_COUNT" $NEW_MIGRATIONS; then
-        php artisan up || true
-        printf 'Migration rollback failed; staying on the current release\n' >&2
-        exit 1
-    fi
+if ! (cd "$TARGET_RELEASE" && php artisan migrate:status --pending=1 >/dev/null 2>&1); then
+    printf 'Refusing to roll back: %s has pending migrations\n' "$(basename "$TARGET_RELEASE")" >&2
+    exit 1
 fi
 
 safe_symlink "$CURRENT_TARGET" "$PREVIOUS_LINK"
 safe_symlink "$TARGET_RELEASE" "$CURRENT_LINK"
 
-if [ "$NEW_MIGRATION_COUNT" -gt 0 ]; then
-    php artisan up
+if [ -e "$APP_ROOT/shared/storage/framework/down" ]; then
+    printf 'Maintenance mode is on: left on and health check skipped — run "php artisan up" once verified\n' >&2
+    exit 0
 fi
 
 if ! run_healthcheck; then
-    cd "$CURRENT_TARGET"
-
-    if [ "$NEW_MIGRATION_COUNT" -gt 0 ]; then
-        php artisan down --retry=15
-
-        if ! php artisan migrate --force; then
-            safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
-            printf 'Migration re-apply failed; the app stays in maintenance mode\n' >&2
-            exit 1
-        fi
-    fi
-
     safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
-
-    if [ "$NEW_MIGRATION_COUNT" -gt 0 ]; then
-        php artisan up
-    fi
-
     printf 'Rollback health check failed; restored previous current release\n' >&2
     exit 1
 fi
