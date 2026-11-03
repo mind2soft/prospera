@@ -22,7 +22,7 @@ FAILURES=0
 
 trap 'rm -rf "$WORK"' EXIT
 
-mkdir -p "$WORK/bin"
+mkdir -p "$WORK/bin" "$WORK/home"
 
 # Release features: .has-ran (migrations:ran exists), .has-verify
 # (amounts:verify exists). $WORK/no-table: no migrations table yet.
@@ -170,8 +170,9 @@ record() {
 deploy() {
     package
     _rc=0
-    env WORK="$WORK" PATH="$WORK/bin:$PATH" "$@" \
-        $SHELL_UNDER_TEST "$WORK/deploy-remote.sh" "$DEPLOY_ROOT" "$DEPLOY_ID" "$WORK/release.tgz" "$WORK/env" 3 "http://localhost/up" "$WAIT" \
+    # Run from elsewhere, like over ssh (the working directory is $HOME).
+    (cd "$WORK/home" && env WORK="$WORK" PATH="$WORK/bin:$PATH" "$@" \
+        $SHELL_UNDER_TEST "$WORK/deploy-remote.sh" "$DEPLOY_ROOT" "$DEPLOY_ID" "$WORK/release.tgz" "$WORK/env" 3 "http://localhost/up" "$WAIT") \
         > "$WORK/out" 2>&1 || _rc=$?
     printf 'APP_KEY=x\n' > "$WORK/env"
     echo "$_rc"
@@ -179,8 +180,8 @@ deploy() {
 
 rollback() {
     _rc=0
-    env WORK="$WORK" PATH="$WORK/bin:$PATH" "$@" \
-        $SHELL_UNDER_TEST "$WORK/rollback-remote.sh" "$APP" "http://localhost/up" "$ROLLBACK_ID" "$WAIT" \
+    (cd "$WORK/home" && env WORK="$WORK" PATH="$WORK/bin:$PATH" "$@" \
+        $SHELL_UNDER_TEST "$WORK/rollback-remote.sh" "$APP" "http://localhost/up" "$ROLLBACK_ID" "$WAIT") \
         > "$WORK/out" 2>&1 || _rc=$?
     echo "$_rc"
 }
@@ -544,6 +545,30 @@ rc=$(deploy)
 expect 'deploy: pruning keeps the previous release through a symlinked deploy root' \
     "$rc $(ls "$APP/releases" | tr '\n' ' ')$(previous)" '0 new old r3 r4 old'
 
+# Links with relative targets (relative to the link, e.g. made by hand).
+setup
+release "$APP/releases/new" '' a
+ln -s "$APP/shared/storage" "$APP/releases/new/storage"
+: > "$APP/releases/new/LIVE"
+rm "$APP/current" && ln -s releases/new "$APP/current"
+rc=$(deploy)
+expect 'deploy: a relative current link still protects the live release' \
+    "$rc $(live) $([ -e "$APP/releases/new/LIVE" ] && echo intact || echo REBUILT)" '1 new intact'
+
+setup
+release "$APP/releases/new" '' a
+: > "$APP/releases/new/PREV"
+ln -s releases/new "$APP/previous"
+rc=$(deploy)
+expect 'deploy: a relative previous link still protects the previous release' \
+    "$rc $(live) $([ -e "$APP/releases/new/PREV" ] && echo intact || echo REBUILT)" '1 old intact'
+
+setup
+rm "$APP/current" && ln -s releases/old "$APP/current"
+rc=$(deploy)
+expect 'deploy: a relative current link migrates in maintenance and goes live' \
+    "$rc $(live) $(maintenance) $(ran 'down') $(previous) $(consistent)" '0 new off yes old yes'
+
 # Legacy layout: the app lives directly in APP_ROOT.
 setup_legacy() {
     setup
@@ -759,6 +784,21 @@ touch -t 202001010000 "$APP/shared/deploy-maintenance"
 rc=$(rollback)
 expect "rollback: a marker older than the maintenance mode never lifts it" \
     "$rc $(live) $(maintenance) $(ran ' up') $(marker) $(grep -c '^sleep' "$WORK/log")" '0 old on no none 0'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+ln -sfn releases/new "$APP/current"
+ln -sfn releases/old "$APP/previous"
+ROLLBACK_ID=new
+rc=$(rollback)
+expect 'rollback: a relative current link still refuses the live release as target' "$rc $(live) $(previous)" '1 new old'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+ln -sfn releases/new "$APP/current"
+ln -sfn releases/old "$APP/previous"
+rc=$(rollback)
+expect 'rollback: relative links roll back to the previous release' "$rc $(live) $(previous) $(ran 'config:cache')" '0 old new yes'
 
 # --- local wrappers (ssh joins its arguments for the remote shell) --------
 

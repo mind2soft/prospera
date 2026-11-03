@@ -95,6 +95,13 @@ if [ ! -L "$CURRENT_LINK" ]; then
     exit 1
 fi
 
+# Resolved absolute target of link $1, whatever its spelling (a relative
+# target is relative to the link, not to the working directory); its raw
+# target if it cannot be entered.
+link_target() {
+    (cd "$1" 2>/dev/null && pwd -P) || readlink "$1"
+}
+
 safe_symlink() {
     _target=$1
     _link=$2
@@ -108,11 +115,11 @@ safe_symlink() {
     mv -fT "$_tmp" "$_link" 2>/dev/null || { rm -f "$_link"; mv "$_tmp" "$_link"; }
 }
 
-CURRENT_TARGET=$(readlink "$CURRENT_LINK")
+CURRENT_TARGET=$(link_target "$CURRENT_LINK")
 PREVIOUS_TARGET=''
 
 if [ -L "$PREVIOUS_LINK" ]; then
-    PREVIOUS_TARGET=$(readlink "$PREVIOUS_LINK")
+    PREVIOUS_TARGET=$(link_target "$PREVIOUS_LINK")
 fi
 
 if [ -n "$ROLLBACK_RELEASE" ]; then

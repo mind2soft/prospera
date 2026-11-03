@@ -99,6 +99,13 @@ TOOK_OVER=0
 PENDING=0
 ENV_PENDING=0
 
+# Resolved absolute target of link $1, whatever its spelling (a relative
+# target is relative to the link, not to the working directory); its raw
+# target if it cannot be entered.
+link_target() {
+    (cd "$1" 2>/dev/null && pwd -P) || readlink "$1"
+}
+
 safe_symlink() {
     _target=$1
     _link=$2
@@ -378,11 +385,11 @@ mkdir -p "$APP_ROOT" "$RELEASES_DIR" "$SHARED_DIR"
 migrate_legacy_layout
 
 if [ -L "$CURRENT_LINK" ]; then
-    CURRENT_TARGET=$(readlink "$CURRENT_LINK")
+    CURRENT_TARGET=$(link_target "$CURRENT_LINK")
 fi
 
 if [ -L "$PREVIOUS_LINK" ]; then
-    PREVIOUS_TARGET=$(readlink "$PREVIOUS_LINK")
+    PREVIOUS_TARGET=$(link_target "$PREVIOUS_LINK")
 fi
 
 # Never rebuild the live or the previous release in place: their code would
