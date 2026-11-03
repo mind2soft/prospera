@@ -63,13 +63,17 @@ read-only visibility by default and escalate via the Share drawer (see
 ### Amount sign convention
 
 Amounts are **always displayed positive** and user input is enforced to be a positive
-integer. They are **stored signed** so arithmetic works naturally in SQL:
+integer. They are **stored signed** so arithmetic works naturally:
 
 - revenue envelopes (direction `revenue`) are stored positive;
 - expense envelopes (direction `expense`) are stored negative.
 
-This makes totals trivial: `SUM(amount) = net`, or
-`SUM(amount WHERE envelope is revenue) - SUM(amount WHERE envelope is expense) = balance`.
+This makes totals trivial: `sum(amount) = net`, or
+`sum(amount where envelope is revenue) - sum(amount where envelope is expense) = balance`.
+
+Amounts are **encrypted at rest** (`budget_envelopes.amount`, see
+[Encryption at rest](encryption.md)): totals are computed in the application
+from the decrypted amounts, never in SQL.
 
 The sign is derived from the envelope's direction — the client never sends a negative
 number; the server negates expense amounts on write.

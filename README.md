@@ -18,10 +18,13 @@ the filing cabinet.
   a direction (expense/revenue) and a color. Fully CRUD-able.
 - **Shared finances** — financial profiles shared with invited members, with
   per-resource owner/contributor/viewer permissions.
+- **Encryption at rest** — money amounts are stored encrypted with a key per
+  financial profile (AES-256-GCM), rotated monthly.
 
 Design docs live in [`docs/`](docs/): [budget](docs/budget.md),
-[ledger](docs/ledger.md), [envelopes](docs/envelope.md) and
-[shared finances](docs/shared-finances.md).
+[ledger](docs/ledger.md), [envelopes](docs/envelope.md),
+[shared finances](docs/shared-finances.md) and
+[encryption at rest](docs/encryption.md).
 
 ## Tech stack
 
@@ -73,8 +76,20 @@ npm run build            # production build
 
 ### Scheduled tasks
 
-Expired invites are pruned daily (`php artisan invites:prune`). In production,
-run the scheduler (`php artisan schedule:run` every minute via cron).
+Expired invites are pruned daily (`php artisan invites:prune`), amount
+encryption keys are rotated monthly (`php artisan amounts:rotate-keys --all`)
+and retired keys pruned daily (`php artisan amounts:prune-keys`). In
+production, run the scheduler (`php artisan schedule:run` every minute via
+cron).
+
+### Encryption at rest
+
+Money amounts are encrypted with per-profile keys wrapped by `APP_KEY` — see
+[docs/encryption.md](docs/encryption.md). **Back up `APP_KEY` separately from
+the database: without it, no amount can be read.** Rotate it with
+`APP_PREVIOUS_KEYS` and `php artisan amounts:rewrap-keys`, never with a bare
+`key:generate`; `php artisan amounts:verify` checks that every amount
+decrypts.
 
 ## Releases & deployment
 

@@ -11,9 +11,13 @@ npm run dev           # Vite dev server
 php artisan serve     # app at http://localhost:8000
 ```
 
-Design notes live in [`docs/`](docs): budgets, envelopes, ledgers and shared
-finances. Read the relevant one before touching its domain — the permission
-model in particular is stricter than it looks.
+Design notes live in [`docs/`](docs): budgets, envelopes, ledgers, shared
+finances and encryption at rest. Read the relevant one before touching its
+domain — the permission model in particular is stricter than it looks.
+
+Money amounts are encrypted at rest ([`docs/encryption.md`](docs/encryption.md)):
+never aggregate, sort, filter or write amount columns in SQL — go through the
+Eloquent models and compute in PHP.
 
 ## Code quality: PRs must be thoroughly tested
 

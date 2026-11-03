@@ -62,7 +62,9 @@ type Transaction = {
 
 Same as for budgets: user input is always a **positive integer**; the server
 negates amounts for envelopes with direction `expense`, so arithmetic works
-naturally in SQL. Revenues are stored positive.
+naturally. Revenues are stored positive. Transaction amounts and starting
+balances are **encrypted at rest** (see [Encryption at rest](encryption.md)):
+totals are computed in the application, never in SQL.
 
 ### Starting balance
 
@@ -85,7 +87,8 @@ month**: for a displayed month, "remaining allocated" is the envelope's
 allocated amount on that month's published budget minus the transactions
 recorded against that envelope within the displayed month. Months without
 a published budget (or envelopes without an allocation on it) report as
-unallocated ("remaining allocated" shows as `—`).
+unallocated ("remaining allocated" shows as `—`). Both sides are summed by
+the server from the decrypted amounts.
 
 - Deleting a budget does not affect transactions (data is independent).
 - **Envelopes referenced by transactions cannot be deleted.**
