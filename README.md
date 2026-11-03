@@ -109,7 +109,8 @@ Failing tests abort the release.
 - **Merges to `main`** run the full test suite (unit, static analysis and e2e)
   to catch regressions early — but never touch production.
 - **Rollback:** manually run the `deploy` workflow with `action: rollback`
-  (optionally naming a release ID; empty = the previous release). Production
+  (optionally naming a release ID — a directory name under `releases/`, such
+  as a tag; empty = the previous release). Production
   migrations are forward-only: a rollback only switches to a release with the
   same migrations, and a deploy failing during or after its migrations stays
   in maintenance mode until a fix is deployed — see

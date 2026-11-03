@@ -180,7 +180,9 @@ scripts compare releases with the migrations the database actually ran
 - `scripts/ci/deploy-production.sh` refuses a release that does not ship
   every migration the database ran, a deploy that cannot read them (except a
   first install), a release id that is not a single directory name
-  (`A-Za-z0-9._-`, not `.` or `..`; tags must follow it) and one that is, or
+  (`A-Za-z0-9._-`, not `.` or `..`; tags must follow it — checked before
+  connecting, and again on the host; every argument is quoted for the remote
+  shell, since ssh joins them into one command line) and one that is, or
   resolves to, the live or the previous release (it would be rebuilt in
   place before any check). The uploaded `.env` replaces `shared/.env` only
   once these checks passed; a refused deploy leaves it untouched.
