@@ -420,6 +420,15 @@ class AmountEncryptionTest extends TestCase
             'insertUsing' => fn () => Transaction::query()->insertUsing(['ledger_id', 'amount'], Transaction::query()->select('ledger_id', 'amount')),
             'ledger update' => fn () => Ledger::query()->whereKey($this->ledger->id)->update(['starting_balance' => 0]),
             'budget assignment update' => fn () => BudgetEnvelope::query()->update(['amount' => 0]),
+            'upper-case column' => fn () => Transaction::query()->update(['AMOUNT' => 5]),
+            'quoted column' => fn () => Transaction::query()->update(['"transactions"."amount"' => 5]),
+            'updateOrInsert' => fn () => Transaction::query()->updateOrInsert(['id' => $transaction->id], ['amount' => 5]),
+            'updateOrInsert callback' => fn () => Transaction::query()->updateOrInsert(['id' => $transaction->id], fn (bool $exists): array => ['amount' => 5]),
+            'updateOrInsert insert' => fn () => Transaction::query()->updateOrInsert($row + ['amount' => 5]),
+            'insertOrIgnoreReturning' => fn () => Transaction::query()->insertOrIgnoreReturning([$row + ['amount' => 5]]),
+            'updateFrom' => fn () => Transaction::query()->updateFrom(['amount' => 5]),
+            'context change' => fn () => Transaction::query()->whereKey($transaction->id)->update(['envelope_id' => $this->salary->id]),
+            'context change via updateOrInsert' => fn () => Transaction::query()->updateOrInsert(['id' => $transaction->id], ['event_at' => '2026-07-01 00:00:00']),
         ];
 
         foreach ($attempts as $name => $attempt) {
@@ -445,13 +454,37 @@ class AmountEncryptionTest extends TestCase
         $budget = $this->createBudget($this->profile);
 
         foreach ([$this->ledger, $budget] as $resource) {
-            try {
-                $resource->update(['profile_id' => $other->id]);
-                $this->fail($resource::class.' moved to another profile.');
-            } catch (LogicException) {
-                $this->assertSame($this->profile->id, $resource->fresh()?->profile_id);
+            $moves = [
+                'save' => fn () => $resource->update(['profile_id' => $other->id]),
+                'builder' => fn () => $resource->newQuery()->whereKey($resource->getKey())->update(['profile_id' => $other->id]),
+                'builder upsert' => fn () => $resource->newQuery()->upsert([['id' => $resource->getKey(), 'profile_id' => $other->id]], ['id']),
+            ];
+
+            foreach ($moves as $name => $move) {
+                try {
+                    $move();
+                    $this->fail($resource::class." moved to another profile ({$name}).");
+                } catch (LogicException) {
+                    $this->assertSame($this->profile->id, $resource->newQuery()->findOrFail($resource->getKey())->getAttribute('profile_id'));
+                }
             }
         }
+
+        // Other bulk writes are unaffected.
+        Budget::query()->whereKey($budget->id)->update(['currency' => 'EUR']);
+        $this->assertSame('EUR', $budget->fresh()?->currency);
+    }
+
+    public function test_a_time_change_within_the_same_day_keeps_the_context(): void
+    {
+        $transaction = $this->transaction($this->ledger, $this->rent, -40);
+        $raw = $this->rawAmount($transaction);
+
+        $transaction->event_at = now()->setDate(2026, 6, 15)->setTime(13, 30);
+        $transaction->save();
+
+        $this->assertSame($raw, $this->rawAmount($transaction));
+        $this->assertSame(-40, Transaction::query()->findOrFail($transaction->id)->amount);
     }
 
     public function test_cloned_budgets_get_fresh_ciphertexts(): void

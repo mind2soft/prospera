@@ -6,6 +6,7 @@ use App\Models\Concerns\EncryptsAmounts;
 use App\Models\Concerns\HasImmutableProfile;
 use App\Models\Concerns\HasProfilePermissions;
 use App\Models\Contracts\HasEncryptedAmounts;
+use App\Models\Contracts\HasImmutableColumns;
 use App\Security\Amounts\AmountContext;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
@@ -25,7 +26,7 @@ use Illuminate\Support\Facades\DB;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-class Ledger extends Model implements HasEncryptedAmounts
+class Ledger extends Model implements HasEncryptedAmounts, HasImmutableColumns
 {
     use EncryptsAmounts;
     use HasImmutableProfile;

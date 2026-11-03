@@ -14,4 +14,11 @@ interface HasEncryptedAmounts
      * @return list<string>
      */
     public static function encryptedAmountColumns(): array;
+
+    /**
+     * The attributes bound into the amounts' encryption context.
+     *
+     * @return list<string>
+     */
+    public static function amountContextAttributes(): array;
 }

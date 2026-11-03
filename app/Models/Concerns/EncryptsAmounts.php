@@ -2,7 +2,7 @@
 
 namespace App\Models\Concerns;
 
-use App\Models\Builders\EncryptedAmountsBuilder;
+use App\Models\Builders\GuardedBuilder;
 use App\Security\Amounts\AmountCipher;
 use App\Security\Amounts\AmountContext;
 use App\Security\Amounts\AmountDecryptionException;
@@ -26,23 +26,16 @@ use LogicException;
  * transaction's envelope) requires assigning the amount in the same save, so
  * a stale amount is never re-encrypted behind the caller's back.
  *
- * Bulk Eloquent writes go through EncryptedAmountsBuilder, which only lets
- * ciphertext reach these columns. DB::table()/toBase() writes bypass Eloquent
- * and must never touch them; nor may SQL aggregate, sort or filter on them.
+ * Bulk Eloquent writes go through GuardedBuilder, which only lets
+ * ciphertext reach these columns and refuses context changes that would not
+ * re-write them. DB::table()/toBase() writes bypass Eloquent and must never
+ * touch them; nor may SQL aggregate, sort or filter on them.
  */
 trait EncryptsAmounts
 {
     /**
-     * The attributes bound into the amounts' encryption context; changing
-     * one re-encrypts the amounts.
-     *
-     * @return list<string>
-     */
-    abstract public static function amountContextAttributes(): array;
-
-    /**
      * The encryption context of a column, from raw attribute values (a model's
-     * attributes or a database row). Shared with the encryption migration.
+     * attributes or a database row).
      *
      * @param  array<string, mixed>  $attributes
      */
@@ -69,8 +62,8 @@ trait EncryptsAmounts
     }
 
     /**
-     * Encrypt pending plaintext amounts (and re-encrypt stored ones whose
-     * context changed) right before Eloquent writes the row.
+     * Encrypt pending plaintext amounts right before Eloquent writes the row
+     * (and re-encrypt raw ciphertext set without the mutator).
      */
     public function encryptAmountsForPersistence(): void
     {
@@ -90,7 +83,7 @@ trait EncryptsAmounts
             }
 
             if ($this->exists && $raw === $this->getRawOriginal($column)) {
-                if ($this->amountContextIsDirty()) {
+                if ($this->amountContextChanged($column)) {
                     throw new LogicException(
                         "Changing {$this->getTable()} ".implode('/', static::amountContextAttributes())
                         ." re-binds the encrypted {$column}: assign {$column} in the same save."
@@ -131,11 +124,29 @@ trait EncryptsAmounts
 
     /**
      * @param  Builder  $query
-     * @return EncryptedAmountsBuilder<$this>
+     * @return GuardedBuilder<$this>
      */
     public function newEloquentBuilder($query)
     {
-        return (new EncryptedAmountsBuilder($query))->setModel($this);
+        return (new GuardedBuilder($query))->setModel($this);
+    }
+
+    /**
+     * The model's own update: encryptAmountsForPersistence() has checked
+     * context changes precisely (e.g. a time change within the same day
+     * keeps a transaction's context), so the builder's coarse check is
+     * relaxed for this query only.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<static>  $query
+     * @return bool
+     */
+    protected function performUpdate(\Illuminate\Database\Eloquent\Builder $query)
+    {
+        if ($query instanceof GuardedBuilder) {
+            $query->forModelSave();
+        }
+
+        return parent::performUpdate($query);
     }
 
     /**
@@ -171,7 +182,7 @@ trait EncryptsAmounts
         /** @var string $value */
         $useOriginalContext = $this->exists
             && $value === $this->getRawOriginal($column)
-            && $this->amountContextIsDirty();
+            && $this->amountContextChanged($column);
 
         return app(AmountKeyRing::class)->decrypt(
             $value,
@@ -194,9 +205,15 @@ trait EncryptsAmounts
         return static::amountContextFor($column, $attributes, $this->amountProfileId($attributes));
     }
 
-    private function amountContextIsDirty(): bool
+    /**
+     * Whether pending attribute changes alter the column's bound context (a
+     * transaction's time of day, for instance, does not).
+     */
+    private function amountContextChanged(string $column): bool
     {
-        return $this->isDirty(static::amountContextAttributes());
+        return $this->exists
+            && $this->isDirty(static::amountContextAttributes())
+            && $this->currentAmountContext($column)->aad(1) !== $this->originalAmountContext($column)->aad(1);
     }
 
     private static function plainAmount(string $column, mixed $value): int

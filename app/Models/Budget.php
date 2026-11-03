@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Builders\GuardedBuilder;
 use App\Models\Concerns\HasImmutableProfile;
 use App\Models\Concerns\HasProfilePermissions;
+use App\Models\Contracts\HasImmutableColumns;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 
 /**
@@ -19,7 +22,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-class Budget extends Model
+class Budget extends Model implements HasImmutableColumns
 {
     use HasImmutableProfile;
     use HasProfilePermissions;
@@ -35,6 +38,17 @@ class Budget extends Model
     protected $casts = [
         'published_at' => 'datetime',
     ];
+
+    /**
+     * Guards bulk writes of profile_id (docs/encryption.md).
+     *
+     * @param  Builder  $query
+     * @return GuardedBuilder<$this>
+     */
+    public function newEloquentBuilder($query)
+    {
+        return (new GuardedBuilder($query))->setModel($this);
+    }
 
     /**
      * The financial profile this budget belongs to.
