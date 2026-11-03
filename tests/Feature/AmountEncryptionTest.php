@@ -426,6 +426,8 @@ class AmountEncryptionTest extends TestCase
             'updateOrInsert callback' => fn () => Transaction::query()->updateOrInsert(['id' => $transaction->id], fn (bool $exists): array => ['amount' => 5]),
             'updateOrInsert insert' => fn () => Transaction::query()->updateOrInsert($row + ['amount' => 5]),
             'insertOrIgnoreReturning' => fn () => Transaction::query()->insertOrIgnoreReturning([$row + ['amount' => 5]]),
+            'mismatched row columns' => fn () => Transaction::query()->insert([$row + ['amount' => $raw], ['a' => 5] + $row]),
+            'mismatched insertOrIgnore columns' => fn () => Transaction::query()->insertOrIgnore([$row + ['amount' => $raw], $row + ['user_id' => 5]]),
             'updateFrom' => fn () => Transaction::query()->updateFrom(['amount' => 5]),
             'context change' => fn () => Transaction::query()->whereKey($transaction->id)->update(['envelope_id' => $this->salary->id]),
             'context change via updateOrInsert' => fn () => Transaction::query()->updateOrInsert(['id' => $transaction->id], ['event_at' => '2026-07-01 00:00:00']),

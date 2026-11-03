@@ -324,12 +324,27 @@ class GuardedBuilder extends Builder
     }
 
     /**
+     * The query builder takes the column list from the first row only, so
+     * every row must have the same columns for the per-row check to hold.
+     *
      * @param  array<array-key, mixed>  $values  one row or a list of rows
      */
     private function assertInsertableRows(array $values, string $operation): void
     {
-        foreach (is_array(reset($values)) ? $values : [$values] as $row) {
-            $this->assertInsertable((array) $row, $operation);
+        $rows = is_array(reset($values)) ? $values : [$values];
+        $columns = null;
+
+        foreach ($rows as $row) {
+            $row = (array) $row;
+            $keys = array_keys($row);
+            sort($keys);
+
+            if ($columns !== null && $keys !== $columns) {
+                throw new LogicException("{$operation}: every row must have the same columns (docs/encryption.md).");
+            }
+
+            $columns = $keys;
+            $this->assertInsertable($row, $operation);
         }
     }
 
