@@ -45,11 +45,12 @@ HEALTHCHECK_URL=${2:-}
 ROLLBACK_RELEASE=${3:-}
 SWITCH_WAIT=${4:-}
 
-# The deploy root: an absolute path of plain names (no spaces, no . or ..).
+# The deploy root: a canonical absolute path of plain names (no spaces,
+# no . or .., no empty or trailing /), so release paths compare as strings.
 _app_path_ok=0
 
 case "$APP_ROOT" in
-    *[!A-Za-z0-9._/-]*|*/./*|*/../*|*/.|*/..) ;;
+    *[!A-Za-z0-9._/-]*|*//*|*/|*/./*|*/../*|*/.|*/..) ;;
     /*) _app_path_ok=1 ;;
 esac
 

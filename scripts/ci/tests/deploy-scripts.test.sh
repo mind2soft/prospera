@@ -109,7 +109,8 @@ release() {
 # migration a; the package to deploy ships a + b.
 setup() {
     rm -rf "$APP" "$WORK/pkg" "$WORK/log" "$WORK/no-table" "$WORK/ssh-log" "$WORK/PWNED"
-    DEPLOY_ID=new ROLLBACK_ID='' WAIT=''
+    DEPLOY_ID=new ROLLBACK_ID='' WAIT='' DEPLOY_ROOT=$APP
+    rm -f "$WORK/app-alias"
     mkdir -p "$APP/shared/storage"
     release "$APP/releases/old" '' a
     ln -s "$APP/shared/storage" "$APP/releases/old/storage"
@@ -170,7 +171,7 @@ deploy() {
     package
     _rc=0
     env WORK="$WORK" PATH="$WORK/bin:$PATH" "$@" \
-        $SHELL_UNDER_TEST "$WORK/deploy-remote.sh" "$APP" "$DEPLOY_ID" "$WORK/release.tgz" "$WORK/env" 3 "http://localhost/up" "$WAIT" \
+        $SHELL_UNDER_TEST "$WORK/deploy-remote.sh" "$DEPLOY_ROOT" "$DEPLOY_ID" "$WORK/release.tgz" "$WORK/env" 3 "http://localhost/up" "$WAIT" \
         > "$WORK/out" 2>&1 || _rc=$?
     printf 'APP_KEY=x\n' > "$WORK/env"
     echo "$_rc"
@@ -512,6 +513,37 @@ rc=$(deploy)
 expect 'deploy: pruning keeps the newest releases, the current and the previous' \
     "$rc $(ls "$APP/releases" | tr '\n' ' ')$(ls "$WORK/keep")" '0 new old r3 r4 file'
 
+# The live release's link was written with another spelling of the path
+# (e.g. by an earlier deploy): it is still kept, as the previous release.
+setup
+rm "$APP/current"
+ln -s "$WORK//app/releases/./old" "$APP/current"
+touch -t 201901010000 "$APP/releases/old"
+_y=2020
+for _r in r1 r2 r3 r4; do
+    release "$APP/releases/$_r" '' a
+    touch -t "${_y}01010000" "$APP/releases/$_r"
+    _y=$((_y + 1))
+done
+rc=$(deploy)
+expect 'deploy: pruning compares releases resolved, whatever the link spelling' \
+    "$rc $(ls "$APP/releases" | tr '\n' ' ')$(previous)" '0 new old r3 r4 old'
+
+# The deploy root is reached through a symlink (e.g. /home -> /usr/home).
+setup
+ln -s "$APP" "$WORK/app-alias"
+DEPLOY_ROOT=$WORK/app-alias
+touch -t 201901010000 "$APP/releases/old"
+_y=2020
+for _r in r1 r2 r3 r4; do
+    release "$APP/releases/$_r" '' a
+    touch -t "${_y}01010000" "$APP/releases/$_r"
+    _y=$((_y + 1))
+done
+rc=$(deploy)
+expect 'deploy: pruning keeps the previous release through a symlinked deploy root' \
+    "$rc $(ls "$APP/releases" | tr '\n' ' ')$(previous)" '0 new old r3 r4 old'
+
 # Legacy layout: the app lives directly in APP_ROOT.
 setup_legacy() {
     setup
@@ -754,7 +786,7 @@ for _payload in ';touch${IFS}'"$WORK/PWNED"';' "';touch \${IFS}$WORK/PWNED;'"; d
     expect "rollback wrapper: arguments are never parsed by the remote shell [$_payload]" "$rc $(live) $(pwned)" '1 new safe'
 done
 
-for _path in "$WORK/app with space" app "$WORK/x/../app" "$WORK/./app" "$APP/.."; do
+for _path in "$WORK/app with space" app "$WORK/x/../app" "$WORK/./app" "$APP/.." "$APP/" "/$APP" "$WORK//app" /; do
     setup_rollback
     release "$APP/releases/old" '' a b
     rc=$(rollback_wrapper SSH_APP_PATH="$_path")
@@ -765,7 +797,7 @@ done
 setup_rollback
 release "$APP/releases/old" '' a b
 _rc=0
-for _arg in "$WORK/app with space|0" "app|0" "$APP|10000" "$APP|x"; do
+for _arg in "$WORK/app with space|0" "app|0" "$APP/|0" "$WORK//app|0" "$APP|10000" "$APP|x"; do
     _rc=0
     (cd "$WORK" && env WORK="$WORK" PATH="$WORK/bin:$PATH" $SHELL_UNDER_TEST "$WORK/rollback-remote.sh" "${_arg%|*}" "" "" "${_arg#*|}") \
         > "$WORK/out" 2>&1 || _rc=$?
@@ -787,7 +819,7 @@ for _id in 'v1;touch${IFS}'"$WORK/PWNED"';' ../releases/old . ..; do
         "$rc $(live) $(pwned) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" '1 old safe no-ssh'
 done
 
-for _path in "$WORK/app with space" app "$WORK/x/../app"; do
+for _path in "$WORK/app with space" app "$WORK/x/../app" "$APP/" "$WORK//app"; do
     setup
     rc=$(deploy_wrapper RELEASE_ID=e2e-$$ SSH_APP_PATH="$_path")
     expect "deploy wrapper: an invalid app path [$_path] is refused before scp and ssh" \
@@ -801,7 +833,7 @@ for _keep in x '' -1 '3 4' 99999 99999999999999999999; do
         "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" "$([ -z "$_keep" ] && echo "0 e2e-$$ ssh" || echo '1 old no-ssh')"
 done
 
-for _arg in "$WORK/app with space|3|0" "$APP|x|0" "$APP|99999999999999999999|0" "$APP|3|10000" "app|3|0"; do
+for _arg in "$WORK/app with space|3|0" "$APP/|3|0" "$WORK//app|3|0" "$APP|x|0" "$APP|99999999999999999999|0" "$APP|3|10000" "app|3|0"; do
     setup
     package
     cp "$WORK/release.tgz" "$WORK/upload.tgz"

@@ -262,8 +262,12 @@ run_healthcheck() {
     return 1
 }
 
+# Keeps the KEEP_RELEASES newest releases, and the current and previous ones
+# (compared resolved, whatever spelling their links were written with).
 prune_old_releases() {
     count=0
+    _live=$(cd "$CURRENT_LINK" 2>/dev/null && pwd -P || true)
+    _prev=$(cd "$PREVIOUS_LINK" 2>/dev/null && pwd -P || true)
 
     (ls -1dt "$RELEASES_DIR"/* 2>/dev/null || true) | while IFS= read -r path; do
         count=$((count + 1))
@@ -273,11 +277,9 @@ prune_old_releases() {
             continue
         fi
 
-        if [ -L "$CURRENT_LINK" ] && [ "$path" = "$(readlink "$CURRENT_LINK")" ]; then
-            continue
-        fi
+        _real=$(cd "$path" 2>/dev/null && pwd -P || true)
 
-        if [ -L "$PREVIOUS_LINK" ] && [ "$path" = "$(readlink "$PREVIOUS_LINK")" ]; then
+        if [ -n "$_real" ] && { [ "$_real" = "$_live" ] || [ "$_real" = "$_prev" ]; }; then
             continue
         fi
 
@@ -334,11 +336,12 @@ migrate_legacy_layout() {
 trap on_exit EXIT
 trap 'exit 1' HUP INT TERM
 
-# The deploy root: an absolute path of plain names (no spaces, no . or ..).
+# The deploy root: a canonical absolute path of plain names (no spaces,
+# no . or .., no empty or trailing /), so release paths compare as strings.
 _app_path_ok=0
 
 case "$APP_ROOT" in
-    *[!A-Za-z0-9._/-]*|*/./*|*/../*|*/.|*/..) ;;
+    *[!A-Za-z0-9._/-]*|*//*|*/|*/./*|*/../*|*/.|*/..) ;;
     /*) _app_path_ok=1 ;;
 esac
 

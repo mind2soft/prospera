@@ -74,7 +74,8 @@ ssh_remote_script() {
     ssh_remote "$_command"
 }
 
-# The deploy root: an absolute path of plain names (no spaces, no . or ..).
+# The deploy root: a canonical absolute path of plain names (no spaces,
+# no . or .., no empty or trailing /), so release paths compare as strings.
 valid_app_path() {
     case "$1" in
         /*) ;;
@@ -82,7 +83,7 @@ valid_app_path() {
     esac
 
     case "$1" in
-        *[!A-Za-z0-9._/-]*|*/./*|*/../*|*/.|*/..) return 1 ;;
+        *[!A-Za-z0-9._/-]*|*//*|*/|*/./*|*/../*|*/.|*/..) return 1 ;;
     esac
 }
 
