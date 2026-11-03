@@ -4,8 +4,11 @@ namespace App\Providers;
 
 use App\Models\FinancialProfileInvite;
 use App\Models\User;
+use App\Security\Amounts\AmountCipher;
+use App\Security\Amounts\AmountKeyRing;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Verified;
+use Illuminate\Database\Events\TransactionRolledBack;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -19,7 +22,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(AmountCipher::class);
+        // Scoped: decrypted amount keys live for one request/job only.
+        $this->app->scoped(AmountKeyRing::class);
     }
 
     /**
@@ -40,6 +45,14 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(Verified::class, function (Verified $event): void {
             if ($event->user instanceof User) {
                 FinancialProfileInvite::completePendingFor($event->user);
+            }
+        });
+
+        // Keys or ids memoized inside a rolled-back transaction may not exist
+        // any more (and ids can be reused): drop the whole memo.
+        Event::listen(TransactionRolledBack::class, function (): void {
+            if ($this->app->resolved(AmountKeyRing::class)) {
+                $this->app->make(AmountKeyRing::class)->forget();
             }
         });
     }

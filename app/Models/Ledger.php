@@ -2,7 +2,10 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\EncryptsAmounts;
 use App\Models\Concerns\HasProfilePermissions;
+use App\Security\Amounts\AmountContext;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -15,13 +18,14 @@ use Illuminate\Support\Facades\DB;
  * @property string $name
  * @property Carbon $start_date
  * @property Carbon $end_date
- * @property int $starting_balance
+ * @property int $starting_balance encrypted at rest (docs/encryption.md)
  * @property Carbon|null $closed_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
 class Ledger extends Model
 {
+    use EncryptsAmounts;
     use HasProfilePermissions;
 
     protected $fillable = ['profile_id', 'name', 'start_date', 'end_date', 'starting_balance', 'closed_at'];
@@ -31,6 +35,34 @@ class Ledger extends Model
         'end_date' => 'date',
         'closed_at' => 'datetime',
     ];
+
+    /**
+     * @return Attribute<int, mixed>
+     */
+    protected function startingBalance(): Attribute
+    {
+        return $this->encryptedAmount('starting_balance');
+    }
+
+    public static function encryptedAmountColumns(): array
+    {
+        return ['starting_balance'];
+    }
+
+    public static function amountContextAttributes(): array
+    {
+        return ['profile_id'];
+    }
+
+    public static function amountContextFor(string $column, array $attributes, int $profileId): AmountContext
+    {
+        return new AmountContext('ledgers', $column, $profileId);
+    }
+
+    protected function amountProfileId(array $attributes): int
+    {
+        return AmountContext::id($attributes['profile_id'] ?? null, 'profile_id');
+    }
 
     /**
      * The financial profile this ledger belongs to.

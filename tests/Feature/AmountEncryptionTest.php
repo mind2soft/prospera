@@ -1,0 +1,550 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Budget;
+use App\Models\BudgetEnvelope;
+use App\Models\BudgetPermission;
+use App\Models\Envelope;
+use App\Models\FinancialProfile;
+use App\Models\FinancialProfileKey;
+use App\Models\Ledger;
+use App\Models\Transaction;
+use App\Models\User;
+use App\Security\Amounts\AmountCipher;
+use App\Security\Amounts\AmountDecryptionException;
+use App\Security\Amounts\AmountKeyRing;
+use App\Security\Amounts\DataKey;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
+use LogicException;
+use RuntimeException;
+use Tests\TestCase;
+
+/**
+ * Encryption at rest of money amounts (issue #4, docs/encryption.md).
+ */
+class AmountEncryptionTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private User $user;
+
+    private FinancialProfile $profile;
+
+    private Ledger $ledger;
+
+    private Envelope $rent;
+
+    private Envelope $salary;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->user = User::factory()->create();
+        $this->profile = FinancialProfile::createOwnedBy($this->user, 'Family');
+        $this->ledger = $this->createLedger($this->profile);
+        $this->rent = $this->user->envelopes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e']);
+        $this->salary = $this->user->envelopes()->create(['name' => 'Salary', 'type' => 'revenue', 'color' => '#10b981']);
+    }
+
+    private function createLedger(FinancialProfile $profile, int $startingBalance = 5000): Ledger
+    {
+        $ledger = Ledger::create([
+            'profile_id' => $profile->id,
+            'name' => '2026',
+            'start_date' => '2026-01-01 00:00:00',
+            'end_date' => '2026-12-31 00:00:00',
+            'starting_balance' => $startingBalance,
+        ]);
+
+        $ledger->permissions()->create(['user_id' => $this->user->id, 'permission' => 'owner']);
+
+        return $ledger;
+    }
+
+    private function createBudget(FinancialProfile $profile, bool $published = true): Budget
+    {
+        $budget = Budget::create([
+            'profile_id' => $profile->id,
+            'currency' => 'CAD',
+            'effective_year' => 2026,
+            'effective_month' => 6,
+            'published_at' => $published ? now() : null,
+        ]);
+
+        $budget->permissions()->create(['user_id' => $this->user->id, 'permission' => BudgetPermission::PERMISSION_OWNER]);
+
+        return $budget;
+    }
+
+    private function transaction(Ledger $ledger, Envelope $envelope, int $amount, string $date = '2026-06-15'): Transaction
+    {
+        return $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => $amount,
+            'event_at' => $date.' 00:00:00',
+        ]);
+    }
+
+    private function rawAmount(Model $model, string $column = 'amount'): string
+    {
+        return (string) DB::table($model->getTable())->where('id', $model->getKey())->value($column);
+    }
+
+    private function setRawAmount(Model $model, string $payload, string $column = 'amount'): void
+    {
+        DB::table($model->getTable())->where('id', $model->getKey())->update([$column => $payload]);
+    }
+
+    /**
+     * A fresh app key, as Laravel's key:generate writes it.
+     */
+    private function newAppKey(): string
+    {
+        return 'base64:'.base64_encode(random_bytes(32));
+    }
+
+    /**
+     * @param  list<string>  $previousKeys
+     */
+    private function useAppKey(string $key, array $previousKeys = []): void
+    {
+        config(['app.key' => $key, 'app.previous_keys' => $previousKeys]);
+        $this->app->forgetInstance('encrypter');
+        Crypt::clearResolvedInstance('encrypter');
+        app(AmountKeyRing::class)->forget();
+    }
+
+    // ------------------------------------------------------------------
+    // Keys
+    // ------------------------------------------------------------------
+
+    public function test_every_new_profile_gets_one_wrapped_key(): void
+    {
+        $owned = FinancialProfile::createOwnedBy($this->user, 'Other');
+        $default = User::factory()->withDefaultProfile()->create()->profiles()->firstOrFail();
+
+        foreach ([$owned, $default] as $profile) {
+            $keys = FinancialProfileKey::query()->where('profile_id', $profile->id)->get();
+
+            $this->assertCount(1, $keys);
+            $this->assertSame(1, $keys[0]->version);
+            $this->assertNull($keys[0]->retired_at);
+            $this->assertArrayNotHasKey('wrapped_key', $keys[0]->toArray());
+        }
+    }
+
+    public function test_wrapped_keys_are_bound_to_their_profile_and_version(): void
+    {
+        $key = DataKey::generate($this->profile->id, 1);
+        $wrapped = AmountKeyRing::wrap($key);
+
+        $this->assertSame($key->bytes(), AmountKeyRing::unwrap($this->profile->id, 1, $wrapped)->bytes());
+        $this->assertStringNotContainsString(base64_encode($key->bytes()), $wrapped);
+
+        foreach ([[$this->profile->id + 1, 1], [$this->profile->id, 2]] as [$profileId, $version]) {
+            try {
+                AmountKeyRing::unwrap($profileId, $version, $wrapped);
+                $this->fail('A wrapped key unwrapped for another profile/version.');
+            } catch (AmountDecryptionException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+
+        $this->expectException(AmountDecryptionException::class);
+        AmountKeyRing::unwrap($this->profile->id, 1, substr($wrapped, 0, -4).'AAAA');
+    }
+
+    public function test_keys_wrapped_with_a_previous_app_key_need_app_previous_keys(): void
+    {
+        $this->transaction($this->ledger, $this->rent, -1234);
+        $oldKey = (string) config('app.key');
+
+        $this->useAppKey($this->newAppKey(), [$oldKey]);
+        $this->assertSame(-1234, Transaction::query()->sole()->amount);
+
+        $this->useAppKey((string) config('app.key'));
+        $this->expectException(AmountDecryptionException::class);
+        Transaction::query()->sole()->amount;
+    }
+
+    public function test_the_active_key_is_the_highest_non_retired_version(): void
+    {
+        $ring = app(AmountKeyRing::class);
+        $ring->createKey($this->profile->id);
+        $ring->createKey($this->profile->id);
+        FinancialProfileKey::query()->where('profile_id', $this->profile->id)->where('version', 3)->update(['retired_at' => now()]);
+        $ring->forget();
+
+        $this->assertSame(2, $ring->activeKey($this->profile->id)->version);
+        $this->assertSame(3, $ring->key($this->profile->id, 3)->version);
+
+        $this->expectException(AmountDecryptionException::class);
+        $ring->key($this->profile->id, 4);
+    }
+
+    public function test_a_profile_without_an_active_key_cannot_store_amounts(): void
+    {
+        FinancialProfileKey::query()->where('profile_id', $this->profile->id)->update(['retired_at' => now()]);
+        app(AmountKeyRing::class)->forget();
+
+        $this->expectException(RuntimeException::class);
+        $this->transaction($this->ledger, $this->rent, -10);
+    }
+
+    public function test_keys_are_memoized_per_request(): void
+    {
+        $ring = app(AmountKeyRing::class);
+        $ring->forget();
+        $ring->activeKey($this->profile->id);
+
+        DB::enableQueryLog();
+        $ring->activeKey($this->profile->id);
+        $ring->key($this->profile->id, 1);
+        $this->assertSame([], DB::getQueryLog());
+    }
+
+    public function test_a_rolled_back_transaction_drops_the_memoized_keys(): void
+    {
+        $ring = app(AmountKeyRing::class);
+        $ring->activeKey($this->profile->id);
+
+        try {
+            DB::transaction(function (): void {
+                throw new RuntimeException('rollback');
+            });
+        } catch (RuntimeException) {
+        }
+
+        DB::enableQueryLog();
+        $ring->activeKey($this->profile->id);
+        $this->assertNotEmpty(DB::getQueryLog());
+    }
+
+    public function test_deleting_a_profile_deletes_its_keys(): void
+    {
+        $solo = FinancialProfile::createOwnedBy($this->user, 'Solo');
+        $this->createLedger($solo);
+
+        $solo->deleteWithResources();
+
+        $this->assertDatabaseMissing('financial_profile_keys', ['profile_id' => $solo->id]);
+    }
+
+    // ------------------------------------------------------------------
+    // Storage
+    // ------------------------------------------------------------------
+
+    public function test_recorded_transactions_are_stored_encrypted(): void
+    {
+        $response = $this->actingAs($this->user)->postJson("/api/ledgers/{$this->ledger->id}/transactions", [
+            'envelope_id' => $this->rent->id,
+            'amount' => 4242,
+            'event_at' => '2026-06-15',
+        ])->assertCreated();
+
+        $this->assertSame(-4242, $response->json('transaction.amount'));
+
+        $transaction = Transaction::query()->sole();
+        $this->assertEncryptedAmount(Transaction::class, ['id' => $transaction->id], 'amount', -4242);
+        $this->assertStringNotContainsString('4242', $this->rawAmount($transaction));
+    }
+
+    public function test_budget_assignments_are_stored_encrypted(): void
+    {
+        $budget = $this->createBudget($this->profile, published: false);
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $this->rent->id, 'type' => 'fixed', 'amount' => 1300,
+        ])->assertCreated();
+        $this->assertEncryptedAmount(BudgetEnvelope::class, ['budget_id' => $budget->id], 'amount', -1300);
+
+        $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$this->rent->id}", [
+            'type' => 'variable', 'amount' => 250,
+        ])->assertOk()->assertJsonPath('envelope.amount', -250);
+        $this->assertEncryptedAmount(BudgetEnvelope::class, ['budget_id' => $budget->id], 'amount', -250);
+    }
+
+    public function test_ledger_starting_balances_are_stored_encrypted(): void
+    {
+        $this->actingAs($this->user)->postJson('/api/ledgers', [
+            'profile_id' => $this->profile->id,
+            'name' => 'Debt',
+            'start_date' => '2026-01-01 00:00:00',
+            'end_date' => '2026-12-31 00:00:00',
+            'starting_balance' => 777,
+            'starting_balance_type' => 'debt',
+        ])->assertCreated()->assertJsonPath('ledger.starting_balance', -777);
+
+        $this->assertEncryptedAmount(Ledger::class, ['name' => 'Debt'], 'starting_balance', -777);
+    }
+
+    public function test_equal_amounts_produce_different_ciphertexts(): void
+    {
+        $first = $this->transaction($this->ledger, $this->rent, -100);
+        $second = $this->transaction($this->ledger, $this->rent, -100);
+
+        $this->assertNotSame($this->rawAmount($first), $this->rawAmount($second));
+    }
+
+    public function test_amounts_are_encrypted_even_without_model_events(): void
+    {
+        $quiet = new Transaction([
+            'ledger_id' => $this->ledger->id,
+            'user_id' => $this->user->id,
+            'envelope_id' => $this->rent->id,
+            'amount' => -55,
+            'event_at' => '2026-06-15 00:00:00',
+        ]);
+        $quiet->saveQuietly();
+
+        Model::withoutEvents(fn () => $this->transaction($this->ledger, $this->salary, 66));
+
+        $this->assertEncryptedAmount(Transaction::class, ['id' => $quiet->id], 'amount', -55);
+        $this->assertEncryptedAmount(Transaction::class, ['envelope_id' => $this->salary->id], 'amount', 66);
+    }
+
+    public function test_updating_other_columns_leaves_the_ciphertext_untouched(): void
+    {
+        $raw = $this->rawAmount($this->ledger, 'starting_balance');
+
+        $this->ledger->update(['closed_at' => now()]);
+
+        $this->assertSame($raw, $this->rawAmount($this->ledger, 'starting_balance'));
+        $this->assertSame(5000, $this->ledger->fresh()?->starting_balance);
+    }
+
+    public function test_changing_the_context_re_encrypts_the_amount(): void
+    {
+        $transaction = $this->transaction($this->ledger, $this->rent, -321);
+        $raw = $this->rawAmount($transaction);
+
+        $transaction = Transaction::query()->findOrFail($transaction->id);
+        $transaction->event_at = now()->setDate(2026, 7, 1)->startOfDay();
+        $transaction->envelope_id = $this->salary->id;
+        $this->assertSame(-321, $transaction->amount); // still readable before saving
+        $transaction->save();
+
+        $this->assertNotSame($raw, $this->rawAmount($transaction));
+        $this->assertEncryptedAmount(Transaction::class, ['id' => $transaction->id], 'amount', -321);
+    }
+
+    public function test_assigning_a_ciphertext_or_a_non_integer_is_rejected(): void
+    {
+        $transaction = $this->transaction($this->ledger, $this->rent, -1);
+
+        foreach ([$this->rawAmount($transaction), '1.5', '', null, '1e3'] as $value) {
+            try {
+                $transaction->amount = $value;
+                $this->fail('A non-integer amount was accepted.');
+            } catch (InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+
+        $transaction->amount = '-12';
+        $this->assertSame(-12, $transaction->amount);
+    }
+
+    public function test_saving_without_an_amount_fails(): void
+    {
+        $this->expectException(LogicException::class);
+
+        $this->ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $this->rent->id,
+            'event_at' => '2026-06-15 00:00:00',
+        ]);
+    }
+
+    public function test_a_ciphertext_copied_into_another_row_is_rejected_on_save(): void
+    {
+        $budget = $this->createBudget($this->profile);
+        $other = $this->createBudget($this->profile, published: false);
+        $assignment = $budget->envelopes()->create(['envelope_id' => $this->rent->id, 'amount' => -10, 'type' => 'fixed']);
+
+        $copy = $assignment->replicate();
+        $copy->budget_id = $other->id;
+
+        $this->expectException(AmountDecryptionException::class);
+        $copy->save();
+    }
+
+    public function test_cloned_budgets_get_fresh_ciphertexts(): void
+    {
+        $budget = $this->createBudget($this->profile);
+        $source = $budget->envelopes()->create(['envelope_id' => $this->rent->id, 'amount' => -1300, 'type' => 'fixed']);
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/clone")->assertCreated();
+
+        $draft = Budget::query()->whereNull('published_at')->sole();
+        $copy = BudgetEnvelope::query()->where('budget_id', $draft->id)->sole();
+
+        $this->assertSame(-1300, $copy->amount);
+        $this->assertNotSame($this->rawAmount($source), $this->rawAmount($copy));
+    }
+
+    // ------------------------------------------------------------------
+    // Integrity: tampering and swapping fail loudly
+    // ------------------------------------------------------------------
+
+    public function test_a_tampered_ciphertext_fails_instead_of_reading_as_zero(): void
+    {
+        $transaction = $this->transaction($this->ledger, $this->rent, -10);
+        $raw = $this->rawAmount($transaction);
+        $last = $raw[strlen($raw) - 1];
+        $this->setRawAmount($transaction, substr($raw, 0, -1).($last === 'A' ? 'B' : 'A'));
+
+        $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$this->ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30")
+            ->assertServerError();
+    }
+
+    public function test_legacy_plaintext_amounts_fail(): void
+    {
+        $transaction = $this->transaction($this->ledger, $this->rent, -10);
+        $this->setRawAmount($transaction, '-10');
+
+        $this->expectException(AmountDecryptionException::class);
+        Transaction::query()->findOrFail($transaction->id)->amount;
+    }
+
+    public function test_swapping_ciphertexts_between_rows_is_detected(): void
+    {
+        $rent = $this->transaction($this->ledger, $this->rent, -10);
+        $salary = $this->transaction($this->ledger, $this->salary, 99999);
+
+        $rentRaw = $this->rawAmount($rent);
+        $this->setRawAmount($rent, $this->rawAmount($salary));
+        $this->setRawAmount($salary, $rentRaw);
+
+        $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$this->ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30")
+            ->assertServerError();
+    }
+
+    public function test_swapping_ciphertexts_between_profiles_is_detected(): void
+    {
+        $theirs = $this->createLedger(FinancialProfile::createOwnedBy($this->user, 'Other'));
+        $mine = $this->transaction($this->ledger, $this->rent, -10);
+        $other = $this->transaction($theirs, $this->rent, -99999);
+
+        $this->setRawAmount($mine, $this->rawAmount($other));
+
+        $this->expectException(AmountDecryptionException::class);
+        Transaction::query()->findOrFail($mine->id)->amount;
+    }
+
+    public function test_swapping_ciphertexts_between_tables_is_detected(): void
+    {
+        $budget = $this->createBudget($this->profile);
+        $assignment = $budget->envelopes()->create(['envelope_id' => $this->rent->id, 'amount' => -10, 'type' => 'fixed']);
+        $transaction = $this->transaction($this->ledger, $this->rent, -99999);
+
+        $this->setRawAmount($transaction, $this->rawAmount($assignment));
+        $this->setRawAmount($this->ledger, $this->rawAmount($assignment), 'starting_balance');
+
+        foreach ([fn () => Transaction::query()->findOrFail($transaction->id)->amount, fn () => Ledger::query()->findOrFail($this->ledger->id)->starting_balance] as $read) {
+            try {
+                $read();
+                $this->fail('A ciphertext from another table decrypted.');
+            } catch (AmountDecryptionException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Aggregates computed in PHP
+    // ------------------------------------------------------------------
+
+    public function test_envelope_totals_span_profiles_and_honour_date_filters(): void
+    {
+        $otherLedger = $this->createLedger(FinancialProfile::createOwnedBy($this->user, 'Other'));
+        $this->transaction($this->ledger, $this->rent, -100, '2026-06-01');
+        $this->transaction($this->ledger, $this->rent, -200, '2026-06-20');
+        $this->transaction($otherLedger, $this->rent, -400, '2026-07-05');
+        $this->transaction($this->ledger, $this->salary, 5000, '2026-06-02');
+
+        $this->actingAs($this->user)->getJson("/api/envelopes/{$this->rent->id}/totals")
+            ->assertOk()
+            ->assertJsonPath('totals.total', -700)
+            ->assertJsonPath('totals.count', 3);
+
+        $this->actingAs($this->user)->getJson("/api/envelopes/{$this->rent->id}/totals?from_date=2026-06-10&to_date=2026-07-05")
+            ->assertOk()
+            ->assertJsonPath('totals.total', -600)
+            ->assertJsonPath('totals.count', 2);
+
+        $this->actingAs($this->user)->getJson("/api/envelopes/{$this->rent->id}/totals?from_date=2027-01-01")
+            ->assertOk()
+            ->assertJsonPath('totals.total', 0)
+            ->assertJsonPath('totals.count', 0);
+    }
+
+    public function test_ledger_transactions_report_remaining_allocations(): void
+    {
+        $budget = $this->createBudget($this->profile);
+        $budget->envelopes()->create(['envelope_id' => $this->rent->id, 'amount' => -1000, 'type' => 'fixed']);
+        $this->transaction($this->ledger, $this->rent, -100, '2026-06-03');
+        $this->transaction($this->ledger, $this->rent, -250, '2026-06-17');
+        $this->transaction($this->ledger, $this->rent, -999, '2026-07-01'); // outside the range
+        $this->transaction($this->ledger, $this->salary, 3000, '2026-06-05'); // unallocated
+
+        $rows = collect($this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$this->ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30")
+            ->assertOk()
+            ->json('transactions'));
+
+        $this->assertCount(3, $rows);
+        $this->assertSame([-650, -650], $rows->where('envelope_id', $this->rent->id)->pluck('remaining_allocated')->all());
+        $this->assertNull($rows->firstWhere('envelope_id', $this->salary->id)['remaining_allocated']);
+        $this->assertSame([-100, 3000, -250], $rows->pluck('amount')->all());
+    }
+
+    public function test_ledger_transaction_queries_do_not_grow_with_the_row_count(): void
+    {
+        $count = function (): int {
+            app(AmountKeyRing::class)->forget();
+            DB::flushQueryLog();
+            DB::enableQueryLog();
+
+            $this->actingAs($this->user)
+                ->getJson("/api/ledgers/{$this->ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30")
+                ->assertOk();
+
+            $queries = count(DB::getQueryLog());
+            DB::disableQueryLog();
+
+            return $queries;
+        };
+
+        $this->transaction($this->ledger, $this->rent, -1);
+        $few = $count();
+
+        for ($i = 0; $i < 20; $i++) {
+            $this->transaction($this->ledger, $this->rent, -$i - 2);
+        }
+
+        $this->assertSame($few, $count());
+    }
+
+    public function test_raw_amount_columns_never_hold_plaintext(): void
+    {
+        $budget = $this->createBudget($this->profile);
+        $budget->envelopes()->create(['envelope_id' => $this->rent->id, 'amount' => -10, 'type' => 'fixed']);
+        $this->transaction($this->ledger, $this->rent, -20);
+
+        foreach ([['transactions', 'amount'], ['budget_envelopes', 'amount'], ['ledgers', 'starting_balance']] as [$table, $column]) {
+            foreach (DB::table($table)->pluck($column) as $raw) {
+                $this->assertTrue(AmountCipher::looksEncrypted($raw), "{$table}.{$column} holds a non-ciphertext value.");
+            }
+        }
+    }
+}

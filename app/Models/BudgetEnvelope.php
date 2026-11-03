@@ -2,6 +2,10 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\EncryptsAmounts;
+use App\Security\Amounts\AmountContext;
+use App\Security\Amounts\AmountKeyRing;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -10,13 +14,15 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $budget_id
  * @property int $envelope_id
- * @property int $amount
+ * @property int $amount encrypted at rest (docs/encryption.md)
  * @property string $type
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
 class BudgetEnvelope extends Model
 {
+    use EncryptsAmounts;
+
     public const TYPE_FIXED = 'fixed';
 
     public const TYPE_VARIABLE = 'variable';
@@ -27,6 +33,39 @@ class BudgetEnvelope extends Model
     ];
 
     protected $fillable = ['budget_id', 'envelope_id', 'amount', 'type'];
+
+    /**
+     * @return Attribute<int, mixed>
+     */
+    protected function amount(): Attribute
+    {
+        return $this->encryptedAmount('amount');
+    }
+
+    public static function encryptedAmountColumns(): array
+    {
+        return ['amount'];
+    }
+
+    public static function amountContextAttributes(): array
+    {
+        return ['budget_id', 'envelope_id'];
+    }
+
+    public static function amountContextFor(string $column, array $attributes, int $profileId): AmountContext
+    {
+        return new AmountContext('budget_envelopes', $column, $profileId, [
+            'b' => AmountContext::id($attributes['budget_id'] ?? null, 'budget_id'),
+            'e' => AmountContext::id($attributes['envelope_id'] ?? null, 'envelope_id'),
+        ]);
+    }
+
+    protected function amountProfileId(array $attributes): int
+    {
+        return app(AmountKeyRing::class)->profileIdForBudget(
+            AmountContext::id($attributes['budget_id'] ?? null, 'budget_id'),
+        );
+    }
 
     /**
      * The budget this assignment belongs to.

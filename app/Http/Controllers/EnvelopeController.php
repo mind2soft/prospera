@@ -108,16 +108,16 @@ class EnvelopeController extends Controller
             $query->where('event_at', '<=', Carbon::parse($validated['to_date'])->endOfDay());
         }
 
-        $aggregate = $query->toBase()
-            ->selectRaw('coalesce(sum(amount), 0) as total, count(*) as count')
-            ->first();
+        // Amounts are encrypted at rest: the total is computed in PHP
+        // (docs/encryption.md).
+        $transactions = $query->get(['id', 'ledger_id', 'envelope_id', 'event_at', 'amount']);
 
         return response()->json([
             'totals' => [
                 'envelope_id' => $envelope->id,
                 'direction' => $envelope->type,
-                'total' => (int) ($aggregate->total ?? 0),
-                'count' => (int) ($aggregate->count ?? 0),
+                'total' => (int) $transactions->sum(fn (Transaction $transaction): int => $transaction->amount),
+                'count' => $transactions->count(),
             ],
         ]);
     }

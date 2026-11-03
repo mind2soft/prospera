@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use App\Security\Amounts\AmountKeyRing;
 use App\Services\ResourcePermissions;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +28,27 @@ class FinancialProfile extends Model
     protected $casts = [
         'is_default' => 'boolean',
     ];
+
+    /**
+     * Every profile gets its amount data key on creation
+     * (docs/encryption.md).
+     */
+    protected static function booted(): void
+    {
+        static::created(function (FinancialProfile $profile): void {
+            app(AmountKeyRing::class)->createKey($profile->id);
+        });
+    }
+
+    /**
+     * The profile's wrapped amount data keys, one row per version.
+     *
+     * @return HasMany<FinancialProfileKey, $this>
+     */
+    public function keys(): HasMany
+    {
+        return $this->hasMany(FinancialProfileKey::class, 'profile_id');
+    }
 
     /**
      * The profile's members.

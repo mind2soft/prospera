@@ -181,6 +181,9 @@ composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 # Migrate first: optimize:clear flushes the database cache store, whose table
 # does not exist yet on a fresh database.
 php artisan migrate --force
+# Encryption at rest (docs/encryption.md): every stored amount must decrypt
+# before the release goes live.
+php artisan amounts:verify
 php artisan optimize:clear
 rm -rf public/storage
 php artisan storage:link

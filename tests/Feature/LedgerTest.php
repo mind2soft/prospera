@@ -185,10 +185,7 @@ class LedgerTest extends TestCase
             'starting_balance_type' => 'debt',
         ])->assertCreated();
 
-        $this->assertDatabaseHas('ledgers', [
-            'profile_id' => $this->profile->id,
-            'starting_balance' => -500,
-        ]);
+        $this->assertEncryptedAmount(Ledger::class, ['profile_id' => $this->profile->id], 'starting_balance', -500);
     }
 
     public function test_store_supports_a_zero_starting_balance(): void
@@ -202,10 +199,7 @@ class LedgerTest extends TestCase
             'starting_balance_type' => 'cash',
         ])->assertCreated();
 
-        $this->assertDatabaseHas('ledgers', [
-            'profile_id' => $this->profile->id,
-            'starting_balance' => 0,
-        ]);
+        $this->assertEncryptedAmount(Ledger::class, ['profile_id' => $this->profile->id], 'starting_balance', 0);
     }
 
     public function test_store_requires_valid_input(): void
@@ -281,18 +275,17 @@ class LedgerTest extends TestCase
             'event_at' => '2026-06-15',
         ])->assertCreated();
 
-        $this->assertDatabaseHas('transactions', [
+        $this->assertEncryptedAmount(Transaction::class, [
             'ledger_id' => $ledger->id,
             'envelope_id' => $envelope->id,
-            'amount' => -42, // expense envelope
-        ]);
+        ], 'amount', -42); // expense envelope
     }
 
     public function test_adding_a_transaction_signs_the_amount(): void
     {
         $ledger = $this->createLedger($this->user);
         $budget = $this->createPublishedBudget($this->user);
-        [$revenueAssignment, $expenseAssignment] = $budget->envelopes()->orderByDesc('amount')->get();
+        [$revenueAssignment, $expenseAssignment] = $budget->envelopes()->get()->sortByDesc('amount')->values();
 
         $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
             'envelope_id' => $revenueAssignment->envelope_id,
@@ -309,8 +302,10 @@ class LedgerTest extends TestCase
                 'event_at' => '2026-06-20',
             ])->assertCreated()->json('transaction'));
 
-        $revenue = Transaction::where('amount', 42)->firstOrFail();
-        $expense = Transaction::where('amount', -75)->firstOrFail();
+        $revenue = Transaction::all()->firstWhere('amount', 42);
+        $expense = Transaction::all()->firstWhere('amount', -75);
+        $this->assertNotNull($revenue);
+        $this->assertNotNull($expense);
 
         $this->assertEquals($ledger->id, $revenue->ledger_id);
         $this->assertEquals($this->user->id, $revenue->user_id);
@@ -560,8 +555,8 @@ class LedgerTest extends TestCase
             'effective_year' => 2026,
             'effective_month' => 6,
         ]);
-        $salaryAssignment = $budget->envelopes()->where('amount', 100)->firstOrFail();
-        $rentAssignment = $budget->envelopes()->where('amount', -200)->firstOrFail();
+        $salaryAssignment = $budget->envelopes()->get()->firstWhere('amount', 100);
+        $rentAssignment = $budget->envelopes()->get()->firstWhere('amount', -200);
 
         $salary = $ledger->transactions()->create([
             'user_id' => $this->user->id,
@@ -614,7 +609,7 @@ class LedgerTest extends TestCase
             'effective_year' => 2026,
             'effective_month' => 6,
         ]);
-        $rentAssignment = $budget->envelopes()->where('amount', -200)->firstOrFail();
+        $rentAssignment = $budget->envelopes()->get()->firstWhere('amount', -200);
 
         $ledger->transactions()->create([
             'user_id' => $this->member->id,
@@ -723,7 +718,7 @@ class LedgerTest extends TestCase
             'permission' => 'contributor',
         ]);
         $budget = $this->createPublishedBudget($this->user);
-        [$revenueAssignment, $expenseAssignment] = $budget->envelopes()->orderByDesc('amount')->get();
+        [$revenueAssignment, $expenseAssignment] = $budget->envelopes()->get()->sortByDesc('amount')->values();
 
         // Without envelope contributor access: rejected.
         $this->actingAs($this->member)->postJson("/api/ledgers/{$ledger->id}/transactions", [

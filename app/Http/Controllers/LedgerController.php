@@ -157,15 +157,11 @@ class LedgerController extends Controller
             ->orderBy('id')
             ->get();
 
-        // Totals per envelope within the queried range.
-        $totals = DB::table('transactions')
-            ->where('ledger_id', $ledger->id)
-            ->whereBetween('event_at', [$from, $to])
-            ->groupBy('envelope_id')
-            ->get(['envelope_id', DB::raw('sum(amount) as total')])
-            ->mapWithKeys(fn (object $row): array => [
-                (string) $row->envelope_id => (int) $row->total,
-            ]);
+        // Totals per envelope within the queried range, computed in PHP from
+        // the rows above — amounts are encrypted at rest (docs/encryption.md).
+        $totals = $transactions
+            ->groupBy(fn (Transaction $transaction): string => (string) $transaction->envelope_id)
+            ->map(fn (Collection $group): int => (int) $group->sum(fn (Transaction $transaction): int => $transaction->amount));
 
         // "Remaining allocated" comes from the published budget bound to the
         // queried month (budgets are per month/year — see docs/budget.md):
@@ -184,7 +180,10 @@ class LedgerController extends Controller
             : BudgetEnvelope::query()
                 ->where('budget_id', $budget->id)
                 ->whereIn('envelope_id', $totals->keys())
-                ->pluck('amount', 'envelope_id');
+                ->get()
+                ->mapWithKeys(fn (BudgetEnvelope $allocation): array => [
+                    (string) $allocation->envelope_id => $allocation->amount,
+                ]);
 
         $envelopePermissions = Envelope::permissionsFor(
             $request->user(),
