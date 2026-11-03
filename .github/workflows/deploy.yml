@@ -101,6 +101,7 @@ jobs:
           APP_URL: ${{ vars.APP_URL }}
           APP_KEY: ${{ secrets.APP_KEY }}
           APP_PREVIOUS_KEYS: ${{ secrets.APP_PREVIOUS_KEYS }}
+          DEPLOY_SWITCH_WAIT: ${{ vars.DEPLOY_SWITCH_WAIT }}
           SSH_HOST: ${{ vars.SSH_HOST }}
           SSH_USER: ${{ vars.SSH_USER }}
           SSH_APP_PATH: ${{ vars.SSH_APP_PATH }}
@@ -138,6 +139,7 @@ jobs:
         env:
           APP_URL: ${{ vars.APP_URL }}
           ROLLBACK_RELEASE: ${{ inputs.rollback_release }}
+          DEPLOY_SWITCH_WAIT: ${{ vars.DEPLOY_SWITCH_WAIT }}
           SSH_HOST: ${{ vars.SSH_HOST }}
           SSH_USER: ${{ vars.SSH_USER }}
           SSH_APP_PATH: ${{ vars.SSH_APP_PATH }}

@@ -18,13 +18,15 @@ if [ -z "$HEALTHCHECK_URL" ] && [ -n "$APP_URL_VALUE" ]; then
 fi
 
 ROLLBACK_RELEASE=${ROLLBACK_RELEASE:-}
+SWITCH_WAIT=${DEPLOY_SWITCH_WAIT:-}
 
-ssh_remote sh -s -- "$SSH_APP_PATH" "$HEALTHCHECK_URL" "$ROLLBACK_RELEASE" <<'REMOTE'
+ssh_remote sh -s -- "$SSH_APP_PATH" "$HEALTHCHECK_URL" "$ROLLBACK_RELEASE" "$SWITCH_WAIT" <<'REMOTE'
 set -eu
 
 APP_ROOT=$1
 HEALTHCHECK_URL=$2
 ROLLBACK_RELEASE=$3
+SWITCH_WAIT=${4:-}
 CURRENT_LINK=$APP_ROOT/current
 PREVIOUS_LINK=$APP_ROOT/previous
 RELEASES_DIR=$APP_ROOT/releases
@@ -50,6 +52,13 @@ run_healthcheck() {
     return 1
 }
 
+case "$SWITCH_WAIT" in
+    *[!0-9]*)
+        printf 'DEPLOY_SWITCH_WAIT must be a number of seconds: %s\n' "$SWITCH_WAIT" >&2
+        exit 1
+        ;;
+esac
+
 if [ ! -L "$CURRENT_LINK" ]; then
     printf 'Current release link is missing\n' >&2
     exit 1
@@ -69,18 +78,35 @@ safe_symlink() {
 }
 
 CURRENT_TARGET=$(readlink "$CURRENT_LINK")
+PREVIOUS_TARGET=''
+
+if [ -L "$PREVIOUS_LINK" ]; then
+    PREVIOUS_TARGET=$(readlink "$PREVIOUS_LINK")
+fi
 
 if [ -n "$ROLLBACK_RELEASE" ]; then
+    case "$ROLLBACK_RELEASE" in
+        .|..|*[!A-Za-z0-9._-]*)
+            printf 'Refusing to roll back: invalid release id: %s\n' "$ROLLBACK_RELEASE" >&2
+            exit 1
+            ;;
+    esac
+
     TARGET_RELEASE=$RELEASES_DIR/$ROLLBACK_RELEASE
 
     if [ ! -d "$TARGET_RELEASE" ]; then
         printf 'Requested rollback release does not exist: %s\n' "$ROLLBACK_RELEASE" >&2
         exit 1
     fi
-elif [ -L "$PREVIOUS_LINK" ]; then
-    TARGET_RELEASE=$(readlink "$PREVIOUS_LINK")
+elif [ -n "$PREVIOUS_TARGET" ]; then
+    TARGET_RELEASE=$PREVIOUS_TARGET
 else
     printf 'Previous release link is missing\n' >&2
+    exit 1
+fi
+
+if [ "$(cd "$TARGET_RELEASE" 2>/dev/null && pwd -P)" = "$(cd "$CURRENT_TARGET" 2>/dev/null && pwd -P)" ]; then
+    printf 'Refusing to roll back: %s is the live release\n' "$(basename "$TARGET_RELEASE")" >&2
     exit 1
 fi
 
@@ -127,8 +153,45 @@ else
     exit 1
 fi
 
-# A marker without maintenance mode is stale (lifted by hand).
-if [ ! -e "$DOWN_FILE" ]; then
+# Whether the maintenance mode on is a deploy's: its marker is written right
+# after "php artisan down", and any later down (an operator's, after lifting
+# it by hand) rewrites the down file, making it newer than the marker.
+deploy_maintenance() {
+    [ -e "$DOWN_FILE" ] && [ -e "$DEPLOY_DOWN" ] || return 1
+    _newer=$(find "$DOWN_FILE" -newer "$DEPLOY_DOWN") || return 1
+    [ -z "$_newer" ]
+}
+
+# PHP caches resolved paths (realpath_cache_ttl, per worker process): a
+# worker may keep resolving "current" to the release it replaced for that
+# long. Wait it out before lifting maintenance mode or probing the health.
+settle_switch() {
+    if [ -z "$SWITCH_WAIT" ]; then
+        SWITCH_WAIT=$(php -r 'echo (int) ini_get("realpath_cache_ttl");' 2>/dev/null || true)
+        case "$SWITCH_WAIT" in
+            ''|*[!0-9]*) SWITCH_WAIT=120 ;;
+        esac
+        SWITCH_WAIT=$((SWITCH_WAIT + 5))
+    fi
+
+    if [ "$SWITCH_WAIT" != 0 ]; then
+        printf 'Waiting %ss for PHP workers to see the new release\n' "$SWITCH_WAIT" >&2
+        sleep "$SWITCH_WAIT"
+    fi
+}
+
+restore_links() {
+    safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
+
+    if [ -n "$PREVIOUS_TARGET" ]; then
+        safe_symlink "$PREVIOUS_TARGET" "$PREVIOUS_LINK"
+    else
+        rm -f "$PREVIOUS_LINK"
+    fi
+}
+
+# A marker not matching the maintenance mode on is stale (lifted by hand).
+if ! deploy_maintenance; then
     rm -f "$DEPLOY_DOWN"
 fi
 
@@ -173,14 +236,17 @@ safe_symlink "$TARGET_RELEASE" "$CURRENT_LINK"
 LIFTED=0
 
 if [ -e "$DOWN_FILE" ]; then
-    if [ ! -e "$DEPLOY_DOWN" ]; then
-        printf 'Maintenance mode is on: left on and health check skipped — lift it ("php artisan up") once the live release is verified to match the schema\n' >&2
+    if ! deploy_maintenance; then
+        printf 'Maintenance mode is on: left on and health check skipped — lift it ("php artisan up") once the live release is verified to match the schema, and PHP workers had time to see it (realpath_cache_ttl, see docs/encryption.md)\n' >&2
         exit 0
     fi
 
+    settle_switch
     php artisan up
     rm -f "$DEPLOY_DOWN"
     LIFTED=1
+else
+    settle_switch
 fi
 
 if ! run_healthcheck; then
@@ -189,7 +255,7 @@ if ! run_healthcheck; then
         : > "$DEPLOY_DOWN"
     fi
 
-    safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
+    restore_links
     printf 'Rollback health check failed; restored previous current release\n' >&2
     exit 1
 fi

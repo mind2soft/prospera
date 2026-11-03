@@ -16,6 +16,7 @@ REMOTE_ENV_PATH="/tmp/prospera-$RELEASE_ID.env"
 LOCAL_ENV_PATH='dist/.env.production'
 KEEP_RELEASES=${KEEP_RELEASES:-3}
 HEALTHCHECK_URL=${DEPLOY_HEALTHCHECK_URL:-$APP_URL/up}
+SWITCH_WAIT=${DEPLOY_SWITCH_WAIT:-}
 
 test -f "$RELEASE_ARCHIVE_PATH" || {
     printf 'Missing release archive: %s\n' "$RELEASE_ARCHIVE_PATH" >&2
@@ -27,7 +28,7 @@ sh "$SCRIPT_DIR/render-production-env.sh" > "$LOCAL_ENV_PATH"
 scp_to_remote "$RELEASE_ARCHIVE_PATH" "$SSH_USER@$SSH_HOST:$REMOTE_ARCHIVE_PATH"
 scp_to_remote "$LOCAL_ENV_PATH" "$SSH_USER@$SSH_HOST:$REMOTE_ENV_PATH"
 
-ssh_remote sh -s -- "$SSH_APP_PATH" "$RELEASE_ID" "$REMOTE_ARCHIVE_PATH" "$REMOTE_ENV_PATH" "$KEEP_RELEASES" "$HEALTHCHECK_URL" <<'REMOTE'
+ssh_remote sh -s -- "$SSH_APP_PATH" "$RELEASE_ID" "$REMOTE_ARCHIVE_PATH" "$REMOTE_ENV_PATH" "$KEEP_RELEASES" "$HEALTHCHECK_URL" "$SWITCH_WAIT" <<'REMOTE'
 set -eu
 
 APP_ROOT=$1
@@ -36,6 +37,7 @@ ARCHIVE_PATH=$3
 ENV_UPLOAD_PATH=$4
 KEEP_RELEASES=$5
 HEALTHCHECK_URL=$6
+SWITCH_WAIT=${7:-}
 
 RELEASES_DIR=$APP_ROOT/releases
 SHARED_DIR=$APP_ROOT/shared
@@ -58,11 +60,14 @@ CURRENT_TARGET=''
 # lifted).
 SCHEMA_RECORD=$APP_ROOT/shared/schema-migrations
 DEPLOY_DOWN=$APP_ROOT/shared/deploy-maintenance
+DOWN_FILE=$SHARED_DIR/storage/framework/down
+PREVIOUS_TARGET=''
 MIGRATED=0
 MAINTENANCE=0
 WAS_DOWN=0
 TOOK_OVER=0
 PENDING=0
+ENV_PENDING=0
 
 safe_symlink() {
     _target=$1
@@ -121,6 +126,41 @@ maintenance_down() {
     fi
 }
 
+# Whether the maintenance mode on is a deploy's: its marker is written right
+# after "php artisan down", and any later down (an operator's, after lifting
+# it by hand) rewrites the down file, making it newer than the marker.
+deploy_maintenance() {
+    [ -e "$DOWN_FILE" ] && [ -e "$DEPLOY_DOWN" ] || return 1
+    _newer=$(find "$DOWN_FILE" -newer "$DEPLOY_DOWN") || return 1
+    [ -z "$_newer" ]
+}
+
+# PHP caches resolved paths (realpath_cache_ttl, per worker process): a
+# worker may keep resolving "current" to the release it replaced for that
+# long. Wait it out before lifting maintenance mode or probing the health.
+settle_switch() {
+    if [ -z "$SWITCH_WAIT" ]; then
+        SWITCH_WAIT=$(php -r 'echo (int) ini_get("realpath_cache_ttl");' 2>/dev/null || true)
+        case "$SWITCH_WAIT" in
+            ''|*[!0-9]*) SWITCH_WAIT=120 ;;
+        esac
+        SWITCH_WAIT=$((SWITCH_WAIT + 5))
+    fi
+
+    if [ "$SWITCH_WAIT" != 0 ]; then
+        printf 'Waiting %ss for PHP workers to see the new release\n' "$SWITCH_WAIT" >&2
+        sleep "$SWITCH_WAIT"
+    fi
+}
+
+restore_previous() {
+    if [ -n "$PREVIOUS_TARGET" ]; then
+        safe_symlink "$PREVIOUS_TARGET" "$PREVIOUS_LINK"
+    else
+        rm -f "$PREVIOUS_LINK"
+    fi
+}
+
 # Whether release $1 ships exactly the migrations the database ran.
 matches_schema() {
     migration_names "$1" > "$RELEASE_DIR/.migrations-other"
@@ -142,8 +182,14 @@ on_exit() {
         record_schema || true
     fi
 
-    if [ "$status" -ne 0 ] && [ -e "$SHARED_DIR/storage/framework/down" ]; then
+    if [ "$status" -ne 0 ] && [ -e "$DOWN_FILE" ]; then
         printf 'Deployment failed: the app stays in maintenance mode (deploy a fix; see docs/encryption.md)\n' >&2
+    fi
+
+    # A refused release never received the uploaded .env: link it to the
+    # shared one like any release (its link to the upload would dangle).
+    if [ "$ENV_PENDING" = 1 ]; then
+        ln -sfn "$SHARED_DIR/.env" "$RELEASE_DIR/.env" || true
     fi
 
     cleanup
@@ -159,6 +205,7 @@ rollback_current() {
         printf 'Health check failed: keeping the new release in maintenance mode\n' >&2
     else
         safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
+        restore_previous
         printf 'Deployment health check failed; reverted current release\n' >&2
     fi
 }
@@ -255,6 +302,21 @@ migrate_legacy_layout() {
 trap on_exit EXIT
 trap 'exit 1' HUP INT TERM
 
+case "$SWITCH_WAIT" in
+    *[!0-9]*)
+        printf 'DEPLOY_SWITCH_WAIT must be a number of seconds: %s\n' "$SWITCH_WAIT" >&2
+        exit 1
+        ;;
+esac
+
+# A release id is one directory name under releases/ (no path).
+case "$RELEASE_ID" in
+    ''|.|..|*[!A-Za-z0-9._-]*)
+        printf 'Refusing to deploy: invalid release id: %s\n' "$RELEASE_ID" >&2
+        exit 1
+        ;;
+esac
+
 mkdir -p "$APP_ROOT" "$RELEASES_DIR" "$SHARED_DIR"
 
 migrate_legacy_layout
@@ -263,12 +325,16 @@ if [ -L "$CURRENT_LINK" ]; then
     CURRENT_TARGET=$(readlink "$CURRENT_LINK")
 fi
 
+if [ -L "$PREVIOUS_LINK" ]; then
+    PREVIOUS_TARGET=$(readlink "$PREVIOUS_LINK")
+fi
+
 # Never rebuild the live or the previous release in place: their code would
 # change under them (or the rollback target would be lost) before any check.
 if [ -d "$RELEASE_DIR" ]; then
     _release=$(cd "$RELEASE_DIR" && pwd -P)
 
-    for _keep in "$CURRENT_TARGET" "$(readlink "$PREVIOUS_LINK" 2>/dev/null || true)"; do
+    for _keep in "$CURRENT_TARGET" "$PREVIOUS_TARGET"; do
         if [ -n "$_keep" ] && [ "$_release" = "$(cd "$_keep" 2>/dev/null && pwd -P)" ]; then
             printf 'Refusing to deploy: release %s is the live or the previous release; deploy under a new release id\n' "$RELEASE_ID" >&2
             exit 1
@@ -278,16 +344,14 @@ fi
 
 # Maintenance mode already on: a failed deploy's (DEPLOY_DOWN) is taken over
 # and lifted once this release is verified; an operator's is never lifted. A
-# marker without maintenance mode is stale (lifted by hand).
-if [ ! -e "$SHARED_DIR/storage/framework/down" ]; then
+# marker not matching the maintenance mode on is stale (lifted by hand).
+if deploy_maintenance; then
+    MAINTENANCE=1
+    TOOK_OVER=1
+else
     rm -f "$DEPLOY_DOWN"
-fi
 
-if [ -e "$SHARED_DIR/storage/framework/down" ]; then
-    if [ -e "$DEPLOY_DOWN" ]; then
-        MAINTENANCE=1
-        TOOK_OVER=1
-    else
+    if [ -e "$DOWN_FILE" ]; then
         WAS_DOWN=1
     fi
 fi
@@ -296,8 +360,7 @@ rm -rf "$RELEASE_DIR"
 mkdir -p "$RELEASE_DIR"
 tar -xzf "$ARCHIVE_PATH" -C "$RELEASE_DIR"
 
-mv "$ENV_UPLOAD_PATH" "$SHARED_DIR/.env"
-chmod 600 "$SHARED_DIR/.env"
+chmod 600 "$ENV_UPLOAD_PATH"
 
 if [ ! -d "$SHARED_DIR/storage" ] && [ -d "$RELEASE_DIR/storage" ]; then
     mv "$RELEASE_DIR/storage" "$SHARED_DIR/storage"
@@ -308,7 +371,10 @@ mkdir -p "$RELEASE_DIR/bootstrap/cache"
 
 rm -rf "$RELEASE_DIR/storage"
 ln -sfn "$SHARED_DIR/storage" "$RELEASE_DIR/storage"
-ln -sfn "$SHARED_DIR/.env" "$RELEASE_DIR/.env"
+# The uploaded .env replaces the shared one (used by every release) only
+# once this release passed its refusal checks.
+ln -sfn "$ENV_UPLOAD_PATH" "$RELEASE_DIR/.env"
+ENV_PENDING=1
 
 chmod -R ug+rwX "$SHARED_DIR/storage" "$RELEASE_DIR/bootstrap/cache" || true
 
@@ -350,6 +416,10 @@ if [ "$PENDING" = 1 ] && [ -n "$CURRENT_TARGET" ] \
     exit 1
 fi
 
+mv "$ENV_UPLOAD_PATH" "$SHARED_DIR/.env"
+ln -sfn "$SHARED_DIR/.env" "$RELEASE_DIR/.env"
+ENV_PENDING=0
+
 # Migrate first: optimize:clear flushes the database cache store, whose table
 # does not exist yet on a fresh database. Pending migrations run in
 # maintenance mode so the previous release stops serving requests before the
@@ -383,8 +453,10 @@ fi
 safe_symlink "$RELEASE_DIR" "$CURRENT_LINK"
 
 if [ "$WAS_DOWN" = 1 ]; then
-    printf 'Maintenance mode was on before this deploy: left on and health check skipped — lift it ("php artisan up") once the live release is verified to match the schema\n' >&2
+    printf 'Maintenance mode was on before this deploy: left on and health check skipped — lift it ("php artisan up") once the live release is verified to match the schema, and PHP workers had time to see it (realpath_cache_ttl, see docs/encryption.md)\n' >&2
 else
+    settle_switch
+
     if [ "$MAINTENANCE" = 1 ]; then
         maintenance_up
     fi

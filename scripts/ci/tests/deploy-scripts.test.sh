@@ -1,8 +1,9 @@
 #!/usr/bin/env sh
 # Control-flow tests of the remote parts of deploy-production.sh and
 # rollback-production.sh against a fake layout, with shimmed php, composer
-# and curl. The php shim models the migrations table ($WORK/ran), migrations
-# and maintenance mode (file driver, relative to the release's storage).
+# curl and sleep. The php shim models the migrations table ($WORK/ran),
+# migrations and maintenance mode (file driver, relative to the release's
+# storage); curl answers 503 while maintenance mode is on.
 #
 # After every scenario the invariant is checked: the live release ships
 # exactly the migrations the database ran, or it is in maintenance mode.
@@ -26,6 +27,7 @@ cat > "$WORK/bin/php" <<'EOF'
 #!/bin/sh
 rel=$(pwd -P)
 printf '%s %s\n' "$(basename "$rel")" "$*" >> "$WORK/log"
+[ "$1" = -r ] && { printf '%s' "${REALPATH_TTL-120}"; exit 0; }
 names() { for f in "$rel"/database/migrations/*.php; do [ -e "$f" ] && basename "$f" .php; done; }
 pending() { names | while IFS= read -r n; do grep -qxF -- "$n" "$WORK/ran" || echo "$n"; done; }
 for f in ${FAIL:-}; do [ "$f" = "$2" ] && exit 1; done
@@ -54,8 +56,14 @@ esac
 exit 0
 EOF
 printf '#!/bin/sh\nexit 0\n' > "$WORK/bin/composer"
-printf '#!/bin/sh\nexit "${HEALTH_EXIT:-0}"\n' > "$WORK/bin/curl"
-chmod +x "$WORK/bin/php" "$WORK/bin/composer" "$WORK/bin/curl"
+cat > "$WORK/bin/curl" <<'EOF'
+#!/bin/sh
+echo "curl $(basename "$(readlink "$WORK/app/current")")" >> "$WORK/log"
+[ -e "$WORK/app/shared/storage/framework/down" ] && exit 22
+exit "${HEALTH_EXIT:-0}"
+EOF
+printf '#!/bin/sh\necho "sleep $1" >> "$WORK/log"\n' > "$WORK/bin/sleep"
+chmod +x "$WORK/bin/php" "$WORK/bin/composer" "$WORK/bin/curl" "$WORK/bin/sleep"
 
 extract_remote() {
     awk "/<<'REMOTE'/{f=1;next} /^REMOTE\$/{f=0} f" "$1"
@@ -80,6 +88,7 @@ release() {
 # migration a; the package to deploy ships a + b.
 setup() {
     rm -rf "$APP" "$WORK/pkg" "$WORK/log" "$WORK/no-table"
+    DEPLOY_ID=new ROLLBACK_ID='' WAIT=''
     mkdir -p "$APP/shared/storage"
     release "$APP/releases/old" '' a
     ln -s "$APP/shared/storage" "$APP/releases/old/storage"
@@ -114,6 +123,24 @@ ran() {
     if grep -q -- " $1" "$WORK/log"; then echo yes; else echo no; fi
 }
 
+# Line number of the first log line matching $1 (0 when absent).
+at() {
+    grep -n -- "$1" "$WORK/log" | head -n 1 | cut -d: -f1 | grep . || echo 0
+}
+
+# Whether log line $1 comes before (lower, non-zero) log line $2.
+before() {
+    if [ "$1" -gt 0 ] && [ "$1" -lt "$2" ]; then echo yes; else echo no; fi
+}
+
+marker() {
+    if [ -e "$APP/shared/deploy-maintenance" ]; then echo marker; else echo none; fi
+}
+
+previous() {
+    if [ -L "$APP/previous" ]; then basename "$(readlink "$APP/previous")"; else echo none; fi
+}
+
 record() {
     if [ -f "$APP/shared/schema-migrations" ]; then sort "$APP/shared/schema-migrations" | tr '\n' ' '; else echo none; fi
 }
@@ -122,7 +149,7 @@ deploy() {
     package
     _rc=0
     env WORK="$WORK" PATH="$WORK/bin:$PATH" "$@" \
-        $SHELL_UNDER_TEST "$WORK/deploy-remote.sh" "$APP" new "$WORK/release.tgz" "$WORK/env" 3 "http://localhost/up" \
+        $SHELL_UNDER_TEST "$WORK/deploy-remote.sh" "$APP" "$DEPLOY_ID" "$WORK/release.tgz" "$WORK/env" 3 "http://localhost/up" "$WAIT" \
         > "$WORK/out" 2>&1 || _rc=$?
     printf 'APP_KEY=x\n' > "$WORK/env"
     echo "$_rc"
@@ -131,7 +158,7 @@ deploy() {
 rollback() {
     _rc=0
     env WORK="$WORK" PATH="$WORK/bin:$PATH" "$@" \
-        $SHELL_UNDER_TEST "$WORK/rollback-remote.sh" "$APP" "http://localhost/up" "" \
+        $SHELL_UNDER_TEST "$WORK/rollback-remote.sh" "$APP" "http://localhost/up" "$ROLLBACK_ID" "$WAIT" \
         > "$WORK/out" 2>&1 || _rc=$?
     echo "$_rc"
 }
@@ -285,6 +312,126 @@ rm -f "$APP/previous"
 rc=$(deploy HEALTH_EXIT=22)
 expect "deploy: a failed deploy's maintenance is kept when the fix fails too" "$rc $(live) $(maintenance)" '1 new on'
 
+# --- PHP's realpath cache: wait before lifting maintenance or probing ------
+
+setup
+rc=$(deploy)
+expect 'deploy: waits realpath_cache_ttl + 5s, then lifts maintenance, then probes the new release' \
+    "$rc $(grep -c '^sleep 125$' "$WORK/log") $(before "$(at '^sleep')" "$(at ' up$')") $(before "$(at ' up$')" "$(at '^curl new')")" '0 1 yes yes'
+
+setup
+rm "$WORK/pkg/database/migrations/b.php"
+rc=$(deploy REALPATH_TTL=30)
+expect 'deploy: without migrations it still waits before the health check' \
+    "$rc $(grep -c '^sleep 35$' "$WORK/log") $(before "$(at '^sleep')" "$(at '^curl new')")" '0 1 yes'
+
+setup
+rc=$(deploy REALPATH_TTL=abc)
+expect 'deploy: an unreadable realpath_cache_ttl waits the PHP default' "$rc $(grep -c '^sleep 125$' "$WORK/log")" '0 1'
+
+setup
+WAIT=7
+rc=$(deploy)
+expect 'deploy: DEPLOY_SWITCH_WAIT overrides the wait' "$rc $(grep -c '^sleep' "$WORK/log") $(grep -c '^sleep 7$' "$WORK/log")" '0 1 1'
+
+setup
+WAIT=0
+rc=$(deploy)
+expect 'deploy: DEPLOY_SWITCH_WAIT=0 disables the wait' "$rc $(grep -c '^sleep' "$WORK/log")" '0 0'
+
+setup
+WAIT=1x
+rc=$(deploy)
+expect 'deploy: an invalid DEPLOY_SWITCH_WAIT is refused before anything' \
+    "$rc $(live) $(ran 'down') $([ -d "$APP/releases/new" ] && echo built || echo none)" '1 old no none'
+
+setup
+mkdir -p "$APP/shared/storage/framework" && : > "$APP/shared/storage/framework/down"
+rc=$(deploy)
+expect "deploy: an operator's maintenance mode skips the wait and the health check" \
+    "$rc $(grep -c '^sleep' "$WORK/log") $(grep -c '^curl' "$WORK/log")" '0 0 0'
+
+# --- maintenance marker ----------------------------------------------------
+
+setup
+rc=$(deploy FAIL=down)
+expect 'deploy: a failing "down" leaves no marker and migrates nothing' \
+    "$rc $(live) $(maintenance) $(marker) $(ran 'migrate --force')" '1 old off none no'
+
+setup
+rc=$(deploy FAIL=amounts:verify)
+expect 'deploy: the marker is written after "down"' \
+    "$(marker) $([ -z "$(find "$APP/shared/storage/framework/down" -newer "$APP/shared/deploy-maintenance")" ] && echo after || echo before)" 'marker after'
+
+# Lifted by hand, then an operator's "down": the down file is newer than the
+# marker.
+setup
+printf 'a\nb\n' > "$WORK/ran"
+mkdir -p "$APP/shared/storage/framework"
+: > "$APP/shared/deploy-maintenance"
+touch -t 202001010000 "$APP/shared/deploy-maintenance"
+: > "$APP/shared/storage/framework/down"
+rc=$(deploy)
+expect "deploy: a marker older than the maintenance mode never lifts it" \
+    "$rc $(live) $(maintenance) $(ran ' up') $(marker)" '0 new on no none'
+
+setup
+printf 'a\nb\n' > "$WORK/ran"
+mkdir -p "$APP/shared/storage/framework"
+: > "$APP/shared/storage/framework/down"
+touch -t 202001010000 "$APP/shared/storage/framework/down"
+: > "$APP/shared/deploy-maintenance"
+rc=$(deploy)
+expect "deploy: a marker matching the maintenance mode is taken over and lifted" \
+    "$rc $(live) $(maintenance) $(marker)" '0 new off none'
+
+# --- release ids -----------------------------------------------------------
+
+for _id in ../releases/old new/../old . .. ''; do
+    setup
+    DEPLOY_ID=$_id
+    rc=$(deploy)
+    expect "deploy: an invalid release id [$_id] is refused" \
+        "$rc $(live) $(ls "$APP/releases/old/database/migrations" | tr '\n' ' ')$(ls "$APP/releases" | tr '\n' ' ')" '1 old a.php old '
+done
+
+setup
+ln -s old "$APP/releases/alias"
+DEPLOY_ID=alias
+rc=$(deploy)
+expect 'deploy: a release id aliasing the live release is refused' \
+    "$rc $(live) $(ls "$APP/releases/old/database/migrations" | tr '\n' ' ')" '1 old a.php '
+
+# --- previous link and .env ------------------------------------------------
+
+setup
+release "$APP/releases/prev0" '' a
+ln -s "$APP/releases/prev0" "$APP/previous"
+rm "$WORK/pkg/database/migrations/b.php"
+rc=$(deploy HEALTH_EXIT=22)
+expect 'deploy: a reverted deploy restores the previous link' "$rc $(live) $(previous)" '1 old prev0'
+
+setup
+rm "$WORK/pkg/database/migrations/b.php"
+rc=$(deploy HEALTH_EXIT=22)
+expect 'deploy: a reverted deploy without a previous link leaves none' "$rc $(live) $(previous)" '1 old none'
+
+setup
+rc=$(deploy)
+expect 'deploy: a successful deploy points previous at the replaced release' "$rc $(live) $(previous)" '0 new old'
+
+setup
+printf 'APP_KEY=old\n' > "$APP/shared/.env"
+rc=$(deploy DB_DOWN=1)
+expect 'deploy: a refused release leaves the shared .env and links its own to it' \
+    "$rc $(cat "$APP/shared/.env") $(readlink "$APP/releases/new/.env" | sed "s|^$APP/||")" '1 APP_KEY=old shared/.env'
+
+setup
+printf 'APP_KEY=old\n' > "$APP/shared/.env"
+rc=$(deploy)
+expect 'deploy: a deploy installs the uploaded .env as the shared one' \
+    "$rc $(cat "$APP/shared/.env") $(readlink "$APP/releases/new/.env" | sed "s|^$APP/||")" '0 APP_KEY=x shared/.env'
+
 # Legacy layout: the app lives directly in APP_ROOT.
 setup_legacy() {
     setup
@@ -302,6 +449,14 @@ expect 'deploy: maintenance mode covers a legacy-layout release' \
 setup_legacy
 rc=$(deploy)
 expect 'deploy: a legacy layout is migrated to releases' "$rc $(live) $(maintenance) $(consistent)" '0 new off yes'
+
+setup_legacy
+printf 'APP_KEY=legacy\n' > "$WORK/legacy-env"
+ln -s "$WORK/legacy-env" "$APP/.env"
+rc=$(deploy)
+_legacy=$(ls -d "$APP"/releases/legacy-*)
+expect 'deploy: a legacy .env symlink is kept as is, not moved' \
+    "$rc $(readlink "$_legacy/.env" | sed "s|^$WORK/||") $(cat "$WORK/legacy-env") $(cat "$APP/shared/.env")" '0 legacy-env APP_KEY=legacy APP_KEY=x'
 
 # --- rollback-production.sh -----------------------------------------------
 
@@ -411,8 +566,8 @@ expect 'rollback: a target that cannot list its commands is refused' "$rc $(live
 
 setup_rollback
 release "$APP/releases/old" '' a b
-: > "$APP/shared/deploy-maintenance"
 mkdir -p "$APP/shared/storage/framework" && : > "$APP/shared/storage/framework/down"
+: > "$APP/shared/deploy-maintenance"
 rc=$(rollback)
 expect 'rollback: lifting a failed deploy'"'"'s maintenance clears its marker' \
     "$rc $([ -e "$APP/shared/deploy-maintenance" ] && echo marker || echo none)" '0 none'
@@ -426,6 +581,72 @@ ln -sfn "$APP/releases/new" "$APP/current"
 ln -sfn "$APP/releases/old" "$APP/previous"
 rc=$(rollback)
 expect "rollback: a stale marker never lifts an operator's maintenance" "$rc $(live) $(maintenance)" '0 old on'
+
+setup_rollback
+ROLLBACK_ID=new
+rc=$(rollback)
+expect 'rollback: the live release is refused as target' "$rc $(live) $(previous) $(grep -c 'is the live release' "$WORK/out")" '1 new old 1'
+
+setup_rollback
+ln -s new "$APP/releases/alias"
+ROLLBACK_ID=alias
+rc=$(rollback)
+expect 'rollback: an alias of the live release is refused as target' "$rc $(live) $(previous)" '1 new old'
+
+for _id in ../releases/old new/../old . ..; do
+    setup_rollback
+    release "$APP/releases/old" '' a b
+    ROLLBACK_ID=$_id
+    rc=$(rollback)
+    expect "rollback: an invalid release id [$_id] is refused" "$rc $(live)" '1 new'
+done
+
+setup_rollback
+release "$APP/releases/old" '' a b c
+rc=$(rollback)
+expect 'rollback: a target shipping migrations the database did not run is refused' \
+    "$rc $(live) $(grep -c 'does not ship exactly' "$WORK/out")" '1 new 1'
+
+setup_rollback
+rc=$(rollback)
+expect 'rollback: a target missing a migration the database ran is refused' \
+    "$rc $(live) $(grep -c 'does not ship exactly' "$WORK/out")" '1 new 1'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+rc=$(rollback HEALTH_EXIT=22)
+expect 'rollback: a failed health check restores the previous link' "$rc $(live) $(previous)" '1 new old'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+rc=$(rollback)
+expect 'rollback: waits, then probes the target' \
+    "$rc $(previous) $(grep -c '^sleep 125$' "$WORK/log") $(before "$(at '^sleep')" "$(at '^curl old')")" '0 new 1 yes'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+mkdir -p "$APP/shared/storage/framework" && : > "$APP/shared/storage/framework/down"
+: > "$APP/shared/deploy-maintenance"
+WAIT=9
+rc=$(rollback)
+expect "rollback: waits before lifting a failed deploy's maintenance, then probes" \
+    "$rc $(grep -c '^sleep 9$' "$WORK/log") $(before "$(at '^sleep')" "$(at ' up$')") $(before "$(at ' up$')" "$(at '^curl old')")" '0 1 yes yes'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+WAIT=x
+rc=$(rollback)
+expect 'rollback: an invalid DEPLOY_SWITCH_WAIT is refused' "$rc $(live)" '1 new'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+mkdir -p "$APP/shared/storage/framework"
+: > "$APP/shared/deploy-maintenance"
+touch -t 202001010000 "$APP/shared/deploy-maintenance"
+: > "$APP/shared/storage/framework/down"
+rc=$(rollback)
+expect "rollback: a marker older than the maintenance mode never lifts it" \
+    "$rc $(live) $(maintenance) $(ran ' up') $(marker) $(grep -c '^sleep' "$WORK/log")" '0 old on no none 0'
 
 if [ "$FAILURES" -ne 0 ]; then
     printf '%s deploy script test(s) failed\n' "$FAILURES" >&2
