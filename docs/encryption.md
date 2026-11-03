@@ -99,9 +99,9 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
 - Write amounts through Eloquent models (`create`, `save`, `update`,
   `saveQuietly` — encryption does not rely on model events). Bulk Eloquent
   writes go through `GuardedBuilder`: `update`, `updateFrom`,
-  `updateOrInsert`, `insert*` and `fillAndInsert*` accept nothing but
-  ciphertext in these columns; `upsert`, `increment`/`decrement`, `touch` and
-  `insertUsing` on them are refused. `DB::table()` and `toBase()` writes
+  `updateOrInsert` and `insert*` accept nothing but ciphertext in these
+  columns; `upsert`, `increment`/`decrement`, `touch` and `insertUsing` on
+  them are refused, and so is `fillAndInsert*` (its models hold plaintext). `DB::table()` and `toBase()` writes
   bypass Eloquent and must never touch them.
 - Changing an attribute bound into the context (a transaction's ledger,
   envelope or date; an assignment's budget or envelope) requires assigning
@@ -172,35 +172,47 @@ Production migrations are **forward-only**: the app prohibits destructive
 commands in production (`DB::prohibitDestructiveCommands()`), so
 `migrate:rollback` and `migrate:reset` refuse to run there. A release must
 therefore never run on a schema it does not know — for this feature, the
-pre-encryption release would read ciphertext and could write plaintext.
+pre-encryption release would read ciphertext and could write plaintext. The
+scripts compare releases with the migrations the database actually ran
+(`php artisan migrations:ran`, read from the migrations table).
 
-- The deploy records, in `shared/schema-migrations`, the migration files of the
-  release the database is migrated with (written right before migrating). A
-  release that does not ship every recorded migration is refused, and so is
-  a deploy whose migration status cannot be read (unless it is the first
-  install).
-- `scripts/ci/deploy-production.sh` switches to maintenance mode before running
-  pending migrations, so the previous release stops accepting requests (ones
-  already in flight may still complete). `amounts:verify` must pass before the
-  release goes live. Any failure during or after migrating — including a
-  failed health check — **leaves the app in maintenance mode**: the previous
-  release is not restored on the migrated schema. Recover by deploying a fix,
-  then `php artisan up`. Failures without pending migrations revert to the
-  previous release as before.
-- A deploy started while maintenance mode is already on leaves it on, keeps
-  its options, and skips the health check: lift it once the live release is
-  verified to match the schema.
-- `scripts/ci/rollback-production.sh` only switches to a release that ships
-  exactly the recorded migrations (or, before any record exists, the live
-  release's) and has none pending. It rebuilds the target's configuration
-  cache from the current `.env` (e.g. a rotated `APP_KEY`) and requires
-  `amounts:verify` to pass with it; otherwise it refuses without switching.
+- `scripts/ci/deploy-production.sh` refuses a release that does not ship
+  every migration the database ran, and a deploy that cannot read them
+  (except a first install).
+- It switches to maintenance mode before running pending migrations, so the
+  previous release stops accepting requests (ones already in flight may still
+  complete). `amounts:verify` must pass before the release goes live. Any
+  failure during or after migrating — including a failed health check —
+  **leaves the app in maintenance mode**: the previous release is not
+  restored on the migrated schema. Recover by deploying a fix: once verified,
+  it lifts the maintenance mode the failed deploy set (marked by
+  `shared/deploy-maintenance`). Failures without pending migrations revert to
+  the previous release as before.
+- An operator's maintenance mode (on before the deploy, without that marker)
+  is never lifted nor modified, and the health check is skipped: lift it once
+  the live release is verified to match the schema.
+- After migrating (or failing to), the deploy records the migrations the
+  database ran in `shared/schema-migrations`.
+- `scripts/ci/rollback-production.sh` only switches to a release shipping
+  exactly the migrations the database ran (read live, else from that record,
+  else from the live release) with none pending. It rebuilds the target's
+  configuration cache from the current `.env` (e.g. a rotated `APP_KEY`) and
+  requires `amounts:verify` to pass with it; otherwise it refuses without
+  switching. It lifts a failed deploy's maintenance mode once the matching
+  release is live, never an operator's.
+- A legacy layout (the app directly in the deploy root) is moved into
+  `releases/` with its storage shared, so maintenance mode covers it; a
+  pending migration is refused if the live release does not use the shared
+  storage.
 - Both scripts assume the `file` maintenance driver (the default,
   `APP_MAINTENANCE_DRIVER=file`). Their control flow is tested by
-  `scripts/ci/tests/deploy-scripts.test.sh` (part of `composer ci:check`). Once this feature is deployed, going back to a
-  pre-encryption release is a deliberate manual operation: the migration's
-  `down()` (tested, it decrypts every amount back to integers) must be run on
-  purpose — production prohibits it by default — before switching releases.
+  `scripts/ci/tests/deploy-scripts.test.sh` (part of `composer ci:check`).
+
+Once this feature is deployed, going back to a pre-encryption release is a
+deliberate manual operation outside the workflow: the migration's `down()`
+(tested: it decrypts every amount back to integers) has to be run on purpose,
+which production prohibits by default. Afterwards the rollback workflow sees
+the database's actual migrations and accepts the pre-encryption release.
 
 ### Migration of existing data
 
