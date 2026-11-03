@@ -71,6 +71,7 @@
             "Composer\\Config::disableProcessTimeout",
             "npm run check",
             "npm run types:check",
+            "sh scripts/ci/tests/deploy-scripts.test.sh",
             "@test"
         ],
         "types:check": [

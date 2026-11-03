@@ -86,9 +86,13 @@ fi
 
 # Production migrations are forward-only: DB::prohibitDestructiveCommands()
 # refuses migrate:rollback/reset there. Only switch to a release that runs on
-# the current schema as is — same migration files, none pending — otherwise
-# it would read or write data it does not understand (e.g. plaintext amounts
-# into encrypted columns, docs/encryption.md). Deploy a fix instead.
+# the current schema as is — the exact migrations the database was last
+# migrated with (shared/schema-migrations, written by the deploy right before
+# migrating), none pending — otherwise it would read or write data it does
+# not understand (e.g. plaintext amounts into encrypted columns,
+# docs/encryption.md). Deploy a fix instead.
+SCHEMA_RECORD=$APP_ROOT/shared/schema-migrations
+
 migration_names() {
     for _file in "$1"/database/migrations/*.php; do
         if [ -e "$_file" ]; then
@@ -97,14 +101,37 @@ migration_names() {
     done
 }
 
-if [ "$(migration_names "$CURRENT_TARGET")" != "$(migration_names "$TARGET_RELEASE")" ]; then
-    printf 'Refusing to roll back: %s and %s ship different migrations (production migrations are forward-only; deploy a fix instead)\n' \
-        "$(basename "$CURRENT_TARGET")" "$(basename "$TARGET_RELEASE")" >&2
+if [ -f "$SCHEMA_RECORD" ]; then
+    EXPECTED=$(cat "$SCHEMA_RECORD")
+else
+    # Not deployed by a schema-recording deploy yet: the live release's
+    # migrations are the best knowledge of the schema.
+    EXPECTED=$(migration_names "$CURRENT_TARGET")
+fi
+
+if [ "$(migration_names "$TARGET_RELEASE")" != "$EXPECTED" ]; then
+    printf 'Refusing to roll back: %s does not ship exactly the migrations the database ran (production migrations are forward-only; deploy a fix instead)\n' \
+        "$(basename "$TARGET_RELEASE")" >&2
     exit 1
 fi
 
-if ! (cd "$TARGET_RELEASE" && php artisan migrate:status --pending=1 >/dev/null 2>&1); then
-    printf 'Refusing to roll back: %s has pending migrations\n' "$(basename "$TARGET_RELEASE")" >&2
+if ! (cd "$TARGET_RELEASE" && php artisan migrate:status --pending=3 >/dev/null 2>&1); then
+    printf 'Refusing to roll back: %s has pending migrations or the migration status is unreadable\n' "$(basename "$TARGET_RELEASE")" >&2
+    exit 1
+fi
+
+# The target's cached configuration predates the current .env (e.g. a
+# rotated APP_KEY, which unwraps the amount keys): rebuild it, then check
+# that every amount decrypts with it.
+cd "$TARGET_RELEASE"
+
+if ! php artisan config:cache; then
+    printf 'Refusing to roll back: caching the configuration of %s failed\n' "$(basename "$TARGET_RELEASE")" >&2
+    exit 1
+fi
+
+if php artisan help amounts:verify >/dev/null 2>&1 && ! php artisan amounts:verify; then
+    printf 'Refusing to roll back: amounts do not all decrypt with %s\n' "$(basename "$TARGET_RELEASE")" >&2
     exit 1
 fi
 
@@ -112,7 +139,7 @@ safe_symlink "$CURRENT_TARGET" "$PREVIOUS_LINK"
 safe_symlink "$TARGET_RELEASE" "$CURRENT_LINK"
 
 if [ -e "$APP_ROOT/shared/storage/framework/down" ]; then
-    printf 'Maintenance mode is on: left on and health check skipped — run "php artisan up" once verified\n' >&2
+    printf 'Maintenance mode is on: left on and health check skipped — lift it ("php artisan up") once the live release is verified to match the schema\n' >&2
     exit 0
 fi
 
