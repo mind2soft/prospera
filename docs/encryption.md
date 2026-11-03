@@ -113,6 +113,11 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
   immutable, for saves and bulk writes alike).
 - `replicate()` copies carry the plaintext amounts and are encrypted afresh in
   their own context.
+- A transaction's date is bound as the `Y-m-d` of `event_at` as stored.
+  PostgreSQL (`timestamp without time zone`, production) and SQLite store it
+  without conversion; on a database converting timestamps with the session
+  time zone (MySQL `timestamp`), changing that time zone would make
+  transaction amounts fail to decrypt.
 
 ## Operations
 
@@ -185,13 +190,18 @@ scripts compare releases with the migrations the database actually ran
   shell, since ssh joins them into one command line) and one that is, or
   resolves to, the live or the previous release (it would be rebuilt in
   place before any check). The deploy root (`SSH_APP_PATH`) must be an
-  absolute path of `A-Za-z0-9._/-` without `.` or `..` components, and
+  absolute path of `A-Za-z0-9._/-` without `.`, `..` or empty components
+  nor a trailing `/` (releases are also compared resolved when pruning), and
   `KEEP_RELEASES` and `DEPLOY_SWITCH_WAIT` numbers of at most 4 digits; all
   are checked before connecting and on the host. The `.env` (it holds `APP_KEY`, which unwraps every amount key) is
   rendered owner-only and uploaded with that mode (scp keeps the source
   file's mode, checked against the production host, whose `/tmp` is also
   private to the account). The uploaded `.env` replaces `shared/.env` only
-  once these checks passed; a refused deploy leaves it untouched.
+  once these checks passed; a refused deploy leaves it untouched. A deploy
+  failing later (e.g. `amounts:verify` after an `APP_PREVIOUS_KEYS` change)
+  has already replaced it: the live release keeps its cached configuration,
+  but fix the secrets and deploy again before any rollback (which rebuilds
+  the configuration from it, then refuses if `amounts:verify` fails).
 - It switches to maintenance mode before running pending migrations, so the
   previous release stops accepting requests (ones already in flight may still
   complete). `amounts:verify` must pass before the release goes live. Any
