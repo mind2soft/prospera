@@ -34,14 +34,16 @@ run_healthcheck() {
         return 0
     fi
 
+    # errexit is ignored inside `if ! run_healthcheck`: return the probe's
+    # own status.
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL "$HEALTHCHECK_URL" >/dev/null
-        return 0
+        return
     fi
 
     if command -v wget >/dev/null 2>&1; then
         wget -q -O /dev/null "$HEALTHCHECK_URL"
-        return 0
+        return
     fi
 
     printf 'Health check requested but curl or wget is unavailable on the target host\n' >&2
@@ -82,16 +84,62 @@ else
     exit 1
 fi
 
+# Only the migrations the target release does not ship are rolled back, in
+# maintenance mode and before switching: --path limits the rollback to those
+# files, so a release without new migrations never undoes an older batch. If
+# the rollback fails, the current release stays live (its schema is intact).
+NEW_MIGRATIONS=''
+NEW_MIGRATION_COUNT=0
+
+for _file in "$CURRENT_TARGET"/database/migrations/*.php; do
+    [ -e "$_file" ] || continue
+    _name=$(basename "$_file")
+
+    if [ ! -e "$TARGET_RELEASE/database/migrations/$_name" ]; then
+        NEW_MIGRATIONS="$NEW_MIGRATIONS --path=database/migrations/$_name"
+        NEW_MIGRATION_COUNT=$((NEW_MIGRATION_COUNT + 1))
+    fi
+done
+
+cd "$CURRENT_TARGET"
+
+if [ "$NEW_MIGRATION_COUNT" -gt 0 ]; then
+    php artisan down --retry=15
+
+    # shellcheck disable=SC2086 # migration file names contain no spaces
+    if ! php artisan migrate:rollback --force --step="$NEW_MIGRATION_COUNT" $NEW_MIGRATIONS; then
+        php artisan up || true
+        printf 'Migration rollback failed; staying on the current release\n' >&2
+        exit 1
+    fi
+fi
+
 safe_symlink "$CURRENT_TARGET" "$PREVIOUS_LINK"
 safe_symlink "$TARGET_RELEASE" "$CURRENT_LINK"
 
-cd "$CURRENT_TARGET"
-php artisan migrate:rollback --force || printf 'Migration rollback failed\n' >&2
+if [ "$NEW_MIGRATION_COUNT" -gt 0 ]; then
+    php artisan up
+fi
 
 if ! run_healthcheck; then
     cd "$CURRENT_TARGET"
-    php artisan migrate --force || printf 'Migration re-apply failed\n' >&2
+
+    if [ "$NEW_MIGRATION_COUNT" -gt 0 ]; then
+        php artisan down --retry=15
+
+        if ! php artisan migrate --force; then
+            safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
+            printf 'Migration re-apply failed; the app stays in maintenance mode\n' >&2
+            exit 1
+        fi
+    fi
+
     safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
+
+    if [ "$NEW_MIGRATION_COUNT" -gt 0 ]; then
+        php artisan up
+    fi
+
     printf 'Rollback health check failed; restored previous current release\n' >&2
     exit 1
 fi
