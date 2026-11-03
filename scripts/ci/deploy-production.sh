@@ -10,6 +10,12 @@ require_env SSH_USER SSH_HOST SSH_APP_PATH APP_KEY APP_URL DB_HOST DB_PORT DB_DA
 prepare_ssh
 
 RELEASE_ID=$(release_id)
+
+if ! valid_release_id "$RELEASE_ID"; then
+    printf 'Refusing to deploy: invalid release id (A-Za-z0-9._- only): %s\n' "$RELEASE_ID" >&2
+    exit 1
+fi
+
 RELEASE_ARCHIVE_PATH=${RELEASE_ARCHIVE:-dist/release.tar.gz}
 REMOTE_ARCHIVE_PATH="/tmp/prospera-$RELEASE_ID.tar.gz"
 REMOTE_ENV_PATH="/tmp/prospera-$RELEASE_ID.env"
@@ -28,7 +34,7 @@ sh "$SCRIPT_DIR/render-production-env.sh" > "$LOCAL_ENV_PATH"
 scp_to_remote "$RELEASE_ARCHIVE_PATH" "$SSH_USER@$SSH_HOST:$REMOTE_ARCHIVE_PATH"
 scp_to_remote "$LOCAL_ENV_PATH" "$SSH_USER@$SSH_HOST:$REMOTE_ENV_PATH"
 
-ssh_remote sh -s -- "$SSH_APP_PATH" "$RELEASE_ID" "$REMOTE_ARCHIVE_PATH" "$REMOTE_ENV_PATH" "$KEEP_RELEASES" "$HEALTHCHECK_URL" "$SWITCH_WAIT" <<'REMOTE'
+ssh_remote_script "$SSH_APP_PATH" "$RELEASE_ID" "$REMOTE_ARCHIVE_PATH" "$REMOTE_ENV_PATH" "$KEEP_RELEASES" "$HEALTHCHECK_URL" "$SWITCH_WAIT" <<'REMOTE'
 set -eu
 
 APP_ROOT=$1
@@ -36,7 +42,7 @@ RELEASE_ID=$2
 ARCHIVE_PATH=$3
 ENV_UPLOAD_PATH=$4
 KEEP_RELEASES=$5
-HEALTHCHECK_URL=$6
+HEALTHCHECK_URL=${6:-}
 SWITCH_WAIT=${7:-}
 
 RELEASES_DIR=$APP_ROOT/releases

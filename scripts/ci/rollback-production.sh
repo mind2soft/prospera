@@ -20,12 +20,17 @@ fi
 ROLLBACK_RELEASE=${ROLLBACK_RELEASE:-}
 SWITCH_WAIT=${DEPLOY_SWITCH_WAIT:-}
 
-ssh_remote sh -s -- "$SSH_APP_PATH" "$HEALTHCHECK_URL" "$ROLLBACK_RELEASE" "$SWITCH_WAIT" <<'REMOTE'
+if [ -n "$ROLLBACK_RELEASE" ] && ! valid_release_id "$ROLLBACK_RELEASE"; then
+    printf 'Refusing to roll back: invalid release id (A-Za-z0-9._- only): %s\n' "$ROLLBACK_RELEASE" >&2
+    exit 1
+fi
+
+ssh_remote_script "$SSH_APP_PATH" "$HEALTHCHECK_URL" "$ROLLBACK_RELEASE" "$SWITCH_WAIT" <<'REMOTE'
 set -eu
 
 APP_ROOT=$1
-HEALTHCHECK_URL=$2
-ROLLBACK_RELEASE=$3
+HEALTHCHECK_URL=${2:-}
+ROLLBACK_RELEASE=${3:-}
 SWITCH_WAIT=${4:-}
 CURRENT_LINK=$APP_ROOT/current
 PREVIOUS_LINK=$APP_ROOT/previous

@@ -8,6 +8,9 @@
 # After every scenario the invariant is checked: the live release ships
 # exactly the migrations the database ran, or it is in maintenance mode.
 #
+# The local wrappers run end to end through ssh and scp shims: like OpenSSH,
+# the ssh shim joins the command words with spaces for the remote shell.
+#
 # Usage: sh scripts/ci/tests/deploy-scripts.test.sh [shell]   (default: sh)
 
 set -eu
@@ -63,7 +66,25 @@ echo "curl $(basename "$(readlink "$WORK/app/current")")" >> "$WORK/log"
 exit "${HEALTH_EXIT:-0}"
 EOF
 printf '#!/bin/sh\necho "sleep $1" >> "$WORK/log"\n' > "$WORK/bin/sleep"
-chmod +x "$WORK/bin/php" "$WORK/bin/composer" "$WORK/bin/curl" "$WORK/bin/sleep"
+cat > "$WORK/bin/ssh" <<'EOF'
+#!/bin/sh
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -i|-o) shift 2 ;;
+        -*) shift ;;
+        *) shift; break ;;
+    esac
+done
+echo "ssh $*" >> "$WORK/ssh-log"
+exec $SHELL_UNDER_TEST -c "$*"
+EOF
+cat > "$WORK/bin/scp" <<'EOF'
+#!/bin/sh
+for _a in "$@"; do _src=$_dst; _dst=$_a; done
+echo "scp $_src" >> "$WORK/ssh-log"
+cp "$_src" "${_dst#*:}"
+EOF
+chmod +x "$WORK/bin/php" "$WORK/bin/composer" "$WORK/bin/curl" "$WORK/bin/sleep" "$WORK/bin/ssh" "$WORK/bin/scp"
 
 extract_remote() {
     awk "/<<'REMOTE'/{f=1;next} /^REMOTE\$/{f=0} f" "$1"
@@ -87,7 +108,7 @@ release() {
 # Live "old" release (pre-feature: no migrations:ran) on a database that ran
 # migration a; the package to deploy ships a + b.
 setup() {
-    rm -rf "$APP" "$WORK/pkg" "$WORK/log" "$WORK/no-table"
+    rm -rf "$APP" "$WORK/pkg" "$WORK/log" "$WORK/no-table" "$WORK/ssh-log" "$WORK/PWNED"
     DEPLOY_ID=new ROLLBACK_ID='' WAIT=''
     mkdir -p "$APP/shared/storage"
     release "$APP/releases/old" '' a
@@ -161,6 +182,33 @@ rollback() {
         $SHELL_UNDER_TEST "$WORK/rollback-remote.sh" "$APP" "http://localhost/up" "$ROLLBACK_ID" "$WAIT" \
         > "$WORK/out" 2>&1 || _rc=$?
     echo "$_rc"
+}
+
+# The local wrappers, through the ssh and scp shims.
+wrapper_env() {
+    env WORK="$WORK" PATH="$WORK/bin:$PATH" HOME="$WORK/home" SHELL_UNDER_TEST="$SHELL_UNDER_TEST" \
+        SSH_USER=deploy SSH_HOST=example.test SSH_APP_PATH="$APP" SSH_PRIVATE_KEY=key \
+        SSH_KNOWN_HOSTS='example.test ssh-ed25519 AAAA' APP_URL=http://localhost "$@"
+}
+
+rollback_wrapper() {
+    _rc=0
+    wrapper_env "$@" $SHELL_UNDER_TEST "$SCRIPTS_DIR/rollback-production.sh" > "$WORK/out" 2>&1 || _rc=$?
+    echo "$_rc"
+}
+
+deploy_wrapper() {
+    package
+    mkdir -p "$WORK/cwd/dist"
+    _rc=0
+    (cd "$WORK/cwd" && wrapper_env RELEASE_ARCHIVE="$WORK/release.tgz" APP_KEY=x DB_HOST=db DB_PORT=5432 \
+        DB_DATABASE=app DB_USERNAME=u DB_PASSWORD=p MAIL_HOST=mail MAIL_PORT=465 MAIL_USERNAME=m MAIL_PASSWORD=mp "$@" \
+        $SHELL_UNDER_TEST "$SCRIPTS_DIR/deploy-production.sh") > "$WORK/out" 2>&1 || _rc=$?
+    echo "$_rc"
+}
+
+pwned() {
+    if [ -e "$WORK/PWNED" ]; then echo PWNED; else echo safe; fi
 }
 
 # expect <name> <actual> <expected>
@@ -647,6 +695,65 @@ touch -t 202001010000 "$APP/shared/deploy-maintenance"
 rc=$(rollback)
 expect "rollback: a marker older than the maintenance mode never lifts it" \
     "$rc $(live) $(maintenance) $(ran ' up') $(marker) $(grep -c '^sleep' "$WORK/log")" '0 old on no none 0'
+
+# --- local wrappers (ssh joins its arguments for the remote shell) --------
+
+setup_rollback
+release "$APP/releases/old" '' a b
+rc=$(rollback_wrapper ROLLBACK_RELEASE='' DEPLOY_SWITCH_WAIT=3)
+expect 'rollback wrapper: an empty release id rolls back to the previous release' \
+    "$rc $(live) $(previous) $(grep -c '^sleep 3$' "$WORK/log")" '0 old new 1'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+rc=$(rollback_wrapper ROLLBACK_RELEASE=old)
+expect 'rollback wrapper: a named release, default wait' "$rc $(live) $(grep -c '^sleep 125$' "$WORK/log")" '0 old 1'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+rc=$(rollback_wrapper ROLLBACK_RELEASE='old;touch${IFS}'"$WORK/PWNED"';')
+expect 'rollback wrapper: an invalid release id is refused before ssh' \
+    "$rc $(live) $(pwned) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" '1 new safe no-ssh'
+
+for _payload in ';touch${IFS}'"$WORK/PWNED"';' "';touch \${IFS}$WORK/PWNED;'"; do
+    setup_rollback
+    release "$APP/releases/old" '' a b
+    rc=$(rollback_wrapper SSH_APP_PATH="$APP$_payload")
+    expect "rollback wrapper: arguments are never parsed by the remote shell [$_payload]" "$rc $(live) $(pwned)" '1 new safe'
+done
+
+setup_rollback
+release "$APP/releases/old" '' a b
+ln -s "$APP" "$WORK/app with space"
+rc=$(rollback_wrapper SSH_APP_PATH="$WORK/app with space")
+rm -f "$WORK/app with space"
+expect 'rollback wrapper: an app path with spaces' "$rc $(live)" '0 old'
+
+setup
+DEPLOY_E2E_ID=e2e-$$
+rc=$(deploy_wrapper RELEASE_ID="$DEPLOY_E2E_ID" DEPLOY_SWITCH_WAIT=2)
+expect 'deploy wrapper: deploys through ssh and scp' \
+    "$rc $(live) $(maintenance) $(grep -c '^sleep 2$' "$WORK/log") $(grep -c '^APP_KEY=x$' "$APP/shared/.env") $([ -e "/tmp/prospera-$DEPLOY_E2E_ID.env" ] && echo left || echo cleaned)" \
+    "0 $DEPLOY_E2E_ID off 1 1 cleaned"
+
+for _id in 'v1;touch${IFS}'"$WORK/PWNED"';' ../releases/old . ..; do
+    setup
+    rc=$(deploy_wrapper RELEASE_ID="$_id")
+    expect "deploy wrapper: an invalid release id [$_id] is refused before scp and ssh" \
+        "$rc $(live) $(pwned) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" '1 old safe no-ssh'
+done
+
+setup_rollback
+release "$APP/releases/old" '' a b
+rc=$(rollback_wrapper ROLLBACK_RELEASE=../releases/old)
+expect 'rollback wrapper: a path as release id is refused before ssh' \
+    "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" '1 new no-ssh'
+
+for _payload in ';touch${IFS}'"$WORK/PWNED"';' "';touch \${IFS}$WORK/PWNED;'"; do
+    setup
+    rc=$(deploy_wrapper RELEASE_ID=e2e-$$ DEPLOY_HEALTHCHECK_URL="http://localhost/up$_payload")
+    expect "deploy wrapper: arguments are never parsed by the remote shell [$_payload]" "$rc $(live) $(pwned)" "0 e2e-$$ safe"
+done
 
 if [ "$FAILURES" -ne 0 ]; then
     printf '%s deploy script test(s) failed\n' "$FAILURES" >&2
