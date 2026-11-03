@@ -98,13 +98,18 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
   way.
 - Write amounts through Eloquent models (`create`, `save`, `update`,
   `saveQuietly` — encryption does not rely on model events). Bulk Eloquent
-  writes (`update`, `insert`, `upsert`, `increment`, `fillAndInsert`…) refuse
-  anything but ciphertext in these columns; `DB::table()` and `toBase()`
-  writes bypass Eloquent and must never touch them.
+  writes go through `GuardedBuilder`: `update`, `updateFrom`,
+  `updateOrInsert`, `insert*` and `fillAndInsert*` accept nothing but
+  ciphertext in these columns; `upsert`, `increment`/`decrement` and
+  `insertUsing` on them are refused. `DB::table()` and `toBase()` writes
+  bypass Eloquent and must never touch them.
 - Changing an attribute bound into the context (a transaction's ledger,
   envelope or date; an assignment's budget or envelope) requires assigning
-  the amount in the same save. Ledgers and budgets cannot move to another
-  profile.
+  the amount in the same save — a time change within the same day does not.
+  Bulk updates of those columns are refused unless every amount column is
+  re-written in the same statement.
+- Ledgers and budgets cannot move to another profile (`profile_id` is
+  immutable, for saves and bulk writes alike).
 - `replicate()` copies carry the plaintext amounts and are encrypted afresh in
   their own context.
 
@@ -131,7 +136,9 @@ production host must run the scheduler:
 
 Retired versions stay readable for the grace period so a request that loaded
 the previous key just before a rotation can still write; pruning re-encrypts
-those stragglers.
+those stragglers. A request that loaded a row just before pruning deletes its
+key version may fail once (HTTP 500) when decrypting it; writes are not
+affected.
 
 ### Backing up `APP_KEY`
 
@@ -161,16 +168,28 @@ restore the row from a backup taken with the same `APP_KEY`.
 
 ### Deployments
 
-`scripts/ci/deploy-production.sh` runs pending migrations in maintenance mode,
-so the previous release never serves requests against a new schema (for this
-feature: it would read ciphertext and could write plaintext). If any step
-after migrating fails, or the health check fails, the release's **new**
-migrations — and only those — are rolled back before the previous release is
-restored. `amounts:verify` must pass before a release goes live. A failed
-rollback leaves the app in maintenance mode for manual intervention.
+Production migrations are **forward-only**: the app prohibits destructive
+commands in production (`DB::prohibitDestructiveCommands()`), so
+`migrate:rollback` and `migrate:reset` refuse to run there. A release must
+therefore never run on a schema it does not know — for this feature, the
+pre-encryption release would read ciphertext and could write plaintext.
 
-`scripts/ci/rollback-production.sh` likewise rolls back only the migrations
-the target release does not ship, in maintenance mode, before switching.
+- `scripts/ci/deploy-production.sh` switches to maintenance mode before running
+  pending migrations, so the previous release stops accepting requests (ones
+  already in flight may still complete). `amounts:verify` must pass before the
+  release goes live. Any failure during or after migrating — including a
+  failed health check — **leaves the app in maintenance mode**: the previous
+  release is not restored on the migrated schema. Recover by deploying a fix,
+  then `php artisan up`. Failures without pending migrations revert to the
+  previous release as before.
+- A deploy started while maintenance mode is already on leaves it on (and
+  skips the health check): run `php artisan up` once verified.
+- `scripts/ci/rollback-production.sh` only switches to a release that ships
+  exactly the same migrations and has none pending; otherwise it refuses
+  without touching anything. Once this feature is deployed, going back to a
+  pre-encryption release is a deliberate manual operation: the migration's
+  `down()` (tested, it decrypts every amount back to integers) must be run on
+  purpose — production prohibits it by default — before switching releases.
 
 ### Migration of existing data
 
