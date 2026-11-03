@@ -189,7 +189,8 @@ scripts compare releases with the migrations the database actually ran
   connecting, and again on the host; every argument is quoted for the remote
   shell, since ssh joins them into one command line) and one that is, or
   resolves to, the live or the previous release (it would be rebuilt in
-  place before any check). The deploy root (`SSH_APP_PATH`) must be an
+  place before any check; the `current` and `previous` links are resolved
+  through themselves, so relative link targets are handled too). The deploy root (`SSH_APP_PATH`) must be an
   absolute path of `A-Za-z0-9._/-` without `.`, `..` or empty components
   nor a trailing `/` (releases are also compared resolved when pruning), and
   `KEEP_RELEASES` and `DEPLOY_SWITCH_WAIT` numbers of at most 4 digits; all
