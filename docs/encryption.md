@@ -101,7 +101,8 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
   writes go through `GuardedBuilder`: `update`, `updateFrom`,
   `updateOrInsert` and `insert*` accept nothing but ciphertext in these
   columns; `upsert`, `increment`/`decrement`, `touch` and `insertUsing` on
-  them are refused, and so is `fillAndInsert*` (its models hold plaintext). `DB::table()` and `toBase()` writes
+  them are refused, and so is `fillAndInsert*` (its models hold plaintext).
+  Multi-row inserts must give every row the same columns. `DB::table()` and `toBase()` writes
   bypass Eloquent and must never touch them.
 - Changing an attribute bound into the context (a transaction's ledger,
   envelope or date; an assignment's budget or envelope) requires assigning
@@ -177,8 +178,9 @@ scripts compare releases with the migrations the database actually ran
 (`php artisan migrations:ran`, read from the migrations table).
 
 - `scripts/ci/deploy-production.sh` refuses a release that does not ship
-  every migration the database ran, and a deploy that cannot read them
-  (except a first install).
+  every migration the database ran, a deploy that cannot read them (except a
+  first install), and a release id that is the live or the previous release
+  (it would be rebuilt in place before any check).
 - It switches to maintenance mode before running pending migrations, so the
   previous release stops accepting requests (ones already in flight may still
   complete). `amounts:verify` must pass before the release goes live. Any
@@ -186,24 +188,27 @@ scripts compare releases with the migrations the database actually ran
   **leaves the app in maintenance mode**: the previous release is not
   restored on the migrated schema. Recover by deploying a fix: once verified,
   it lifts the maintenance mode the failed deploy set (marked by
-  `shared/deploy-maintenance`). Failures without pending migrations revert to
-  the previous release as before.
+  `shared/deploy-maintenance`, written once the app is down and cleared when
+  maintenance mode is lifted, by hand or not). A failed health check without
+  pending migrations reverts to the previous release only if it ships exactly
+  the migrations the database ran and no failed deploy's maintenance was
+  pending; otherwise the new release stays in maintenance mode.
 - An operator's maintenance mode (on before the deploy, without that marker)
   is never lifted nor modified, and the health check is skipped: lift it once
   the live release is verified to match the schema.
 - After migrating (or failing to), the deploy records the migrations the
   database ran in `shared/schema-migrations`.
 - `scripts/ci/rollback-production.sh` only switches to a release shipping
-  exactly the migrations the database ran (read live, else from that record,
-  else from the live release) with none pending. It rebuilds the target's
+  exactly the migrations the database ran (read live from either release,
+  else from that record; without either it refuses) with none pending. It rebuilds the target's
   configuration cache from the current `.env` (e.g. a rotated `APP_KEY`) and
-  requires `amounts:verify` to pass with it; otherwise it refuses without
-  switching. It lifts a failed deploy's maintenance mode once the matching
+  requires `amounts:verify` to pass with it when the target has that command;
+  otherwise it refuses without switching. It lifts a failed deploy's maintenance mode once the matching
   release is live, never an operator's.
 - A legacy layout (the app directly in the deploy root) is moved into
-  `releases/` with its storage shared, so maintenance mode covers it; a
-  pending migration is refused if the live release does not use the shared
-  storage.
+  `releases/` with its storage and `.env` shared, so maintenance mode covers
+  it and a rollback to it uses the current `.env`; a pending migration is
+  refused if the live release does not use the shared storage.
 - Both scripts assume the `file` maintenance driver (the default,
   `APP_MAINTENANCE_DRIVER=file`). Their control flow is tested by
   `scripts/ci/tests/deploy-scripts.test.sh` (part of `composer ci:check`).
