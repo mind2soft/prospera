@@ -186,8 +186,8 @@ scripts compare releases with the migrations the database actually ran
   resolves to, the live or the previous release (it would be rebuilt in
   place before any check). The deploy root (`SSH_APP_PATH`) must be an
   absolute path of `A-Za-z0-9._/-` without `.` or `..` components, and
-  `KEEP_RELEASES` a number; both are checked before connecting and on the
-  host. The `.env` (it holds `APP_KEY`, which unwraps every amount key) is
+  `KEEP_RELEASES` and `DEPLOY_SWITCH_WAIT` numbers of at most 4 digits; all
+  are checked before connecting and on the host. The `.env` (it holds `APP_KEY`, which unwraps every amount key) is
   rendered owner-only and uploaded with that mode (scp keeps the source
   file's mode, checked against the production host, whose `/tmp` is also
   private to the account). The uploaded `.env` replaces `shared/.env` only
@@ -220,7 +220,7 @@ scripts compare releases with the migrations the database actually ran
   the host's CLI PHP; 125 if unreadable) before lifting maintenance mode and
   before the health check, so neither happens while the replaced release may
   still serve requests. Set the `DEPLOY_SWITCH_WAIT` repository variable (in
-  seconds; `0` disables it) when the web PHP's TTL differs from the CLI's, or
+  seconds, at most 9999; `0` disables it) when the web PHP's TTL differs from the CLI's, or
   when the server resolves the symlink itself (nginx:
   `fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;` and
   `DOCUMENT_ROOT $realpath_root`). OPcache is not handled: on a host where
