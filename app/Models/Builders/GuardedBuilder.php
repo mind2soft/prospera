@@ -7,6 +7,7 @@ use App\Models\Contracts\HasImmutableColumns;
 use App\Security\Amounts\AmountCipher;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use LogicException;
 
@@ -30,12 +31,13 @@ class GuardedBuilder extends Builder
 {
     /**
      * Set for a model's own save (EncryptsAmounts::performUpdate), which has
-     * already checked context changes precisely.
+     * already checked context changes precisely; consumed by the next
+     * update().
      */
     private bool $modelSave = false;
 
     /**
-     * @internal for EncryptsAmounts::performUpdate()
+     * @internal for EncryptsAmounts::performUpdate() only
      *
      * @return $this
      */
@@ -52,9 +54,28 @@ class GuardedBuilder extends Builder
      */
     public function update(array $values)
     {
-        $this->assertUpdatable($values, 'update');
+        try {
+            $this->assertUpdatable($values, 'update');
+        } finally {
+            $this->modelSave = false;
+        }
 
         return parent::update($values);
+    }
+
+    /**
+     * @param  string|array<int, string>|null  $column
+     * @return int|false
+     */
+    public function touch($column = null)
+    {
+        $columns = $column
+            ? Arr::wrap($column)
+            : array_filter([$this->model->usesTimestamps() ? $this->model->getUpdatedAtColumn() : null]);
+
+        $this->assertUpdatable(array_fill_keys($columns, $this->model->freshTimestampString()), 'touch');
+
+        return parent::touch($column);
     }
 
     /**

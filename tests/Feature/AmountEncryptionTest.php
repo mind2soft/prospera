@@ -429,6 +429,14 @@ class AmountEncryptionTest extends TestCase
             'updateFrom' => fn () => Transaction::query()->updateFrom(['amount' => 5]),
             'context change' => fn () => Transaction::query()->whereKey($transaction->id)->update(['envelope_id' => $this->salary->id]),
             'context change via updateOrInsert' => fn () => Transaction::query()->updateOrInsert(['id' => $transaction->id], ['event_at' => '2026-07-01 00:00:00']),
+            'touch amount' => fn () => Transaction::query()->whereKey($transaction->id)->touch('amount'),
+            'touch context' => fn () => Transaction::query()->whereKey($transaction->id)->touch(['updated_at', 'event_at']),
+            'touch profile' => fn () => Ledger::query()->whereKey($this->ledger->id)->touch('profile_id'),
+            'flag is one-shot' => function () use ($transaction): void {
+                $query = Transaction::query()->whereKey($transaction->id);
+                $query->forModelSave()->update(['user_id' => null]);
+                $query->update(['envelope_id' => $this->salary->id]);
+            },
         ];
 
         foreach ($attempts as $name => $attempt) {
@@ -446,6 +454,8 @@ class AmountEncryptionTest extends TestCase
         // Writes that leave the amounts alone are unaffected.
         Transaction::query()->whereKey($transaction->id)->update(['user_id' => null]);
         $this->assertNull(Transaction::query()->findOrFail($transaction->id)->user_id);
+        $this->assertSame(1, Transaction::query()->whereKey($transaction->id)->touch());
+        $this->assertSame(-10, Transaction::query()->findOrFail($transaction->id)->amount);
     }
 
     public function test_ledgers_and_budgets_cannot_move_to_another_profile(): void
