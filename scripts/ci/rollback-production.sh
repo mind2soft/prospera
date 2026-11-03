@@ -20,6 +20,11 @@ fi
 ROLLBACK_RELEASE=${ROLLBACK_RELEASE:-}
 SWITCH_WAIT=${DEPLOY_SWITCH_WAIT:-}
 
+if ! valid_app_path "$SSH_APP_PATH"; then
+    printf 'Refusing to roll back: invalid SSH_APP_PATH (absolute, A-Za-z0-9._/- only): %s\n' "$SSH_APP_PATH" >&2
+    exit 1
+fi
+
 if [ -n "$ROLLBACK_RELEASE" ] && ! valid_release_id "$ROLLBACK_RELEASE"; then
     printf 'Refusing to roll back: invalid release id (A-Za-z0-9._- only): %s\n' "$ROLLBACK_RELEASE" >&2
     exit 1
@@ -32,6 +37,19 @@ APP_ROOT=$1
 HEALTHCHECK_URL=${2:-}
 ROLLBACK_RELEASE=${3:-}
 SWITCH_WAIT=${4:-}
+
+# The deploy root: an absolute path of plain names (no spaces, no . or ..).
+case "$APP_ROOT" in
+    /*) ;;
+    *) APP_ROOT='' ;;
+esac
+
+case "$APP_ROOT" in
+    ''|*[!A-Za-z0-9._/-]*|*/./*|*/../*|*/.|*/..)
+        printf 'Refusing: invalid app path (absolute, A-Za-z0-9._/- only): %s\n' "$1" >&2
+        exit 1
+        ;;
+esac
 CURRENT_LINK=$APP_ROOT/current
 PREVIOUS_LINK=$APP_ROOT/previous
 RELEASES_DIR=$APP_ROOT/releases

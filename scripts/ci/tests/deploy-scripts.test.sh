@@ -480,6 +480,20 @@ rc=$(deploy)
 expect 'deploy: a deploy installs the uploaded .env as the shared one' \
     "$rc $(cat "$APP/shared/.env") $(readlink "$APP/releases/new/.env" | sed "s|^$APP/||")" '0 APP_KEY=x shared/.env'
 
+# Pruning keeps the KEEP_RELEASES newest, plus the current and previous.
+setup
+touch -t 201901010000 "$APP/releases/old"
+_y=2020
+for _r in r1 r2 r3 r4; do
+    release "$APP/releases/$_r" '' a
+    touch -t "${_y}01010000" "$APP/releases/$_r"
+    _y=$((_y + 1))
+done
+mkdir -p "$WORK/keep" && : > "$WORK/keep/file"
+rc=$(deploy)
+expect 'deploy: pruning keeps the newest releases, the current and the previous' \
+    "$rc $(ls "$APP/releases" | tr '\n' ' ')$(ls "$WORK/keep")" '0 new old r3 r4 file'
+
 # Legacy layout: the app lives directly in APP_ROOT.
 setup_legacy() {
     setup
@@ -722,12 +736,20 @@ for _payload in ';touch${IFS}'"$WORK/PWNED"';' "';touch \${IFS}$WORK/PWNED;'"; d
     expect "rollback wrapper: arguments are never parsed by the remote shell [$_payload]" "$rc $(live) $(pwned)" '1 new safe'
 done
 
+for _path in "$WORK/app with space" app "$WORK/x/../app" "$WORK/./app" "$APP/.."; do
+    setup_rollback
+    release "$APP/releases/old" '' a b
+    rc=$(rollback_wrapper SSH_APP_PATH="$_path")
+    expect "rollback wrapper: an invalid app path [$_path] is refused before ssh" \
+        "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" '1 new no-ssh'
+done
+
 setup_rollback
 release "$APP/releases/old" '' a b
-ln -s "$APP" "$WORK/app with space"
-rc=$(rollback_wrapper SSH_APP_PATH="$WORK/app with space")
-rm -f "$WORK/app with space"
-expect 'rollback wrapper: an app path with spaces' "$rc $(live)" '0 old'
+_rc=0
+env WORK="$WORK" PATH="$WORK/bin:$PATH" $SHELL_UNDER_TEST "$WORK/rollback-remote.sh" "$WORK/app with space" "" "" 0 \
+    > "$WORK/out" 2>&1 || _rc=$?
+expect 'rollback: an invalid app path is refused on the host too' "$_rc $(live) $(grep -c 'invalid app path' "$WORK/out")" '1 new 1'
 
 setup
 DEPLOY_E2E_ID=e2e-$$
@@ -742,6 +764,36 @@ for _id in 'v1;touch${IFS}'"$WORK/PWNED"';' ../releases/old . ..; do
     expect "deploy wrapper: an invalid release id [$_id] is refused before scp and ssh" \
         "$rc $(live) $(pwned) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" '1 old safe no-ssh'
 done
+
+for _path in "$WORK/app with space" app "$WORK/x/../app"; do
+    setup
+    rc=$(deploy_wrapper RELEASE_ID=e2e-$$ SSH_APP_PATH="$_path")
+    expect "deploy wrapper: an invalid app path [$_path] is refused before scp and ssh" \
+        "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" '1 old no-ssh'
+done
+
+for _keep in x '' -1 '3 4'; do
+    setup
+    rc=$(deploy_wrapper RELEASE_ID=e2e-$$ KEEP_RELEASES="$_keep")
+    expect "deploy wrapper: an invalid KEEP_RELEASES [$_keep] is refused before scp and ssh" \
+        "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" "$([ -z "$_keep" ] && echo "0 e2e-$$ ssh" || echo '1 old no-ssh')"
+done
+
+setup
+for _arg in "$WORK/app with space|3" "$APP|x"; do
+    _rc=0
+    env WORK="$WORK" PATH="$WORK/bin:$PATH" $SHELL_UNDER_TEST "$WORK/deploy-remote.sh" "${_arg%|*}" new "$WORK/release.tgz" "$WORK/env" "${_arg#*|}" "" 0 \
+        > "$WORK/out" 2>&1 || _rc=$?
+    expect "deploy: an invalid app path or KEEP_RELEASES [$_arg] is refused on the host too" \
+        "$_rc $(live) $([ -d "$APP/releases/new" ] && echo built || echo none)" '1 old none'
+done
+
+setup
+mkdir -p "$WORK/cwd/dist"
+printf 'old\n' > "$WORK/cwd/dist/.env.production"
+chmod 644 "$WORK/cwd/dist/.env.production"
+rc=$(deploy_wrapper RELEASE_ID=e2e-$$)
+expect 'deploy wrapper: the rendered .env is owner-only' "$rc $(ls -l "$WORK/cwd/dist/.env.production" | cut -c1-10)" '0 -rw-------'
 
 setup_rollback
 release "$APP/releases/old" '' a b

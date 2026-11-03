@@ -10,6 +10,19 @@ require_env SSH_USER SSH_HOST SSH_APP_PATH APP_KEY APP_URL DB_HOST DB_PORT DB_DA
 prepare_ssh
 
 RELEASE_ID=$(release_id)
+KEEP_RELEASES=${KEEP_RELEASES:-3}
+
+if ! valid_app_path "$SSH_APP_PATH"; then
+    printf 'Refusing to deploy: invalid SSH_APP_PATH (absolute, A-Za-z0-9._/- only): %s\n' "$SSH_APP_PATH" >&2
+    exit 1
+fi
+
+case "$KEEP_RELEASES" in
+    ''|*[!0-9]*)
+        printf 'Refusing to deploy: KEEP_RELEASES must be a number: %s\n' "$KEEP_RELEASES" >&2
+        exit 1
+        ;;
+esac
 
 if ! valid_release_id "$RELEASE_ID"; then
     printf 'Refusing to deploy: invalid release id (A-Za-z0-9._- only): %s\n' "$RELEASE_ID" >&2
@@ -20,7 +33,6 @@ RELEASE_ARCHIVE_PATH=${RELEASE_ARCHIVE:-dist/release.tar.gz}
 REMOTE_ARCHIVE_PATH="/tmp/prospera-$RELEASE_ID.tar.gz"
 REMOTE_ENV_PATH="/tmp/prospera-$RELEASE_ID.env"
 LOCAL_ENV_PATH='dist/.env.production'
-KEEP_RELEASES=${KEEP_RELEASES:-3}
 HEALTHCHECK_URL=${DEPLOY_HEALTHCHECK_URL:-$APP_URL/up}
 SWITCH_WAIT=${DEPLOY_SWITCH_WAIT:-}
 
@@ -29,7 +41,11 @@ test -f "$RELEASE_ARCHIVE_PATH" || {
     exit 1
 }
 
-sh "$SCRIPT_DIR/render-production-env.sh" > "$LOCAL_ENV_PATH"
+# The .env holds APP_KEY (it unwraps every amount key): owner-only, also on
+# the host (scp keeps the source file's mode).
+rm -f "$LOCAL_ENV_PATH"
+(umask 077 && sh "$SCRIPT_DIR/render-production-env.sh" > "$LOCAL_ENV_PATH")
+chmod 600 "$LOCAL_ENV_PATH"
 
 scp_to_remote "$RELEASE_ARCHIVE_PATH" "$SSH_USER@$SSH_HOST:$REMOTE_ARCHIVE_PATH"
 scp_to_remote "$LOCAL_ENV_PATH" "$SSH_USER@$SSH_HOST:$REMOTE_ENV_PATH"
@@ -44,6 +60,26 @@ ENV_UPLOAD_PATH=$4
 KEEP_RELEASES=$5
 HEALTHCHECK_URL=${6:-}
 SWITCH_WAIT=${7:-}
+
+# The deploy root: an absolute path of plain names (no spaces, no . or ..).
+case "$APP_ROOT" in
+    /*) ;;
+    *) APP_ROOT='' ;;
+esac
+
+case "$APP_ROOT" in
+    ''|*[!A-Za-z0-9._/-]*|*/./*|*/../*|*/.|*/..)
+        printf 'Refusing: invalid app path (absolute, A-Za-z0-9._/- only): %s\n' "$1" >&2
+        exit 1
+        ;;
+esac
+
+case "$KEEP_RELEASES" in
+    ''|*[!0-9]*)
+        printf 'Refusing to deploy: KEEP_RELEASES must be a number: %s\n' "$KEEP_RELEASES" >&2
+        exit 1
+        ;;
+esac
 
 RELEASES_DIR=$APP_ROOT/releases
 SHARED_DIR=$APP_ROOT/shared
@@ -240,7 +276,7 @@ run_healthcheck() {
 prune_old_releases() {
     count=0
 
-    for path in $(ls -1dt "$RELEASES_DIR"/* 2>/dev/null || true); do
+    (ls -1dt "$RELEASES_DIR"/* 2>/dev/null || true) | while IFS= read -r path; do
         count=$((count + 1))
 
         if [ "$count" -le "$KEEP_RELEASES" ]; then

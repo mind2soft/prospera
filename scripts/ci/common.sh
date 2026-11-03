@@ -74,6 +74,18 @@ ssh_remote_script() {
     ssh_remote "$_command"
 }
 
+# The deploy root: an absolute path of plain names (no spaces, no . or ..).
+valid_app_path() {
+    case "$1" in
+        /*) ;;
+        *) return 1 ;;
+    esac
+
+    case "$1" in
+        *[!A-Za-z0-9._/-]*|*/./*|*/../*|*/.|*/..) return 1 ;;
+    esac
+}
+
 # A release id is one directory name under releases/ (no path).
 valid_release_id() {
     case "$1" in
