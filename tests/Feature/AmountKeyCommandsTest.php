@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Console\Commands\ListRanMigrations;
 use App\Models\Budget;
 use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
@@ -18,6 +19,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -248,6 +250,18 @@ class AmountKeyCommandsTest extends TestCase
             ->expectsOutputToContain("transactions #{$transactions[1]->id}")
             ->expectsOutputToContain('1 amount(s) failed verification.')
             ->assertFailed();
+    }
+
+    public function test_migrations_ran_lists_the_migrations_table(): void
+    {
+        $this->artisan('migrations:ran')
+            ->expectsOutput('0001_01_01_000000_create_users_table')
+            ->expectsOutput('2026_11_03_000001_encrypt_amounts_at_rest')
+            ->assertSuccessful();
+
+        Schema::drop('migrations');
+
+        $this->artisan('migrations:ran')->assertExitCode(ListRanMigrations::NO_REPOSITORY);
     }
 
     public function test_rotation_and_pruning_are_scheduled(): void

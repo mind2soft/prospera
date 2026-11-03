@@ -2,27 +2,23 @@
 
 namespace App\Security\Amounts;
 
-use Closure;
 use InvalidArgumentException;
 use LogicException;
+use WeakMap;
 
 /**
- * A plaintext per-profile amount data key, held in memory only. It refuses
- * to be serialized and hides its bytes from debug output (an explicit
- * (array) cast or reflection can still reach them: PHP has no protected
- * memory).
+ * A plaintext per-profile amount data key, held in memory only. Its bytes
+ * live outside the instance (a private static WeakMap), so no dumper — PHP's
+ * own, Symfony VarDumper (dump(), dd(), Tinker) — nor an (array) cast can
+ * print them; it refuses to be serialized or cloned. Reflection can still
+ * reach them: PHP has no protected memory.
  */
 final class DataKey
 {
     public const LENGTH = 32;
 
-    /**
-     * Holds the bytes out of the object's properties, so var_export() and
-     * the debug dumpers (with __debugInfo) cannot print them.
-     *
-     * @var Closure(): string
-     */
-    private readonly Closure $bytes;
+    /** @var WeakMap<self, string>|null */
+    private static ?WeakMap $secrets = null;
 
     public function __construct(
         public readonly int $profileId,
@@ -37,7 +33,8 @@ final class DataKey
             throw new InvalidArgumentException('Amount key must be exactly '.self::LENGTH.' bytes.');
         }
 
-        $this->bytes = static fn (): string => $bytes;
+        self::$secrets ??= new WeakMap;
+        self::$secrets[$this] = $bytes;
     }
 
     public static function generate(int $profileId, int $version): self
@@ -47,7 +44,13 @@ final class DataKey
 
     public function bytes(): string
     {
-        return ($this->bytes)();
+        $bytes = self::$secrets[$this] ?? null;
+
+        if ($bytes === null) {
+            throw new LogicException('Amount key bytes are unavailable.');
+        }
+
+        return $bytes;
     }
 
     /**
@@ -56,6 +59,11 @@ final class DataKey
     public function __debugInfo(): array
     {
         return ['profileId' => $this->profileId, 'version' => $this->version];
+    }
+
+    public function __clone(): void
+    {
+        throw new LogicException('Amount keys must never be cloned.');
     }
 
     /**

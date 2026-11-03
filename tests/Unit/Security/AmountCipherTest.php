@@ -10,6 +10,8 @@ use InvalidArgumentException;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\VarDumper\Cloner\VarCloner;
+use Symfony\Component\VarDumper\Dumper\CliDumper;
 
 class AmountCipherTest extends TestCase
 {
@@ -248,6 +250,14 @@ class AmountCipherTest extends TestCase
         $this->assertStringNotContainsString($bytes, print_r($key, true));
         $this->assertStringNotContainsString($bytes, print_r([$key], true));
         $this->assertStringNotContainsString($bytes, var_export($key, true));
+        $this->assertStringNotContainsString($bytes, print_r((array) $key, true));
+        $this->assertStringNotContainsString($bytes, var_export((array) $key, true));
+
+        // Symfony VarDumper (dump(), dd(), Tinker).
+        $dumped = (new CliDumper)->dump((new VarCloner)->cloneVar($key), true);
+        $this->assertIsString($dumped);
+        $this->assertStringNotContainsString($bytes, $dumped);
+        $this->assertStringNotContainsString(bin2hex($bytes), $dumped);
         $this->assertSame('{"profileId":7,"version":3}', json_encode($key));
         $this->assertSame($bytes, $key->bytes());
 
@@ -255,6 +265,13 @@ class AmountCipherTest extends TestCase
         var_dump($key);
         $dump = (string) ob_get_clean();
         $this->assertStringNotContainsString($bytes, $dump);
+
+        try {
+            clone $key;
+            $this->fail('An amount key was cloned.');
+        } catch (LogicException) {
+            $this->addToAssertionCount(1);
+        }
 
         $this->expectException(LogicException::class);
         serialize($key);
