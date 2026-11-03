@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\EncryptsAmounts;
+use App\Models\Contracts\HasEncryptedAmounts;
 use App\Security\Amounts\AmountContext;
 use App\Security\Amounts\AmountKeyRing;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -19,7 +20,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-class BudgetEnvelope extends Model
+class BudgetEnvelope extends Model implements HasEncryptedAmounts
 {
     use EncryptsAmounts;
 

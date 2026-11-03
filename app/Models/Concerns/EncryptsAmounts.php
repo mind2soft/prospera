@@ -2,16 +2,19 @@
 
 namespace App\Models\Concerns;
 
+use App\Models\Builders\EncryptedAmountsBuilder;
 use App\Security\Amounts\AmountCipher;
 use App\Security\Amounts\AmountContext;
 use App\Security\Amounts\AmountDecryptionException;
 use App\Security\Amounts\AmountKeyRing;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Query\Builder;
 use InvalidArgumentException;
 use LogicException;
 
 /**
- * Money columns encrypted at rest (docs/encryption.md).
+ * Money columns encrypted at rest (docs/encryption.md). Using models
+ * implement HasEncryptedAmounts.
  *
  * The attribute holds the plaintext int between assignment and persistence;
  * it is encrypted when Eloquent builds the INSERT/UPDATE payload
@@ -19,19 +22,16 @@ use LogicException;
  * withoutEvents() cannot bypass it. Stored values are decrypted on read and
  * any failure throws — an amount never silently reads as 0 or null.
  *
- * Query-builder writes (insert/update/upsert/increment) bypass Eloquent and
- * must never touch these columns; neither may SQL aggregate, sort or filter
- * on them.
+ * Changing an attribute bound into the encryption context (e.g. a
+ * transaction's envelope) requires assigning the amount in the same save, so
+ * a stale amount is never re-encrypted behind the caller's back.
+ *
+ * Bulk Eloquent writes go through EncryptedAmountsBuilder, which only lets
+ * ciphertext reach these columns. DB::table()/toBase() writes bypass Eloquent
+ * and must never touch them; nor may SQL aggregate, sort or filter on them.
  */
 trait EncryptsAmounts
 {
-    /**
-     * The encrypted money columns.
-     *
-     * @return list<string>
-     */
-    abstract public static function encryptedAmountColumns(): array;
-
     /**
      * The attributes bound into the amounts' encryption context; changing
      * one re-encrypts the amounts.
@@ -89,19 +89,53 @@ trait EncryptsAmounts
                 throw new LogicException("{$this->getTable()}.{$column} must be set before saving.");
             }
 
-            $unchanged = $this->exists && $raw === $this->getRawOriginal($column);
+            if ($this->exists && $raw === $this->getRawOriginal($column)) {
+                if ($this->amountContextIsDirty()) {
+                    throw new LogicException(
+                        "Changing {$this->getTable()} ".implode('/', static::amountContextAttributes())
+                        ." re-binds the encrypted {$column}: assign {$column} in the same save."
+                    );
+                }
 
-            if ($unchanged && ! $this->amountContextIsDirty()) {
                 continue;
             }
 
-            // A stored ciphertext moving to a new context (or a raw
-            // ciphertext copied in, e.g. by replicate()) must authenticate
-            // under its source context before being re-bound to this row.
-            $plain = $ring->decrypt($raw, $unchanged ? $this->originalAmountContext($column) : $this->currentAmountContext($column));
-
-            $this->attributes[$column] = $ring->encrypt($plain, $this->currentAmountContext($column));
+            // A raw ciphertext set without the mutator (setRawAttributes) must
+            // authenticate in this row's context before being re-encrypted.
+            $this->attributes[$column] = $ring->encrypt(
+                $ring->decrypt($raw, $this->currentAmountContext($column)),
+                $this->currentAmountContext($column),
+            );
         }
+    }
+
+    /**
+     * Copies carry the plaintext amounts, encrypted afresh in their own
+     * context when saved.
+     *
+     * @param  array<int, string>|null  $except
+     * @return static
+     */
+    public function replicate(?array $except = null)
+    {
+        $copy = parent::replicate($except);
+
+        foreach (static::encryptedAmountColumns() as $column) {
+            if (array_key_exists($column, $copy->getAttributes())) {
+                $copy->setAttribute($column, $this->getAttribute($column));
+            }
+        }
+
+        return $copy;
+    }
+
+    /**
+     * @param  Builder  $query
+     * @return EncryptedAmountsBuilder<$this>
+     */
+    public function newEloquentBuilder($query)
+    {
+        return (new EncryptedAmountsBuilder($query))->setModel($this);
     }
 
     /**

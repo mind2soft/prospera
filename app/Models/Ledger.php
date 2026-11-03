@@ -3,7 +3,9 @@
 namespace App\Models;
 
 use App\Models\Concerns\EncryptsAmounts;
+use App\Models\Concerns\HasImmutableProfile;
 use App\Models\Concerns\HasProfilePermissions;
+use App\Models\Contracts\HasEncryptedAmounts;
 use App\Security\Amounts\AmountContext;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
@@ -23,9 +25,10 @@ use Illuminate\Support\Facades\DB;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-class Ledger extends Model
+class Ledger extends Model implements HasEncryptedAmounts
 {
     use EncryptsAmounts;
+    use HasImmutableProfile;
     use HasProfilePermissions;
 
     protected $fillable = ['profile_id', 'name', 'start_date', 'end_date', 'starting_balance', 'closed_at'];

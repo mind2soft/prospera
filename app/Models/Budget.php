@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasImmutableProfile;
 use App\Models\Concerns\HasProfilePermissions;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,6 +21,7 @@ use Illuminate\Support\Carbon;
  */
 class Budget extends Model
 {
+    use HasImmutableProfile;
     use HasProfilePermissions;
 
     protected $fillable = [

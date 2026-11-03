@@ -1,9 +1,7 @@
 <?php
 
-use App\Models\BudgetEnvelope;
-use App\Models\Ledger;
-use App\Models\Transaction;
 use App\Security\Amounts\AmountCipher;
+use App\Security\Amounts\AmountContext;
 use App\Security\Amounts\AmountDecryptionException;
 use App\Security\Amounts\AmountKeyRing;
 use App\Security\Amounts\DataKey;
@@ -18,9 +16,11 @@ use Illuminate\Support\Facades\Schema;
  * financial profile gets a wrapped AES-256-GCM data key and the three money
  * columns are converted in place to authenticated ciphertext.
  *
- * Works on raw rows only (no model events) and shares the context builders
- * with the models so both always agree. Every value is checked by a round
- * trip before the plaintext column is dropped. Fully reversible.
+ * Works on raw rows only (no models). The "pa1" contexts are frozen here —
+ * identical to the models' amountContextFor() today (asserted by
+ * EncryptAmountsMigrationTest) — so later model changes cannot alter what
+ * this migration decrypts. Every value is checked by a round trip before
+ * the plaintext column is dropped. Fully reversible.
  */
 return new class extends Migration
 {
@@ -62,18 +62,18 @@ return new class extends Migration
             }
         });
 
-        foreach ($this->columns() as [$table, $column, $model, $query]) {
+        foreach ($this->columns() as [$table, $column, $contextFor, $query]) {
             Schema::table($table, function (Blueprint $blueprint) use ($column) {
                 $blueprint->string($column.'_ct', 80)->nullable();
             });
 
-            DB::transaction(function () use ($table, $column, $model, $query, $cipher, $keys): void {
-                $query()->chunkById(self::CHUNK, function ($rows) use ($table, $column, $model, $cipher, $keys): void {
+            DB::transaction(function () use ($table, $column, $contextFor, $query, $cipher, $keys): void {
+                $query()->chunkById(self::CHUNK, function ($rows) use ($table, $column, $contextFor, $cipher, $keys): void {
                     foreach ($rows as $row) {
                         $attributes = (array) $row;
                         $profileId = (int) $attributes['profile_id'];
                         $amount = $this->plaintext($attributes[$column], $table, $column, (int) $attributes['id']);
-                        $context = $model::amountContextFor($column, $attributes, $profileId);
+                        $context = $contextFor($attributes, $profileId);
 
                         $payload = $cipher->encrypt($amount, $keys[$profileId], $context);
 
@@ -107,17 +107,17 @@ return new class extends Migration
 
         $cipher = new AmountCipher;
 
-        foreach ($this->columns() as [$table, $column, $model, $query]) {
+        foreach ($this->columns() as [$table, $column, $contextFor, $query]) {
             Schema::table($table, function (Blueprint $blueprint) use ($column) {
                 $blueprint->integer($column.'_pt')->nullable();
             });
 
-            DB::transaction(function () use ($table, $column, $model, $query, $cipher, $keys): void {
-                $query()->chunkById(self::CHUNK, function ($rows) use ($table, $column, $model, $cipher, $keys): void {
+            DB::transaction(function () use ($table, $column, $contextFor, $query, $cipher, $keys): void {
+                $query()->chunkById(self::CHUNK, function ($rows) use ($table, $column, $contextFor, $cipher, $keys): void {
                     foreach ($rows as $row) {
                         $attributes = (array) $row;
                         $profileId = (int) $attributes['profile_id'];
-                        $context = $model::amountContextFor($column, $attributes, $profileId);
+                        $context = $contextFor($attributes, $profileId);
                         $version = AmountCipher::keyVersionOf((string) $attributes[$column], $context);
                         $key = $keys[$profileId][$version]
                             ?? throw new AmountDecryptionException("Unknown amount key version {$version} for profile {$profileId}.");
@@ -140,22 +140,40 @@ return new class extends Migration
     }
 
     /**
-     * The money columns, their model (context builder) and a query yielding
-     * the rows with their owning profile id.
+     * The money columns, their frozen "pa1" context builder and a query
+     * yielding the rows with their owning profile id.
      *
-     * @return list<array{0: string, 1: string, 2: class-string, 3: Closure(): Builder}>
+     * @return list<array{0: string, 1: string, 2: Closure(array<string, mixed>, int): AmountContext, 3: Closure(): Builder}>
      */
     private function columns(): array
     {
         return [
-            ['transactions', 'amount', Transaction::class, fn (): Builder => DB::table('transactions')
-                ->join('ledgers', 'ledgers.id', '=', 'transactions.ledger_id')
-                ->select('transactions.*', 'ledgers.profile_id')],
-            ['budget_envelopes', 'amount', BudgetEnvelope::class, fn (): Builder => DB::table('budget_envelopes')
-                ->join('budgets', 'budgets.id', '=', 'budget_envelopes.budget_id')
-                ->select('budget_envelopes.*', 'budgets.profile_id')],
-            ['ledgers', 'starting_balance', Ledger::class, fn (): Builder => DB::table('ledgers')
-                ->select('ledgers.*')],
+            [
+                'transactions', 'amount',
+                fn (array $row, int $profileId): AmountContext => new AmountContext('transactions', 'amount', $profileId, [
+                    'l' => AmountContext::id($row['ledger_id'] ?? null, 'ledger_id'),
+                    'e' => AmountContext::id($row['envelope_id'] ?? null, 'envelope_id'),
+                    'd' => AmountContext::date($row['event_at'] ?? null),
+                ]),
+                fn (): Builder => DB::table('transactions')
+                    ->join('ledgers', 'ledgers.id', '=', 'transactions.ledger_id')
+                    ->select('transactions.*', 'ledgers.profile_id'),
+            ],
+            [
+                'budget_envelopes', 'amount',
+                fn (array $row, int $profileId): AmountContext => new AmountContext('budget_envelopes', 'amount', $profileId, [
+                    'b' => AmountContext::id($row['budget_id'] ?? null, 'budget_id'),
+                    'e' => AmountContext::id($row['envelope_id'] ?? null, 'envelope_id'),
+                ]),
+                fn (): Builder => DB::table('budget_envelopes')
+                    ->join('budgets', 'budgets.id', '=', 'budget_envelopes.budget_id')
+                    ->select('budget_envelopes.*', 'budgets.profile_id'),
+            ],
+            [
+                'ledgers', 'starting_balance',
+                fn (array $row, int $profileId): AmountContext => new AmountContext('ledgers', 'starting_balance', $profileId),
+                fn (): Builder => DB::table('ledgers')->select('ledgers.*'),
+            ],
         ];
     }
 

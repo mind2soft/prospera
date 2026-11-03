@@ -320,7 +320,7 @@ class AmountEncryptionTest extends TestCase
         $this->assertSame(5000, $this->ledger->fresh()?->starting_balance);
     }
 
-    public function test_changing_the_context_re_encrypts_the_amount(): void
+    public function test_changing_the_context_requires_assigning_the_amount(): void
     {
         $transaction = $this->transaction($this->ledger, $this->rent, -321);
         $raw = $this->rawAmount($transaction);
@@ -329,10 +329,19 @@ class AmountEncryptionTest extends TestCase
         $transaction->event_at = now()->setDate(2026, 7, 1)->startOfDay();
         $transaction->envelope_id = $this->salary->id;
         $this->assertSame(-321, $transaction->amount); // still readable before saving
+
+        try {
+            $transaction->save();
+            $this->fail('A context change re-encrypted the stored amount implicitly.');
+        } catch (LogicException) {
+            $this->assertSame($raw, $this->rawAmount($transaction));
+        }
+
+        $transaction->amount = $transaction->amount;
         $transaction->save();
 
         $this->assertNotSame($raw, $this->rawAmount($transaction));
-        $this->assertEncryptedAmount(Transaction::class, ['id' => $transaction->id], 'amount', -321);
+        $this->assertEncryptedAmount(Transaction::class, ['id' => $transaction->id, 'envelope_id' => $this->salary->id], 'amount', -321);
     }
 
     public function test_assigning_a_ciphertext_or_a_non_integer_is_rejected(): void
@@ -363,7 +372,7 @@ class AmountEncryptionTest extends TestCase
         ]);
     }
 
-    public function test_a_ciphertext_copied_into_another_row_is_rejected_on_save(): void
+    public function test_replicas_are_encrypted_afresh_in_their_own_context(): void
     {
         $budget = $this->createBudget($this->profile);
         $other = $this->createBudget($this->profile, published: false);
@@ -371,9 +380,78 @@ class AmountEncryptionTest extends TestCase
 
         $copy = $assignment->replicate();
         $copy->budget_id = $other->id;
+        $copy->save();
+
+        $this->assertEncryptedAmount(BudgetEnvelope::class, ['budget_id' => $other->id], 'amount', -10);
+        $this->assertNotSame($this->rawAmount($assignment), $this->rawAmount($copy));
+    }
+
+    public function test_a_raw_ciphertext_copied_into_another_row_is_rejected_on_save(): void
+    {
+        $budget = $this->createBudget($this->profile);
+        $other = $this->createBudget($this->profile, published: false);
+        $assignment = $budget->envelopes()->create(['envelope_id' => $this->rent->id, 'amount' => -10, 'type' => 'fixed']);
+
+        $copy = new BudgetEnvelope;
+        $copy->setRawAttributes(['budget_id' => $other->id, 'envelope_id' => $this->rent->id, 'type' => 'fixed', 'amount' => $this->rawAmount($assignment)]);
 
         $this->expectException(AmountDecryptionException::class);
         $copy->save();
+    }
+
+    public function test_bulk_eloquent_writes_cannot_store_plaintext_or_do_sql_arithmetic(): void
+    {
+        $transaction = $this->transaction($this->ledger, $this->rent, -10);
+        $raw = $this->rawAmount($transaction);
+        $row = ['ledger_id' => $this->ledger->id, 'user_id' => $this->user->id, 'envelope_id' => $this->rent->id, 'event_at' => '2026-06-15 00:00:00'];
+
+        $attempts = [
+            'update' => fn () => Transaction::query()->whereKey($transaction->id)->update(['amount' => 5]),
+            'qualified update' => fn () => Transaction::query()->whereKey($transaction->id)->update(['transactions.amount' => '5']),
+            'relation update' => fn () => $this->ledger->transactions()->update(['amount' => 5]),
+            'model increment' => fn () => $transaction->increment('amount', 5),
+            'builder decrement' => fn () => Transaction::query()->decrement('amount'),
+            'incrementEach' => fn () => Transaction::query()->incrementEach(['amount' => 1]),
+            'upsert' => fn () => Transaction::query()->upsert([$row + ['id' => $transaction->id, 'amount' => 5]], ['id'], ['amount']),
+            'insert' => fn () => Transaction::query()->insert($row + ['amount' => 5]),
+            'insertGetId' => fn () => Transaction::query()->insertGetId($row + ['amount' => 5]),
+            'insertOrIgnore' => fn () => Transaction::query()->insertOrIgnore([$row + ['amount' => 5]]),
+            'fillAndInsert' => fn () => Transaction::query()->fillAndInsert([$row + ['amount' => 5]]),
+            'insertUsing' => fn () => Transaction::query()->insertUsing(['ledger_id', 'amount'], Transaction::query()->select('ledger_id', 'amount')),
+            'ledger update' => fn () => Ledger::query()->whereKey($this->ledger->id)->update(['starting_balance' => 0]),
+            'budget assignment update' => fn () => BudgetEnvelope::query()->update(['amount' => 0]),
+        ];
+
+        foreach ($attempts as $name => $attempt) {
+            try {
+                $attempt();
+                $this->fail("{$name} wrote an encrypted column.");
+            } catch (LogicException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+
+        $this->assertSame(1, Transaction::query()->count());
+        $this->assertSame($raw, $this->rawAmount($transaction));
+
+        // Writes that leave the amounts alone are unaffected.
+        Transaction::query()->whereKey($transaction->id)->update(['user_id' => null]);
+        $this->assertNull(Transaction::query()->findOrFail($transaction->id)->user_id);
+    }
+
+    public function test_ledgers_and_budgets_cannot_move_to_another_profile(): void
+    {
+        $other = FinancialProfile::createOwnedBy($this->user, 'Other');
+        $budget = $this->createBudget($this->profile);
+
+        foreach ([$this->ledger, $budget] as $resource) {
+            try {
+                $resource->update(['profile_id' => $other->id]);
+                $this->fail($resource::class.' moved to another profile.');
+            } catch (LogicException) {
+                $this->assertSame($this->profile->id, $resource->fresh()?->profile_id);
+            }
+        }
     }
 
     public function test_cloned_budgets_get_fresh_ciphertexts(): void

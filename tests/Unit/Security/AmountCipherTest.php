@@ -246,7 +246,10 @@ class AmountCipherTest extends TestCase
         $key = new DataKey(7, 3, $bytes);
 
         $this->assertStringNotContainsString($bytes, print_r($key, true));
-        $this->assertStringNotContainsString($bytes, var_export($key->__debugInfo(), true));
+        $this->assertStringNotContainsString($bytes, print_r([$key], true));
+        $this->assertStringNotContainsString($bytes, var_export($key, true));
+        $this->assertSame('{"profileId":7,"version":3}', json_encode($key));
+        $this->assertSame($bytes, $key->bytes());
 
         ob_start();
         var_dump($key);
