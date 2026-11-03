@@ -1,7 +1,11 @@
 #!/usr/bin/env sh
 # Control-flow tests of the remote parts of deploy-production.sh and
-# rollback-production.sh, run against a fake release layout with shimmed
-# php/composer/curl binaries (no server, no database).
+# rollback-production.sh against a fake layout, with shimmed php, composer
+# and curl. The php shim models the migrations table ($WORK/ran), migrations
+# and maintenance mode (file driver, relative to the release's storage).
+#
+# After every scenario the invariant is checked: the live release ships
+# exactly the migrations the database ran, or it is in maintenance mode.
 #
 # Usage: sh scripts/ci/tests/deploy-scripts.test.sh [shell]   (default: sh)
 
@@ -16,20 +20,33 @@ trap 'rm -rf "$WORK"' EXIT
 
 mkdir -p "$WORK/bin"
 
-# php shim: logs "<release dir> <args>", simulates migrate:status exit codes,
-# maintenance mode (file driver) and injected failures.
+# Release features: .has-ran (migrations:ran exists), .has-verify
+# (amounts:verify exists). $WORK/no-table: no migrations table yet.
 cat > "$WORK/bin/php" <<'EOF'
 #!/bin/sh
-printf '%s %s\n' "$(basename "$(pwd -P)")" "$*" >> "$WORK/log"
+rel=$(pwd -P)
+printf '%s %s\n' "$(basename "$rel")" "$*" >> "$WORK/log"
+names() { for f in "$rel"/database/migrations/*.php; do [ -e "$f" ] && basename "$f" .php; done; }
+pending() { names | while IFS= read -r n; do grep -qxF -- "$n" "$WORK/ran" || echo "$n"; done; }
+for f in ${FAIL:-}; do [ "$f" = "$2" ] && exit 1; done
 case "$2" in
-    migrate:status) exit "${STATUS_EXIT:-0}" ;;
-esac
-for _fail in ${FAIL:-}; do
-    [ "$_fail" = "$2" ] && exit 1
-done
-case "$2" in
-    down) mkdir -p "$WORK/app/shared/storage/framework" && : > "$WORK/app/shared/storage/framework/down" ;;
-    up) rm -f "$WORK/app/shared/storage/framework/down" ;;
+    migrations:ran)
+        [ -e "$rel/.has-ran" ] || exit 1
+        [ "${DB_DOWN:-}" = 1 ] && exit 1
+        [ -e "$WORK/no-table" ] && exit 2
+        cat "$WORK/ran" ;;
+    migrate:status)
+        [ -e "$WORK/no-table" ] && exit 1
+        if [ -n "$(pending)" ]; then
+            [ "$3" = "--pending=3" ] && exit 3
+        fi ;;
+    migrate)
+        rm -f "$WORK/no-table"; touch "$WORK/ran"
+        [ "${MIGRATE_APPLY:-1}" = 1 ] && pending > "$WORK/pending" && cat "$WORK/pending" >> "$WORK/ran"
+        [ "${MIGRATE_EXIT:-0}" = 0 ] || exit "$MIGRATE_EXIT" ;;
+    help) [ "$3" = amounts:verify ] && [ ! -e "$rel/.has-verify" ] && exit 1 ;;
+    down) mkdir -p "$rel/storage/framework" && : > "$rel/storage/framework/down" ;;
+    up) rm -f "$rel/storage/framework/down" ;;
 esac
 exit 0
 EOF
@@ -44,40 +61,74 @@ extract_remote() {
 extract_remote "$SCRIPTS_DIR/deploy-production.sh" > "$WORK/deploy-remote.sh"
 extract_remote "$SCRIPTS_DIR/rollback-production.sh" > "$WORK/rollback-remote.sh"
 
-# Layout: releases/old (live, migrations a.php) and a new release shipping
-# a.php + b.php; optional schema record and maintenance mode.
+APP=$WORK/app
+
+# release <dir> <features: ran verify> <migrations...>
+release() {
+    _dir=$1 _features=$2
+    shift 2
+    mkdir -p "$_dir/database/migrations"
+    for _m in "$@"; do : > "$_dir/database/migrations/$_m.php"; done
+    case "$_features" in *ran*) : > "$_dir/.has-ran" ;; esac
+    case "$_features" in *verify*) : > "$_dir/.has-verify" ;; esac
+}
+
+# Live "old" release (pre-feature: no migrations:ran) on a database that ran
+# migration a; the package to deploy ships a + b.
 setup() {
-    rm -rf "$WORK/app" "$WORK/pkg" "$WORK/log"
-    mkdir -p "$WORK/app/releases/old/database/migrations" "$WORK/app/shared/storage" "$WORK/pkg/database/migrations"
-    : > "$WORK/app/releases/old/database/migrations/a.php"
-    : > "$WORK/pkg/database/migrations/a.php"
-    : > "$WORK/pkg/database/migrations/b.php"
+    rm -rf "$APP" "$WORK/pkg" "$WORK/log" "$WORK/no-table"
+    mkdir -p "$APP/shared/storage"
+    release "$APP/releases/old" '' a
+    ln -s "$APP/shared/storage" "$APP/releases/old/storage"
+    ln -s "$APP/releases/old" "$APP/current"
+    release "$WORK/pkg" 'ran verify' a b
+    printf 'a\n' > "$WORK/ran"
     : > "$WORK/log"
-    ln -s "$WORK/app/releases/old" "$WORK/app/current"
-    tar -czf "$WORK/release.tgz" -C "$WORK/pkg" .
     printf 'APP_KEY=x\n' > "$WORK/env"
 }
 
-maintenance() {
-    if [ -e "$WORK/app/shared/storage/framework/down" ]; then echo on; else echo off; fi
+package() {
+    tar -czf "$WORK/release.tgz" -C "$WORK/pkg" .
 }
 
 live() {
-    if [ -L "$WORK/app/current" ]; then basename "$(readlink "$WORK/app/current")"; else echo none; fi
+    if [ -L "$APP/current" ]; then basename "$(readlink "$APP/current")" | sed 's/^legacy-.*/legacy/'; else echo none; fi
+}
+
+maintenance() {
+    if [ -e "$APP/current/storage/framework/down" ]; then echo on; else echo off; fi
+}
+
+# The live release matches the schema, or is in maintenance mode.
+consistent() {
+    [ -L "$APP/current" ] || { echo yes; return; }
+    _shipped=$(for f in "$APP"/current/database/migrations/*.php; do [ -e "$f" ] && basename "$f" .php; done | sort | tr '\n' ' ')
+    _ran=$(sort "$WORK/ran" 2>/dev/null | tr '\n' ' ')
+    if [ "$_shipped" = "$_ran" ] || [ "$(maintenance)" = on ]; then echo yes; else echo NO; fi
+}
+
+ran() {
+    if grep -q -- " $1" "$WORK/log"; then echo yes; else echo no; fi
+}
+
+record() {
+    if [ -f "$APP/shared/schema-migrations" ]; then sort "$APP/shared/schema-migrations" | tr '\n' ' '; else echo none; fi
 }
 
 deploy() {
+    package
     _rc=0
     env WORK="$WORK" PATH="$WORK/bin:$PATH" "$@" \
-        $SHELL_UNDER_TEST "$WORK/deploy-remote.sh" "$WORK/app" new "$WORK/release.tgz" "$WORK/env" 3 "http://localhost/up" \
+        $SHELL_UNDER_TEST "$WORK/deploy-remote.sh" "$APP" new "$WORK/release.tgz" "$WORK/env" 3 "http://localhost/up" \
         > "$WORK/out" 2>&1 || _rc=$?
+    printf 'APP_KEY=x\n' > "$WORK/env"
     echo "$_rc"
 }
 
 rollback() {
     _rc=0
     env WORK="$WORK" PATH="$WORK/bin:$PATH" "$@" \
-        $SHELL_UNDER_TEST "$WORK/rollback-remote.sh" "$WORK/app" "http://localhost/up" "" \
+        $SHELL_UNDER_TEST "$WORK/rollback-remote.sh" "$APP" "http://localhost/up" "" \
         > "$WORK/out" 2>&1 || _rc=$?
     echo "$_rc"
 }
@@ -88,99 +139,175 @@ expect() {
         printf 'ok   %s\n' "$1"
     else
         printf 'FAIL %s: got [%s], expected [%s]\n' "$1" "$2" "$3"
-        sed 's/^/     | /' "$WORK/out"
+        sed 's/^/     | /' "$WORK/out" "$WORK/log"
         FAILURES=$((FAILURES + 1))
     fi
-}
-
-ran() {
-    if grep -q " $1" "$WORK/log"; then echo yes; else echo no; fi
 }
 
 # --- deploy-production.sh -------------------------------------------------
 
 setup
-rc=$(deploy STATUS_EXIT=3)
-expect 'deploy: pending migrations succeed' "$rc $(live) $(maintenance) $(ran 'down') $(ran 'up')" '0 new off yes yes'
-expect 'deploy: records the migrated schema' "$(tr '\n' ' ' < "$WORK/app/shared/schema-migrations")" 'a.php b.php '
+rc=$(deploy)
+expect 'deploy: pending migrations run in maintenance, then go live' \
+    "$rc $(live) $(maintenance) $(ran 'down') $(ran 'up') $(record) $(consistent)" '0 new off yes yes a b  yes'
 
 setup
-rc=$(deploy STATUS_EXIT=3 FAIL=amounts:verify)
-expect 'deploy: failure after migrating stays in maintenance on the old release' "$rc $(live) $(maintenance)" '1 old on'
+rc=$(deploy FAIL=amounts:verify)
+expect 'deploy: a failure after migrating stays in maintenance' \
+    "$rc $(live) $(maintenance) $(record) $(consistent)" '1 old on a b  yes'
 
 setup
-rc=$(deploy STATUS_EXIT=3 FAIL=migrate)
-expect 'deploy: failed migration stays in maintenance' "$rc $(live) $(maintenance)" '1 old on'
+rc=$(deploy MIGRATE_EXIT=1)
+expect 'deploy: a failed migration stays in maintenance' "$rc $(live) $(maintenance) $(consistent)" '1 old on yes'
+
+# migrate applies c, then fails: the record holds what the database ran.
+setup
+rm -f "$WORK/pkg/database/migrations/b.php"
+release "$WORK/pkg" 'ran verify' a c
+rc=$(deploy MIGRATE_EXIT=1)
+expect 'deploy: the record holds the migrations the database ran' "$(record)" 'a c '
 
 setup
-rc=$(deploy STATUS_EXIT=3 HEALTH_EXIT=22)
-expect 'deploy: failed health check after migrating keeps the new release in maintenance' "$rc $(live) $(maintenance)" '1 new on'
+rc=$(deploy HEALTH_EXIT=22)
+expect 'deploy: a failed health check after migrating keeps the new release in maintenance' \
+    "$rc $(live) $(maintenance) $(consistent)" '1 new on yes'
 
 setup
-rc=$(deploy STATUS_EXIT=0 HEALTH_EXIT=22)
-expect 'deploy: failed health check without migrations reverts' "$rc $(live) $(maintenance) $(ran 'down')" '1 old off no'
+rm "$WORK/pkg/database/migrations/b.php"
+rc=$(deploy HEALTH_EXIT=22)
+expect 'deploy: a failed health check without migrations reverts' \
+    "$rc $(live) $(maintenance) $(ran 'down') $(consistent)" '1 old off no yes'
 
 setup
-rc=$(deploy STATUS_EXIT=1)
-expect 'deploy: unreadable migration status is refused before maintenance' "$rc $(live) $(maintenance) $(ran 'migrate --force')" '1 old off no'
+rc=$(deploy DB_DOWN=1)
+expect 'deploy: an unreadable migrations table is refused before maintenance' \
+    "$rc $(live) $(maintenance) $(ran 'migrate --force') $(consistent)" '1 old off no yes'
 
 setup
-rm "$WORK/app/current"
-rc=$(deploy STATUS_EXIT=1)
-expect 'deploy: first install migrates without maintenance' "$rc $(live) $(maintenance) $(ran 'migrate --force') $(ran 'down')" '0 new off yes no'
+rm "$APP/current"
+: > "$WORK/no-table"
+rc=$(deploy)
+expect 'deploy: a first install migrates without maintenance' \
+    "$rc $(live) $(maintenance) $(ran 'down') $(record) $(consistent)" '0 new off no a b  yes'
 
 setup
-mkdir -p "$WORK/app/shared/storage/framework" && : > "$WORK/app/shared/storage/framework/down"
-rc=$(deploy STATUS_EXIT=3)
-expect 'deploy: pre-existing maintenance is left on and untouched' "$rc $(live) $(maintenance) $(ran 'down') $(ran 'up')" '0 new on no no'
+mkdir -p "$APP/shared/storage/framework" && : > "$APP/shared/storage/framework/down"
+rc=$(deploy)
+expect "deploy: an operator's maintenance mode is left on and untouched" \
+    "$rc $(live) $(maintenance) $(ran 'down') $(ran 'up') $(consistent)" '0 new on no no yes'
 
 setup
-printf 'a.php\nb.php\nc.php\n' > "$WORK/app/shared/schema-migrations"
-rc=$(deploy STATUS_EXIT=0)
-expect 'deploy: a release missing applied migrations is refused' "$rc $(live) $(maintenance) $(ran 'migrate --force')" '1 old off no'
+rc=$(deploy FAIL=amounts:verify)
+rc=$(deploy)
+expect "deploy: a fix-forward deploy lifts a failed deploy's maintenance" \
+    "$rc $(live) $(maintenance) $([ -e "$APP/shared/deploy-maintenance" ] && echo marker || echo none) $(consistent)" '0 new off none yes'
+
+setup
+rc=$(deploy FAIL=amounts:verify)
+rc=$(deploy HEALTH_EXIT=22)
+expect "deploy: a taken-over maintenance survives a failed health check" \
+    "$rc $(live) $(maintenance) $(ran 'migrate --force') $(consistent)" '1 new on yes yes'
+
+setup
+printf 'a\nb\nc\n' > "$WORK/ran"
+rc=$(deploy)
+expect 'deploy: a release missing migrations the database ran is refused' \
+    "$rc $(live) $(maintenance) $(ran 'migrate --force')" '1 old off no'
+
+setup
+rc=$(deploy MIGRATE_EXIT=1 MIGRATE_APPLY=0)
+rm "$WORK/pkg/database/migrations/b.php"
+rc=$(deploy)
+expect 'deploy: a fix dropping an unapplied migration is accepted' "$rc $(live) $(maintenance) $(consistent)" '0 new off yes'
+
+# Legacy layout: the app lives directly in APP_ROOT.
+setup_legacy() {
+    setup
+    rm -rf "$APP/current" "$APP/releases" "$APP/shared"
+    release "$APP" '' a
+    : > "$APP/artisan"
+    mkdir -p "$APP/storage/framework"
+}
+
+setup_legacy
+rc=$(deploy FAIL=amounts:verify)
+expect 'deploy: maintenance mode covers a legacy-layout release' \
+    "$rc $(live) $(maintenance) $(consistent)" '1 legacy on yes'
+
+setup_legacy
+rc=$(deploy)
+expect 'deploy: a legacy layout is migrated to releases' "$rc $(live) $(maintenance) $(consistent)" '0 new off yes'
 
 # --- rollback-production.sh -----------------------------------------------
 
-# Layout: current = new (a.php), previous = old (a.php).
+# current = new (a b, with migrations:ran), previous = old (a).
 setup_rollback() {
     setup
-    mkdir -p "$WORK/app/releases/new/database/migrations"
-    : > "$WORK/app/releases/new/database/migrations/a.php"
-    ln -sfn "$WORK/app/releases/new" "$WORK/app/current"
-    ln -sfn "$WORK/app/releases/old" "$WORK/app/previous"
+    release "$APP/releases/new" 'ran verify' a b
+    ln -s "$APP/shared/storage" "$APP/releases/new/storage"
+    ln -sfn "$APP/releases/new" "$APP/current"
+    ln -sfn "$APP/releases/old" "$APP/previous"
+    printf 'a\nb\n' > "$WORK/ran"
 }
 
 setup_rollback
-printf 'a.php\n' > "$WORK/app/shared/schema-migrations"
 rc=$(rollback)
-expect 'rollback: same schema switches' "$rc $(live) $(ran 'config:cache')" '0 old yes'
+expect 'rollback: a target missing migrations the database ran is refused' "$rc $(live) $(consistent)" '1 new yes'
 
 setup_rollback
-printf 'a.php\nb.php\n' > "$WORK/app/shared/schema-migrations"
+rm "$APP/releases/new/database/migrations/b.php"
+printf 'a\n' > "$WORK/ran"
 rc=$(rollback)
-expect 'rollback: database ahead of the target is refused' "$rc $(live)" '1 new'
+expect 'rollback: a target matching the schema goes live' "$rc $(live) $(ran 'config:cache') $(consistent)" '0 old yes yes'
 
 setup_rollback
-: > "$WORK/app/releases/new/database/migrations/b.php"
+printf 'a\nb\nx\n' > "$WORK/ran"
+release "$APP/releases/old" '' a b
 rc=$(rollback)
-expect 'rollback: without a record, differing migrations are refused' "$rc $(live)" '1 new'
+expect 'rollback: migrations run outside the workflow are seen' "$rc $(live)" '1 new'
 
 setup_rollback
-rc=$(rollback STATUS_EXIT=3)
+rm "$APP/releases/new/.has-ran"
+printf 'a\nb\n' > "$APP/shared/schema-migrations"
+rc=$(rollback)
+expect 'rollback: without migrations:ran, the record is used' "$rc $(live) $(consistent)" '1 new yes'
+
+setup_rollback
+rm "$APP/releases/new/.has-ran"
+release "$APP/releases/old" '' a b
+printf 'a\n' > "$WORK/ran"
+rc=$(rollback)
 expect 'rollback: pending target migrations are refused' "$rc $(live)" '1 new'
 
 setup_rollback
+release "$APP/releases/old" verify a b
 rc=$(rollback FAIL=amounts:verify)
 expect 'rollback: undecryptable amounts are refused' "$rc $(live)" '1 new'
 
 setup_rollback
+release "$APP/releases/old" '' a b
 rc=$(rollback HEALTH_EXIT=22)
-expect 'rollback: failed health check restores the current release' "$rc $(live)" '1 new'
+expect 'rollback: a failed health check restores the current release' "$rc $(live) $(consistent)" '1 new yes'
 
 setup_rollback
-mkdir -p "$WORK/app/shared/storage/framework" && : > "$WORK/app/shared/storage/framework/down"
+release "$APP/releases/old" '' a b
+mkdir -p "$APP/shared/storage/framework" && : > "$APP/shared/storage/framework/down"
 rc=$(rollback)
-expect 'rollback: maintenance mode is left on' "$rc $(live) $(maintenance)" '0 old on'
+expect "rollback: an operator's maintenance mode is left on" "$rc $(live) $(maintenance)" '0 old on'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+mkdir -p "$APP/shared/storage/framework" && : > "$APP/shared/storage/framework/down"
+: > "$APP/shared/deploy-maintenance"
+rc=$(rollback)
+expect "rollback: a failed deploy's maintenance is lifted on a matching release" "$rc $(live) $(maintenance) $(consistent)" '0 old off yes'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+mkdir -p "$APP/shared/storage/framework" && : > "$APP/shared/storage/framework/down"
+: > "$APP/shared/deploy-maintenance"
+rc=$(rollback HEALTH_EXIT=22)
+expect "rollback: a failed health check restores a failed deploy's maintenance" "$rc $(live) $(maintenance)" '1 new on'
 
 if [ "$FAILURES" -ne 0 ]; then
     printf '%s deploy script test(s) failed\n' "$FAILURES" >&2

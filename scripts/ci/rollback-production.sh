@@ -85,31 +85,50 @@ else
 fi
 
 # Production migrations are forward-only: DB::prohibitDestructiveCommands()
-# refuses migrate:rollback/reset there. Only switch to a release that runs on
-# the current schema as is — the exact migrations the database was last
-# migrated with (shared/schema-migrations, written by the deploy right before
-# migrating), none pending — otherwise it would read or write data it does
-# not understand (e.g. plaintext amounts into encrypted columns,
+# refuses migrate:rollback/reset there. Only switch to a release shipping
+# exactly the migrations the database ran — read live with
+# `php artisan migrations:ran` (from the current or the target release),
+# else from shared/schema-migrations (recorded by the last deploy), else the
+# live release's — otherwise it would read or write data it does not
+# understand (e.g. plaintext amounts into encrypted columns,
 # docs/encryption.md). Deploy a fix instead.
 SCHEMA_RECORD=$APP_ROOT/shared/schema-migrations
+DEPLOY_DOWN=$APP_ROOT/shared/deploy-maintenance
+DOWN_FILE=$APP_ROOT/shared/storage/framework/down
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
 
 migration_names() {
     for _file in "$1"/database/migrations/*.php; do
         if [ -e "$_file" ]; then
-            basename "$_file"
+            basename "$_file" .php
         fi
     done
 }
 
-if [ -f "$SCHEMA_RECORD" ]; then
-    EXPECTED=$(cat "$SCHEMA_RECORD")
+# Lines of file $1 that file $2 does not contain.
+lines_missing_from() {
+    while IFS= read -r _line; do
+        if [ -n "$_line" ] && ! grep -qxF -- "$_line" "$2"; then
+            printf '%s\n' "$_line"
+        fi
+    done < "$1"
+
+    return 0
+}
+
+if (cd "$CURRENT_TARGET" && php artisan migrations:ran > "$TMP_DIR/ran" 2>/dev/null) \
+    || (cd "$TARGET_RELEASE" && php artisan migrations:ran > "$TMP_DIR/ran" 2>/dev/null); then
+    :
+elif [ -f "$SCHEMA_RECORD" ]; then
+    cp "$SCHEMA_RECORD" "$TMP_DIR/ran"
 else
-    # Not deployed by a schema-recording deploy yet: the live release's
-    # migrations are the best knowledge of the schema.
-    EXPECTED=$(migration_names "$CURRENT_TARGET")
+    migration_names "$CURRENT_TARGET" > "$TMP_DIR/ran"
 fi
 
-if [ "$(migration_names "$TARGET_RELEASE")" != "$EXPECTED" ]; then
+migration_names "$TARGET_RELEASE" > "$TMP_DIR/shipped"
+
+if [ -n "$(lines_missing_from "$TMP_DIR/ran" "$TMP_DIR/shipped")" ] || [ -n "$(lines_missing_from "$TMP_DIR/shipped" "$TMP_DIR/ran")" ]; then
     printf 'Refusing to roll back: %s does not ship exactly the migrations the database ran (production migrations are forward-only; deploy a fix instead)\n' \
         "$(basename "$TARGET_RELEASE")" >&2
     exit 1
@@ -138,12 +157,27 @@ fi
 safe_symlink "$CURRENT_TARGET" "$PREVIOUS_LINK"
 safe_symlink "$TARGET_RELEASE" "$CURRENT_LINK"
 
-if [ -e "$APP_ROOT/shared/storage/framework/down" ]; then
-    printf 'Maintenance mode is on: left on and health check skipped — lift it ("php artisan up") once the live release is verified to match the schema\n' >&2
-    exit 0
+# A deploy's maintenance mode (failed deploy) is lifted now that the live
+# release matches the schema; an operator's is left on.
+LIFTED=0
+
+if [ -e "$DOWN_FILE" ]; then
+    if [ ! -e "$DEPLOY_DOWN" ]; then
+        printf 'Maintenance mode is on: left on and health check skipped — lift it ("php artisan up") once the live release is verified to match the schema\n' >&2
+        exit 0
+    fi
+
+    php artisan up
+    rm -f "$DEPLOY_DOWN"
+    LIFTED=1
 fi
 
 if ! run_healthcheck; then
+    if [ "$LIFTED" = 1 ]; then
+        : > "$DEPLOY_DOWN"
+        php artisan down --retry=15
+    fi
+
     safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
     printf 'Rollback health check failed; restored previous current release\n' >&2
     exit 1

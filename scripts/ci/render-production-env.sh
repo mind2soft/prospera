@@ -8,7 +8,8 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 require_env APP_KEY APP_URL DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD
 
 APP_NAME=${APP_NAME:-Prospera}
-APP_PREVIOUS_KEYS=${APP_PREVIOUS_KEYS:-}
+# Keys are base64: whitespace (e.g. "key1, key2") would break the .env.
+APP_PREVIOUS_KEYS=$(printf '%s' "${APP_PREVIOUS_KEYS:-}" | tr -d '[:space:]')
 APP_ENV=${APP_ENV:-production}
 APP_LOCALE=${APP_LOCALE:-en}
 APP_FALLBACK_LOCALE=${APP_FALLBACK_LOCALE:-en}

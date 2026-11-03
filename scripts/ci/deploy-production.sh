@@ -50,13 +50,18 @@ CURRENT_TARGET=''
 # columns, docs/encryption.md): failures after migrating leave the app in
 # maintenance mode for a fix-forward deploy.
 #
-# SCHEMA_RECORD lists the migration files of the release the database was
-# last migrated with (written right before migrating), so a release that does
-# not know every applied migration is never deployed nor rolled back to.
+# Releases are compared with the migrations the database ran
+# (`php artisan migrations:ran`): a release that does not ship every one of
+# them is never deployed. SCHEMA_RECORD keeps that list as of the last deploy
+# for rollbacks; DEPLOY_DOWN marks maintenance turned on by a deploy, which a
+# later fully verified deploy may lift (an operator's maintenance is never
+# lifted).
 SCHEMA_RECORD=$APP_ROOT/shared/schema-migrations
+DEPLOY_DOWN=$APP_ROOT/shared/deploy-maintenance
 MIGRATED=0
 MAINTENANCE=0
 WAS_DOWN=0
+TOOK_OVER=0
 PENDING=0
 
 safe_symlink() {
@@ -76,34 +81,61 @@ cleanup() {
     rm -f "$ARCHIVE_PATH" "$ENV_UPLOAD_PATH"
 }
 
-# Migration file names shipped by release $1, one per line.
+# Migration names (file names without .php) shipped by release $1.
 migration_names() {
     for _file in "$1"/database/migrations/*.php; do
         if [ -e "$_file" ]; then
-            basename "$_file"
+            basename "$_file" .php
         fi
     done
 }
 
+# Lines of file $1 that file $2 does not contain.
+lines_missing_from() {
+    while IFS= read -r _line; do
+        if [ -n "$_line" ] && ! grep -qxF -- "$_line" "$2"; then
+            printf '%s\n' "$_line"
+        fi
+    done < "$1"
+
+    return 0
+}
+
+# Record the migrations the database ran; falls back to the release's (a
+# superset, since a deploy never runs on a database ahead of its release).
 record_schema() {
-    migration_names "$RELEASE_DIR" > "$SCHEMA_RECORD.tmp"
+    if ! (cd "$RELEASE_DIR" && php artisan migrations:ran > "$SCHEMA_RECORD.tmp" 2>/dev/null); then
+        migration_names "$RELEASE_DIR" > "$SCHEMA_RECORD.tmp"
+    fi
+
     mv -f "$SCHEMA_RECORD.tmp" "$SCHEMA_RECORD"
 }
 
 # Maintenance mode lives in the shared storage (file driver), so it covers
-# both releases. A maintenance mode already on is left untouched.
+# every release sharing it. An operator's maintenance mode is left untouched.
 maintenance_down() {
-    if [ "$WAS_DOWN" = 0 ]; then
+    if [ "$MAINTENANCE" = 0 ] && [ "$WAS_DOWN" = 0 ]; then
+        : > "$DEPLOY_DOWN"
         (cd "$RELEASE_DIR" && php artisan down --retry=15)
         MAINTENANCE=1
     fi
 }
 
+maintenance_up() {
+    (cd "$RELEASE_DIR" && php artisan up)
+    rm -f "$DEPLOY_DOWN"
+    MAINTENANCE=0
+}
+
 on_exit() {
     status=$?
 
-    if [ "$status" -ne 0 ] && [ "$MIGRATED" = 1 ] && [ -e "$SHARED_DIR/storage/framework/down" ]; then
-        printf 'Deployment failed during or after migrating: the app stays in maintenance mode (deploy a fix; see docs/encryption.md)\n' >&2
+    if [ "$status" -ne 0 ] && [ "$MIGRATED" = 1 ]; then
+        record_schema || true
+    fi
+
+    if [ "$status" -ne 0 ] && [ -e "$SHARED_DIR/storage/framework/down" ]; then
+        printf 'Deployment failed: the app stays in maintenance mode (deploy a fix; see docs/encryption.md)\n' >&2
     fi
 
     cleanup
@@ -113,10 +145,10 @@ on_exit() {
 rollback_current() {
     if [ -z "$CURRENT_TARGET" ]; then
         rm -f "$CURRENT_LINK"
-    elif [ "$MIGRATED" = 1 ]; then
-        # The previous release cannot run on the migrated schema.
+    elif [ "$MIGRATED" = 1 ] || [ "$TOOK_OVER" = 1 ]; then
+        # The previous release cannot run on this schema.
         maintenance_down
-        printf 'Health check failed after migrating: keeping the new release in maintenance mode\n' >&2
+        printf 'Health check failed: keeping the new release in maintenance mode\n' >&2
     else
         safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
         printf 'Deployment health check failed; reverted current release\n' >&2
@@ -196,6 +228,13 @@ migrate_legacy_layout() {
         mv "$APP_ROOT/public" "$legacy_release/public"
     fi
 
+    # Share the legacy storage so maintenance mode (file driver) covers the
+    # legacy release too.
+    if [ ! -e "$SHARED_DIR/storage" ] && [ -d "$legacy_release/storage" ] && [ ! -L "$legacy_release/storage" ]; then
+        mv "$legacy_release/storage" "$SHARED_DIR/storage"
+        ln -s "$SHARED_DIR/storage" "$legacy_release/storage"
+    fi
+
     safe_symlink "$legacy_release" "$CURRENT_LINK"
 }
 
@@ -210,10 +249,15 @@ if [ -L "$CURRENT_LINK" ]; then
     CURRENT_TARGET=$(readlink "$CURRENT_LINK")
 fi
 
-# Maintenance mode switched on before this deploy (by an operator or a failed
-# deploy) is never lifted by it.
+# Maintenance mode already on: a failed deploy's (DEPLOY_DOWN) is taken over
+# and lifted once this release is verified; an operator's is never lifted.
 if [ -e "$SHARED_DIR/storage/framework/down" ]; then
-    WAS_DOWN=1
+    if [ -e "$DEPLOY_DOWN" ]; then
+        MAINTENANCE=1
+        TOOK_OVER=1
+    else
+        WAS_DOWN=1
+    fi
 fi
 
 rm -rf "$RELEASE_DIR"
@@ -240,30 +284,38 @@ cd "$RELEASE_DIR"
 
 composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 
-# Refuse a release that does not ship every migration the database ran.
-if [ -f "$SCHEMA_RECORD" ]; then
-    migration_names "$RELEASE_DIR" > "$RELEASE_DIR/.migration-names"
-    _unknown=$(grep -vxF -f "$RELEASE_DIR/.migration-names" "$SCHEMA_RECORD" || true)
+# Compare the release with the migrations the database ran: refuse a release
+# that does not ship all of them (the database is ahead of it).
+# migrations:ran exits 2 without a migrations table (first install).
+migration_names "$RELEASE_DIR" > "$RELEASE_DIR/.migrations-shipped"
+
+if php artisan migrations:ran > "$RELEASE_DIR/.migrations-ran" 2>/dev/null; then
+    _unknown=$(lines_missing_from "$RELEASE_DIR/.migrations-ran" "$RELEASE_DIR/.migrations-shipped")
 
     if [ -n "$_unknown" ]; then
         printf 'Refusing to deploy: the database ran migrations this release does not ship:\n%s\n' "$_unknown" >&2
         exit 1
     fi
-fi
 
-# migrate:status --pending=3 exits 0 (none pending), 3 (pending) or 1 (error:
-# no migrations table on a first install, or an unreachable database).
-if php artisan migrate:status --pending=3 >/dev/null 2>&1; then
-    PENDING=0
+    if [ -n "$(lines_missing_from "$RELEASE_DIR/.migrations-shipped" "$RELEASE_DIR/.migrations-ran")" ]; then
+        PENDING=1
+    fi
 else
     _status=$?
 
-    if [ "$_status" -eq 3 ] || [ -z "$CURRENT_TARGET" ]; then
+    if [ "$_status" -eq 2 ] && [ -z "$CURRENT_TARGET" ]; then
         PENDING=1
     else
-        printf 'Refusing to deploy: cannot read the migration status (exit %s)\n' "$_status" >&2
+        printf 'Refusing to deploy: cannot read the migrations the database ran (exit %s)\n' "$_status" >&2
         exit 1
     fi
+fi
+
+# Maintenance mode only protects a live release sharing the storage.
+if [ "$PENDING" = 1 ] && [ -n "$CURRENT_TARGET" ] \
+    && [ "$(cd "$CURRENT_TARGET/storage" 2>/dev/null && pwd -P)" != "$(cd "$SHARED_DIR/storage" && pwd -P)" ]; then
+    printf 'Refusing to migrate: the live release does not use the shared storage, maintenance mode would not cover it\n' >&2
+    exit 1
 fi
 
 # Migrate first: optimize:clear flushes the database cache store, whose table
@@ -276,11 +328,10 @@ if [ "$PENDING" = 1 ]; then
     fi
 
     MIGRATED=1
-    record_schema
     php artisan migrate --force
-else
-    record_schema
 fi
+
+record_schema
 # Encryption at rest (docs/encryption.md): every stored amount must decrypt
 # before the release goes live.
 php artisan amounts:verify
@@ -303,8 +354,7 @@ if [ "$WAS_DOWN" = 1 ]; then
     printf 'Maintenance mode was on before this deploy: left on and health check skipped — lift it ("php artisan up") once the live release is verified to match the schema\n' >&2
 else
     if [ "$MAINTENANCE" = 1 ]; then
-        (cd "$RELEASE_DIR" && php artisan up)
-        MAINTENANCE=0
+        maintenance_up
     fi
 
     if ! run_healthcheck; then
