@@ -374,6 +374,24 @@ expect 'deploy: without migrations it still waits before the health check' \
     "$rc $(grep -c '^sleep 35$' "$WORK/log") $(before "$(at '^sleep')" "$(at '^curl new')")" '0 1 yes'
 
 setup
+rc=$(deploy REALPATH_TTL=99999999999999999999)
+expect 'deploy: an oversized realpath_cache_ttl is capped' "$rc $(grep -c '^sleep 10004$' "$WORK/log")" '0 1'
+
+setup_rollback_ttl() {
+    setup
+    release "$APP/releases/new" 'ran verify' a b
+    ln -s "$APP/shared/storage" "$APP/releases/new/storage"
+    ln -sfn "$APP/releases/new" "$APP/current"
+    ln -sfn "$APP/releases/old" "$APP/previous"
+    release "$APP/releases/old" '' a b
+    printf 'a\nb\n' > "$WORK/ran"
+}
+
+setup_rollback_ttl
+rc=$(rollback REALPATH_TTL=99999999999999999999)
+expect 'rollback: an oversized realpath_cache_ttl is capped' "$rc $(live) $(grep -c '^sleep 10004$' "$WORK/log")" '0 old 1'
+
+setup
 rc=$(deploy REALPATH_TTL=abc)
 expect 'deploy: an unreadable realpath_cache_ttl waits the PHP default' "$rc $(grep -c '^sleep 125$' "$WORK/log")" '0 1'
 
@@ -747,9 +765,13 @@ done
 setup_rollback
 release "$APP/releases/old" '' a b
 _rc=0
-env WORK="$WORK" PATH="$WORK/bin:$PATH" $SHELL_UNDER_TEST "$WORK/rollback-remote.sh" "$WORK/app with space" "" "" 0 \
-    > "$WORK/out" 2>&1 || _rc=$?
-expect 'rollback: an invalid app path is refused on the host too' "$_rc $(live) $(grep -c 'invalid app path' "$WORK/out")" '1 new 1'
+for _arg in "$WORK/app with space|0" "app|0" "$APP|10000" "$APP|x"; do
+    _rc=0
+    (cd "$WORK" && env WORK="$WORK" PATH="$WORK/bin:$PATH" $SHELL_UNDER_TEST "$WORK/rollback-remote.sh" "${_arg%|*}" "" "" "${_arg#*|}") \
+        > "$WORK/out" 2>&1 || _rc=$?
+    expect "rollback: an invalid app path or wait [$_arg] is refused on the host too" \
+        "$_rc $(live) $(grep -c 'invalid app path\|must be a number' "$WORK/out")" '1 new 1'
+done
 
 setup
 DEPLOY_E2E_ID=e2e-$$
@@ -772,21 +794,42 @@ for _path in "$WORK/app with space" app "$WORK/x/../app"; do
         "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" '1 old no-ssh'
 done
 
-for _keep in x '' -1 '3 4'; do
+for _keep in x '' -1 '3 4' 99999 99999999999999999999; do
     setup
     rc=$(deploy_wrapper RELEASE_ID=e2e-$$ KEEP_RELEASES="$_keep")
     expect "deploy wrapper: an invalid KEEP_RELEASES [$_keep] is refused before scp and ssh" \
         "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" "$([ -z "$_keep" ] && echo "0 e2e-$$ ssh" || echo '1 old no-ssh')"
 done
 
-setup
-for _arg in "$WORK/app with space|3" "$APP|x"; do
+for _arg in "$WORK/app with space|3|0" "$APP|x|0" "$APP|99999999999999999999|0" "$APP|3|10000" "app|3|0"; do
+    setup
+    package
+    cp "$WORK/release.tgz" "$WORK/upload.tgz"
+    _rest=${_arg#*|}
     _rc=0
-    env WORK="$WORK" PATH="$WORK/bin:$PATH" $SHELL_UNDER_TEST "$WORK/deploy-remote.sh" "${_arg%|*}" new "$WORK/release.tgz" "$WORK/env" "${_arg#*|}" "" 0 \
+    (cd "$WORK" && env WORK="$WORK" PATH="$WORK/bin:$PATH" $SHELL_UNDER_TEST "$WORK/deploy-remote.sh" "${_arg%%|*}" new "$WORK/upload.tgz" "$WORK/env" "${_rest%|*}" "" "${_rest#*|}") \
         > "$WORK/out" 2>&1 || _rc=$?
-    expect "deploy: an invalid app path or KEEP_RELEASES [$_arg] is refused on the host too" \
-        "$_rc $(live) $([ -d "$APP/releases/new" ] && echo built || echo none)" '1 old none'
+    expect "deploy: an invalid app path, KEEP_RELEASES or wait [$_arg] is refused on the host, uploads removed" \
+        "$_rc $(live) $([ -d "$APP/releases/new" ] && echo built || echo none) $([ -e "$WORK/upload.tgz" ] || [ -e "$WORK/env" ] && echo left || echo removed) $(grep -c 'invalid app path\|must be a number' "$WORK/out")" '1 old none removed 1'
+    printf 'APP_KEY=x\n' > "$WORK/env"
 done
+
+for _wait in 10000 99999999999999999999 1x; do
+    setup
+    rc=$(deploy_wrapper RELEASE_ID=e2e-$$ DEPLOY_SWITCH_WAIT="$_wait")
+    expect "deploy wrapper: an invalid DEPLOY_SWITCH_WAIT [$_wait] is refused before scp and ssh" \
+        "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" '1 old no-ssh'
+
+    setup_rollback
+    release "$APP/releases/old" '' a b
+    rc=$(rollback_wrapper DEPLOY_SWITCH_WAIT="$_wait")
+    expect "rollback wrapper: an invalid DEPLOY_SWITCH_WAIT [$_wait] is refused before ssh" \
+        "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" '1 new no-ssh'
+done
+
+setup
+rc=$(deploy_wrapper RELEASE_ID=e2e-$$ DEPLOY_SWITCH_WAIT=9999)
+expect 'deploy wrapper: a 4-digit DEPLOY_SWITCH_WAIT is accepted' "$rc $(grep -c '^sleep 9999$' "$WORK/log")" '0 1'
 
 setup
 mkdir -p "$WORK/cwd/dist"

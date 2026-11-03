@@ -25,6 +25,13 @@ if ! valid_app_path "$SSH_APP_PATH"; then
     exit 1
 fi
 
+case "$SWITCH_WAIT" in
+    *[!0-9]*|?????*)
+        printf 'Refusing to roll back: DEPLOY_SWITCH_WAIT must be a number of seconds (0-9999): %s\n' "$SWITCH_WAIT" >&2
+        exit 1
+        ;;
+esac
+
 if [ -n "$ROLLBACK_RELEASE" ] && ! valid_release_id "$ROLLBACK_RELEASE"; then
     printf 'Refusing to roll back: invalid release id (A-Za-z0-9._- only): %s\n' "$ROLLBACK_RELEASE" >&2
     exit 1
@@ -39,17 +46,17 @@ ROLLBACK_RELEASE=${3:-}
 SWITCH_WAIT=${4:-}
 
 # The deploy root: an absolute path of plain names (no spaces, no . or ..).
-case "$APP_ROOT" in
-    /*) ;;
-    *) APP_ROOT='' ;;
-esac
+_app_path_ok=0
 
 case "$APP_ROOT" in
-    ''|*[!A-Za-z0-9._/-]*|*/./*|*/../*|*/.|*/..)
-        printf 'Refusing: invalid app path (absolute, A-Za-z0-9._/- only): %s\n' "$1" >&2
-        exit 1
-        ;;
+    *[!A-Za-z0-9._/-]*|*/./*|*/../*|*/.|*/..) ;;
+    /*) _app_path_ok=1 ;;
 esac
+
+if [ "$_app_path_ok" = 0 ]; then
+    printf 'Refusing: invalid app path (absolute, A-Za-z0-9._/- only): %s\n' "$APP_ROOT" >&2
+    exit 1
+fi
 CURRENT_LINK=$APP_ROOT/current
 PREVIOUS_LINK=$APP_ROOT/previous
 RELEASES_DIR=$APP_ROOT/releases
@@ -76,8 +83,8 @@ run_healthcheck() {
 }
 
 case "$SWITCH_WAIT" in
-    *[!0-9]*)
-        printf 'DEPLOY_SWITCH_WAIT must be a number of seconds: %s\n' "$SWITCH_WAIT" >&2
+    *[!0-9]*|?????*)
+        printf 'DEPLOY_SWITCH_WAIT must be a number of seconds (0-9999): %s\n' "$SWITCH_WAIT" >&2
         exit 1
         ;;
 esac
@@ -193,6 +200,7 @@ settle_switch() {
         SWITCH_WAIT=$(php -r 'echo (int) ini_get("realpath_cache_ttl");' 2>/dev/null || true)
         case "$SWITCH_WAIT" in
             ''|*[!0-9]*) SWITCH_WAIT=120 ;;
+            ?????*) SWITCH_WAIT=9999 ;;
         esac
         SWITCH_WAIT=$((SWITCH_WAIT + 5))
     fi

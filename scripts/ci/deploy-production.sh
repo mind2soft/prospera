@@ -18,8 +18,15 @@ if ! valid_app_path "$SSH_APP_PATH"; then
 fi
 
 case "$KEEP_RELEASES" in
-    ''|*[!0-9]*)
-        printf 'Refusing to deploy: KEEP_RELEASES must be a number: %s\n' "$KEEP_RELEASES" >&2
+    ''|*[!0-9]*|?????*)
+        printf 'Refusing to deploy: KEEP_RELEASES must be a number (0-9999): %s\n' "$KEEP_RELEASES" >&2
+        exit 1
+        ;;
+esac
+
+case "${DEPLOY_SWITCH_WAIT:-}" in
+    *[!0-9]*|?????*)
+        printf 'Refusing to deploy: DEPLOY_SWITCH_WAIT must be a number of seconds (0-9999): %s\n' "$DEPLOY_SWITCH_WAIT" >&2
         exit 1
         ;;
 esac
@@ -61,25 +68,6 @@ KEEP_RELEASES=$5
 HEALTHCHECK_URL=${6:-}
 SWITCH_WAIT=${7:-}
 
-# The deploy root: an absolute path of plain names (no spaces, no . or ..).
-case "$APP_ROOT" in
-    /*) ;;
-    *) APP_ROOT='' ;;
-esac
-
-case "$APP_ROOT" in
-    ''|*[!A-Za-z0-9._/-]*|*/./*|*/../*|*/.|*/..)
-        printf 'Refusing: invalid app path (absolute, A-Za-z0-9._/- only): %s\n' "$1" >&2
-        exit 1
-        ;;
-esac
-
-case "$KEEP_RELEASES" in
-    ''|*[!0-9]*)
-        printf 'Refusing to deploy: KEEP_RELEASES must be a number: %s\n' "$KEEP_RELEASES" >&2
-        exit 1
-        ;;
-esac
 
 RELEASES_DIR=$APP_ROOT/releases
 SHARED_DIR=$APP_ROOT/shared
@@ -185,6 +173,7 @@ settle_switch() {
         SWITCH_WAIT=$(php -r 'echo (int) ini_get("realpath_cache_ttl");' 2>/dev/null || true)
         case "$SWITCH_WAIT" in
             ''|*[!0-9]*) SWITCH_WAIT=120 ;;
+            ?????*) SWITCH_WAIT=9999 ;;
         esac
         SWITCH_WAIT=$((SWITCH_WAIT + 5))
     fi
@@ -279,7 +268,8 @@ prune_old_releases() {
     (ls -1dt "$RELEASES_DIR"/* 2>/dev/null || true) | while IFS= read -r path; do
         count=$((count + 1))
 
-        if [ "$count" -le "$KEEP_RELEASES" ]; then
+        # Fails closed: a comparison error keeps the release.
+        if ! [ "$count" -gt "$KEEP_RELEASES" ] 2>/dev/null; then
             continue
         fi
 
@@ -344,9 +334,30 @@ migrate_legacy_layout() {
 trap on_exit EXIT
 trap 'exit 1' HUP INT TERM
 
+# The deploy root: an absolute path of plain names (no spaces, no . or ..).
+_app_path_ok=0
+
+case "$APP_ROOT" in
+    *[!A-Za-z0-9._/-]*|*/./*|*/../*|*/.|*/..) ;;
+    /*) _app_path_ok=1 ;;
+esac
+
+if [ "$_app_path_ok" = 0 ]; then
+    printf 'Refusing: invalid app path (absolute, A-Za-z0-9._/- only): %s\n' "$APP_ROOT" >&2
+    exit 1
+fi
+
+# Numbers of at most 4 digits: larger ones overflow the shell's arithmetic.
+case "$KEEP_RELEASES" in
+    ''|*[!0-9]*|?????*)
+        printf 'Refusing to deploy: KEEP_RELEASES must be a number (0-9999): %s\n' "$KEEP_RELEASES" >&2
+        exit 1
+        ;;
+esac
+
 case "$SWITCH_WAIT" in
-    *[!0-9]*)
-        printf 'DEPLOY_SWITCH_WAIT must be a number of seconds: %s\n' "$SWITCH_WAIT" >&2
+    *[!0-9]*|?????*)
+        printf 'DEPLOY_SWITCH_WAIT must be a number of seconds (0-9999): %s\n' "$SWITCH_WAIT" >&2
         exit 1
         ;;
 esac
