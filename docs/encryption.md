@@ -184,7 +184,13 @@ scripts compare releases with the migrations the database actually ran
   connecting, and again on the host; every argument is quoted for the remote
   shell, since ssh joins them into one command line) and one that is, or
   resolves to, the live or the previous release (it would be rebuilt in
-  place before any check). The uploaded `.env` replaces `shared/.env` only
+  place before any check). The deploy root (`SSH_APP_PATH`) must be an
+  absolute path of `A-Za-z0-9._/-` without `.` or `..` components, and
+  `KEEP_RELEASES` a number; both are checked before connecting and on the
+  host. The `.env` (it holds `APP_KEY`, which unwraps every amount key) is
+  rendered owner-only and uploaded with that mode (scp keeps the source
+  file's mode, checked against the production host, whose `/tmp` is also
+  private to the account). The uploaded `.env` replaces `shared/.env` only
   once these checks passed; a refused deploy leaves it untouched.
 - It switches to maintenance mode before running pending migrations, so the
   previous release stops accepting requests (ones already in flight may still
