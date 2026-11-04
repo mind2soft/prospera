@@ -66,11 +66,11 @@ Then visit **http://localhost:8000**.
 ### Quality checks
 
 ```bash
-composer ci:check        # everything CI runs: vp check, vue-tsc, Pint, PHPStan, tests
+composer ci:check        # everything CI runs: biome check, vue-tsc, Pint, PHPStan, tests
 composer test            # Pint (check) + PHPStan + PHPUnit
 php artisan test         # PHPUnit test suite only
 composer lint            # fix PHP formatting (Pint)
-npm run check            # check frontend formatting + lint (vp check)
+npm run check            # check frontend formatting + lint (Biome)
 npm run check:fix        # fix frontend formatting + lint issues
 npm run types:check      # vue-tsc
 npm run e2e              # Playwright end-to-end tests
@@ -83,15 +83,34 @@ Formatting covers two distinct tools, depending on the language:
 
 - **PHP** is formatted with [Pint](https://laravel.com/docs/pint):
   `composer lint` fixes it, `composer lint:check` only verifies it.
-- **JS/Vue** (`resources/js/**`) is formatted by `vp check`
-  ([Laravel Chisel](https://github.com/laravel/chisel)): `npm run check` only
-  verifies it — `composer lint` does **not** fix it. Run `npm run check:fix`
-  to apply the fixes automatically.
+- **JS/Vue/CSS** (`resources/js/**`, `resources/css/**`) is formatted and
+  linted by [Biome](https://biomejs.dev) (configured in `biome.jsonc`):
+  `npm run check` only verifies it — `composer lint` does **not** fix it. Run
+  `npm run check:fix` to apply the fixes automatically.
 
 If `composer ci:check` reports `Formatting issues found` in `.vue` files
 (which `composer lint` cannot solve), run `npm run check:fix` and commit the
 result. Both checks run as part of `composer ci:check` and `composer test`, so
 fix formatting before opening a PR.
+
+### Pre-commit formatting hook
+
+Commits automatically format the staged PHP and frontend files: Pint formats
+`*.php`, Biome formats `*.{css,json,jsonc,js,ts,vue}`, and the fixed files are
+included in the commit. The hook runs on staged files only and never blocks a
+commit — lint issues are caught by `composer ci:check`.
+
+The hook is installed by `composer setup` (`vp hooks enable`). In an existing
+clone, enable it once:
+
+```bash
+npx vp hooks enable
+```
+
+The dispatcher lives in `.vite-hooks/_` (generated, gitignored); its
+configuration is the `staged` block in `vite.config.ts` and the committed
+`.vite-hooks/pre-commit`. Skip it for a single commit with
+`VP_GIT_HOOKS=0 git commit`.
 
 ### Scheduled tasks
 

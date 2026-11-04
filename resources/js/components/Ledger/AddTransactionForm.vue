@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,8 +11,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import type { AddTransactionInput, PickerEnvelope } from '@/lib/ledgerApi';
 import { useLocale } from '@/composables/useLocale';
+import type { AddTransactionInput, PickerEnvelope } from '@/lib/ledgerApi';
 
 const { locale } = useLocale();
 
@@ -23,9 +23,7 @@ const props = defineProps<{
     disabled?: boolean;
 }>();
 
-const emit = defineEmits<{
-    (e: 'confirm', input: AddTransactionInput): void;
-}>();
+const emit = defineEmits<(e: 'confirm', input: AddTransactionInput) => void>();
 
 const envelopeId = ref<number | null>(null);
 const amount = ref('');

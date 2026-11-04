@@ -1,13 +1,15 @@
+<!-- biome-ignore-all lint/a11y/noHeaderScope: vue-i18n `scope` prop, not the HTML attribute -->
+<!-- biome-ignore-all lint/a11y/noPositiveTabindex: deliberate tab order for the invite page form -->
 <script setup lang="ts">
 import { Form, Head, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { I18nT, useI18n } from 'vue-i18n';
 import { useQueryClient } from 'vue-query';
 import { toast } from 'vue-sonner';
-import { I18nT, useI18n } from 'vue-i18n';
+import Icon from '@/components/Icon.vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import TextLink from '@/components/TextLink.vue';
-import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,7 +22,7 @@ import { dashboard, login } from '@/routes';
 import { store } from '@/routes/register';
 import type { InviteContext } from '@/types';
 
-const props = defineProps<{
+defineProps<{
     passwordRules: string;
     /** Invite context resolved by the backend from the link's invite key. */
     invite?: InviteContext | null;
@@ -148,7 +150,9 @@ const onDecline = () => {
                         variant="ghost"
                         :disabled="accepting"
                         @click="onDecline"
-                        >{{ $t('auth.register.decline') }}</Button
+                        >{{
+                            $t('auth.register.decline')
+                        }}</Button
                     >
                 </div>
             </template>
@@ -313,7 +317,9 @@ const onDecline = () => {
                     :href="login()"
                     class="underline underline-offset-4"
                     :tabindex="6"
-                    >{{ $t('auth.login.submit') }}</TextLink
+                    >{{
+                        $t('auth.login.submit')
+                    }}</TextLink
                 >
             </div>
         </Form>

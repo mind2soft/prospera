@@ -46,7 +46,7 @@ const { verify, isLoading, error, isSupported } = usePasskeyVerify({
                 :disabled="isLoading"
             >
                 <Spinner v-if="isLoading" />
-                <KeyRound v-else class="h-4 w-4" />
+                <KeyRound v-else class="size-4" />
                 {{
                     isLoading
                         ? (props.loadingLabel ??

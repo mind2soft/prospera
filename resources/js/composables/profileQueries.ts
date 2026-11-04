@@ -1,9 +1,9 @@
-import { computed, toValue, type MaybeRefOrGetter } from 'vue';
 import { usePage } from '@inertiajs/vue3';
+import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { useQueryClient } from 'vue-query';
+import { useMutation, useQuery } from '@/composables/query';
 import { profileApi } from '@/lib/profileApi';
 import type { FinancialProfile, ProfileMember } from '@/types';
-import { useMutation, useQuery } from '@/composables/query';
 
 export const profileKeys = {
     all: ['profiles'] as const,

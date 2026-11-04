@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { expect, test, type Page, type Route } from '@playwright/test';
+import { expect, type Page, type Route, test } from '@playwright/test';
 
 const LOGIN = {
     email: 'playwright@example.com',

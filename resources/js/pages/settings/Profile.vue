@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { Form, Head, usePage } from '@inertiajs/vue3';
-import { Link } from '@inertiajs/vue3';
+import { Form, Head, Link, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import DeleteUser from '@/components/DeleteUser.vue';
@@ -154,7 +153,9 @@ const submittedLocale = computed(() =>
                 <Button
                     :disabled="processing"
                     data-test="update-profile-button"
-                    >{{ $t('settings.profile.save') }}</Button
+                    >{{
+                        $t('settings.profile.save')
+                    }}</Button
                 >
             </div>
         </Form>

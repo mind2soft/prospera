@@ -138,7 +138,9 @@ const confirmTransfer = (): void => {
                             <span
                                 v-if="member.user_id === currentUserId"
                                 class="text-xs font-normal text-muted-foreground"
-                                >{{ $t('share.drawer.you') }}</span
+                                >{{
+                                    $t('share.drawer.you')
+                                }}</span
                             >
                         </p>
                         <p class="truncate text-xs text-muted-foreground">
@@ -167,7 +169,9 @@ const confirmTransfer = (): void => {
                     <span
                         v-else
                         class="shrink-0 text-xs font-medium text-muted-foreground"
-                        >{{ $t(permissionLabels[member.permission]) }}</span
+                        >{{
+                            $t(permissionLabels[member.permission])
+                        }}</span
                     >
                     <Button
                         v-if="canManage && member.permission !== 'owner'"
@@ -255,7 +259,9 @@ const confirmTransfer = (): void => {
                         <Button
                             variant="ghost"
                             @click="confirmingTransfer = false"
-                            >{{ $t('common.actions.cancel') }}</Button
+                            >{{
+                                $t('common.actions.cancel')
+                            }}</Button
                         >
                         <Button @click="confirmTransfer">{{
                             $t('share.drawer.transfer')

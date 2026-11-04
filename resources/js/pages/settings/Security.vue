@@ -3,14 +3,14 @@ import { Form, Head } from '@inertiajs/vue3';
 import SecurityController from '@/actions/App/Http/Controllers/Settings/SecurityController';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
-import PasswordInput from '@/components/PasswordInput.vue';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { edit } from '@/routes/security';
 import type { Props as ManagePasskeysProps } from '@/components/ManagePasskeys.vue';
 import ManagePasskeys from '@/components/ManagePasskeys.vue';
 import type { Props as ManageTwoFactorProps } from '@/components/ManageTwoFactor.vue';
 import ManageTwoFactor from '@/components/ManageTwoFactor.vue';
+import PasswordInput from '@/components/PasswordInput.vue';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { edit } from '@/routes/security';
 
 // oxfmt-ignore
 type Props = {
@@ -114,13 +114,13 @@ defineOptions({
     </div>
 
     <ManageTwoFactor
-        :canManageTwoFactor="canManageTwoFactor"
-        :requiresConfirmation="requiresConfirmation"
-        :twoFactorEnabled="twoFactorEnabled"
+        :can-manage-two-factor="canManageTwoFactor"
+        :requires-confirmation="requiresConfirmation"
+        :two-factor-enabled="twoFactorEnabled"
     />
 
     <ManagePasskeys
-        :canManagePasskeys="canManagePasskeys"
+        :can-manage-passkeys="canManagePasskeys"
         :passkeys="passkeys"
     />
 </template>

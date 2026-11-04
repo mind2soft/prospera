@@ -24,7 +24,7 @@ const { title = '', description = '' } = defineProps<{
                 class="mx-auto mb-8 flex w-fit items-center gap-2.5"
             >
                 <span
-                    class="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-emerald-700 text-white shadow-sm shadow-brand/30"
+                    class="flex size-9 items-center justify-center rounded-lg bg-linear-to-br from-brand to-emerald-700 text-white shadow-sm shadow-brand/30"
                 >
                     <AppLogoIcon class="size-5" />
                 </span>

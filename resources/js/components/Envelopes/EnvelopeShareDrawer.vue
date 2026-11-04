@@ -27,13 +27,13 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
-import { useProfileCircle } from '@/composables/profileQueries';
 import {
     useEnvelopeShares,
     useRemoveEnvelopeShare,
     useSetEnvelopeShare,
     useTransferEnvelopeOwnership,
 } from '@/composables/envelopeQueries';
+import { useProfileCircle } from '@/composables/profileQueries';
 import { ApiError } from '@/lib/api';
 import type { ResourceMember, ResourcePermission } from '@/types';
 
@@ -45,7 +45,7 @@ const props = defineProps<{
     currentUserId: number;
 }>();
 
-const emit = defineEmits<{ (e: 'update:open', value: boolean): void }>();
+const emit = defineEmits<(e: 'update:open', value: boolean) => void>();
 
 const { t } = useI18n();
 
@@ -390,7 +390,9 @@ watch(
                         <Button
                             variant="ghost"
                             @click="confirmingTransfer = false"
-                            >{{ $t('common.actions.cancel') }}</Button
+                            >{{
+                                $t('common.actions.cancel')
+                            }}</Button
                         >
                         <Button @click="confirmTransfer">{{
                             $t('share.drawer.transfer')

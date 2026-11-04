@@ -25,8 +25,12 @@ Eloquent models and compute in PHP.
 Every PR must pass the full CI gate locally before it is opened:
 
 ```bash
-composer ci:check     # format + lint (vp check), vue-tsc, pint, phpstan, artisan test
+composer ci:check     # format + lint (biome check), vue-tsc, pint, phpstan, artisan test
 ```
+
+A pre-commit hook formats staged PHP and frontend files automatically (Pint +
+Biome, see the README). It is installed by `composer setup`; in an existing
+clone, run `npx vp hooks enable` once.
 
 In addition:
 

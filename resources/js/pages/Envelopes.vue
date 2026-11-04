@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, router, usePage, useForm } from '@inertiajs/vue3';
+import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
@@ -8,10 +8,10 @@ import {
     store,
     update,
 } from '@/actions/App/Http/Controllers/EnvelopeController';
+import EnvelopeShareDrawer from '@/components/Envelopes/EnvelopeShareDrawer.vue';
 import Heading from '@/components/Heading.vue';
 import Icon from '@/components/Icon.vue';
 import InputError from '@/components/InputError.vue';
-import EnvelopeShareDrawer from '@/components/Envelopes/EnvelopeShareDrawer.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { envelopes } from '@/routes';
+import { envelopes as envelopesRoute } from '@/routes';
 import type { Envelope } from '@/types';
 
 defineOptions({
@@ -39,7 +39,7 @@ defineOptions({
         breadcrumbs: [
             {
                 title: 'envelopes.title',
-                href: envelopes(),
+                href: envelopesRoute(),
             },
         ],
     },
@@ -207,11 +207,11 @@ const roleLabel: Record<string, string> = {
             class="relative overflow-hidden border-sidebar-border/70 dark:border-sidebar-border"
         >
             <div
-                class="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5"
+                class="pointer-events-none absolute inset-0 bg-linear-to-br from-primary/10 via-transparent to-primary/5"
                 aria-hidden="true"
             />
             <div
-                class="pointer-events-none absolute -top-24 left-1/2 h-64 w-[36rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
+                class="pointer-events-none absolute -top-24 left-1/2 h-64 w-xl -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
                 aria-hidden="true"
             />
 
@@ -229,7 +229,7 @@ const roleLabel: Record<string, string> = {
                 </div>
 
                 <h3
-                    class="mt-6 bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
+                    class="mt-6 bg-linear-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
                 >
                     {{ $t('envelopes.empty.title') }}
                 </h3>
@@ -273,7 +273,7 @@ const roleLabel: Record<string, string> = {
                         {{ $t(group.title) }}
                     </h3>
                     <div
-                        class="h-px flex-1 bg-gradient-to-r from-border to-transparent"
+                        class="h-px flex-1 bg-linear-to-r from-border to-transparent"
                     />
                 </div>
 
@@ -296,7 +296,7 @@ const roleLabel: Record<string, string> = {
                             <div
                                 class="flex size-10 shrink-0 items-center justify-center rounded-xl text-lg font-semibold"
                                 :style="{
-                                    backgroundColor: envelope.color + '1a',
+                                    backgroundColor: `${envelope.color}1a`,
                                     color: envelope.color,
                                 }"
                             >

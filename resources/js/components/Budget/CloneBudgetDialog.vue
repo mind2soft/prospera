@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import { Button } from '@/components/ui/button';
 import {
     Dialog,
     DialogContent,
@@ -15,9 +16,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-import { CURRENCIES, currencyName } from '@/lib/budget';
 import { useLocale } from '@/composables/useLocale';
+import { CURRENCIES, currencyName } from '@/lib/budget';
 
 const { locale } = useLocale();
 
@@ -69,7 +69,8 @@ const confirm = () => {
                         :key="option.code"
                         :value="option.code"
                     >
-                        {{ option.code }} —
+                        {{ option.code }}
+                        —
                         {{ currencyName(option.code, locale) }}
                     </SelectItem>
                 </SelectContent>
