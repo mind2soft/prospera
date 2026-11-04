@@ -41,6 +41,11 @@ To help triage and fix the issue quickly, please include:
 In scope: this repository's own source code — the Laravel backend, the Vue
 frontend, build tooling, and CI workflows.
 
+Money amounts are encrypted at rest; the protections and their documented
+limits (e.g. a compromised `APP_KEY`, metadata confidentiality) are described
+in [docs/encryption.md](docs/encryption.md). Weaknesses in that design or its
+implementation are in scope.
+
 Out of scope: vulnerabilities in third-party dependencies (report those
 upstream; the project follows Dependabot updates), issues requiring access
 to a private deployment's environment, and anything outside this codebase.

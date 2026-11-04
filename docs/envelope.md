@@ -50,6 +50,9 @@ existing **profile members** of the owner (see
   and displayed as positive integers and stored signed, derived from the
   envelope's direction (revenue positive, expense negative). See
   [Budget — Amount sign convention](budget.md#amount-sign-convention).
+- **Encryption at rest** — the amounts recorded against envelopes are
+  encrypted in the database; envelope totals are computed by the server from
+  the decrypted amounts (see [Encryption at rest](encryption.md)).
 
 ## Permissions
 

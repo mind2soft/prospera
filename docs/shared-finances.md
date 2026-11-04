@@ -128,6 +128,12 @@ and totals are computed by dedicated server-side endpoints that validate
 permissions. Budget **planned** amounts are budget data — they follow budget
 read access, not envelope permissions (see [Budget](budget.md)).
 
+Each financial profile has its own **amount encryption key**: amounts are
+encrypted at rest and decrypted by the server after these permission checks.
+Members and collaborators never receive keys — sharing a resource grants
+access to its decrypted amounts through the API only (see
+[Encryption at rest](encryption.md)).
+
 ## Switching profile
 
 In the user menu, above "Settings", a menu "Profiles" with a sub-menu listing

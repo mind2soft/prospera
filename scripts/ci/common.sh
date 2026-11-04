@@ -54,7 +54,44 @@ prepare_ssh() {
 }
 
 ssh_remote() {
-    ssh -i "$SSH_KEY_PATH" -o IdentitiesOnly=yes -o BatchMode=yes "$SSH_USER@$SSH_HOST" "$@"
+    ssh -i "$SSH_KEY_PATH" -o IdentitiesOnly=yes -o BatchMode=yes -o ServerAliveInterval=30 "$SSH_USER@$SSH_HOST" "$@"
+}
+
+shell_quote() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+# Run the script on stdin remotely as "sh -s -- <args>". ssh joins its
+# arguments with spaces into one command line that the remote shell parses
+# again, so each argument is quoted (empty or special values survive).
+ssh_remote_script() {
+    _command='sh -s --'
+
+    for _arg in "$@"; do
+        _command="$_command $(shell_quote "$_arg")"
+    done
+
+    ssh_remote "$_command"
+}
+
+# The deploy root: a canonical absolute path of plain names (no spaces,
+# no . or .., no empty or trailing /), so release paths compare as strings.
+valid_app_path() {
+    case "$1" in
+        /*) ;;
+        *) return 1 ;;
+    esac
+
+    case "$1" in
+        *[!A-Za-z0-9._/-]*|*//*|*/|*/./*|*/../*|*/.|*/..) return 1 ;;
+    esac
+}
+
+# A release id is one directory name under releases/ (no path).
+valid_release_id() {
+    case "$1" in
+        ''|.|..|*[!A-Za-z0-9._-]*) return 1 ;;
+    esac
 }
 
 scp_to_remote() {

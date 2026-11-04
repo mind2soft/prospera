@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Budget;
+use App\Models\BudgetEnvelope;
 use App\Models\BudgetPermission;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
@@ -266,11 +267,13 @@ class BudgetTest extends TestCase
             'envelope_id' => $revenue->id, 'type' => 'variable', 'amount' => 3000,
         ])->assertCreated();
 
+        $this->assertEncryptedAmount(BudgetEnvelope::class, ['envelope_id' => $expense->id], 'amount', -1300);
         $this->assertDatabaseHas('budget_envelopes', [
-            'envelope_id' => $expense->id, 'amount' => -1300, 'type' => 'fixed',
+            'envelope_id' => $expense->id, 'type' => 'fixed',
         ]);
+        $this->assertEncryptedAmount(BudgetEnvelope::class, ['envelope_id' => $revenue->id], 'amount', 3000);
         $this->assertDatabaseHas('budget_envelopes', [
-            'envelope_id' => $revenue->id, 'amount' => 3000, 'type' => 'variable',
+            'envelope_id' => $revenue->id, 'type' => 'variable',
         ]);
     }
 
@@ -391,7 +394,7 @@ class BudgetTest extends TestCase
             'amount' => 250,
         ])->assertOk()->assertJsonPath('envelope.amount', -250);
 
-        $this->assertDatabaseHas('budget_envelopes', ['envelope_id' => $envelope->id, 'amount' => -250]);
+        $this->assertEncryptedAmount(BudgetEnvelope::class, ['envelope_id' => $envelope->id], 'amount', -250);
     }
 
     public function test_remove_envelope(): void
@@ -553,8 +556,9 @@ class BudgetTest extends TestCase
         $response->assertCreated();
         $draft = Budget::whereNull('published_at')->firstOrFail();
         $this->assertEquals('EUR', $draft->currency);
+        $this->assertEncryptedAmount(BudgetEnvelope::class, ['budget_id' => $draft->id, 'envelope_id' => $envelope->id], 'amount', -1300);
         $this->assertDatabaseHas('budget_envelopes', [
-            'budget_id' => $draft->id, 'envelope_id' => $envelope->id, 'amount' => -1300,
+            'budget_id' => $draft->id, 'envelope_id' => $envelope->id,
         ]);
         $this->assertDatabaseHas('budget_envelopes', [
             'budget_id' => $budget->id, 'envelope_id' => $envelope->id,
