@@ -34,7 +34,8 @@
             "description": "Pick a day on the calendar, select an envelope and enter the amount."
         },
         "share": {
-            "title": "Share ledger"
+            "title": "Share ledger",
+            "resource": "ledger"
         },
         "delete": {
             "title": "Delete this ledger?",

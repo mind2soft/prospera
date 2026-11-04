@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import Icon from '@/components/Icon.vue';
-import { useI18n } from 'vue-i18n';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -31,6 +30,7 @@ import type { ResourceMember, ResourcePermission } from '@/types';
 const props = defineProps<{
     open: boolean;
     title: string;
+    transferResource: string;
     /** Effective permission rows (implicit viewer included). */
     members: ResourceMember[];
     currentUserId: number;
@@ -57,9 +57,6 @@ const transferTargetName = computed(
     () =>
         props.members.find((m) => m.user_id === transferTarget.value)?.name ??
         '',
-);
-const transferResource = computed(() =>
-    props.title.toLowerCase().replace(/^share /, ''),
 );
 
 const transferCandidates = computed(() =>

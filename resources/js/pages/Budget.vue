@@ -529,6 +529,7 @@ const onRemoveEnvelope = (envelopeId: number) => {
             v-if="budgetId !== null && budget !== null"
             :open="showShare"
             :title="$t('budget.share.title')"
+            :transfer-resource="$t('budget.share.resource')"
             :members="budget.shares"
             :current-user-id="currentUserId"
             :can-manage="budget.permission === 'owner'"

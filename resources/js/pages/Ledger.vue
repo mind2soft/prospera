@@ -569,6 +569,7 @@ const onRemoveTransaction = (transactionId: number) => {
             v-if="ledgerId !== null"
             :open="showShare"
             :title="$t('ledger.share.title')"
+            :transfer-resource="$t('ledger.share.resource')"
             :members="shareMembers"
             :current-user-id="meId"
             :can-manage="ledgerPermission === 'owner'"

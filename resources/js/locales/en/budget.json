@@ -72,7 +72,8 @@
             "createDraft": "Create draft"
         },
         "share": {
-            "title": "Share budget"
+            "title": "Share budget",
+            "resource": "budget"
         },
         "confirm": {
             "publishTitle": "Publish this budget?",
