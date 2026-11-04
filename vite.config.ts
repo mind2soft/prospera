@@ -42,4 +42,8 @@ export default defineConfig({
             ],
         },
     },
+    staged: {
+        '*.php': 'vendor/bin/pint',
+        '*.{css,json,jsonc,js,cjs,mjs,ts,cts,mts,vue}': 'biome format --write',
+    },
 });

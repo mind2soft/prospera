@@ -1,0 +1,7 @@
+# Pre-commit: format staged PHP and frontend files.
+#
+# `vp staged` (lint-staged) runs the `staged` commands from vite.config.ts on
+# the staged files only and re-adds any files the formatters modified, so the
+# fixes land in the commit automatically. Formatting never blocks a commit:
+# lint errors are caught by `npm run check` / `composer ci:check`.
+vp staged
