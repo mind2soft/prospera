@@ -49,7 +49,7 @@
             "leave": "Leave",
             "leaveProfile": "Leave profile",
             "inviteSomeone": "Invite someone",
-            "emailPlaceholder": "person@example.com",
+            "emailPlaceholder": "person{'@'}example.com",
             "invite": "Invite",
             "inviteNote": "The invite link expires after 48 hours and only works for this email address.",
             "expires": "Expires {date}",
