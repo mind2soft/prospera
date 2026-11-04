@@ -28,5 +28,10 @@ if ! php -r 'exit((int) (bool) @fsockopen("127.0.0.1", 8000, $errno, $errstr, 0.
     exit 1
 fi
 
+# Rebuild the frontend assets: `php artisan serve` has no Vite dev server
+# and serves whatever is in `public/build` — a stale build would run the
+# suite against outdated code (see issue #27).
+npm run build
+
 php artisan migrate:fresh --env=e2e --force
 exec php artisan serve --env=e2e --no-reload
