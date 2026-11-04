@@ -1,8 +1,9 @@
-import type { Ref } from 'vue';
+import { computed, toValue, type Ref } from 'vue';
 import {
     useMutation as useVueMutation,
     useQuery as useVueQuery,
 } from 'vue-query';
+import { isClient } from '@/lib/ssr';
 
 export type QueryKey = readonly unknown[];
 
@@ -13,6 +14,8 @@ export type QueryFnContext = {
 export type Query<TData, TError = Error> = {
     data: Ref<TData | undefined>;
     error: Ref<TError | null>;
+    isPending: Ref<boolean>;
+    isError: Ref<boolean>;
     isLoading: Ref<boolean>;
 };
 
@@ -59,13 +62,33 @@ export function useQuery<TQueryFnData, TError, TData>(
     const query = useVueQuery<TQueryFnData, TError, TData>({
         queryKey: options.queryKey,
         queryFn: options.queryFn,
-        enabled: options.enabled,
         select: options.select,
+        // The SSR pass can never fetch successfully: there is no session
+        // cookie, no CSRF token, and Node's fetch cannot resolve relative
+        // URLs. Disable every query server-side so the SSR markup is the
+        // deterministic "no data yet" state — the same state the client
+        // renders on its synchronous hydration pass. Templates that switch
+        // between skeletons and content must branch on `isPending` (no data
+        // yet), never on `isLoading` (a fetch is in flight): `isLoading`
+        // depends on fetch status, which diverges between the async SSR
+        // render and the hydration render and was the source of the
+        // skeleton/comment hydration mismatches.
+        enabled: computed(() => isClient && toValue(options.enabled ?? true)),
     });
 
     return {
         data: query.data,
         error: query.error,
+        // vue-query wraps TanStack v4, which has no `isPending`. Derive the
+        // hydration-safe flag locally: "no data and no error", independent
+        // of fetch status. `status` here is 'idle' (never fetched), 'loading'
+        // (fetch in flight), 'success' or 'error' — only data presence is
+        // identical between the SSR render and the client's hydration pass.
+        isPending: computed(() => {
+            const status = query.status.value;
+            return status !== 'success' && status !== 'error';
+        }),
+        isError: query.isError,
         isLoading: query.isLoading,
     };
 }

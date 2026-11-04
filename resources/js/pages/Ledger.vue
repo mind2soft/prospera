@@ -220,9 +220,21 @@ const canAddTransaction = computed(
 );
 
 // --- mutations -------------------------------------------------------------
-const { currentProfile, isLoading: isLoadingCurrentProfile } =
-    useCurrentProfile();
+const {
+    currentProfile,
+    isPending: isPendingCurrentProfile,
+    isError: isErrorCurrentProfile,
+} = useCurrentProfile();
 const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
+
+// "No data yet, no error" — unlike `isLoading`, this state is identical
+// between the SSR render and the client's hydration pass, so the skeleton
+// and content branches cannot diverge (see composables/query.ts).
+const waitingForData = computed(
+    () =>
+        (isPendingCurrentProfile.value && !isErrorCurrentProfile.value) ||
+        (ledgersQuery.isPending.value && !ledgersQuery.isError.value),
+);
 
 const createLedger = useCreateLedger();
 const closeLedger = useCloseLedger();
@@ -378,9 +390,7 @@ const onRemoveTransaction = (transactionId: number) => {
             :description="$t('ledger.description')"
         />
 
-        <LedgerLoadingScreen
-            v-if="isLoadingCurrentProfile || ledgersQuery.isLoading.value"
-        />
+        <LedgerLoadingScreen v-if="waitingForData" />
 
         <!-- No ledgers yet -->
         <Card
@@ -476,7 +486,7 @@ const onRemoveTransaction = (transactionId: number) => {
 
                     <Card
                         v-else-if="
-                            !envelopesQuery.isLoading.value &&
+                            !envelopesQuery.isPending.value &&
                             pickerEnvelopes.length === 0
                         "
                         class="border-amber-500/30"
@@ -504,7 +514,7 @@ const onRemoveTransaction = (transactionId: number) => {
 
                     <Card
                         v-else-if="
-                            !envelopesQuery.isLoading.value &&
+                            !envelopesQuery.isPending.value &&
                             !canAddTransaction
                         "
                         class="border-amber-500/30"

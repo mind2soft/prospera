@@ -17,12 +17,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -39,7 +33,6 @@ import {
     useDeleteProfile,
     usePendingInvites,
     useProfileMembers,
-    useProfiles,
     useRemoveMember,
     useRenameProfile,
     useRevokeInvite,
@@ -69,7 +62,8 @@ const {
     profiles,
     profileId: currentProfileId,
     select,
-    isLoading,
+    isPending,
+    isError,
 } = useCurrentProfile();
 
 const createProfile = useCreateProfile();
@@ -381,10 +375,13 @@ const joinedLabel = (joinedAt: string): string =>
             </Button>
         </div>
 
-        <p v-if="isLoading" class="space-y-2">
+        <!-- `div`, not `p`: the HTML parser auto-closes a <p> before block
+             elements, so <div>s inside a <p> hydrate into the wrong DOM
+             shape and desync every sibling that follows. -->
+        <div v-if="isPending && !isError" class="space-y-2">
             <Skeleton class="h-16 w-full" />
             <Skeleton class="h-16 w-full" />
-        </p>
+        </div>
 
         <div v-else class="space-y-3">
             <Card
@@ -502,7 +499,10 @@ const joinedLabel = (joinedAt: string): string =>
                                 {{ $t('settings.profiles.members') }}
                             </p>
                             <p
-                                v-if="membersQuery.isLoading.value"
+                                v-if="
+                                    membersQuery.isPending.value &&
+                                    !membersQuery.isError.value
+                                "
                                 class="text-sm text-muted-foreground"
                             >
                                 {{ $t('common.loading') }}

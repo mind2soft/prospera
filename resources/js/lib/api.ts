@@ -1,3 +1,5 @@
+import { isClient } from '@/lib/ssr';
+
 export class ApiError extends Error {
     readonly status: number;
     readonly errors: Record<string, string[]>;
@@ -29,6 +31,14 @@ export async function api<T>(
     url: string,
     options: ApiOptions = {},
 ): Promise<T> {
+    // The SSR pass has no CSRF meta tag, no session cookie, and Node's fetch
+    // cannot resolve relative URLs — every call would fail one way or
+    // another. Fail fast so queryFns bail out instead of retrying a doomed
+    // request; the client refetches on hydration.
+    if (!isClient) {
+        throw new ApiError(`api() cannot fetch ${url} during SSR`, 0);
+    }
+
     const { method = 'GET', body, signal } = options;
 
     const headers: Record<string, string> = { Accept: 'application/json' };
@@ -36,9 +46,10 @@ export async function api<T>(
         headers['Content-Type'] = 'application/json';
     }
 
-    const token = document.querySelector<HTMLMetaElement>(
-        'meta[name="csrf-token"]',
-    )?.content;
+    const token = isClient
+        ? document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
+              ?.content
+        : null;
     if (token) {
         headers['X-CSRF-TOKEN'] = token;
     }

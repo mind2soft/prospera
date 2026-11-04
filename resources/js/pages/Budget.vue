@@ -116,9 +116,21 @@ watch(
 
 // --- mutations -------------------------------------------------------------
 const queryClient = useQueryClient();
-const { currentProfile, isLoading: isLoadingCurrentProfile } =
-    useCurrentProfile();
+const {
+    currentProfile,
+    isPending: isPendingCurrentProfile,
+    isError: isErrorCurrentProfile,
+} = useCurrentProfile();
 const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
+
+// "No data yet, no error" — unlike `isLoading`, this state is identical
+// between the SSR render and the client's hydration pass, so the skeleton
+// and content branches cannot diverge (see composables/query.ts).
+const waitingForData = computed(
+    () =>
+        (isPendingCurrentProfile.value && !isErrorCurrentProfile.value) ||
+        (budgetsQuery.isPending.value && !budgetsQuery.isError.value),
+);
 
 const createBudget = useCreateBudget();
 const publishBudget = usePublishBudget();
@@ -395,9 +407,7 @@ const onRemoveEnvelope = (envelopeId: number) => {
             :description="$t('budget.description')"
         />
 
-        <BudgetLoadingScreen
-            v-if="isLoadingCurrentProfile || budgetsQuery.isLoading.value"
-        />
+        <BudgetLoadingScreen v-if="waitingForData" />
 
         <!-- No budgets yet -->
         <Card
@@ -467,7 +477,11 @@ const onRemoveEnvelope = (envelopeId: number) => {
             />
 
             <BudgetLoadingScreen
-                v-if="budgetQuery.isLoading.value && budget === null"
+                v-if="
+                    budgetQuery.isPending.value &&
+                    !budgetQuery.isError.value &&
+                    budget === null
+                "
                 :selector="false"
             />
 
