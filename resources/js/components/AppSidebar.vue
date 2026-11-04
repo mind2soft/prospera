@@ -16,29 +16,33 @@ import {
 import { budget, dashboard, ledger, envelopes } from '@/routes';
 import { materialSymbol } from '@/lib/materialIcon';
 import type { NavItem } from '@/types';
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 
-const mainNavItems: NavItem[] = [
+const { t } = useI18n();
+
+const mainNavItems = computed<NavItem[]>(() => [
     {
-        title: 'Dashboard',
+        title: t('layout.nav.dashboard'),
         href: dashboard(),
         icon: LayoutGrid,
     },
     {
-        title: 'Budget',
+        title: t('layout.nav.budget'),
         href: budget(),
         icon: materialSymbol('savings'),
     },
     {
-        title: 'Ledger',
+        title: t('layout.nav.ledger'),
         href: ledger(),
         icon: materialSymbol('receipt-long'),
     },
     {
-        title: 'Envelopes',
+        title: t('layout.nav.envelopes'),
         href: envelopes(),
         icon: materialSymbol('category'),
     },
-];
+]);
 </script>
 
 <template>

@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/card';
 import { home } from '@/routes';
 
-defineProps<{
+const { title = '', description = '' } = defineProps<{
     title?: string;
     description?: string;
 }>();
@@ -35,9 +35,13 @@ defineProps<{
             <div class="flex flex-col gap-6">
                 <Card class="rounded-xl">
                     <CardHeader class="px-10 pt-8 pb-0 text-center">
-                        <CardTitle class="text-xl">{{ title }}</CardTitle>
+                        <CardTitle class="text-xl">{{
+                            $te(title) ? $t(title) : title
+                        }}</CardTitle>
                         <CardDescription>
-                            {{ description }}
+                            {{
+                                $te(description) ? $t(description) : description
+                            }}
                         </CardDescription>
                     </CardHeader>
                     <CardContent class="px-10 py-8">

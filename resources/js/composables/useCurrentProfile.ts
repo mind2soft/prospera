@@ -76,6 +76,8 @@ export function useCurrentProfile() {
 
     return {
         profiles,
+        isPending: profilesQuery.isPending,
+        isError: profilesQuery.isError,
         isLoading: profilesQuery.isLoading,
         profileId: computed(() => selectedId.value),
         currentProfile,

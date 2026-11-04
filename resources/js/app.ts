@@ -1,6 +1,8 @@
 import { createInertiaApp } from '@inertiajs/vue3';
 import { VueQueryPlugin } from 'vue-query';
 import { initializeTheme } from '@/composables/useAppearance';
+import { initializeLocale } from '@/composables/useLocale';
+import { i18n } from '@/i18n';
 import AppLayout from '@/layouts/AppLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
@@ -40,6 +42,7 @@ void createInertiaApp({
                 },
             },
         });
+        app.use(i18n);
         app.directive('focus', {
             mounted: (el: HTMLElement, shouldFocus) => {
                 if (shouldFocus.value !== false) {
@@ -52,6 +55,10 @@ void createInertiaApp({
         color: '#4B5563',
     },
 });
+
+// This will resolve the active locale (user preference, else browser
+// locales) on page load and keep it in sync...
+initializeLocale();
 
 // This will set light / dark mode on page load...
 initializeTheme();

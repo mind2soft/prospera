@@ -14,15 +14,36 @@ export const MONTH_NAMES = [
 ] as const;
 
 export const CURRENCIES = [
-    { code: 'CAD', label: 'Canadian Dollar' },
-    { code: 'USD', label: 'US Dollar' },
-    { code: 'EUR', label: 'Euro' },
-    { code: 'GBP', label: 'British Pound' },
-    { code: 'CHF', label: 'Swiss Franc' },
-    { code: 'AUD', label: 'Australian Dollar' },
-    { code: 'JPY', label: 'Japanese Yen' },
-    { code: 'CNY', label: 'Chinese Yuan' },
+    { code: 'CAD' },
+    { code: 'USD' },
+    { code: 'EUR' },
+    { code: 'GBP' },
+    { code: 'CHF' },
+    { code: 'AUD' },
+    { code: 'JPY' },
+    { code: 'CNY' },
 ] as const;
+
+const currencyDisplayNames = new Map<string, Intl.DisplayNames>();
+
+/**
+ * The localized display name of a currency code, e.g. "Canadian Dollar"
+ * for CAD in English (falls back to the raw code).
+ */
+export function currencyName(code: string, locale: string): string {
+    let displayNames = currencyDisplayNames.get(locale);
+
+    if (!displayNames) {
+        displayNames = new Intl.DisplayNames([locale], { type: 'currency' });
+        currencyDisplayNames.set(locale, displayNames);
+    }
+
+    try {
+        return displayNames.of(code) ?? code;
+    } catch {
+        return code;
+    }
+}
 
 const formatters = new Map<string, Intl.NumberFormat>();
 

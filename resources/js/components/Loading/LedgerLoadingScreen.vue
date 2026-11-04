@@ -10,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
     <div
         class="flex flex-col gap-6"
         role="status"
-        aria-label="Loading ledgers"
+        :aria-label="$t('layout.loading.ledgers')"
         data-testid="ledger-loading"
     >
         <div class="flex items-center justify-between gap-4">

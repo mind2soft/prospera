@@ -10,21 +10,43 @@ import {
 } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import { useLocale } from '@/composables/useLocale';
 import { dashboard, login, register } from '@/routes';
 
 const page = usePage();
 const isSignedIn = computed(() => Boolean(page.props.auth?.user));
+const { locale } = useLocale();
 
 // Illustrative figures for the hero preview — not real data.
 const envelopes = [
-    { name: 'Housing', spent: 1450, planned: 1500, color: 'bg-sky-500' },
-    { name: 'Groceries', spent: 412, planned: 650, color: 'bg-emerald-500' },
-    { name: 'Transport', spent: 96, planned: 220, color: 'bg-amber-500' },
-    { name: 'Fun', spent: 138, planned: 150, color: 'bg-rose-500' },
+    {
+        nameKey: 'welcome.envelopes.housing',
+        spent: 1450,
+        planned: 1500,
+        color: 'bg-sky-500',
+    },
+    {
+        nameKey: 'welcome.envelopes.groceries',
+        spent: 412,
+        planned: 650,
+        color: 'bg-emerald-500',
+    },
+    {
+        nameKey: 'welcome.envelopes.transport',
+        spent: 96,
+        planned: 220,
+        color: 'bg-amber-500',
+    },
+    {
+        nameKey: 'welcome.envelopes.fun',
+        spent: 138,
+        planned: 150,
+        color: 'bg-rose-500',
+    },
 ];
 
 const money = (n: number) =>
-    n.toLocaleString('en-US', {
+    n.toLocaleString(locale.value, {
         style: 'currency',
         currency: 'USD',
         maximumFractionDigits: 0,
@@ -33,29 +55,29 @@ const money = (n: number) =>
 const features = [
     {
         icon: ChartPie,
-        title: 'Budget before you spend',
-        body: 'Plan each month by splitting your income into envelopes. Fixed bills and flexible spending, side by side.',
+        titleKey: 'welcome.features.budgetFirst.title',
+        bodyKey: 'welcome.features.budgetFirst.body',
     },
     {
         icon: BookOpenText,
-        title: 'A ledger that stays simple',
-        body: 'Log expenses and revenues one line at a time. No double entry, no chart of accounts — just what happened.',
+        titleKey: 'welcome.features.simpleLedger.title',
+        bodyKey: 'welcome.features.simpleLedger.body',
     },
     {
         icon: Mail,
-        title: 'Envelopes you can see',
-        body: 'Color-coded envelopes show at a glance what is left. When one is empty, you know it is time to stop.',
+        titleKey: 'welcome.features.visibleEnvelopes.title',
+        bodyKey: 'welcome.features.visibleEnvelopes.body',
     },
     {
         icon: Users,
-        title: 'Finances, shared',
-        body: 'Invite a partner or family into a shared profile, with owner, contributor and viewer roles per resource.',
+        titleKey: 'welcome.features.shared.title',
+        bodyKey: 'welcome.features.shared.body',
     },
 ];
 </script>
 
 <template>
-    <Head title="The envelope system, reimagined" />
+    <Head :title="$t('welcome.title')" />
 
     <div
         class="relative min-h-screen overflow-hidden bg-background text-foreground antialiased"
@@ -97,7 +119,7 @@ const features = [
                         :href="dashboard()"
                         class="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 font-medium text-primary-foreground transition hover:opacity-90"
                     >
-                        Open dashboard
+                        {{ $t('welcome.nav.openDashboard') }}
                         <ArrowRight class="size-4" />
                     </Link>
                     <template v-else>
@@ -105,13 +127,13 @@ const features = [
                             :href="login()"
                             class="inline-flex h-9 items-center rounded-full px-4 font-medium text-muted-foreground transition hover:text-foreground"
                         >
-                            Log in
+                            {{ $t('auth.login.submit') }}
                         </Link>
                         <Link
                             :href="register()"
                             class="inline-flex h-9 items-center rounded-full bg-primary px-4 font-medium text-primary-foreground transition hover:opacity-90"
                         >
-                            Get started
+                            {{ $t('welcome.nav.getStarted') }}
                         </Link>
                     </template>
                 </div>
@@ -128,23 +150,21 @@ const features = [
                         class="inline-flex items-center gap-2 rounded-full border bg-background/70 px-3 py-1 text-xs font-medium text-muted-foreground shadow-xs backdrop-blur"
                     >
                         <span class="size-1.5 rounded-full bg-brand" />
-                        The envelope system, reimagined
+                        {{ $t('welcome.hero.badge') }}
                     </p>
                     <h1
                         class="mt-6 font-display text-5xl leading-[1.05] tracking-tight text-balance sm:text-6xl lg:text-7xl"
                     >
-                        Give every dollar
+                        {{ $t('welcome.hero.title') }}
                         <em
                             class="bg-gradient-to-r from-brand to-teal-500 bg-clip-text pr-1 text-transparent"
-                            >a purpose.</em
+                            >{{ $t('welcome.hero.emphasis') }}</em
                         >
                     </h1>
                     <p
                         class="mx-auto mt-6 max-w-lg text-lg text-pretty text-muted-foreground lg:mx-0"
                     >
-                        Prospera puts your money into envelopes — one per
-                        purpose — so you always know what is left to spend.
-                        Calm, clear budgeting without the spreadsheet.
+                        {{ $t('welcome.hero.description') }}
                     </p>
                     <div
                         class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row lg:justify-start"
@@ -155,8 +175,8 @@ const features = [
                         >
                             {{
                                 isSignedIn
-                                    ? 'Open dashboard'
-                                    : 'Start budgeting — free'
+                                    ? $t('welcome.nav.openDashboard')
+                                    : $t('welcome.hero.cta')
                             }}
                             <ArrowRight
                                 class="size-4 transition group-hover:translate-x-0.5"
@@ -167,7 +187,7 @@ const features = [
                             :href="login()"
                             class="inline-flex h-12 items-center rounded-full px-6 text-sm font-medium text-muted-foreground transition hover:text-foreground"
                         >
-                            I already have an account
+                            {{ $t('welcome.hero.existingAccount') }}
                         </Link>
                     </div>
                 </div>
@@ -184,16 +204,16 @@ const features = [
                         class="rounded-2xl border bg-card/90 p-6 shadow-2xl ring-1 shadow-black/5 ring-black/[0.02] backdrop-blur"
                     >
                         <div class="flex items-baseline justify-between">
-                            <span class="text-sm text-muted-foreground"
-                                >October</span
-                            >
+                            <span class="text-sm text-muted-foreground">{{
+                                $t('welcome.preview.month')
+                            }}</span>
                             <span
                                 class="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand"
-                                >On track</span
+                                >{{ $t('welcome.preview.onTrack') }}</span
                             >
                         </div>
                         <p class="mt-3 text-sm text-muted-foreground">
-                            Left to spend
+                            {{ $t('welcome.preview.leftToSpend') }}
                         </p>
                         <p
                             class="font-display text-5xl tracking-tight tabular-nums"
@@ -202,7 +222,7 @@ const features = [
                         </p>
 
                         <ul class="mt-6 space-y-4 pb-6">
-                            <li v-for="e in envelopes" :key="e.name">
+                            <li v-for="e in envelopes" :key="e.nameKey">
                                 <div
                                     class="mb-1.5 flex items-center justify-between text-sm"
                                 >
@@ -211,12 +231,18 @@ const features = [
                                             class="size-2 rounded-full"
                                             :class="e.color"
                                         />
-                                        {{ e.name }}
+                                        {{ $t(e.nameKey) }}
                                     </span>
                                     <span
                                         class="text-muted-foreground tabular-nums"
                                     >
-                                        {{ money(e.planned - e.spent) }} left
+                                        {{
+                                            $t('welcome.preview.left', {
+                                                amount: money(
+                                                    e.planned - e.spent,
+                                                ),
+                                            })
+                                        }}
                                     </span>
                                 </div>
                                 <div
@@ -243,7 +269,9 @@ const features = [
                             <Banknote class="size-5" />
                         </span>
                         <div class="text-sm leading-tight">
-                            <p class="font-medium">Paycheck received</p>
+                            <p class="font-medium">
+                                {{ $t('welcome.preview.paycheckReceived') }}
+                            </p>
                             <p class="text-muted-foreground tabular-nums">
                                 +{{ money(2100) }}
                             </p>
@@ -258,10 +286,10 @@ const features = [
                     <h2
                         class="max-w-2xl font-display text-4xl tracking-tight text-balance sm:text-5xl"
                     >
-                        Everything a household budget needs.
-                        <span class="text-muted-foreground"
-                            >Nothing an accountant does.</span
-                        >
+                        {{ $t('welcome.features.title') }}
+                        <span class="text-muted-foreground">{{
+                            $t('welcome.features.subtitle')
+                        }}</span>
                     </h2>
 
                     <div
@@ -269,7 +297,7 @@ const features = [
                     >
                         <div
                             v-for="f in features"
-                            :key="f.title"
+                            :key="f.titleKey"
                             class="bg-background p-7 transition hover:bg-card"
                         >
                             <span
@@ -277,11 +305,13 @@ const features = [
                             >
                                 <component :is="f.icon" class="size-5" />
                             </span>
-                            <h3 class="mt-5 font-medium">{{ f.title }}</h3>
+                            <h3 class="mt-5 font-medium">
+                                {{ $t(f.titleKey) }}
+                            </h3>
                             <p
                                 class="mt-2 text-sm leading-relaxed text-muted-foreground"
                             >
-                                {{ f.body }}
+                                {{ $t(f.bodyKey) }}
                             </p>
                         </div>
                     </div>
@@ -301,7 +331,7 @@ const features = [
                         <h2
                             class="font-display text-4xl tracking-tight text-balance sm:text-5xl"
                         >
-                            Know where your money goes — before it goes.
+                            {{ $t('welcome.closing.title') }}
                         </h2>
                         <Link
                             :href="isSignedIn ? dashboard() : register()"
@@ -309,8 +339,8 @@ const features = [
                         >
                             {{
                                 isSignedIn
-                                    ? 'Open dashboard'
-                                    : 'Create your free account'
+                                    ? $t('welcome.nav.openDashboard')
+                                    : $t('welcome.closing.cta')
                             }}
                             <ArrowRight
                                 class="size-4 transition group-hover:translate-x-0.5"
@@ -329,8 +359,8 @@ const features = [
                     >Prospera</span
                 >
                 <span
-                    >&copy; {{ new Date().getFullYear() }} Prospera. Money,
-                    envelopes, clarity.</span
+                    >&copy; {{ new Date().getFullYear() }}
+                    {{ $t('welcome.footer.tagline') }}</span
                 >
             </div>
         </footer>

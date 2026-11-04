@@ -1,0 +1,89 @@
+{
+    "budget": {
+        "title": "Budget",
+        "description": "Plan where your money goes before it goes anywhere.",
+        "toast": {
+            "failed": "Something went wrong.",
+            "accessUpdated": "Access updated.",
+            "accessRevoked": "Access revoked.",
+            "ownershipTransferred": "Ownership transferred.",
+            "published": "Budget published.",
+            "deleted": "Budget deleted.",
+            "draftCreated": "Draft budget created.",
+            "envelopeAdded": "Envelope added.",
+            "envelopeRemoved": "Envelope removed."
+        },
+        "empty": {
+            "title": "Create your first budget",
+            "description": "Start with a draft: pick your currency, add your envelopes, then publish when it feels right.",
+            "create": "Create budget",
+            "onlyOwner": "Only the profile owner can create budgets."
+        },
+        "flow": {
+            "revenues": "Revenues",
+            "expenses": "Expenses",
+            "segmentTitle": "{name} — {amount}"
+        },
+        "selector": {
+            "selectBudget": "Select budget",
+            "actions": "Budget actions",
+            "publish": "Publish",
+            "newBudget": "New Budget",
+            "share": "Share"
+        },
+        "table": {
+            "addEnvelope": "Add envelope",
+            "envelope": "Envelope",
+            "type": "Type",
+            "amount": "Amount",
+            "leftToSpend": "Left to spend",
+            "actions": "Actions",
+            "removeEnvelope": "Remove envelope",
+            "empty": "No envelopes assigned yet.",
+            "overspending": "Overspending",
+            "leftOver": "Left over",
+            "variableNote": "Variable amounts are expected values — re-adjust them any time with a budget revision."
+        },
+        "addEnvelope": {
+            "title": "Add an envelope",
+            "description": "Assign one of your envelopes to this budget with its planned amount.",
+            "envelope": "Envelope",
+            "chooseEnvelope": "Choose an envelope",
+            "revenue": "revenue",
+            "expense": "expense",
+            "allAssigned": "All your envelopes are already in this budget.",
+            "type": "Type",
+            "fixed": "Fixed",
+            "variable": "Variable",
+            "amount": "Amount",
+            "amountPlaceholder": "e.g. 800",
+            "savedAsExpense": "Saved as an expense.",
+            "savedAsRevenue": "Saved as revenue.",
+            "add": "Add envelope"
+        },
+        "create": {
+            "title": "Create a new budget",
+            "description": "Start with a draft — pick the currency you will budget in.",
+            "createDraft": "Create draft"
+        },
+        "clone": {
+            "title": "Create a new budget?",
+            "description": "A draft copy of this budget will be created — same envelopes, ready for your adjustments. The currency is pre-filled from the current budget.",
+            "createDraft": "Create draft"
+        },
+        "share": {
+            "title": "Share budget",
+            "resource": "budget"
+        },
+        "confirm": {
+            "publishTitle": "Publish this budget?",
+            "publishDescription": "Publishing stamps this budget for the current month and puts it in read-only mode. This cannot be undone.",
+            "publishDescriptionWithReplace": "Publishing stamps this budget for the current month and puts it in read-only mode. This cannot be undone. An existing published budget for this month will be replaced.",
+            "replaceWarning": "An existing published budget for this month will be replaced.",
+            "deleteTitle": "Delete this budget?",
+            "deleteDescription": "This permanently removes the budget with all of its envelope assignments and shares.",
+            "publishButton": "Publish",
+            "deleteButton": "Delete budget"
+        }
+    }
+}

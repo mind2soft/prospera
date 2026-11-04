@@ -46,14 +46,14 @@ const menuProfiles = computed(() =>
         <DropdownMenuSub>
             <DropdownMenuSubTrigger class="gap-2">
                 <Icon name="group" class="size-4" aria-hidden="true" />
-                Profiles
+                {{ $t('layout.user.profiles') }}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent class="w-64">
                 <p
                     v-if="profiles.length === 0"
                     class="px-2 py-1.5 text-sm text-muted-foreground"
                 >
-                    Loading…
+                    {{ $t('common.loading') }}
                 </p>
                 <template v-else>
                     <DropdownMenuItem
@@ -78,7 +78,11 @@ const menuProfiles = computed(() =>
                                     : 'bg-muted text-muted-foreground'
                             "
                         >
-                            {{ profile.is_owner ? 'Owned' : 'Shared' }}
+                            {{
+                                profile.is_owner
+                                    ? $t('layout.user.owned')
+                                    : $t('layout.user.shared')
+                            }}
                         </span>
                         <Icon
                             v-if="profile.id === profileId"
@@ -96,7 +100,7 @@ const menuProfiles = computed(() =>
                         :href="editProfiles()"
                     >
                         <Icon name="tune" class="size-4" aria-hidden="true" />
-                        Manage profiles
+                        {{ $t('layout.user.manageProfiles') }}
                     </Link>
                 </DropdownMenuItem>
             </DropdownMenuSubContent>
@@ -104,7 +108,7 @@ const menuProfiles = computed(() =>
         <DropdownMenuItem :as-child="true">
             <Link class="block w-full cursor-pointer" :href="edit()" prefetch>
                 <Icon name="settings" class="size-4" aria-hidden="true" />
-                Settings
+                {{ $t('layout.user.settings') }}
             </Link>
         </DropdownMenuItem>
     </DropdownMenuGroup>
@@ -118,7 +122,7 @@ const menuProfiles = computed(() =>
             data-test="logout-button"
         >
             <Icon name="logout" class="size-4" aria-hidden="true" />
-            Log out
+            {{ $t('layout.user.logOut') }}
         </Link>
     </DropdownMenuItem>
 </template>

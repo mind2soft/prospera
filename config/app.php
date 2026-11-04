@@ -86,6 +86,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Available UI Locales
+    |--------------------------------------------------------------------------
+    |
+    | The locales users may pick from in their settings, keyed by locale code
+    | with the display name as value. The frontend interface is localized
+    | with Vue i18n; adding a locale means adding its translations and
+    | registering it here.
+    |
+    */
+    'available_locales' => [
+        'en' => 'English',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Encryption Key
     |--------------------------------------------------------------------------
     |

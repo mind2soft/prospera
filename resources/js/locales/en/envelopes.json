@@ -1,0 +1,61 @@
+{
+    "envelopes": {
+        "title": "Envelopes",
+        "description": "Give every euro, dollar or franc a home — the classic envelope system, minus the paper.",
+        "newEnvelope": "New envelope",
+        "empty": {
+            "title": "Create your first envelope",
+            "description": "An envelope for housing, one for groceries, one for fun — envelopes are how Prospera turns a pile of transactions into a clear picture of where your money flows.",
+            "create": "Create envelope"
+        },
+        "groups": {
+            "expenses": "Expenses",
+            "expensesEmpty": "No expense envelopes yet.",
+            "revenue": "Revenue",
+            "revenueEmpty": "No revenue envelopes yet."
+        },
+        "role": {
+            "owner": "Owned",
+            "contributor": "Can edit",
+            "viewer": "Can view",
+            "none": "Shared"
+        },
+        "options": "Envelope options",
+        "menu": {
+            "share": "Share"
+        },
+        "dialog": {
+            "newTitle": "New envelope",
+            "newDescription": "A name, a direction, a color — that is all it takes.",
+            "editTitle": "Edit envelope",
+            "editDescription": "Fine-tune how this envelope looks and behaves."
+        },
+        "form": {
+            "namePlaceholder": "e.g. Groceries",
+            "type": "Type",
+            "expense": "Expense",
+            "revenue": "Revenue",
+            "color": "Color",
+            "saving": "Saving…",
+            "saveChanges": "Save changes",
+            "create": "Create envelope"
+        },
+        "colors": {
+            "indigo": "Indigo",
+            "blue": "Blue",
+            "sky": "Sky",
+            "teal": "Teal",
+            "emerald": "Emerald",
+            "amber": "Amber",
+            "orange": "Orange",
+            "rose": "Rose",
+            "violet": "Violet",
+            "slate": "Slate"
+        },
+        "delete": {
+            "title": "Delete envelope?",
+            "description": "“{name}” will be removed from your envelopes. Existing transactions are not deleted.",
+            "failed": "Could not delete the envelope."
+        }
+    }
+}

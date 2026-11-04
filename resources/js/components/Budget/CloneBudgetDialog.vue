@@ -16,7 +16,10 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { CURRENCIES } from '@/lib/budget';
+import { CURRENCIES, currencyName } from '@/lib/budget';
+import { useLocale } from '@/composables/useLocale';
+
+const { locale } = useLocale();
 
 const props = defineProps<{
     open: boolean;
@@ -50,11 +53,9 @@ const confirm = () => {
     <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
         <DialogContent class="sm:max-w-sm">
             <DialogHeader>
-                <DialogTitle>Create a new budget?</DialogTitle>
+                <DialogTitle>{{ $t('budget.clone.title') }}</DialogTitle>
                 <DialogDescription>
-                    A draft copy of this budget will be created — same
-                    envelopes, ready for your adjustments. The currency is
-                    pre-filled from the current budget.
+                    {{ $t('budget.clone.description') }}
                 </DialogDescription>
             </DialogHeader>
 
@@ -68,16 +69,19 @@ const confirm = () => {
                         :key="option.code"
                         :value="option.code"
                     >
-                        {{ option.code }} — {{ option.label }}
+                        {{ option.code }} —
+                        {{ currencyName(option.code, locale) }}
                     </SelectItem>
                 </SelectContent>
             </Select>
 
             <DialogFooter>
-                <Button variant="ghost" @click="emit('update:open', false)"
-                    >Cancel</Button
-                >
-                <Button @click="confirm">Create draft</Button>
+                <Button variant="ghost" @click="emit('update:open', false)">{{
+                    $t('common.actions.cancel')
+                }}</Button>
+                <Button @click="confirm">{{
+                    $t('budget.clone.createDraft')
+                }}</Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>

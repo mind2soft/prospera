@@ -2,6 +2,7 @@
 import { Head, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
 import { toast } from 'vue-sonner';
+import { useI18n } from 'vue-i18n';
 import Icon from '@/components/Icon.vue';
 import Heading from '@/components/Heading.vue';
 import InputError from '@/components/InputError.vue';
@@ -16,12 +17,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -38,22 +33,27 @@ import {
     useDeleteProfile,
     usePendingInvites,
     useProfileMembers,
-    useProfiles,
     useRemoveMember,
     useRenameProfile,
     useRevokeInvite,
     useTransferProfileOwnership,
 } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
+import { useLocale } from '@/composables/useLocale';
 import { ApiError } from '@/lib/api';
 import { edit as editProfiles } from '@/routes/profiles';
 import type { FinancialProfile, ProfileInvite, ProfileMember } from '@/types';
 
 defineOptions({
     layout: {
-        breadcrumbs: [{ title: 'Profiles', href: editProfiles() }],
+        breadcrumbs: [
+            { title: 'settings.profiles.title', href: editProfiles() },
+        ],
     },
 });
+
+const { t } = useI18n();
+const { locale } = useLocale();
 
 // --- profiles ----------------------------------------------------------------
 const meId = computed(() => usePage().props.auth.user.id);
@@ -62,7 +62,8 @@ const {
     profiles,
     profileId: currentProfileId,
     select,
-    isLoading,
+    isPending,
+    isError,
 } = useCurrentProfile();
 
 const createProfile = useCreateProfile();
@@ -74,7 +75,11 @@ const createInvite = useCreateInvite();
 const revokeInvite = useRevokeInvite();
 
 const fail = (e: unknown) => {
-    toast.error(e instanceof ApiError ? e.firstError : 'Something went wrong.');
+    toast.error(
+        e instanceof ApiError
+            ? e.firstError
+            : t('settings.profiles.somethingWentWrong'),
+    );
 };
 
 const expandedId = ref<number | null>(null);
@@ -112,7 +117,7 @@ const commitRename = (profile: FinancialProfile) => {
     renameProfile.mutate(
         { profileId: profile.id, name },
         {
-            onSuccess: () => toast.success('Profile renamed.'),
+            onSuccess: () => toast.success(t('settings.profiles.renamedToast')),
             onError: fail,
         },
     );
@@ -136,7 +141,7 @@ const onCreate = () => {
         onSuccess: () => {
             showCreate.value = false;
             newName.value = '';
-            toast.success('Profile created.');
+            toast.success(t('settings.profiles.createdToast'));
         },
         onError: (e) => {
             newNameError.value =
@@ -157,7 +162,7 @@ const onDelete = () => {
     deleteProfile.mutate(target.id, {
         onSuccess: () => {
             deleteTarget.value = null;
-            toast.success('Profile deleted.');
+            toast.success(t('settings.profiles.deletedToast'));
         },
         onError: (e) => {
             deleteTarget.value = null;
@@ -190,7 +195,11 @@ const confirmRemove = () => {
         {
             onSuccess: () => {
                 removeTarget.value = null;
-                toast.success(`${target.name} was removed from the profile.`);
+                toast.success(
+                    t('settings.profiles.memberRemovedToast', {
+                        name: target.name,
+                    }),
+                );
             },
             onError: (e) => {
                 removeTarget.value = null;
@@ -211,7 +220,9 @@ const confirmLeave = () => {
         {
             onSuccess: () => {
                 leaveTarget.value = null;
-                toast.success(`You left "${profile.name}".`);
+                toast.success(
+                    t('settings.profiles.leftToast', { name: profile.name }),
+                );
             },
             onError: (e) => {
                 leaveTarget.value = null;
@@ -247,9 +258,7 @@ const confirmTransfer = () => {
         {
             onSuccess: () => {
                 transferTarget.value = null;
-                toast.success(
-                    'Ownership transferred. You are now a collaborator.',
-                );
+                toast.success(t('settings.profiles.ownershipTransferredToast'));
             },
             onError: (e) => {
                 transferTarget.value = null;
@@ -294,7 +303,7 @@ const onInvite = () => {
                     ...inviteUrls.value,
                     [data.invite.id]: data.url,
                 };
-                toast.success('Invite created — copy the link to share it.');
+                toast.success(t('settings.profiles.inviteCreatedToast'));
             },
             onError: (e) => {
                 inviteError.value =
@@ -315,7 +324,7 @@ const copyInvite = async (invite: ProfileInvite) => {
         copiedInviteId.value = invite.id;
         setTimeout(() => (copiedInviteId.value = null), 2000);
     } catch {
-        toast.error('Could not copy the link.');
+        toast.error(t('settings.profiles.copyFailedToast'));
     }
 };
 
@@ -327,14 +336,15 @@ const revoke = (invite: ProfileInvite) => {
     revokeInvite.mutate(
         { profileId: profile.id, inviteId: invite.id },
         {
-            onSuccess: () => toast.success('Invite revoked.'),
+            onSuccess: () =>
+                toast.success(t('settings.profiles.inviteRevokedToast')),
             onError: (e) => fail(e),
         },
     );
 };
 
 const expiryLabel = (expiresAt: string): string =>
-    new Date(expiresAt).toLocaleString(undefined, {
+    new Date(expiresAt).toLocaleString(locale.value, {
         month: 'short',
         day: 'numeric',
         hour: 'numeric',
@@ -342,7 +352,7 @@ const expiryLabel = (expiresAt: string): string =>
     });
 
 const joinedLabel = (joinedAt: string): string =>
-    new Date(joinedAt).toLocaleDateString(undefined, {
+    new Date(joinedAt).toLocaleDateString(locale.value, {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -350,25 +360,28 @@ const joinedLabel = (joinedAt: string): string =>
 </script>
 
 <template>
-    <Head title="Profiles" />
+    <Head :title="$t('settings.profiles.title')" />
 
     <div class="flex flex-col space-y-6">
         <div class="flex flex-wrap items-end justify-between gap-4">
             <Heading
                 variant="small"
-                title="Profiles"
-                description="Group people, then share budgets and ledgers within a profile"
+                :title="$t('settings.profiles.title')"
+                :description="$t('settings.profiles.description')"
             />
             <Button class="gap-2" @click="showCreate = true">
                 <Icon name="add" class="size-4" aria-hidden="true" />
-                New profile
+                {{ $t('settings.profiles.newProfile') }}
             </Button>
         </div>
 
-        <p v-if="isLoading" class="space-y-2">
+        <!-- `div`, not `p`: the HTML parser auto-closes a <p> before block
+             elements, so <div>s inside a <p> hydrate into the wrong DOM
+             shape and desync every sibling that follows. -->
+        <div v-if="isPending && !isError" class="space-y-2">
             <Skeleton class="h-16 w-full" />
             <Skeleton class="h-16 w-full" />
-        </p>
+        </div>
 
         <div v-else class="space-y-3">
             <Card
@@ -423,19 +436,21 @@ const joinedLabel = (joinedAt: string): string =>
                                     v-if="profile.is_owner"
                                     variant="default"
                                     class="shrink-0"
-                                    >Owned</Badge
+                                    >{{ $t('settings.profiles.owned') }}</Badge
                                 >
                                 <Badge
                                     v-else
                                     variant="secondary"
                                     class="shrink-0"
-                                    >Shared</Badge
+                                    >{{ $t('settings.profiles.shared') }}</Badge
                                 >
                                 <Badge
                                     v-if="profile.id === currentProfileId"
                                     variant="outline"
                                     class="shrink-0"
-                                    >Current</Badge
+                                    >{{
+                                        $t('settings.profiles.current')
+                                    }}</Badge
                                 >
                             </span>
                         </span>
@@ -444,7 +459,7 @@ const joinedLabel = (joinedAt: string): string =>
                             variant="ghost"
                             size="icon-sm"
                             class="shrink-0"
-                            aria-label="Rename profile"
+                            :aria-label="$t('settings.profiles.rename')"
                             @click.stop="startRename(profile)"
                         >
                             <Icon
@@ -460,7 +475,7 @@ const joinedLabel = (joinedAt: string): string =>
                             class="shrink-0 text-xs"
                             @click.stop="select(profile.id)"
                         >
-                            Switch to
+                            {{ $t('settings.profiles.switchTo') }}
                         </Button>
                         <Icon
                             name="expand-more"
@@ -481,13 +496,16 @@ const joinedLabel = (joinedAt: string): string =>
                             <p
                                 class="text-xs font-medium text-muted-foreground"
                             >
-                                Members
+                                {{ $t('settings.profiles.members') }}
                             </p>
                             <p
-                                v-if="membersQuery.isLoading.value"
+                                v-if="
+                                    membersQuery.isPending.value &&
+                                    !membersQuery.isError.value
+                                "
                                 class="text-sm text-muted-foreground"
                             >
-                                Loading…
+                                {{ $t('common.loading') }}
                             </p>
                             <div v-else class="space-y-1">
                                 <div
@@ -506,14 +524,22 @@ const joinedLabel = (joinedAt: string): string =>
                                             <span
                                                 v-if="member.id === meId"
                                                 class="text-xs font-normal text-muted-foreground"
-                                                >(you)</span
+                                                >{{
+                                                    $t('settings.profiles.you')
+                                                }}</span
                                             >
                                         </p>
                                         <p
                                             class="truncate text-xs text-muted-foreground"
                                         >
-                                            {{ member.email }} · joined
-                                            {{ joinedLabel(member.joined_at) }}
+                                            {{ member.email }} ·
+                                            {{
+                                                $t('settings.profiles.joined', {
+                                                    date: joinedLabel(
+                                                        member.joined_at,
+                                                    ),
+                                                })
+                                            }}
                                         </p>
                                     </div>
                                     <Badge
@@ -526,8 +552,10 @@ const joinedLabel = (joinedAt: string): string =>
                                     >
                                         {{
                                             member.is_owner
-                                                ? 'Owner'
-                                                : 'Collaborator'
+                                                ? $t('settings.profiles.owner')
+                                                : $t(
+                                                      'settings.profiles.collaborator',
+                                                  )
                                         }}
                                     </Badge>
                                     <Button
@@ -537,7 +565,9 @@ const joinedLabel = (joinedAt: string): string =>
                                         variant="ghost"
                                         size="icon-sm"
                                         class="shrink-0 text-muted-foreground hover:text-destructive"
-                                        aria-label="Remove member"
+                                        :aria-label="
+                                            $t('settings.profiles.removeMember')
+                                        "
                                         @click="removeTarget = member"
                                     >
                                         <Icon
@@ -556,7 +586,7 @@ const joinedLabel = (joinedAt: string): string =>
                                         class="shrink-0 text-xs text-muted-foreground hover:text-destructive"
                                         @click="leaveTarget = member"
                                     >
-                                        Leave
+                                        {{ $t('settings.profiles.leave') }}
                                     </Button>
                                 </div>
                             </div>
@@ -568,7 +598,7 @@ const joinedLabel = (joinedAt: string): string =>
                                 <p
                                     class="text-xs font-medium text-muted-foreground"
                                 >
-                                    Invite someone
+                                    {{ $t('settings.profiles.inviteSomeone') }}
                                 </p>
                                 <form
                                     class="flex items-start gap-2"
@@ -579,7 +609,11 @@ const joinedLabel = (joinedAt: string): string =>
                                             v-model="inviteEmail"
                                             type="email"
                                             required
-                                            placeholder="person@example.com"
+                                            :placeholder="
+                                                $t(
+                                                    'settings.profiles.emailPlaceholder',
+                                                )
+                                            "
                                         />
                                         <InputError :message="inviteError" />
                                     </div>
@@ -594,12 +628,11 @@ const joinedLabel = (joinedAt: string): string =>
                                             class="size-4"
                                             aria-hidden="true"
                                         />
-                                        Invite
+                                        {{ $t('settings.profiles.invite') }}
                                     </Button>
                                 </form>
                                 <p class="text-xs text-muted-foreground">
-                                    The invite link expires after 48 hours and
-                                    only works for this email address.
+                                    {{ $t('settings.profiles.inviteNote') }}
                                 </p>
 
                                 <div
@@ -620,8 +653,16 @@ const joinedLabel = (joinedAt: string): string =>
                                         <p
                                             class="text-xs text-muted-foreground"
                                         >
-                                            Expires
-                                            {{ expiryLabel(invite.expires_at) }}
+                                            {{
+                                                $t(
+                                                    'settings.profiles.expires',
+                                                    {
+                                                        date: expiryLabel(
+                                                            invite.expires_at,
+                                                        ),
+                                                    },
+                                                )
+                                            }}
                                         </p>
                                     </div>
                                     <Button
@@ -629,7 +670,11 @@ const joinedLabel = (joinedAt: string): string =>
                                         variant="ghost"
                                         size="icon-sm"
                                         class="shrink-0"
-                                        aria-label="Copy invite link"
+                                        :aria-label="
+                                            $t(
+                                                'settings.profiles.copyInviteLink',
+                                            )
+                                        "
                                         @click="copyInvite(invite)"
                                     >
                                         <Icon
@@ -646,7 +691,9 @@ const joinedLabel = (joinedAt: string): string =>
                                         variant="ghost"
                                         size="icon-sm"
                                         class="shrink-0 text-muted-foreground hover:text-destructive"
-                                        aria-label="Revoke invite"
+                                        :aria-label="
+                                            $t('settings.profiles.revokeInvite')
+                                        "
                                         :disabled="revokeInvite.isLoading.value"
                                         @click="revoke(invite)"
                                     >
@@ -666,7 +713,11 @@ const joinedLabel = (joinedAt: string): string =>
                                 <p
                                     class="text-xs font-medium text-muted-foreground"
                                 >
-                                    Transfer ownership
+                                    {{
+                                        $t(
+                                            'settings.profiles.transferOwnership',
+                                        )
+                                    }}
                                 </p>
                                 <div class="flex items-center gap-2">
                                     <Select
@@ -680,7 +731,11 @@ const joinedLabel = (joinedAt: string): string =>
                                     >
                                         <SelectTrigger class="flex-1">
                                             <SelectValue
-                                                placeholder="Choose a collaborator"
+                                                :placeholder="
+                                                    $t(
+                                                        'settings.profiles.chooseCollaborator',
+                                                    )
+                                                "
                                             />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -698,7 +753,7 @@ const joinedLabel = (joinedAt: string): string =>
                                         :disabled="transferTarget === null"
                                         @click="askTransfer"
                                     >
-                                        Transfer
+                                        {{ $t('settings.profiles.transfer') }}
                                     </Button>
                                 </div>
                             </div>
@@ -709,14 +764,13 @@ const joinedLabel = (joinedAt: string): string =>
                                 class="space-y-2 border-t pt-4"
                             >
                                 <p class="text-xs font-medium text-destructive">
-                                    Danger zone
+                                    {{ $t('settings.profiles.dangerZone') }}
                                 </p>
                                 <div
                                     class="flex items-center justify-between gap-4"
                                 >
                                     <p class="text-sm text-muted-foreground">
-                                        Deletes this profile. Blocked while it
-                                        still has budgets or ledgers.
+                                        {{ $t('settings.profiles.deleteNote') }}
                                     </p>
                                     <Button
                                         variant="destructive"
@@ -729,7 +783,11 @@ const joinedLabel = (joinedAt: string): string =>
                                             class="size-4"
                                             aria-hidden="true"
                                         />
-                                        Delete profile
+                                        {{
+                                            $t(
+                                                'settings.profiles.deleteProfile',
+                                            )
+                                        }}
                                     </Button>
                                 </div>
                             </div>
@@ -743,34 +801,37 @@ const joinedLabel = (joinedAt: string): string =>
         <Dialog :open="showCreate" @update:open="showCreate = false">
             <DialogContent class="sm:max-w-sm">
                 <DialogHeader>
-                    <DialogTitle>New profile</DialogTitle>
+                    <DialogTitle>{{
+                        $t('settings.profiles.newProfile')
+                    }}</DialogTitle>
                     <DialogDescription>
-                        A profile groups people — budgets and ledgers are shared
-                        within it.
+                        {{ $t('settings.profiles.createDescription') }}
                     </DialogDescription>
                 </DialogHeader>
                 <div class="grid gap-2">
-                    <Label for="profile-name">Name</Label>
+                    <Label for="profile-name">{{
+                        $t('common.fields.name')
+                    }}</Label>
                     <Input
                         id="profile-name"
                         v-model="newName"
                         v-focus
-                        placeholder="e.g. Family"
+                        :placeholder="$t('settings.profiles.namePlaceholder')"
                         @keydown.enter.prevent="onCreate"
                     />
                     <InputError :message="newNameError" />
                 </div>
                 <DialogFooter>
-                    <Button variant="ghost" @click="showCreate = false"
-                        >Cancel</Button
-                    >
+                    <Button variant="ghost" @click="showCreate = false">{{
+                        $t('common.actions.cancel')
+                    }}</Button>
                     <Button
                         :disabled="
                             newName.trim() === '' ||
                             createProfile.isLoading.value
                         "
                         @click="onCreate"
-                        >Create profile</Button
+                        >{{ $t('settings.profiles.createProfile') }}</Button
                     >
                 </DialogFooter>
             </DialogContent>
@@ -783,22 +844,26 @@ const joinedLabel = (joinedAt: string): string =>
         >
             <DialogContent class="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Delete this profile?</DialogTitle>
+                    <DialogTitle>{{
+                        $t('settings.profiles.deleteConfirmTitle')
+                    }}</DialogTitle>
                     <DialogDescription>
-                        “{{ deleteTarget?.name }}” will be permanently deleted.
-                        This is blocked while the profile still has budgets or
-                        ledgers.
+                        {{
+                            $t('settings.profiles.deleteConfirmDescription', {
+                                name: deleteTarget?.name,
+                            })
+                        }}
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="ghost" @click="deleteTarget = null"
-                        >Cancel</Button
-                    >
+                    <Button variant="ghost" @click="deleteTarget = null">{{
+                        $t('common.actions.cancel')
+                    }}</Button>
                     <Button
                         variant="destructive"
                         :disabled="deleteProfile.isLoading.value"
                         @click="onDelete"
-                        >Delete profile</Button
+                        >{{ $t('settings.profiles.deleteProfile') }}</Button
                     >
                 </DialogFooter>
             </DialogContent>
@@ -811,22 +876,26 @@ const joinedLabel = (joinedAt: string): string =>
         >
             <DialogContent class="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Remove this member?</DialogTitle>
+                    <DialogTitle>{{
+                        $t('settings.profiles.removeConfirmTitle')
+                    }}</DialogTitle>
                     <DialogDescription>
-                        {{ removeTarget?.name }} loses access to the profile's
-                        budgets and ledgers. Resources they own in the profile
-                        transfer to you.
+                        {{
+                            $t('settings.profiles.removeConfirmDescription', {
+                                name: removeTarget?.name,
+                            })
+                        }}
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="ghost" @click="removeTarget = null"
-                        >Cancel</Button
-                    >
+                    <Button variant="ghost" @click="removeTarget = null">{{
+                        $t('common.actions.cancel')
+                    }}</Button>
                     <Button
                         variant="destructive"
                         :disabled="removeMember.isLoading.value"
                         @click="confirmRemove"
-                        >Remove</Button
+                        >{{ $t('common.actions.remove') }}</Button
                     >
                 </DialogFooter>
             </DialogContent>
@@ -836,22 +905,26 @@ const joinedLabel = (joinedAt: string): string =>
         <Dialog :open="leaveTarget !== null" @update:open="leaveTarget = null">
             <DialogContent class="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Leave this profile?</DialogTitle>
+                    <DialogTitle>{{
+                        $t('settings.profiles.leaveConfirmTitle')
+                    }}</DialogTitle>
                     <DialogDescription>
-                        You will lose access to “{{ expandedProfile?.name }}”.
-                        Resources you own in the profile transfer to the profile
-                        owner.
+                        {{
+                            $t('settings.profiles.leaveConfirmDescription', {
+                                name: expandedProfile?.name,
+                            })
+                        }}
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="ghost" @click="leaveTarget = null"
-                        >Cancel</Button
-                    >
+                    <Button variant="ghost" @click="leaveTarget = null">{{
+                        $t('common.actions.cancel')
+                    }}</Button>
                     <Button
                         variant="destructive"
                         :disabled="removeMember.isLoading.value"
                         @click="confirmLeave"
-                        >Leave profile</Button
+                        >{{ $t('settings.profiles.leaveProfile') }}</Button
                     >
                 </DialogFooter>
             </DialogContent>
@@ -864,18 +937,29 @@ const joinedLabel = (joinedAt: string): string =>
         >
             <DialogContent class="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Transfer profile ownership?</DialogTitle>
+                    <DialogTitle>{{
+                        $t('settings.profiles.transferConfirmTitle')
+                    }}</DialogTitle>
                     <DialogDescription>
-                        {{ members.find((m) => m.id === transferTarget)?.name }}
-                        becomes the owner of “{{ expandedProfile?.name }}”. You
-                        become a collaborator.
+                        {{
+                            $t('settings.profiles.transferConfirmDescription', {
+                                member: members.find(
+                                    (m) => m.id === transferTarget,
+                                )?.name,
+                                profile: expandedProfile?.name,
+                            })
+                        }}
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="ghost" @click="confirmingTransfer = false"
-                        >Cancel</Button
+                    <Button
+                        variant="ghost"
+                        @click="confirmingTransfer = false"
+                        >{{ $t('common.actions.cancel') }}</Button
                     >
-                    <Button @click="confirmTransfer">Transfer</Button>
+                    <Button @click="confirmTransfer">{{
+                        $t('settings.profiles.transfer')
+                    }}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

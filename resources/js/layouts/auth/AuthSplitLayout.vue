@@ -6,7 +6,7 @@ import { home } from '@/routes';
 const page = usePage();
 const name = page.props.name;
 
-defineProps<{
+const { title = '', description = '' } = defineProps<{
     title?: string;
     description?: string;
 }>();
@@ -34,10 +34,10 @@ defineProps<{
             >
                 <div class="flex flex-col space-y-2 text-center">
                     <h1 class="text-xl font-medium tracking-tight" v-if="title">
-                        {{ title }}
+                        {{ $te(title) ? $t(title) : title }}
                     </h1>
                     <p class="text-sm text-muted-foreground" v-if="description">
-                        {{ description }}
+                        {{ $te(description) ? $t(description) : description }}
                     </p>
                 </div>
                 <slot />

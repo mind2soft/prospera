@@ -12,8 +12,9 @@ php artisan serve     # app at http://localhost:8000
 ```
 
 Design notes live in [`docs/`](docs): budgets, envelopes, ledgers, shared
-finances and encryption at rest. Read the relevant one before touching its
-domain — the permission model in particular is stricter than it looks.
+finances, encryption at rest and localization. Read the relevant one before
+touching its domain — the permission model in particular is stricter than it
+looks.
 
 Money amounts are encrypted at rest ([`docs/encryption.md`](docs/encryption.md)):
 never aggregate, sort, filter or write amount columns in SQL — go through the

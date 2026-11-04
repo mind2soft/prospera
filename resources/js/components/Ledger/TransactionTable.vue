@@ -11,7 +11,10 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { getInitials } from '@/composables/useInitials';
+import { useLocale } from '@/composables/useLocale';
 import type { Transaction } from '@/types';
+
+const { locale } = useLocale();
 
 const props = defineProps<{
     transactions: Transaction[];
@@ -65,14 +68,14 @@ const remainingFor = (transaction: Transaction): number | null => {
 
 const dayLabel = (eventAt: string): string => {
     const [year, month, day] = eventAt.split('-').map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+    return new Date(year, month - 1, day).toLocaleDateString(locale.value, {
         month: 'short',
         day: 'numeric',
     });
 };
 
 const stampLabel = (createdAt: string): string =>
-    new Date(createdAt).toLocaleString(undefined, {
+    new Date(createdAt).toLocaleString(locale.value, {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -88,15 +91,25 @@ const stampLabel = (createdAt: string): string =>
                 <tr
                     class="border-b bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase"
                 >
-                    <th class="px-4 py-2.5 font-medium">Day</th>
-                    <th class="px-4 py-2.5 font-medium">Envelope</th>
-                    <th class="px-4 py-2.5 text-right font-medium">Amount</th>
-                    <th class="px-4 py-2.5 text-right font-medium">
-                        Remaining
+                    <th class="px-4 py-2.5 font-medium">
+                        {{ $t('ledger.table.day') }}
                     </th>
-                    <th class="px-4 py-2.5 font-medium">User</th>
+                    <th class="px-4 py-2.5 font-medium">
+                        {{ $t('ledger.table.envelope') }}
+                    </th>
+                    <th class="px-4 py-2.5 text-right font-medium">
+                        {{ $t('ledger.table.amount') }}
+                    </th>
+                    <th class="px-4 py-2.5 text-right font-medium">
+                        {{ $t('ledger.table.remaining') }}
+                    </th>
+                    <th class="px-4 py-2.5 font-medium">
+                        {{ $t('ledger.table.user') }}
+                    </th>
                     <th v-if="canDelete" class="w-12 px-4 py-2.5">
-                        <span class="sr-only">Actions</span>
+                        <span class="sr-only">{{
+                            $t('ledger.table.actions')
+                        }}</span>
                     </th>
                 </tr>
             </thead>
@@ -172,7 +185,7 @@ const stampLabel = (createdAt: string): string =>
                                         {{ transaction.user.name }}
                                     </p>
                                     <p class="text-xs text-muted-foreground">
-                                        Recorded
+                                        {{ $t('ledger.table.recorded') }}
                                         {{ stampLabel(transaction.created_at) }}
                                     </p>
                                 </TooltipContent>
@@ -180,7 +193,7 @@ const stampLabel = (createdAt: string): string =>
                             <span
                                 v-else
                                 class="text-xs text-muted-foreground italic"
-                                >Former member</span
+                                >{{ $t('ledger.table.formerMember') }}</span
                             >
                         </TooltipProvider>
                     </td>
@@ -190,7 +203,7 @@ const stampLabel = (createdAt: string): string =>
                             variant="ghost"
                             size="icon-sm"
                             class="text-destructive hover:bg-destructive hover:text-destructive"
-                            aria-label="Remove transaction"
+                            :aria-label="$t('ledger.table.removeTransaction')"
                             :disabled="pendingId === transaction.id"
                             @click="emit('remove', transaction.id)"
                         >
@@ -207,7 +220,7 @@ const stampLabel = (createdAt: string): string =>
                         :colspan="canDelete ? 6 : 5"
                         class="px-4 py-8 text-center text-muted-foreground"
                     >
-                        No transactions this month.
+                        {{ $t('ledger.table.empty') }}
                     </td>
                 </tr>
             </tbody>

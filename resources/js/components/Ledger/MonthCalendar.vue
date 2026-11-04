@@ -2,7 +2,9 @@
 import { computed } from 'vue';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
-import { MONTH_NAMES } from '@/lib/budget';
+import { useLocale } from '@/composables/useLocale';
+
+const { locale } = useLocale();
 
 const props = defineProps<{
     selectedDate: string; // "YYYY-MM-DD"
@@ -52,7 +54,10 @@ const isOutOfRange = (date: string): boolean =>
 
 const monthLabel = computed(() => {
     const [year, month] = props.viewMonth.split('-').map(Number);
-    return `${MONTH_NAMES[month - 1] ?? month} ${year}`;
+    return new Date(year, month - 1, 1).toLocaleDateString(locale.value, {
+        month: 'long',
+        year: 'numeric',
+    });
 });
 
 type CalendarDay = {
@@ -107,7 +112,14 @@ const weeks = computed<CalendarDay[][]>(() => {
     return grid;
 });
 
-const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+/** Weekday names Mon–Sun in the active locale (2023-01-02 was a Monday). */
+const weekDays = computed(() =>
+    Array.from({ length: 7 }, (_, i) =>
+        new Date(2023, 0, 2 + i).toLocaleDateString(locale.value, {
+            weekday: 'short',
+        }),
+    ),
+);
 </script>
 
 <template>
@@ -121,7 +133,7 @@ const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                 size="icon-sm"
                 class="rounded-lg"
                 :disabled="prevMonthDisabled"
-                aria-label="Previous month"
+                :aria-label="$t('ledger.calendar.previousMonth')"
                 @click="emit('navigate-month', 'prev')"
             >
                 <Icon name="chevron-left" class="size-4" aria-hidden="true" />
@@ -132,7 +144,7 @@ const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                 size="icon-sm"
                 class="rounded-lg"
                 :disabled="nextMonthDisabled"
-                aria-label="Next month"
+                :aria-label="$t('ledger.calendar.nextMonth')"
                 @click="emit('navigate-month', 'next')"
             >
                 <Icon name="chevron-right" class="size-4" aria-hidden="true" />

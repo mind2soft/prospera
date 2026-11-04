@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -34,6 +35,8 @@ const emit = defineEmits<{
     (e: 'remove'): void;
 }>();
 
+const { t } = useI18n();
+
 const menuOpen = ref(false);
 
 const selected = computed(
@@ -43,7 +46,10 @@ const isClosed = computed(() => selected.value?.status === 'closed');
 const isOwner = computed(() => props.permission === 'owner');
 
 const label = (ledger: Ledger): string => {
-    const state = ledger.status === 'closed' ? 'Closed' : 'Open';
+    const state =
+        ledger.status === 'closed'
+            ? t('ledger.status.closed')
+            : t('ledger.status.open');
     return `${ledger.name} (${state})`;
 };
 </script>
@@ -80,11 +86,17 @@ const label = (ledger: Ledger): string => {
                                 class="size-3"
                                 aria-hidden="true"
                             />
-                            {{ isClosed ? 'Closed' : 'Open' }}
+                            {{
+                                isClosed
+                                    ? $t('ledger.status.closed')
+                                    : $t('ledger.status.open')
+                            }}
                         </span>
                     </span>
                     <span v-else>{{
-                        loading ? 'Loading…' : 'Select ledger'
+                        loading
+                            ? $t('common.loading')
+                            : $t('ledger.selector.selectLedger')
                     }}</span>
                 </SelectValue>
             </SelectTrigger>
@@ -101,7 +113,7 @@ const label = (ledger: Ledger): string => {
                     variant="ghost"
                     size="icon"
                     class="rounded-xl"
-                    aria-label="Ledger actions"
+                    :aria-label="$t('ledger.selector.actions')"
                 >
                     <Icon name="more-vert" class="size-5" aria-hidden="true" />
                 </Button>
@@ -123,7 +135,11 @@ const label = (ledger: Ledger): string => {
                             class="size-4 text-muted-foreground"
                             aria-hidden="true"
                         />
-                        {{ isClosed ? 'Reopen' : 'Close' }}
+                        {{
+                            isClosed
+                                ? $t('ledger.menu.reopen')
+                                : $t('common.actions.close')
+                        }}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
@@ -134,7 +150,7 @@ const label = (ledger: Ledger): string => {
                         "
                     >
                         <Icon name="delete" class="size-4" aria-hidden="true" />
-                        Delete
+                        {{ $t('common.actions.delete') }}
                     </DropdownMenuItem>
                 </template>
                 <DropdownMenuItem
@@ -148,7 +164,7 @@ const label = (ledger: Ledger): string => {
                         class="size-4 text-muted-foreground"
                         aria-hidden="true"
                     />
-                    Share
+                    {{ $t('ledger.menu.share') }}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

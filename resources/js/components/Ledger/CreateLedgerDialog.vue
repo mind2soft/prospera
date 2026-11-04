@@ -90,22 +90,25 @@ const confirm = () => {
     <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
         <DialogContent class="sm:max-w-md">
             <DialogHeader>
-                <DialogTitle>Create a new ledger</DialogTitle>
+                <DialogTitle>{{ $t('ledger.createDialog.title') }}</DialogTitle>
                 <DialogDescription>
-                    A ledger keeps a yearly financial record of your
-                    transactions.
+                    {{ $t('ledger.createDialog.description') }}
                 </DialogDescription>
             </DialogHeader>
 
             <div class="grid gap-4">
                 <div class="grid gap-2">
-                    <Label for="ledger-name">Name</Label>
+                    <Label for="ledger-name">{{
+                        $t('common.fields.name')
+                    }}</Label>
                     <Input id="ledger-name" v-model="name" type="text" />
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <div class="grid gap-2">
-                        <Label for="ledger-start">Starting date</Label>
+                        <Label for="ledger-start">{{
+                            $t('ledger.createDialog.startDate')
+                        }}</Label>
                         <Input
                             id="ledger-start"
                             v-model="startDate"
@@ -113,32 +116,44 @@ const confirm = () => {
                         />
                     </div>
                     <div class="grid gap-2">
-                        <Label for="ledger-end">End date</Label>
+                        <Label for="ledger-end">{{
+                            $t('ledger.createDialog.endDate')
+                        }}</Label>
                         <Input id="ledger-end" v-model="endDate" type="date" />
                     </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">
                     <div class="grid gap-2">
-                        <Label for="ledger-balance">Starting balance</Label>
+                        <Label for="ledger-balance">{{
+                            $t('ledger.createDialog.startingBalance')
+                        }}</Label>
                         <Input
                             id="ledger-balance"
                             v-model="balance"
                             type="number"
                             min="0"
                             step="1"
-                            placeholder="e.g. 1000"
+                            :placeholder="
+                                $t('ledger.createDialog.balancePlaceholder')
+                            "
                         />
                     </div>
                     <div class="grid gap-2">
-                        <Label>Balance type</Label>
+                        <Label>{{
+                            $t('ledger.createDialog.balanceType')
+                        }}</Label>
                         <Select v-model="balanceType">
                             <SelectTrigger class="w-full">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="cash">Cash</SelectItem>
-                                <SelectItem value="debt">Debt</SelectItem>
+                                <SelectItem value="cash">{{
+                                    $t('ledger.createDialog.cash')
+                                }}</SelectItem>
+                                <SelectItem value="debt">{{
+                                    $t('ledger.createDialog.debt')
+                                }}</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -146,12 +161,12 @@ const confirm = () => {
             </div>
 
             <DialogFooter>
-                <Button variant="ghost" @click="emit('update:open', false)"
-                    >Cancel</Button
-                >
-                <Button :disabled="!valid" @click="confirm"
-                    >Create ledger</Button
-                >
+                <Button variant="ghost" @click="emit('update:open', false)">{{
+                    $t('common.actions.cancel')
+                }}</Button>
+                <Button :disabled="!valid" @click="confirm">{{
+                    $t('ledger.actions.createLedger')
+                }}</Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>

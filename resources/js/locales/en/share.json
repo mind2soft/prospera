@@ -1,0 +1,35 @@
+{
+    "share": {
+        "toast": {
+            "failed": "Something went wrong.",
+            "accessGranted": "Access granted.",
+            "accessUpdated": "Access updated.",
+            "accessRevoked": "Access revoked.",
+            "ownershipTransferred": "Ownership transferred."
+        },
+        "permission": {
+            "owner": "Owner",
+            "contributor": "Can edit",
+            "viewer": "Can view"
+        },
+        "drawer": {
+            "description": "Members of the profile this resource belongs to.",
+            "you": "(you)",
+            "revoke": "Revoke access",
+            "chooseMember": "Choose a member",
+            "transferOwnership": "Transfer ownership",
+            "transfer": "Transfer",
+            "transferNote": "The new owner gets full control; you become a contributor.",
+            "transferTitle": "Transfer ownership?",
+            "transferDescription": "{name} will become the owner of this {resource} and get full control over it. You will become a contributor."
+        },
+        "envelope": {
+            "title": "Share envelope",
+            "description": "People who share a profile with you.",
+            "empty": "Not shared with anyone yet.",
+            "grantAccess": "Grant access",
+            "transferDescription": "{name} will become the owner of this envelope and get full control over it. You will become a contributor."
+        },
+        "add": "Add"
+    }
+}

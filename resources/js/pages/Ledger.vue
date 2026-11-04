@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
+import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import Icon from '@/components/Icon.vue';
 import Heading from '@/components/Heading.vue';
@@ -55,9 +56,11 @@ import type { ResourcePermission } from '@/types';
 
 defineOptions({
     layout: {
-        breadcrumbs: [{ title: 'Ledger', href: ledgerRoute() }],
+        breadcrumbs: [{ title: 'ledger.title', href: ledgerRoute() }],
     },
 });
+
+const { t } = useI18n();
 
 // --- state -----------------------------------------------------------------
 const isoToday = (): string => {
@@ -217,9 +220,21 @@ const canAddTransaction = computed(
 );
 
 // --- mutations -------------------------------------------------------------
-const { currentProfile, isLoading: isLoadingCurrentProfile } =
-    useCurrentProfile();
+const {
+    currentProfile,
+    isPending: isPendingCurrentProfile,
+    isError: isErrorCurrentProfile,
+} = useCurrentProfile();
 const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
+
+// "No data yet, no error" — unlike `isLoading`, this state is identical
+// between the SSR render and the client's hydration pass, so the skeleton
+// and content branches cannot diverge (see composables/query.ts).
+const waitingForData = computed(
+    () =>
+        (isPendingCurrentProfile.value && !isErrorCurrentProfile.value) ||
+        (ledgersQuery.isPending.value && !ledgersQuery.isError.value),
+);
 
 const createLedger = useCreateLedger();
 const closeLedger = useCloseLedger();
@@ -251,7 +266,7 @@ const onSetSharePermission = (
     setLedgerShare.mutate(
         { ledgerId: id, userId, permission },
         {
-            onSuccess: () => toast.success('Access updated.'),
+            onSuccess: () => toast.success(t('ledger.toast.accessUpdated')),
             onError: fail,
         },
     );
@@ -265,7 +280,7 @@ const onRevokeShare = (userId: number) => {
     removeLedgerShare.mutate(
         { ledgerId: id, userId },
         {
-            onSuccess: () => toast.success('Access revoked.'),
+            onSuccess: () => toast.success(t('ledger.toast.accessRevoked')),
             onError: fail,
         },
     );
@@ -279,14 +294,17 @@ const onTransferOwnership = (userId: number) => {
     transferLedgerOwnership.mutate(
         { ledgerId: id, userId },
         {
-            onSuccess: () => toast.success('Ownership transferred.'),
+            onSuccess: () =>
+                toast.success(t('ledger.toast.ownershipTransferred')),
             onError: fail,
         },
     );
 };
 
 const fail = (e: unknown) => {
-    toast.error(e instanceof ApiError ? e.firstError : 'Something went wrong.');
+    toast.error(
+        e instanceof ApiError ? e.firstError : t('ledger.error.generic'),
+    );
 };
 
 const showCreate = ref(false);
@@ -296,7 +314,7 @@ const onCreate = (input: Omit<CreateLedgerInput, 'profile_id'>) => {
     createLedger.mutate(input, {
         onSuccess: (data) => {
             selectedLedgerId.value = data.ledger.id;
-            toast.success('Ledger created.');
+            toast.success(t('ledger.toast.ledgerCreated'));
         },
         onError: fail,
     });
@@ -307,7 +325,7 @@ const onClose = () => {
         return;
     }
     closeLedger.mutate(ledgerId.value, {
-        onSuccess: () => toast.success('Ledger closed.'),
+        onSuccess: () => toast.success(t('ledger.toast.ledgerClosed')),
         onError: fail,
     });
 };
@@ -317,7 +335,7 @@ const onReopen = () => {
         return;
     }
     reopenLedger.mutate(ledgerId.value, {
-        onSuccess: () => toast.success('Ledger reopened.'),
+        onSuccess: () => toast.success(t('ledger.toast.ledgerReopened')),
         onError: fail,
     });
 };
@@ -329,7 +347,7 @@ const onDelete = () => {
     const id = ledgerId.value;
     showDelete.value = false;
     deleteLedger.mutate(id, {
-        onSuccess: () => toast.success('Ledger deleted.'),
+        onSuccess: () => toast.success(t('ledger.toast.ledgerDeleted')),
         onError: fail,
     });
 };
@@ -341,7 +359,7 @@ const onAddTransaction = (input: AddTransactionInput) => {
     addTransaction.mutate(
         { input },
         {
-            onSuccess: () => toast.success('Transaction added.'),
+            onSuccess: () => toast.success(t('ledger.toast.transactionAdded')),
             onError: fail,
         },
     );
@@ -364,17 +382,15 @@ const onRemoveTransaction = (transactionId: number) => {
 </script>
 
 <template>
-    <Head title="Ledger" />
+    <Head :title="$t('ledger.title')" />
 
     <div class="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4">
         <Heading
-            title="Ledger"
-            description="A yearly financial record of everything that comes in and everything that goes out."
+            :title="$t('ledger.title')"
+            :description="$t('ledger.description')"
         />
 
-        <LedgerLoadingScreen
-            v-if="isLoadingCurrentProfile || ledgersQuery.isLoading.value"
-        />
+        <LedgerLoadingScreen v-if="waitingForData" />
 
         <!-- No ledgers yet -->
         <Card
@@ -406,14 +422,12 @@ const onRemoveTransaction = (transactionId: number) => {
                 <h3
                     class="mt-6 bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
                 >
-                    Create your first ledger
+                    {{ $t('ledger.empty.title') }}
                 </h3>
                 <p
                     class="mt-3 max-w-xl text-sm leading-relaxed text-balance text-muted-foreground sm:text-base"
                 >
-                    A ledger keeps a yearly financial record of your
-                    transactions. Create one to start logging expenses and
-                    revenues.
+                    {{ $t('ledger.empty.description') }}
                 </p>
 
                 <Button
@@ -423,10 +437,10 @@ const onRemoveTransaction = (transactionId: number) => {
                     @click="showCreate = true"
                 >
                     <Icon name="add" class="size-5" aria-hidden="true" />
-                    Create ledger
+                    {{ $t('ledger.actions.createLedger') }}
                 </Button>
                 <p v-else class="text-sm text-muted-foreground">
-                    Only the profile owner can create ledgers.
+                    {{ $t('ledger.empty.onlyOwner') }}
                 </p>
             </CardContent>
         </Card>
@@ -466,14 +480,13 @@ const onRemoveTransaction = (transactionId: number) => {
                                 class="size-5 shrink-0 text-amber-500"
                                 aria-hidden="true"
                             />
-                            This ledger is closed and read-only. Reopen it from
-                            the actions menu to record transactions.
+                            {{ $t('ledger.closedNotice') }}
                         </CardContent>
                     </Card>
 
                     <Card
                         v-else-if="
-                            !envelopesQuery.isLoading.value &&
+                            !envelopesQuery.isPending.value &&
                             pickerEnvelopes.length === 0
                         "
                         class="border-amber-500/30"
@@ -487,11 +500,13 @@ const onRemoveTransaction = (transactionId: number) => {
                                 aria-hidden="true"
                             />
                             <span>
-                                Envelopes are required to record transactions.
+                                {{ $t('ledger.envelopesNotice.required') }}
                                 <Link
                                     :href="envelopesRoute()"
                                     class="font-medium text-primary underline underline-offset-4"
-                                    >Manage envelopes</Link
+                                    >{{
+                                        $t('ledger.envelopesNotice.manage')
+                                    }}</Link
                                 >
                             </span>
                         </CardContent>
@@ -499,7 +514,7 @@ const onRemoveTransaction = (transactionId: number) => {
 
                     <Card
                         v-else-if="
-                            !envelopesQuery.isLoading.value &&
+                            !envelopesQuery.isPending.value &&
                             !canAddTransaction
                         "
                         class="border-amber-500/30"
@@ -512,19 +527,17 @@ const onRemoveTransaction = (transactionId: number) => {
                                 class="size-5 shrink-0 text-amber-500"
                                 aria-hidden="true"
                             />
-                            You don't have permission to record transactions in
-                            this ledger.
+                            {{ $t('ledger.permissionNotice') }}
                         </CardContent>
                     </Card>
 
                     <Card v-else>
                         <CardHeader>
-                            <CardTitle class="text-base"
-                                >New transaction</CardTitle
-                            >
+                            <CardTitle class="text-base">{{
+                                $t('ledger.newTransaction.title')
+                            }}</CardTitle>
                             <CardDescription>
-                                Pick a day on the calendar, select an envelope
-                                and enter the amount.
+                                {{ $t('ledger.newTransaction.description') }}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -555,7 +568,8 @@ const onRemoveTransaction = (transactionId: number) => {
         <ResourceShareDrawer
             v-if="ledgerId !== null"
             :open="showShare"
-            title="Share ledger"
+            :title="$t('ledger.share.title')"
+            :transfer-resource="$t('ledger.share.resource')"
             :members="shareMembers"
             :current-user-id="meId"
             :can-manage="ledgerPermission === 'owner'"
@@ -568,21 +582,20 @@ const onRemoveTransaction = (transactionId: number) => {
         <Dialog :open="showDelete" @update:open="showDelete = false">
             <DialogContent class="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Delete this ledger?</DialogTitle>
+                    <DialogTitle>{{ $t('ledger.delete.title') }}</DialogTitle>
                     <DialogDescription>
-                        This permanently removes the ledger and ALL of its
-                        transactions. This cannot be undone.
+                        {{ $t('ledger.delete.description') }}
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="ghost" @click="showDelete = false"
-                        >Cancel</Button
-                    >
+                    <Button variant="ghost" @click="showDelete = false">{{
+                        $t('common.actions.cancel')
+                    }}</Button>
                     <Button
                         variant="destructive"
                         :disabled="deleteLedger.isLoading.value"
                         @click="onDelete"
-                        >Delete ledger</Button
+                        >{{ $t('ledger.delete.confirm') }}</Button
                     >
                 </DialogFooter>
             </DialogContent>

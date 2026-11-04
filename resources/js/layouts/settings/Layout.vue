@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Heading from '@/components/Heading.vue';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -11,24 +13,26 @@ import { edit as editProfiles } from '@/routes/profiles';
 import { edit as editSecurity } from '@/routes/security';
 import type { NavItem } from '@/types';
 
-const sidebarNavItems: NavItem[] = [
+const { t } = useI18n();
+
+const sidebarNavItems = computed<NavItem[]>(() => [
     {
-        title: 'Account',
+        title: t('settings.nav.account'),
         href: editProfile(),
     },
     {
-        title: 'Profiles',
+        title: t('settings.nav.profiles'),
         href: editProfiles(),
     },
     {
-        title: 'Security',
+        title: t('settings.nav.security'),
         href: editSecurity(),
     },
     {
-        title: 'Appearance',
+        title: t('settings.nav.appearance'),
         href: editAppearance(),
     },
-];
+]);
 
 const { isCurrentOrParentUrl } = useCurrentUrl();
 </script>
@@ -37,15 +41,15 @@ const { isCurrentOrParentUrl } = useCurrentUrl();
     <div class="px-4 py-6">
         <Heading
             class="mb-8"
-            title="Settings"
-            description="Manage your profile and account settings"
+            :title="$t('settings.title')"
+            :description="$t('settings.description')"
         />
 
         <div class="flex flex-col lg:flex-row lg:space-x-12">
             <aside class="w-full max-w-xl lg:w-48">
                 <nav
                     class="flex flex-col space-y-1 space-x-0"
-                    aria-label="Settings"
+                    :aria-label="$t('settings.title')"
                 >
                     <Button
                         v-for="item in sidebarNavItems"

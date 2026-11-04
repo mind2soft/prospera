@@ -91,16 +91,15 @@ const confirm = () => {
     <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
         <DialogContent class="sm:max-w-md">
             <DialogHeader>
-                <DialogTitle>Add an envelope</DialogTitle>
+                <DialogTitle>{{ $t('budget.addEnvelope.title') }}</DialogTitle>
                 <DialogDescription>
-                    Assign one of your envelopes to this budget with its planned
-                    amount.
+                    {{ $t('budget.addEnvelope.description') }}
                 </DialogDescription>
             </DialogHeader>
 
             <div class="grid gap-4">
                 <div class="grid gap-2">
-                    <Label>Envelope</Label>
+                    <Label>{{ $t('budget.addEnvelope.envelope') }}</Label>
                     <Select
                         :model-value="envelopeId ?? undefined"
                         @update:model-value="
@@ -108,7 +107,11 @@ const confirm = () => {
                         "
                     >
                         <SelectTrigger class="w-full">
-                            <SelectValue placeholder="Choose an envelope" />
+                            <SelectValue
+                                :placeholder="
+                                    $t('budget.addEnvelope.chooseEnvelope')
+                                "
+                            />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem
@@ -127,8 +130,12 @@ const confirm = () => {
                                     <span class="text-xs text-muted-foreground">
                                         {{
                                             option.direction === 'revenue'
-                                                ? 'revenue'
-                                                : 'expense'
+                                                ? $t(
+                                                      'budget.addEnvelope.revenue',
+                                                  )
+                                                : $t(
+                                                      'budget.addEnvelope.expense',
+                                                  )
                                         }}
                                     </span>
                                 </span>
@@ -144,50 +151,56 @@ const confirm = () => {
                             class="mr-1 inline size-3.5"
                             aria-hidden="true"
                         />
-                        All your envelopes are already in this budget.
+                        {{ $t('budget.addEnvelope.allAssigned') }}
                     </p>
                 </div>
 
                 <div class="grid gap-2">
-                    <Label>Type</Label>
+                    <Label>{{ $t('budget.addEnvelope.type') }}</Label>
                     <Select v-model="type">
                         <SelectTrigger class="w-full">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="fixed">Fixed</SelectItem>
-                            <SelectItem value="variable">Variable</SelectItem>
+                            <SelectItem value="fixed">{{
+                                $t('budget.addEnvelope.fixed')
+                            }}</SelectItem>
+                            <SelectItem value="variable">{{
+                                $t('budget.addEnvelope.variable')
+                            }}</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
 
                 <div class="grid gap-2">
-                    <Label>Amount</Label>
+                    <Label>{{ $t('budget.addEnvelope.amount') }}</Label>
                     <Input
                         v-model="amount"
                         type="number"
                         min="1"
                         step="1"
-                        placeholder="e.g. 800"
+                        :placeholder="
+                            $t('budget.addEnvelope.amountPlaceholder')
+                        "
                         class="tabular-nums"
                     />
                     <p v-if="selected" class="text-xs text-muted-foreground">
                         {{
                             selected.direction === 'expense'
-                                ? 'Saved as an expense.'
-                                : 'Saved as revenue.'
+                                ? $t('budget.addEnvelope.savedAsExpense')
+                                : $t('budget.addEnvelope.savedAsRevenue')
                         }}
                     </p>
                 </div>
             </div>
 
             <DialogFooter>
-                <Button variant="ghost" @click="emit('update:open', false)"
-                    >Cancel</Button
-                >
-                <Button :disabled="!valid" @click="confirm"
-                    >Add envelope</Button
-                >
+                <Button variant="ghost" @click="emit('update:open', false)">{{
+                    $t('common.actions.cancel')
+                }}</Button>
+                <Button :disabled="!valid" @click="confirm">{{
+                    $t('budget.addEnvelope.add')
+                }}</Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>

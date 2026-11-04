@@ -3,6 +3,7 @@ import { Form, Head, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 import { useQueryClient } from 'vue-query';
 import { toast } from 'vue-sonner';
+import { I18nT, useI18n } from 'vue-i18n';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import TextLink from '@/components/TextLink.vue';
@@ -27,8 +28,8 @@ const props = defineProps<{
 
 defineOptions({
     layout: {
-        title: 'Create an account',
-        description: 'Enter your details below to create your account',
+        title: 'auth.register.layoutTitle',
+        description: 'auth.register.layoutDescription',
     },
 });
 
@@ -61,6 +62,8 @@ const accepting = ref(false);
 const acceptError = ref<string | null>(null);
 const { select } = useCurrentProfile();
 
+const { t } = useI18n();
+
 const onAccept = () => {
     acceptError.value = null;
     accepting.value = true;
@@ -69,7 +72,9 @@ const onAccept = () => {
             // Refresh the profiles list so the joined profile can be selected.
             await queryClient.invalidateQueries({ queryKey: profileKeys.all });
             select(data.profile.id);
-            toast.success(`You joined “${data.profile.name}”.`);
+            toast.success(
+                t('auth.register.joinedToast', { name: data.profile.name }),
+            );
             router.get(dashboard());
         },
         onError: (e) => {
@@ -77,7 +82,7 @@ const onAccept = () => {
             acceptError.value =
                 e instanceof ApiError
                     ? e.firstError
-                    : 'Could not accept this invite.';
+                    : t('auth.register.acceptError');
         },
     });
 };
@@ -88,7 +93,7 @@ const onDecline = () => {
 </script>
 
 <template>
-    <Head title="Register" />
+    <Head :title="$t('auth.register.title')" />
 
     <!-- Signed-in: accept (or decline) the invite. -->
     <Card v-if="signedIn && onInviteLink">
@@ -102,13 +107,25 @@ const onDecline = () => {
                     />
                     <div class="text-sm">
                         <p class="text-base font-medium">
-                            Join “{{ invite.profile }}”
+                            {{
+                                $t('auth.register.join', {
+                                    profile: invite.profile,
+                                })
+                            }}
                         </p>
-                        <p class="text-muted-foreground">
-                            {{ invite.inviter }} invited
-                            <span class="font-medium">{{ invite.email }}</span>
-                            to this financial profile.
-                        </p>
+                        <I18nT
+                            keypath="auth.register.invitedBy"
+                            tag="p"
+                            scope="global"
+                            class="text-muted-foreground"
+                        >
+                            <template #inviter>{{ invite.inviter }}</template>
+                            <template #email>
+                                <span class="font-medium">{{
+                                    invite.email
+                                }}</span>
+                            </template>
+                        </I18nT>
                     </div>
                 </div>
 
@@ -125,13 +142,13 @@ const onDecline = () => {
                         @click="onAccept"
                     >
                         <Spinner v-if="accepting" />
-                        Accept invite
+                        {{ $t('auth.register.acceptInvite') }}
                     </Button>
                     <Button
                         variant="ghost"
                         :disabled="accepting"
                         @click="onDecline"
-                        >Decline</Button
+                        >{{ $t('auth.register.decline') }}</Button
                     >
                 </div>
             </template>
@@ -144,15 +161,19 @@ const onDecline = () => {
                     />
                     <div class="text-sm">
                         <p class="text-base font-medium">
-                            This invite is not available
+                            {{ $t('auth.register.inviteUnavailable') }}
                         </p>
                         <p class="text-muted-foreground">
-                            The invite link is invalid or has expired.
+                            {{
+                                $t('auth.register.inviteUnavailableDescription')
+                            }}
                         </p>
                     </div>
                 </div>
                 <Button as-child>
-                    <Link :href="dashboard()">Go to dashboard</Link>
+                    <Link :href="dashboard()">
+                        {{ $t('auth.register.goToDashboard') }}
+                    </Link>
                 </Button>
             </template>
         </CardContent>
@@ -170,12 +191,20 @@ const onDecline = () => {
                 aria-hidden="true"
             />
             <div class="text-sm">
-                <p class="font-medium">Join “{{ invite.profile }}”</p>
-                <p class="text-muted-foreground">
-                    {{ invite.inviter }} invited
-                    <span class="font-medium">{{ invite.email }}</span> to this
-                    financial profile.
+                <p class="font-medium">
+                    {{ $t('auth.register.join', { profile: invite.profile }) }}
                 </p>
+                <I18nT
+                    keypath="auth.register.invitedBy"
+                    tag="p"
+                    scope="global"
+                    class="text-muted-foreground"
+                >
+                    <template #inviter>{{ invite.inviter }}</template>
+                    <template #email>
+                        <span class="font-medium">{{ invite.email }}</span>
+                    </template>
+                </I18nT>
             </div>
         </div>
 
@@ -195,7 +224,7 @@ const onDecline = () => {
 
             <div class="grid gap-6">
                 <div class="grid gap-2">
-                    <Label for="name">Name</Label>
+                    <Label for="name">{{ $t('common.fields.name') }}</Label>
                     <Input
                         id="name"
                         type="text"
@@ -204,13 +233,13 @@ const onDecline = () => {
                         :tabindex="1"
                         autocomplete="name"
                         name="name"
-                        placeholder="Full name"
+                        :placeholder="$t('auth.register.namePlaceholder')"
                     />
                     <InputError :message="errors.name" />
                 </div>
 
                 <div class="grid gap-2">
-                    <Label for="email">Email address</Label>
+                    <Label for="email">{{ $t('common.fields.email') }}</Label>
                     <Input
                         id="email"
                         type="email"
@@ -229,28 +258,32 @@ const onDecline = () => {
                 </div>
 
                 <div class="grid gap-2">
-                    <Label for="password">Password</Label>
+                    <Label for="password">{{
+                        $t('common.fields.password')
+                    }}</Label>
                     <PasswordInput
                         id="password"
                         required
                         :tabindex="3"
                         autocomplete="new-password"
                         name="password"
-                        placeholder="Password"
+                        :placeholder="$t('common.fields.password')"
                         :passwordrules="passwordRules"
                     />
                     <InputError :message="errors.password" />
                 </div>
 
                 <div class="grid gap-2">
-                    <Label for="password_confirmation">Confirm password</Label>
+                    <Label for="password_confirmation">{{
+                        $t('auth.register.confirmPassword')
+                    }}</Label>
                     <PasswordInput
                         id="password_confirmation"
                         required
                         :tabindex="4"
                         autocomplete="new-password"
                         name="password_confirmation"
-                        placeholder="Confirm password"
+                        :placeholder="$t('auth.register.confirmPassword')"
                         :passwordrules="passwordRules"
                     />
                     <InputError :message="errors.password_confirmation" />
@@ -266,19 +299,21 @@ const onDecline = () => {
                     <Spinner v-if="processing" />
                     {{
                         invite
-                            ? `Create account and join “${invite.profile}”`
-                            : 'Create account'
+                            ? $t('auth.register.createAndJoin', {
+                                  profile: invite.profile,
+                              })
+                            : $t('auth.register.create')
                     }}
                 </Button>
             </div>
 
             <div class="text-center text-sm text-muted-foreground">
-                Already have an account?
+                {{ $t('auth.register.alreadyHaveAccount') }}
                 <TextLink
                     :href="login()"
                     class="underline underline-offset-4"
                     :tabindex="6"
-                    >Log in</TextLink
+                    >{{ $t('auth.login.submit') }}</TextLink
                 >
             </div>
         </Form>

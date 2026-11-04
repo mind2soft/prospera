@@ -16,7 +16,10 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { CURRENCIES } from '@/lib/budget';
+import { CURRENCIES, currencyName } from '@/lib/budget';
+import { useLocale } from '@/composables/useLocale';
+
+const { locale } = useLocale();
 
 const props = defineProps<{ open: boolean }>();
 
@@ -46,9 +49,9 @@ const confirm = () => {
     <Dialog :open="open" @update:open="(value) => emit('update:open', value)">
         <DialogContent class="sm:max-w-sm">
             <DialogHeader>
-                <DialogTitle>Create a new budget</DialogTitle>
+                <DialogTitle>{{ $t('budget.create.title') }}</DialogTitle>
                 <DialogDescription>
-                    Start with a draft — pick the currency you will budget in.
+                    {{ $t('budget.create.description') }}
                 </DialogDescription>
             </DialogHeader>
 
@@ -62,16 +65,19 @@ const confirm = () => {
                         :key="option.code"
                         :value="option.code"
                     >
-                        {{ option.code }} — {{ option.label }}
+                        {{ option.code }} —
+                        {{ currencyName(option.code, locale) }}
                     </SelectItem>
                 </SelectContent>
             </Select>
 
             <DialogFooter>
-                <Button variant="ghost" @click="emit('update:open', false)"
-                    >Cancel</Button
-                >
-                <Button @click="confirm">Create draft</Button>
+                <Button variant="ghost" @click="emit('update:open', false)">{{
+                    $t('common.actions.cancel')
+                }}</Button>
+                <Button @click="confirm">{{
+                    $t('budget.create.createDraft')
+                }}</Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>

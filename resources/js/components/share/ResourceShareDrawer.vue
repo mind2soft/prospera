@@ -30,6 +30,7 @@ import type { ResourceMember, ResourcePermission } from '@/types';
 const props = defineProps<{
     open: boolean;
     title: string;
+    transferResource: string;
     /** Effective permission rows (implicit viewer included). */
     members: ResourceMember[];
     currentUserId: number;
@@ -45,13 +46,18 @@ const emit = defineEmits<{
 }>();
 
 const permissionLabels: Record<ResourcePermission, string> = {
-    owner: 'Owner',
-    contributor: 'Can edit',
-    viewer: 'Can view',
+    owner: 'share.permission.owner',
+    contributor: 'share.permission.contributor',
+    viewer: 'share.permission.viewer',
 };
 
 const transferTarget = ref<number | null>(null);
 const confirmingTransfer = ref(false);
+const transferTargetName = computed(
+    () =>
+        props.members.find((m) => m.user_id === transferTarget.value)?.name ??
+        '',
+);
 
 const transferCandidates = computed(() =>
     props.members.filter(
@@ -103,17 +109,16 @@ const confirmTransfer = (): void => {
         <SheetContent class="flex flex-col gap-6 overflow-y-auto sm:max-w-md">
             <SheetHeader>
                 <SheetTitle>{{ title }}</SheetTitle>
-                <SheetDescription
-                    >Members of the profile this resource belongs
-                    to.</SheetDescription
-                >
+                <SheetDescription>{{
+                    $t('share.drawer.description')
+                }}</SheetDescription>
             </SheetHeader>
 
             <p
                 v-if="members.length === 0"
                 class="py-4 text-sm text-muted-foreground"
             >
-                Loading…
+                {{ $t('common.loading') }}
             </p>
 
             <div v-else class="space-y-1">
@@ -133,7 +138,7 @@ const confirmTransfer = (): void => {
                             <span
                                 v-if="member.user_id === currentUserId"
                                 class="text-xs font-normal text-muted-foreground"
-                                >(you)</span
+                                >{{ $t('share.drawer.you') }}</span
                             >
                         </p>
                         <p class="truncate text-xs text-muted-foreground">
@@ -151,23 +156,25 @@ const confirmTransfer = (): void => {
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="contributor"
-                                >Can edit</SelectItem
-                            >
-                            <SelectItem value="viewer">Can view</SelectItem>
+                            <SelectItem value="contributor">{{
+                                $t('share.permission.contributor')
+                            }}</SelectItem>
+                            <SelectItem value="viewer">{{
+                                $t('share.permission.viewer')
+                            }}</SelectItem>
                         </SelectContent>
                     </Select>
                     <span
                         v-else
                         class="shrink-0 text-xs font-medium text-muted-foreground"
-                        >{{ permissionLabels[member.permission] }}</span
+                        >{{ $t(permissionLabels[member.permission]) }}</span
                     >
                     <Button
                         v-if="canManage && member.permission !== 'owner'"
                         variant="ghost"
                         size="icon-sm"
                         class="shrink-0 text-muted-foreground hover:text-destructive"
-                        aria-label="Revoke access"
+                        :aria-label="$t('share.drawer.revoke')"
                         @click="emit('revoke', member.user_id)"
                     >
                         <Icon name="close" class="size-4" aria-hidden="true" />
@@ -179,7 +186,9 @@ const confirmTransfer = (): void => {
                 <Separator />
 
                 <div class="space-y-2">
-                    <p class="text-sm font-medium">Transfer ownership</p>
+                    <p class="text-sm font-medium">
+                        {{ $t('share.drawer.transferOwnership') }}
+                    </p>
                     <div class="flex items-center gap-2">
                         <Select
                             :model-value="transferTarget ?? undefined"
@@ -188,7 +197,11 @@ const confirmTransfer = (): void => {
                             "
                         >
                             <SelectTrigger class="flex-1">
-                                <SelectValue placeholder="Choose a member" />
+                                <SelectValue
+                                    :placeholder="
+                                        $t('share.drawer.chooseMember')
+                                    "
+                                />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem
@@ -211,12 +224,11 @@ const confirmTransfer = (): void => {
                                 class="size-4"
                                 aria-hidden="true"
                             />
-                            Transfer
+                            {{ $t('share.drawer.transfer') }}
                         </Button>
                     </div>
                     <p class="text-xs text-muted-foreground">
-                        The new owner gets full control; you become a
-                        contributor.
+                        {{ $t('share.drawer.transferNote') }}
                     </p>
                 </div>
             </template>
@@ -227,26 +239,27 @@ const confirmTransfer = (): void => {
             >
                 <DialogContent class="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Transfer ownership?</DialogTitle>
+                        <DialogTitle>{{
+                            $t('share.drawer.transferTitle')
+                        }}</DialogTitle>
                         <DialogDescription>
                             {{
-                                members.find(
-                                    (m) => m.user_id === transferTarget,
-                                )?.name
+                                $t('share.drawer.transferDescription', {
+                                    name: transferTargetName,
+                                    resource: transferResource,
+                                })
                             }}
-                            will become the owner of this
-                            {{ title.toLowerCase().replace(/^share /, '') }} and
-                            get full control over it. You will become a
-                            contributor.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <Button
                             variant="ghost"
                             @click="confirmingTransfer = false"
-                            >Cancel</Button
+                            >{{ $t('common.actions.cancel') }}</Button
                         >
-                        <Button @click="confirmTransfer">Transfer</Button>
+                        <Button @click="confirmTransfer">{{
+                            $t('share.drawer.transfer')
+                        }}</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

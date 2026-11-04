@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{ (e: 'update:open', value: boolean): void }>();
 
+const { t } = useI18n();
+
 const sharesQuery = useEnvelopeShares(
     computed(() => (props.open ? props.envelopeId : null)),
 );
@@ -56,7 +59,7 @@ const removeShare = useRemoveEnvelopeShare();
 const transferOwnership = useTransferEnvelopeOwnership();
 
 const fail = (e: unknown) => {
-    toast.error(e instanceof ApiError ? e.firstError : 'Something went wrong.');
+    toast.error(e instanceof ApiError ? e.firstError : t('share.toast.failed'));
 };
 
 const shares = computed(() => sharesQuery.data.value ?? []);
@@ -86,7 +89,7 @@ const add = () => {
         {
             onSuccess: () => {
                 newUserId.value = null;
-                toast.success('Access granted.');
+                toast.success(t('share.toast.accessGranted'));
             },
             onError: fail,
         },
@@ -105,7 +108,7 @@ const onPermissionChange = (share: ResourceMember, permission: string) => {
             permission: permission as ResourcePermission,
         },
         {
-            onSuccess: () => toast.success('Access updated.'),
+            onSuccess: () => toast.success(t('share.toast.accessUpdated')),
             onError: fail,
         },
     );
@@ -115,7 +118,7 @@ const onRevoke = (share: ResourceMember) => {
     removeShare.mutate(
         { envelopeId: props.envelopeId, userId: share.user_id },
         {
-            onSuccess: () => toast.success('Access revoked.'),
+            onSuccess: () => toast.success(t('share.toast.accessRevoked')),
             onError: fail,
         },
     );
@@ -124,6 +127,9 @@ const onRevoke = (share: ResourceMember) => {
 // --- transfer ---------------------------------------------------------------
 const transferTarget = ref<number | null>(null);
 const confirmingTransfer = ref(false);
+const transferTargetName = computed(
+    () => circle.value.find((m) => m.id === transferTarget.value)?.name ?? '',
+);
 
 const askTransfer = () => {
     if (transferTarget.value === null) {
@@ -142,7 +148,7 @@ const confirmTransfer = () => {
         {
             onSuccess: () => {
                 transferTarget.value = null;
-                toast.success('Ownership transferred.');
+                toast.success(t('share.toast.ownershipTransferred'));
                 emit('update:open', false);
             },
             onError: (e) => {
@@ -170,23 +176,23 @@ watch(
     <Sheet :open="open" @update:open="(value) => emit('update:open', value)">
         <SheetContent class="flex flex-col gap-6 overflow-y-auto sm:max-w-md">
             <SheetHeader>
-                <SheetTitle>Share envelope</SheetTitle>
-                <SheetDescription
-                    >People who share a profile with you.</SheetDescription
-                >
+                <SheetTitle>{{ $t('share.envelope.title') }}</SheetTitle>
+                <SheetDescription>{{
+                    $t('share.envelope.description')
+                }}</SheetDescription>
             </SheetHeader>
 
             <p
                 v-if="sharesQuery.isLoading.value"
                 class="py-4 text-sm text-muted-foreground"
             >
-                Loading…
+                {{ $t('common.loading') }}
             </p>
             <p
                 v-else-if="shares.length === 0"
                 class="py-4 text-sm text-muted-foreground"
             >
-                Not shared with anyone yet.
+                {{ $t('share.envelope.empty') }}
             </p>
             <div v-else class="space-y-1">
                 <div
@@ -218,10 +224,12 @@ watch(
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="contributor"
-                                >Can edit</SelectItem
-                            >
-                            <SelectItem value="viewer">Can view</SelectItem>
+                            <SelectItem value="contributor">{{
+                                $t('share.permission.contributor')
+                            }}</SelectItem>
+                            <SelectItem value="viewer">{{
+                                $t('share.permission.viewer')
+                            }}</SelectItem>
                         </SelectContent>
                     </Select>
                     <span
@@ -229,8 +237,8 @@ watch(
                         class="shrink-0 text-xs font-medium text-muted-foreground"
                         >{{
                             share.permission === 'contributor'
-                                ? 'Can edit'
-                                : 'Can view'
+                                ? $t('share.permission.contributor')
+                                : $t('share.permission.viewer')
                         }}</span
                     >
                     <Button
@@ -238,7 +246,7 @@ watch(
                         variant="ghost"
                         size="icon-sm"
                         class="shrink-0 text-muted-foreground hover:text-destructive"
-                        aria-label="Revoke access"
+                        :aria-label="$t('share.drawer.revoke')"
                         @click="onRevoke(share)"
                     >
                         <Icon name="close" class="size-4" aria-hidden="true" />
@@ -250,7 +258,9 @@ watch(
                 <Separator />
 
                 <div class="space-y-2">
-                    <p class="text-sm font-medium">Grant access</p>
+                    <p class="text-sm font-medium">
+                        {{ $t('share.envelope.grantAccess') }}
+                    </p>
                     <div class="flex items-center gap-2">
                         <Select
                             :model-value="newUserId ?? undefined"
@@ -259,7 +269,11 @@ watch(
                             "
                         >
                             <SelectTrigger class="flex-1">
-                                <SelectValue placeholder="Choose a member" />
+                                <SelectValue
+                                    :placeholder="
+                                        $t('share.drawer.chooseMember')
+                                    "
+                                />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem
@@ -276,10 +290,12 @@ watch(
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="contributor"
-                                    >Can edit</SelectItem
-                                >
-                                <SelectItem value="viewer">Can view</SelectItem>
+                                <SelectItem value="contributor">{{
+                                    $t('share.permission.contributor')
+                                }}</SelectItem>
+                                <SelectItem value="viewer">{{
+                                    $t('share.permission.viewer')
+                                }}</SelectItem>
                             </SelectContent>
                         </Select>
                         <Button
@@ -293,7 +309,7 @@ watch(
                                 class="size-4"
                                 aria-hidden="true"
                             />
-                            Add
+                            {{ $t('share.add') }}
                         </Button>
                     </div>
                 </div>
@@ -304,7 +320,9 @@ watch(
                     "
                     class="space-y-2"
                 >
-                    <p class="text-sm font-medium">Transfer ownership</p>
+                    <p class="text-sm font-medium">
+                        {{ $t('share.drawer.transferOwnership') }}
+                    </p>
                     <div class="flex items-center gap-2">
                         <Select
                             :model-value="transferTarget ?? undefined"
@@ -313,7 +331,11 @@ watch(
                             "
                         >
                             <SelectTrigger class="flex-1">
-                                <SelectValue placeholder="Choose a member" />
+                                <SelectValue
+                                    :placeholder="
+                                        $t('share.drawer.chooseMember')
+                                    "
+                                />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem
@@ -338,12 +360,11 @@ watch(
                                 class="size-4"
                                 aria-hidden="true"
                             />
-                            Transfer
+                            {{ $t('share.drawer.transfer') }}
                         </Button>
                     </div>
                     <p class="text-xs text-muted-foreground">
-                        The new owner gets full control; you become a
-                        contributor.
+                        {{ $t('share.drawer.transferNote') }}
                     </p>
                 </div>
             </template>
@@ -354,23 +375,26 @@ watch(
             >
                 <DialogContent class="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Transfer ownership?</DialogTitle>
+                        <DialogTitle>{{
+                            $t('share.drawer.transferTitle')
+                        }}</DialogTitle>
                         <DialogDescription>
                             {{
-                                circle.find((m) => m.id === transferTarget)
-                                    ?.name
+                                $t('share.envelope.transferDescription', {
+                                    name: transferTargetName,
+                                })
                             }}
-                            will become the owner of this envelope and get full
-                            control over it. You will become a contributor.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                         <Button
                             variant="ghost"
                             @click="confirmingTransfer = false"
-                            >Cancel</Button
+                            >{{ $t('common.actions.cancel') }}</Button
                         >
-                        <Button @click="confirmTransfer">Transfer</Button>
+                        <Button @click="confirmTransfer">{{
+                            $t('share.drawer.transfer')
+                        }}</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

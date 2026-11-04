@@ -1,0 +1,57 @@
+{
+    "welcome": {
+        "title": "The envelope system, reimagined",
+        "nav": {
+            "openDashboard": "Open dashboard",
+            "getStarted": "Get started"
+        },
+        "hero": {
+            "badge": "The envelope system, reimagined",
+            "title": "Give every dollar",
+            "emphasis": "a purpose.",
+            "description": "Prospera puts your money into envelopes — one per purpose — so you always know what is left to spend. Calm, clear budgeting without the spreadsheet.",
+            "cta": "Start budgeting — free",
+            "existingAccount": "I already have an account"
+        },
+        "envelopes": {
+            "housing": "Housing",
+            "groceries": "Groceries",
+            "transport": "Transport",
+            "fun": "Fun"
+        },
+        "preview": {
+            "month": "October",
+            "onTrack": "On track",
+            "leftToSpend": "Left to spend",
+            "left": "{amount} left",
+            "paycheckReceived": "Paycheck received"
+        },
+        "features": {
+            "title": "Everything a household budget needs.",
+            "subtitle": "Nothing an accountant does.",
+            "budgetFirst": {
+                "title": "Budget before you spend",
+                "body": "Plan each month by splitting your income into envelopes. Fixed bills and flexible spending, side by side."
+            },
+            "simpleLedger": {
+                "title": "A ledger that stays simple",
+                "body": "Log expenses and revenues one line at a time. No double entry, no chart of accounts — just what happened."
+            },
+            "visibleEnvelopes": {
+                "title": "Envelopes you can see",
+                "body": "Color-coded envelopes show at a glance what is left. When one is empty, you know it is time to stop."
+            },
+            "shared": {
+                "title": "Finances, shared",
+                "body": "Invite a partner or family into a shared profile, with owner, contributor and viewer roles per resource."
+            }
+        },
+        "closing": {
+            "title": "Know where your money goes — before it goes.",
+            "cta": "Create your free account"
+        },
+        "footer": {
+            "tagline": "Prospera. Money, envelopes, clarity."
+        }
+    }
+}

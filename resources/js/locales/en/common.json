@@ -1,0 +1,25 @@
+{
+    "common": {
+        "actions": {
+            "save": "Save",
+            "cancel": "Cancel",
+            "close": "Close",
+            "delete": "Delete",
+            "edit": "Edit",
+            "create": "Create",
+            "confirm": "Confirm",
+            "back": "Back",
+            "retry": "Retry",
+            "remove": "Remove",
+            "copy": "Copy",
+            "copied": "Copied!"
+        },
+        "fields": {
+            "name": "Name",
+            "email": "Email address",
+            "password": "Password"
+        },
+        "loading": "Loading\u2026",
+        "error": "Something went wrong. Please try again."
+    }
+}
