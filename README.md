@@ -69,10 +69,28 @@ composer ci:check        # everything CI runs: vp check, vue-tsc, Pint, PHPStan,
 composer test            # Pint (check) + PHPStan + PHPUnit
 php artisan test         # PHPUnit test suite only
 composer lint            # fix PHP formatting (Pint)
+npm run check            # check frontend formatting + lint (vp check)
+npm run check:fix        # fix frontend formatting + lint issues
 npm run types:check      # vue-tsc
 npm run e2e              # Playwright end-to-end tests
 npm run build            # production build
 ```
+
+### Fixing formatting issues
+
+Formatting covers two distinct tools, depending on the language:
+
+- **PHP** is formatted with [Pint](https://laravel.com/docs/pint):
+  `composer lint` fixes it, `composer lint:check` only verifies it.
+- **JS/Vue** (`resources/js/**`) is formatted by `vp check`
+  ([Laravel Chisel](https://github.com/laravel/chisel)): `npm run check` only
+  verifies it — `composer lint` does **not** fix it. Run `npm run check:fix`
+  to apply the fixes automatically.
+
+If `composer ci:check` reports `Formatting issues found` in `.vue` files
+(which `composer lint` cannot solve), run `npm run check:fix` and commit the
+result. Both checks run as part of `composer ci:check` and `composer test`, so
+fix formatting before opening a PR.
 
 ### Scheduled tasks
 
