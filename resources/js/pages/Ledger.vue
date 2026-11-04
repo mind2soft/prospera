@@ -21,6 +21,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import LedgerSelector from '@/components/Ledger/LedgerSelector.vue';
+import LedgerLoadingScreen from '@/components/Loading/LedgerLoadingScreen.vue';
 import MonthCalendar from '@/components/Ledger/MonthCalendar.vue';
 import TransactionTable from '@/components/Ledger/TransactionTable.vue';
 import AddTransactionForm from '@/components/Ledger/AddTransactionForm.vue';
@@ -216,7 +217,8 @@ const canAddTransaction = computed(
 );
 
 // --- mutations -------------------------------------------------------------
-const { currentProfile } = useCurrentProfile();
+const { currentProfile, isLoading: isLoadingCurrentProfile } =
+    useCurrentProfile();
 const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
 
 const createLedger = useCreateLedger();
@@ -370,16 +372,9 @@ const onRemoveTransaction = (transactionId: number) => {
             description="A yearly financial record of everything that comes in and everything that goes out."
         />
 
-        <div
-            v-if="ledgersQuery.isLoading.value"
-            class="flex justify-center py-20"
-        >
-            <Icon
-                name="progress-activity"
-                class="size-6 animate-spin text-muted-foreground"
-                aria-hidden="true"
-            />
-        </div>
+        <LedgerLoadingScreen
+            v-if="isLoadingCurrentProfile || ledgersQuery.isLoading.value"
+        />
 
         <!-- No ledgers yet -->
         <Card

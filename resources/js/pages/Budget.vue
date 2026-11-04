@@ -16,6 +16,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import BudgetSelector from '@/components/Budget/BudgetSelector.vue';
+import BudgetLoadingScreen from '@/components/Loading/BudgetLoadingScreen.vue';
 import BudgetFlowBar from '@/components/Budget/BudgetFlowBar.vue';
 import BudgetEnvelopeTable from '@/components/Budget/BudgetEnvelopeTable.vue';
 import CreateBudgetDialog from '@/components/Budget/CreateBudgetDialog.vue';
@@ -112,7 +113,8 @@ watch(
 
 // --- mutations -------------------------------------------------------------
 const queryClient = useQueryClient();
-const { currentProfile } = useCurrentProfile();
+const { currentProfile, isLoading: isLoadingCurrentProfile } =
+    useCurrentProfile();
 const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
 
 const createBudget = useCreateBudget();
@@ -387,16 +389,9 @@ const onRemoveEnvelope = (envelopeId: number) => {
             description="Plan where your money goes before it goes anywhere."
         />
 
-        <div
-            v-if="budgetsQuery.isLoading.value"
-            class="flex justify-center py-20"
-        >
-            <Icon
-                name="progress-activity"
-                class="size-6 animate-spin text-muted-foreground"
-                aria-hidden="true"
-            />
-        </div>
+        <BudgetLoadingScreen
+            v-if="isLoadingCurrentProfile || budgetsQuery.isLoading.value"
+        />
 
         <!-- No budgets yet -->
         <Card
@@ -466,16 +461,10 @@ const onRemoveEnvelope = (envelopeId: number) => {
                 @remove="confirmKind = 'delete'"
             />
 
-            <div
+            <BudgetLoadingScreen
                 v-if="budgetQuery.isLoading.value && budget === null"
-                class="flex justify-center py-20"
-            >
-                <Icon
-                    name="progress-activity"
-                    class="size-6 animate-spin text-muted-foreground"
-                    aria-hidden="true"
-                />
-            </div>
+                :selector="false"
+            />
 
             <template v-else-if="budget">
                 <BudgetFlowBar
