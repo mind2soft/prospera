@@ -12,6 +12,9 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import type { AddTransactionInput, PickerEnvelope } from '@/lib/ledgerApi';
+import { useLocale } from '@/composables/useLocale';
+
+const { locale } = useLocale();
 
 const props = defineProps<{
     envelopes: PickerEnvelope[];
@@ -35,7 +38,7 @@ const selected = computed(
 const dateLabel = computed(() => {
     const [year, month, day] = props.selectedDate.split('-').map(Number);
     const date = new Date(year, month - 1, day);
-    return date.toLocaleDateString(undefined, {
+    return date.toLocaleDateString(locale.value, {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
@@ -72,14 +75,16 @@ const confirm = () => {
 <template>
     <form class="flex flex-wrap items-end gap-3" @submit.prevent="confirm">
         <div class="grid gap-1.5">
-            <Label>Envelope</Label>
+            <Label>{{ $t('ledger.form.envelope') }}</Label>
             <Select
                 :model-value="envelopeId ?? undefined"
                 :disabled="disabled || envelopes.length === 0"
                 @update:model-value="(value) => (envelopeId = Number(value))"
             >
                 <SelectTrigger class="w-52">
-                    <SelectValue placeholder="Choose an envelope" />
+                    <SelectValue
+                        :placeholder="$t('ledger.form.envelopePlaceholder')"
+                    />
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem
@@ -96,8 +101,8 @@ const confirm = () => {
                             <span class="text-xs text-muted-foreground">
                                 {{
                                     e.direction === 'revenue'
-                                        ? 'revenue'
-                                        : 'expense'
+                                        ? $t('ledger.direction.revenue')
+                                        : $t('ledger.direction.expense')
                                 }}
                             </span>
                         </span>
@@ -107,20 +112,22 @@ const confirm = () => {
         </div>
 
         <div class="grid gap-1.5">
-            <Label for="transaction-amount">Amount</Label>
+            <Label for="transaction-amount">{{
+                $t('ledger.form.amount')
+            }}</Label>
             <Input
                 id="transaction-amount"
                 v-model="amount"
                 type="number"
                 min="1"
                 step="1"
-                placeholder="e.g. 42"
+                :placeholder="$t('ledger.form.amountPlaceholder')"
                 class="w-28 tabular-nums"
             />
         </div>
 
         <div class="grid gap-1.5">
-            <Label>Event date</Label>
+            <Label>{{ $t('ledger.form.eventDate') }}</Label>
             <div
                 class="flex h-9 w-36 items-center gap-1.5 rounded-md border bg-muted/40 px-3 text-sm tabular-nums"
                 data-testid="event-date"
@@ -136,7 +143,7 @@ const confirm = () => {
 
         <Button type="submit" class="gap-1.5" :disabled="disabled || !valid">
             <Icon name="add" class="size-4" aria-hidden="true" />
-            Add
+            {{ $t('ledger.form.add') }}
         </Button>
     </form>
 </template>

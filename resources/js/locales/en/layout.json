@@ -1,0 +1,31 @@
+{
+    "layout": {
+        "nav": {
+            "dashboard": "Dashboard",
+            "budget": "Budget",
+            "ledger": "Ledger",
+            "envelopes": "Envelopes"
+        },
+        "header": {
+            "navigationMenu": "Navigation menu",
+            "repository": "Repository",
+            "documentation": "Documentation"
+        },
+        "user": {
+            "profiles": "Profiles",
+            "owned": "Owned",
+            "shared": "Shared",
+            "manageProfiles": "Manage profiles",
+            "settings": "Settings",
+            "logOut": "Log out"
+        },
+        "dashboard": {
+            "title": "Dashboard",
+            "welcome": "Welcome to Prospera"
+        },
+        "loading": {
+            "budgets": "Loading budgets",
+            "ledgers": "Loading ledgers"
+        }
+    }
+}

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, router, usePage, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import {
     destroy,
@@ -37,12 +38,14 @@ defineOptions({
     layout: {
         breadcrumbs: [
             {
-                title: 'Envelopes',
+                title: 'envelopes.title',
                 href: envelopes(),
             },
         ],
     },
 });
+
+const { t } = useI18n();
 
 type Props = {
     envelopes?: Envelope[];
@@ -55,16 +58,16 @@ const props = withDefaults(defineProps<Props>(), {
 const meId = computed(() => usePage().props.auth.user.id);
 
 const palette = [
-    { name: 'Indigo', value: '#6366f1' },
-    { name: 'Blue', value: '#3b82f6' },
-    { name: 'Sky', value: '#0ea5e9' },
-    { name: 'Teal', value: '#14b8a6' },
-    { name: 'Emerald', value: '#10b981' },
-    { name: 'Amber', value: '#f59e0b' },
-    { name: 'Orange', value: '#f97316' },
-    { name: 'Rose', value: '#f43f5e' },
-    { name: 'Violet', value: '#8b5cf6' },
-    { name: 'Slate', value: '#64748b' },
+    { name: 'envelopes.colors.indigo', value: '#6366f1' },
+    { name: 'envelopes.colors.blue', value: '#3b82f6' },
+    { name: 'envelopes.colors.sky', value: '#0ea5e9' },
+    { name: 'envelopes.colors.teal', value: '#14b8a6' },
+    { name: 'envelopes.colors.emerald', value: '#10b981' },
+    { name: 'envelopes.colors.amber', value: '#f59e0b' },
+    { name: 'envelopes.colors.orange', value: '#f97316' },
+    { name: 'envelopes.colors.rose', value: '#f43f5e' },
+    { name: 'envelopes.colors.violet', value: '#8b5cf6' },
+    { name: 'envelopes.colors.slate', value: '#64748b' },
 ];
 
 const defaults = {
@@ -162,7 +165,7 @@ const remove = () => {
             toDelete.value = null;
         },
         onError: () => {
-            toast.error(firstPageError() ?? 'Could not delete the envelope.');
+            toast.error(firstPageError() ?? t('envelopes.delete.failed'));
         },
     });
 };
@@ -172,21 +175,21 @@ const shareTarget = computed(
 );
 
 const roleLabel: Record<string, string> = {
-    owner: 'Owned',
-    contributor: 'Can edit',
-    viewer: 'Can view',
-    none: 'Shared',
+    owner: 'envelopes.role.owner',
+    contributor: 'envelopes.role.contributor',
+    viewer: 'envelopes.role.viewer',
+    none: 'envelopes.role.none',
 };
 </script>
 
 <template>
-    <Head title="Envelopes" />
+    <Head :title="$t('envelopes.title')" />
 
     <div class="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4">
         <div class="flex flex-wrap items-center justify-between gap-4">
             <Heading
-                title="Envelopes"
-                description="Give every euro, dollar or franc a home — the classic envelope system, minus the paper."
+                :title="$t('envelopes.title')"
+                :description="$t('envelopes.description')"
             />
             <Button
                 v-if="props.envelopes.length"
@@ -194,7 +197,7 @@ const roleLabel: Record<string, string> = {
                 @click="openCreate"
             >
                 <Icon name="add" class="size-5" aria-hidden="true" />
-                New envelope
+                {{ $t('envelopes.newEnvelope') }}
             </Button>
         </div>
 
@@ -228,14 +231,12 @@ const roleLabel: Record<string, string> = {
                 <h3
                     class="mt-6 bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
                 >
-                    Create your first envelope
+                    {{ $t('envelopes.empty.title') }}
                 </h3>
                 <p
                     class="mt-3 max-w-xl text-sm leading-relaxed text-balance text-muted-foreground sm:text-base"
                 >
-                    An envelope for housing, one for groceries, one for fun —
-                    envelopes are how Prospera turns a pile of transactions into
-                    a clear picture of where your money flows.
+                    {{ $t('envelopes.empty.description') }}
                 </p>
 
                 <Button
@@ -244,7 +245,7 @@ const roleLabel: Record<string, string> = {
                     @click="openCreate"
                 >
                     <Icon name="add" class="size-5" aria-hidden="true" />
-                    Create envelope
+                    {{ $t('envelopes.empty.create') }}
                 </Button>
             </CardContent>
         </Card>
@@ -255,13 +256,13 @@ const roleLabel: Record<string, string> = {
                 v-for="group in [
                     {
                         type: 'expense',
-                        title: 'Expenses',
-                        empty: 'No expense envelopes yet.',
+                        title: 'envelopes.groups.expenses',
+                        empty: 'envelopes.groups.expensesEmpty',
                     },
                     {
                         type: 'revenue',
-                        title: 'Revenue',
-                        empty: 'No revenue envelopes yet.',
+                        title: 'envelopes.groups.revenue',
+                        empty: 'envelopes.groups.revenueEmpty',
                     },
                 ]"
                 :key="group.type"
@@ -269,7 +270,7 @@ const roleLabel: Record<string, string> = {
             >
                 <div class="flex items-center gap-3">
                     <h3 class="text-sm font-medium text-muted-foreground">
-                        {{ group.title }}
+                        {{ $t(group.title) }}
                     </h3>
                     <div
                         class="h-px flex-1 bg-gradient-to-r from-border to-transparent"
@@ -313,7 +314,7 @@ const roleLabel: Record<string, string> = {
                                 variant="secondary"
                                 class="shrink-0"
                             >
-                                {{ roleLabel[envelope.permission] }}
+                                {{ $t(roleLabel[envelope.permission]) }}
                             </Badge>
 
                             <DropdownMenu
@@ -324,7 +325,7 @@ const roleLabel: Record<string, string> = {
                                         variant="ghost"
                                         size="icon"
                                         class="size-8 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
-                                        aria-label="Envelope options"
+                                        :aria-label="$t('envelopes.options')"
                                     >
                                         <Icon name="more-vert" class="size-4" />
                                     </Button>
@@ -339,7 +340,7 @@ const roleLabel: Record<string, string> = {
                                             class="size-4"
                                             aria-hidden="true"
                                         />
-                                        Edit
+                                        {{ $t('common.actions.edit') }}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         class="gap-2"
@@ -350,7 +351,7 @@ const roleLabel: Record<string, string> = {
                                             class="size-4"
                                             aria-hidden="true"
                                         />
-                                        Share
+                                        {{ $t('envelopes.menu.share') }}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
                                         class="gap-2 text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
@@ -361,7 +362,7 @@ const roleLabel: Record<string, string> = {
                                             class="size-4"
                                             aria-hidden="true"
                                         />
-                                        Delete
+                                        {{ $t('common.actions.delete') }}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -373,7 +374,7 @@ const roleLabel: Record<string, string> = {
                     v-else
                     class="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground"
                 >
-                    {{ group.empty }}
+                    {{ $t(group.empty) }}
                 </p>
             </section>
         </div>
@@ -393,32 +394,38 @@ const roleLabel: Record<string, string> = {
             <DialogContent class="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>
-                        {{ editing ? 'Edit envelope' : 'New envelope' }}
+                        {{
+                            editing
+                                ? $t('envelopes.dialog.editTitle')
+                                : $t('envelopes.dialog.newTitle')
+                        }}
                     </DialogTitle>
                     <DialogDescription>
                         {{
                             editing
-                                ? 'Fine-tune how this envelope looks and behaves.'
-                                : 'A name, a direction, a color — that is all it takes.'
+                                ? $t('envelopes.dialog.editDescription')
+                                : $t('envelopes.dialog.newDescription')
                         }}
                     </DialogDescription>
                 </DialogHeader>
 
                 <form class="space-y-5" @submit.prevent="save">
                     <div class="grid gap-2">
-                        <Label for="envelope-name">Name</Label>
+                        <Label for="envelope-name">{{
+                            $t('common.fields.name')
+                        }}</Label>
                         <Input
                             id="envelope-name"
                             v-model="form.name"
                             type="text"
-                            placeholder="e.g. Groceries"
+                            :placeholder="$t('envelopes.form.namePlaceholder')"
                             autocomplete="off"
                         />
                         <InputError :message="form.errors.name" />
                     </div>
 
                     <div class="grid gap-2">
-                        <Label>Type</Label>
+                        <Label>{{ $t('envelopes.form.type') }}</Label>
                         <div
                             class="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1"
                         >
@@ -437,7 +444,7 @@ const roleLabel: Record<string, string> = {
                                     class="size-4"
                                     aria-hidden="true"
                                 />
-                                Expense
+                                {{ $t('envelopes.form.expense') }}
                             </button>
                             <button
                                 type="button"
@@ -454,14 +461,14 @@ const roleLabel: Record<string, string> = {
                                     class="size-4"
                                     aria-hidden="true"
                                 />
-                                Revenue
+                                {{ $t('envelopes.form.revenue') }}
                             </button>
                         </div>
                         <InputError :message="form.errors.type" />
                     </div>
 
                     <div class="grid gap-2">
-                        <Label>Color</Label>
+                        <Label>{{ $t('envelopes.form.color') }}</Label>
                         <div class="flex flex-wrap gap-2">
                             <button
                                 v-for="color in palette"
@@ -474,8 +481,8 @@ const roleLabel: Record<string, string> = {
                                         : 'ring-1 ring-border'
                                 "
                                 :style="{ backgroundColor: color.value }"
-                                :title="color.name"
-                                :aria-label="color.name"
+                                :title="$t(color.name)"
+                                :aria-label="$t(color.name)"
                                 @click="form.color = color.value"
                             />
                         </div>
@@ -488,15 +495,15 @@ const roleLabel: Record<string, string> = {
                             variant="ghost"
                             @click="dialogOpen = false"
                         >
-                            Cancel
+                            {{ $t('common.actions.cancel') }}
                         </Button>
                         <Button type="submit" :disabled="form.processing">
                             {{
                                 form.processing
-                                    ? 'Saving…'
+                                    ? $t('envelopes.form.saving')
                                     : editing
-                                      ? 'Save changes'
-                                      : 'Create envelope'
+                                      ? $t('envelopes.form.saveChanges')
+                                      : $t('envelopes.form.create')
                             }}
                         </Button>
                     </DialogFooter>
@@ -508,20 +515,25 @@ const roleLabel: Record<string, string> = {
         <Dialog v-model:open="deleteDialogOpen">
             <DialogContent class="sm:max-w-sm">
                 <DialogHeader>
-                    <DialogTitle>Delete envelope?</DialogTitle>
+                    <DialogTitle>{{
+                        $t('envelopes.delete.title')
+                    }}</DialogTitle>
                     <DialogDescription>
                         <template v-if="toDelete">
-                            “{{ toDelete.name }}” will be removed from your
-                            envelopes. Existing transactions are not deleted.
+                            {{
+                                $t('envelopes.delete.description', {
+                                    name: toDelete.name,
+                                })
+                            }}
                         </template>
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter class="gap-2">
                     <Button variant="ghost" @click="deleteDialogOpen = false">
-                        Cancel
+                        {{ $t('common.actions.cancel') }}
                     </Button>
                     <Button variant="destructive" @click="remove">
-                        Delete
+                        {{ $t('common.actions.delete') }}
                     </Button>
                 </DialogFooter>
             </DialogContent>

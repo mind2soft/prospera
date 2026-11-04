@@ -8,7 +8,7 @@ defineOptions({
     layout: {
         breadcrumbs: [
             {
-                title: 'Dashboard',
+                title: 'layout.dashboard.title',
                 href: dashboard(),
             },
         ],
@@ -17,14 +17,14 @@ defineOptions({
 </script>
 
 <template>
-    <Head title="Dashboard" />
+    <Head :title="$t('layout.dashboard.title')" />
 
     <div
         class="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-4"
     >
         <h1 class="flex items-center gap-2 text-xl font-semibold">
             <Icon name="rocket-launch-outline" class="size-5 text-primary" />
-            Welcome to Prospera
+            {{ $t('layout.dashboard.welcome') }}
         </h1>
         <div class="grid auto-rows-min gap-4 md:grid-cols-3">
             <div

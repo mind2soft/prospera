@@ -120,7 +120,7 @@ const runningLeft = computed(() => {
                 @click="emit('add')"
             >
                 <Icon name="add" class="size-4" aria-hidden="true" />
-                Add envelope
+                {{ $t('budget.table.addEnvelope') }}
             </Button>
         </div>
 
@@ -130,16 +130,22 @@ const runningLeft = computed(() => {
                     <tr
                         class="border-b bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase"
                     >
-                        <th class="px-4 py-2.5 font-medium">Envelope</th>
-                        <th class="px-4 py-2.5 font-medium">Type</th>
-                        <th class="px-4 py-2.5 text-right font-medium">
-                            Amount
+                        <th class="px-4 py-2.5 font-medium">
+                            {{ $t('budget.table.envelope') }}
+                        </th>
+                        <th class="px-4 py-2.5 font-medium">
+                            {{ $t('budget.table.type') }}
                         </th>
                         <th class="px-4 py-2.5 text-right font-medium">
-                            Left to spend
+                            {{ $t('budget.table.amount') }}
+                        </th>
+                        <th class="px-4 py-2.5 text-right font-medium">
+                            {{ $t('budget.table.leftToSpend') }}
                         </th>
                         <th v-if="editable" class="w-12 px-4 py-2.5">
-                            <span class="sr-only">Actions</span>
+                            <span class="sr-only">{{
+                                $t('budget.table.actions')
+                            }}</span>
                         </th>
                     </tr>
                 </thead>
@@ -211,7 +217,7 @@ const runningLeft = computed(() => {
                                 variant="ghost"
                                 size="icon-sm"
                                 class="text-destructive hover:bg-destructive hover:text-destructive"
-                                aria-label="Remove envelope"
+                                :aria-label="$t('budget.table.removeEnvelope')"
                                 :disabled="pendingId === row.envelope_id"
                                 @click="emit('remove', row.envelope_id)"
                             >
@@ -228,7 +234,7 @@ const runningLeft = computed(() => {
                             :colspan="editable ? 5 : 4"
                             class="px-4 py-8 text-center text-muted-foreground"
                         >
-                            No envelopes assigned yet.
+                            {{ $t('budget.table.empty') }}
                         </td>
                     </tr>
                 </tbody>
@@ -253,7 +259,9 @@ const runningLeft = computed(() => {
                                     aria-hidden="true"
                                 />
                                 {{
-                                    remaining < 0 ? 'Overspending' : 'Left over'
+                                    remaining < 0
+                                        ? $t('budget.table.overspending')
+                                        : $t('budget.table.leftOver')
                                 }}
                             </span>
                         </td>
@@ -276,8 +284,7 @@ const runningLeft = computed(() => {
             class="flex items-center gap-1.5 text-xs text-muted-foreground"
         >
             <Icon name="info" class="size-3.5 shrink-0" aria-hidden="true" />
-            Variable amounts are expected values — re-adjust them any time with
-            a budget revision.
+            {{ $t('budget.table.variableNote') }}
         </p>
     </section>
 </template>

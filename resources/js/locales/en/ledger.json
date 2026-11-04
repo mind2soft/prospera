@@ -1,0 +1,96 @@
+{
+    "ledger": {
+        "title": "Ledger",
+        "description": "A yearly financial record of everything that comes in and everything that goes out.",
+        "toast": {
+            "accessUpdated": "Access updated.",
+            "accessRevoked": "Access revoked.",
+            "ownershipTransferred": "Ownership transferred.",
+            "ledgerCreated": "Ledger created.",
+            "ledgerClosed": "Ledger closed.",
+            "ledgerReopened": "Ledger reopened.",
+            "ledgerDeleted": "Ledger deleted.",
+            "transactionAdded": "Transaction added."
+        },
+        "error": {
+            "generic": "Something went wrong."
+        },
+        "empty": {
+            "title": "Create your first ledger",
+            "description": "A ledger keeps a yearly financial record of your transactions. Create one to start logging expenses and revenues.",
+            "onlyOwner": "Only the profile owner can create ledgers."
+        },
+        "actions": {
+            "createLedger": "Create ledger"
+        },
+        "closedNotice": "This ledger is closed and read-only. Reopen it from the actions menu to record transactions.",
+        "envelopesNotice": {
+            "required": "Envelopes are required to record transactions.",
+            "manage": "Manage envelopes"
+        },
+        "permissionNotice": "You don't have permission to record transactions in this ledger.",
+        "newTransaction": {
+            "title": "New transaction",
+            "description": "Pick a day on the calendar, select an envelope and enter the amount."
+        },
+        "share": {
+            "title": "Share ledger"
+        },
+        "delete": {
+            "title": "Delete this ledger?",
+            "description": "This permanently removes the ledger and ALL of its transactions. This cannot be undone.",
+            "confirm": "Delete ledger"
+        },
+        "status": {
+            "open": "Open",
+            "closed": "Closed"
+        },
+        "selector": {
+            "selectLedger": "Select ledger",
+            "actions": "Ledger actions"
+        },
+        "menu": {
+            "reopen": "Reopen",
+            "share": "Share"
+        },
+        "calendar": {
+            "previousMonth": "Previous month",
+            "nextMonth": "Next month"
+        },
+        "form": {
+            "envelope": "Envelope",
+            "envelopePlaceholder": "Choose an envelope",
+            "amount": "Amount",
+            "amountPlaceholder": "e.g. 42",
+            "eventDate": "Event date",
+            "add": "Add"
+        },
+        "direction": {
+            "revenue": "revenue",
+            "expense": "expense"
+        },
+        "createDialog": {
+            "title": "Create a new ledger",
+            "description": "A ledger keeps a yearly financial record of your transactions.",
+            "startDate": "Starting date",
+            "endDate": "End date",
+            "startingBalance": "Starting balance",
+            "balancePlaceholder": "e.g. 1000",
+            "balanceType": "Balance type",
+            "cash": "Cash",
+            "debt": "Debt"
+        },
+        "table": {
+            "day": "Day",
+            "envelope": "Envelope",
+            "amount": "Amount",
+            "remaining": "Remaining",
+            "user": "User",
+            "actions": "Actions",
+            "recorded": "Recorded",
+            "formerMember": "Former member",
+            "removeTransaction": "Remove transaction",
+            "empty": "No transactions this month."
+        }
+    }
+}

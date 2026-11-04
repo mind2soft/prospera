@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useLocale } from '@/composables/useLocale';
 import { formatMoney } from '@/lib/budget';
 
 export type BudgetBarSegment = {
@@ -15,6 +16,8 @@ const props = defineProps<{
     max: number;
     currency?: string;
 }>();
+
+const { locale } = useLocale();
 
 const total = computed(() =>
     props.segments.reduce((sum, s) => sum + s.amount, 0),
@@ -36,7 +39,7 @@ const positions = computed(() => {
 const fmt = (amount: number) =>
     props.currency
         ? formatMoney(amount, props.currency)
-        : amount.toLocaleString();
+        : amount.toLocaleString(locale.value);
 </script>
 
 <template>
@@ -62,7 +65,12 @@ const fmt = (amount: number) =>
                     width: `${segment.widthPct}%`,
                     backgroundColor: segment.color,
                 }"
-                :title="`${segment.name} — ${fmt(segment.amount)}`"
+                :title="
+                    $t('budget.flow.segmentTitle', {
+                        name: segment.name,
+                        amount: fmt(segment.amount),
+                    })
+                "
             />
         </div>
 

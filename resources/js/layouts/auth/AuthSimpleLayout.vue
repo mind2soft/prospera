@@ -3,7 +3,7 @@ import { Link } from '@inertiajs/vue3';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import { home } from '@/routes';
 
-defineProps<{
+const { title = '', description = '' } = defineProps<{
     title?: string;
     description?: string;
 }>();
@@ -38,13 +38,13 @@ defineProps<{
             >
                 <div class="mb-8 space-y-1.5 text-center">
                     <h1 class="font-display text-3xl tracking-tight">
-                        {{ title }}
+                        {{ $te(title) ? $t(title) : title }}
                     </h1>
                     <p
                         v-if="description"
                         class="text-sm text-balance text-muted-foreground"
                     >
-                        {{ description }}
+                        {{ $te(description) ? $t(description) : description }}
                     </p>
                 </div>
                 <div>

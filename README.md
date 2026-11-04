@@ -23,8 +23,9 @@ the filing cabinet.
 
 Design docs live in [`docs/`](docs/): [budget](docs/budget.md),
 [ledger](docs/ledger.md), [envelopes](docs/envelope.md),
-[shared finances](docs/shared-finances.md) and
-[encryption at rest](docs/encryption.md).
+[shared finances](docs/shared-finances.md),
+[encryption at rest](docs/encryption.md) and
+[localization](docs/localization.md).
 
 ## Tech stack
 

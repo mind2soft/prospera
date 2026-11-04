@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 import { useQueryClient } from 'vue-query';
+import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import Icon from '@/components/Icon.vue';
 import Heading from '@/components/Heading.vue';
@@ -46,9 +47,11 @@ import type { BudgetDetail, ResourcePermission } from '@/types';
 
 defineOptions({
     layout: {
-        breadcrumbs: [{ title: 'Budget', href: budgetRoute() }],
+        breadcrumbs: [{ title: 'budget.title', href: budgetRoute() }],
     },
 });
+
+const { t } = useI18n();
 
 const budgetsQuery = useBudgets();
 /** Draft first, then published (each newest first). */
@@ -144,7 +147,9 @@ const working = computed(
 );
 
 const fail = (e: unknown) => {
-    toast.error(e instanceof ApiError ? e.firstError : 'Something went wrong.');
+    toast.error(
+        e instanceof ApiError ? e.firstError : t('budget.toast.failed'),
+    );
 };
 
 // --- dialogs ---------------------------------------------------------------
@@ -183,7 +188,7 @@ const onSetSharePermission = (
     setShare.mutate(
         { budgetId: id, userId, permission },
         {
-            onSuccess: () => toast.success('Access updated.'),
+            onSuccess: () => toast.success(t('budget.toast.accessUpdated')),
             onError: fail,
         },
     );
@@ -197,7 +202,7 @@ const onRevokeShare = (userId: number) => {
     revokeShare.mutate(
         { budgetId: id, userId },
         {
-            onSuccess: () => toast.success('Access revoked.'),
+            onSuccess: () => toast.success(t('budget.toast.accessRevoked')),
             onError: fail,
         },
     );
@@ -211,7 +216,8 @@ const onTransferOwnership = (userId: number) => {
     transferOwnership.mutate(
         { budgetId: id, userId },
         {
-            onSuccess: () => toast.success('Ownership transferred.'),
+            onSuccess: () =>
+                toast.success(t('budget.toast.ownershipTransferred')),
             onError: fail,
         },
     );
@@ -229,14 +235,14 @@ const onConfirm = () => {
         publishBudget.mutate(id, {
             onSuccess: (data) => {
                 selectedId.value = data.budget.id;
-                toast.success('Budget published.');
+                toast.success(t('budget.toast.published'));
             },
             onError: fail,
         });
     } else if (kind === 'delete') {
         deleteBudget.mutate(id, {
             onSuccess: () => {
-                toast.success('Budget deleted.');
+                toast.success(t('budget.toast.deleted'));
             },
             onError: fail,
         });
@@ -247,7 +253,7 @@ const onCreate = (currency: string) => {
     createBudget.mutate(currency, {
         onSuccess: (data) => {
             selectedId.value = data.budget.id;
-            toast.success('Draft budget created.');
+            toast.success(t('budget.toast.draftCreated'));
         },
         onError: fail,
     });
@@ -263,7 +269,7 @@ const onClone = (currency: string) => {
         {
             onSuccess: (data) => {
                 selectedId.value = data.budget.id;
-                toast.success('Draft budget created.');
+                toast.success(t('budget.toast.draftCreated'));
             },
             onError: fail,
         },
@@ -280,7 +286,7 @@ const onAddEnvelope = (input: AddEnvelopeInput) => {
         {
             onSuccess: () => {
                 showAddEnvelope.value = false;
-                toast.success('Envelope added.');
+                toast.success(t('budget.toast.envelopeAdded'));
             },
             onError: fail,
         },
@@ -373,7 +379,7 @@ const onRemoveEnvelope = (envelopeId: number) => {
             onSettled: () => {
                 pendingEnvelopeId.value = null;
             },
-            onSuccess: () => toast.success('Envelope removed.'),
+            onSuccess: () => toast.success(t('budget.toast.envelopeRemoved')),
             onError: fail,
         },
     );
@@ -381,12 +387,12 @@ const onRemoveEnvelope = (envelopeId: number) => {
 </script>
 
 <template>
-    <Head title="Budget" />
+    <Head :title="$t('budget.title')" />
 
     <div class="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4">
         <Heading
-            title="Budget"
-            description="Plan where your money goes before it goes anywhere."
+            :title="$t('budget.title')"
+            :description="$t('budget.description')"
         />
 
         <BudgetLoadingScreen
@@ -423,13 +429,12 @@ const onRemoveEnvelope = (envelopeId: number) => {
                 <h3
                     class="mt-6 bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
                 >
-                    Create your first budget
+                    {{ $t('budget.empty.title') }}
                 </h3>
                 <p
                     class="mt-3 max-w-xl text-sm leading-relaxed text-balance text-muted-foreground sm:text-base"
                 >
-                    Start with a draft: pick your currency, add your envelopes,
-                    then publish when it feels right.
+                    {{ $t('budget.empty.description') }}
                 </p>
 
                 <Button
@@ -439,10 +444,10 @@ const onRemoveEnvelope = (envelopeId: number) => {
                     @click="showCreate = true"
                 >
                     <Icon name="add" class="size-5" aria-hidden="true" />
-                    Create budget
+                    {{ $t('budget.empty.create') }}
                 </Button>
                 <p v-else class="text-sm text-muted-foreground">
-                    Only the profile owner can create budgets.
+                    {{ $t('budget.empty.onlyOwner') }}
                 </p>
             </CardContent>
         </Card>
@@ -468,13 +473,13 @@ const onRemoveEnvelope = (envelopeId: number) => {
 
             <template v-else-if="budget">
                 <BudgetFlowBar
-                    title="Revenues"
+                    :title="$t('budget.flow.revenues')"
                     :segments="revenueSegments"
                     :max="max"
                     :currency="budget.currency"
                 />
                 <BudgetFlowBar
-                    title="Expenses"
+                    :title="$t('budget.flow.expenses')"
                     :segments="expenseSegments"
                     :max="max"
                     :currency="budget.currency"
@@ -509,7 +514,7 @@ const onRemoveEnvelope = (envelopeId: number) => {
         <ResourceShareDrawer
             v-if="budgetId !== null && budget !== null"
             :open="showShare"
-            title="Share budget"
+            :title="$t('budget.share.title')"
             :members="budget.shares"
             :current-user-id="currentUserId"
             :can-manage="budget.permission === 'owner'"
@@ -524,29 +529,28 @@ const onRemoveEnvelope = (envelopeId: number) => {
                 <DialogHeader>
                     <DialogTitle>{{
                         confirmKind === 'publish'
-                            ? 'Publish this budget?'
-                            : 'Delete this budget?'
+                            ? $t('budget.confirm.publishTitle')
+                            : $t('budget.confirm.deleteTitle')
                     }}</DialogTitle>
                     <DialogDescription>
                         <template v-if="confirmKind === 'publish'">
-                            Publishing stamps this budget for the current month
-                            and puts it in read-only mode. This cannot be
-                            undone.
-                            <template v-if="replaceWarning">
-                                An existing published budget for this month will
-                                be replaced.
-                            </template>
+                            {{
+                                replaceWarning
+                                    ? $t(
+                                          'budget.confirm.publishDescriptionWithReplace',
+                                      )
+                                    : $t('budget.confirm.publishDescription')
+                            }}
                         </template>
                         <template v-else>
-                            This permanently removes the budget with all of its
-                            envelope assignments and shares.
+                            {{ $t('budget.confirm.deleteDescription') }}
                         </template>
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="ghost" @click="confirmKind = null"
-                        >Cancel</Button
-                    >
+                    <Button variant="ghost" @click="confirmKind = null">{{
+                        $t('common.actions.cancel')
+                    }}</Button>
                     <Button
                         :variant="
                             confirmKind === 'delete' ? 'destructive' : 'default'
@@ -556,8 +560,8 @@ const onRemoveEnvelope = (envelopeId: number) => {
                     >
                         {{
                             confirmKind === 'publish'
-                                ? 'Publish'
-                                : 'Delete budget'
+                                ? $t('budget.confirm.publishButton')
+                                : $t('budget.confirm.deleteButton')
                         }}
                     </Button>
                 </DialogFooter>

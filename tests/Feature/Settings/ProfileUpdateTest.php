@@ -61,6 +61,58 @@ class ProfileUpdateTest extends TestCase
         $this->assertNotNull($user->refresh()->email_verified_at);
     }
 
+    public function test_preferred_locale_can_be_updated()
+    {
+        $user = User::factory()->create();
+
+        $response = $this
+            ->actingAs($user)
+            ->patch(route('profile.update'), [
+                'name' => $user->name,
+                'email' => $user->email,
+                'locale' => 'en',
+            ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $this->assertSame('en', $user->refresh()->locale);
+    }
+
+    public function test_preferred_locale_can_be_reset_to_follow_the_browser()
+    {
+        $user = User::factory()->create(['locale' => 'en']);
+
+        $response = $this
+            ->actingAs($user)
+            ->patch(route('profile.update'), [
+                'name' => $user->name,
+                'email' => $user->email,
+                'locale' => null,
+            ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $this->assertNull($user->refresh()->locale);
+    }
+
+    public function test_unavailable_locale_is_rejected()
+    {
+        $user = User::factory()->create();
+
+        $response = $this
+            ->actingAs($user)
+            ->from(route('profile.edit'))
+            ->patch(route('profile.update'), [
+                'name' => $user->name,
+                'email' => $user->email,
+                'locale' => 'xx',
+            ]);
+
+        $response->assertSessionHasErrors('locale');
+
+        $this->assertNull($user->refresh()->locale);
+    }
+
     public function test_user_can_delete_their_account()
     {
         $user = User::factory()->create();

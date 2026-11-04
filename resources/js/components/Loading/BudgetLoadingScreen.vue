@@ -21,7 +21,7 @@ withDefaults(
     <div
         class="flex flex-col gap-6"
         role="status"
-        aria-label="Loading budgets"
+        :aria-label="$t('layout.loading.budgets')"
         data-testid="budget-loading"
     >
         <div v-if="selector" class="flex items-center justify-between gap-4">

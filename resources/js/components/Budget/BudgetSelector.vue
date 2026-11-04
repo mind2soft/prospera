@@ -58,8 +58,8 @@ const isDraft = computed(() => selected.value?.published_at === null);
                         selected
                             ? budgetLabel(selected)
                             : loading
-                              ? 'Loading…'
-                              : 'Select budget'
+                              ? $t('common.loading')
+                              : $t('budget.selector.selectBudget')
                     }}
                 </SelectValue>
             </SelectTrigger>
@@ -76,7 +76,7 @@ const isDraft = computed(() => selected.value?.published_at === null);
                     variant="ghost"
                     size="icon"
                     class="rounded-xl"
-                    aria-label="Budget actions"
+                    :aria-label="$t('budget.selector.actions')"
                 >
                     <Icon name="more-vert" class="size-5" aria-hidden="true" />
                 </Button>
@@ -94,7 +94,7 @@ const isDraft = computed(() => selected.value?.published_at === null);
                         class="size-4 text-muted-foreground"
                         aria-hidden="true"
                     />
-                    Publish
+                    {{ $t('budget.selector.publish') }}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                     v-if="!isDraft && isProfileOwner"
@@ -108,7 +108,7 @@ const isDraft = computed(() => selected.value?.published_at === null);
                         class="size-4 text-muted-foreground"
                         aria-hidden="true"
                     />
-                    New Budget
+                    {{ $t('budget.selector.newBudget') }}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                     @click="
@@ -121,7 +121,7 @@ const isDraft = computed(() => selected.value?.published_at === null);
                         class="size-4 text-muted-foreground"
                         aria-hidden="true"
                     />
-                    Share
+                    {{ $t('budget.selector.share') }}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                     v-if="permission === 'owner'"
@@ -132,7 +132,7 @@ const isDraft = computed(() => selected.value?.published_at === null);
                     "
                 >
                     <Icon name="delete" class="size-4" aria-hidden="true" />
-                    Delete
+                    {{ $t('common.actions.delete') }}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>
