@@ -1,0 +1,25 @@
+{
+    "common": {
+        "actions": {
+            "save": "Enregistrer",
+            "cancel": "Annuler",
+            "close": "Fermer",
+            "delete": "Supprimer",
+            "edit": "Modifier",
+            "create": "Créer",
+            "confirm": "Confirmer",
+            "back": "Retour",
+            "retry": "Réessayer",
+            "remove": "Retirer",
+            "copy": "Copier",
+            "copied": "Copié !"
+        },
+        "fields": {
+            "name": "Nom",
+            "email": "Adresse e-mail",
+            "password": "Mot de passe"
+        },
+        "loading": "Chargement…",
+        "error": "Une erreur est survenue. Veuillez réessayer."
+    }
+}

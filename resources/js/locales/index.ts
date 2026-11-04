@@ -14,6 +14,15 @@ import ledger from './en/ledger.json';
 import settings from './en/settings.json';
 import share from './en/share.json';
 import welcome from './en/welcome.json';
+import authFr from './fr/auth.json';
+import budgetFr from './fr/budget.json';
+import commonFr from './fr/common.json';
+import envelopesFr from './fr/envelopes.json';
+import layoutFr from './fr/layout.json';
+import ledgerFr from './fr/ledger.json';
+import settingsFr from './fr/settings.json';
+import shareFr from './fr/share.json';
+import welcomeFr from './fr/welcome.json';
 
 const en = {
     ...common,
@@ -27,6 +36,18 @@ const en = {
     ...welcome,
 };
 
+const fr = {
+    ...commonFr,
+    ...authFr,
+    ...budgetFr,
+    ...envelopesFr,
+    ...layoutFr,
+    ...ledgerFr,
+    ...settingsFr,
+    ...shareFr,
+    ...welcomeFr,
+};
+
 export type MessageSchema = typeof en;
 
-export const messages: Record<string, MessageSchema> = { en };
+export const messages: Record<string, MessageSchema> = { en, fr };
