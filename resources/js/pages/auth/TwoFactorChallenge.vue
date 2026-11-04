@@ -1,3 +1,4 @@
+<!-- biome-ignore-all lint/a11y/noAutofocus: intentional focus on the first form field, matching the Laravel starter UX -->
 <script setup lang="ts">
 import { Form, Head, setLayoutProps } from '@inertiajs/vue3';
 import { computed, ref, watchEffect } from 'vue';

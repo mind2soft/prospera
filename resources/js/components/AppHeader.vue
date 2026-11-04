@@ -2,9 +2,11 @@
 import { Link, usePage } from '@inertiajs/vue3';
 import { BookOpen, Folder, LayoutGrid, Menu, Search } from '@lucide/vue';
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import AppLogo from '@/components/AppLogo.vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import Breadcrumbs from '@/components/Breadcrumbs.vue';
+import UserMenuContent from '@/components/UserMenuContent.vue';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,13 +33,11 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import UserMenuContent from '@/components/UserMenuContent.vue';
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { getInitials } from '@/composables/useInitials';
 import { toUrl } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem, NavItem } from '@/types';
-import { useI18n } from 'vue-i18n';
 
 type Props = {
     breadcrumbs?: BreadcrumbItem[];
@@ -88,9 +88,9 @@ const rightNavItems = computed<NavItem[]>(() => [
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                class="mr-2 h-9 w-9"
+                                class="mr-2 size-9"
                             >
-                                <Menu class="h-5 w-5" />
+                                <Menu class="size-5" />
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="left" class="w-[300px] p-6">
@@ -121,7 +121,7 @@ const rightNavItems = computed<NavItem[]>(() => [
                                         <component
                                             v-if="item.icon"
                                             :is="item.icon"
-                                            class="h-5 w-5"
+                                            class="size-5"
                                         />
                                         {{ item.title }}
                                     </Link>
@@ -138,7 +138,7 @@ const rightNavItems = computed<NavItem[]>(() => [
                                         <component
                                             v-if="item.icon"
                                             :is="item.icon"
-                                            class="h-5 w-5"
+                                            class="size-5"
                                         />
                                         <span>{{ item.title }}</span>
                                     </a>
@@ -177,7 +177,7 @@ const rightNavItems = computed<NavItem[]>(() => [
                                     <component
                                         v-if="item.icon"
                                         :is="item.icon"
-                                        class="mr-2 h-4 w-4"
+                                        class="mr-2 size-4"
                                     />
                                     {{ item.title }}
                                 </Link>
@@ -195,7 +195,7 @@ const rightNavItems = computed<NavItem[]>(() => [
                         <Button
                             variant="ghost"
                             size="icon"
-                            class="group h-9 w-9 cursor-pointer"
+                            class="group size-9 cursor-pointer"
                         >
                             <Search
                                 class="size-5 opacity-80 group-hover:opacity-100"
@@ -214,7 +214,7 @@ const rightNavItems = computed<NavItem[]>(() => [
                                                 variant="ghost"
                                                 size="icon"
                                                 as-child
-                                                class="group h-9 w-9 cursor-pointer"
+                                                class="group size-9 cursor-pointer"
                                             >
                                                 <a
                                                     :href="toUrl(item.href)"

@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
 import { Head, Link, usePage } from '@inertiajs/vue3';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
-import Icon from '@/components/Icon.vue';
 import Heading from '@/components/Heading.vue';
+import Icon from '@/components/Icon.vue';
+import AddTransactionForm from '@/components/Ledger/AddTransactionForm.vue';
+import CreateLedgerDialog from '@/components/Ledger/CreateLedgerDialog.vue';
+import LedgerSelector from '@/components/Ledger/LedgerSelector.vue';
+import MonthCalendar from '@/components/Ledger/MonthCalendar.vue';
+import TransactionTable from '@/components/Ledger/TransactionTable.vue';
+import LedgerLoadingScreen from '@/components/Loading/LedgerLoadingScreen.vue';
+import ResourceShareDrawer from '@/components/share/ResourceShareDrawer.vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -21,13 +28,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import LedgerSelector from '@/components/Ledger/LedgerSelector.vue';
-import LedgerLoadingScreen from '@/components/Loading/LedgerLoadingScreen.vue';
-import MonthCalendar from '@/components/Ledger/MonthCalendar.vue';
-import TransactionTable from '@/components/Ledger/TransactionTable.vue';
-import AddTransactionForm from '@/components/Ledger/AddTransactionForm.vue';
-import CreateLedgerDialog from '@/components/Ledger/CreateLedgerDialog.vue';
-import ResourceShareDrawer from '@/components/share/ResourceShareDrawer.vue';
+import { useBudgets } from '@/composables/budgetQueries';
+import { useEnvelopeOptions } from '@/composables/envelopeQueries';
 import {
     useAddTransaction,
     useCloseLedger,
@@ -35,23 +37,21 @@ import {
     useDeleteLedger,
     useDeleteTransaction,
     useLedgerShares,
-    useLedgerTransactions,
     useLedgers,
+    useLedgerTransactions,
     useRemoveLedgerShare,
     useReopenLedger,
     useSetLedgerShare,
     useTransferLedgerOwnership,
 } from '@/composables/ledgerQueries';
-import { useBudgets } from '@/composables/budgetQueries';
-import { useEnvelopeOptions } from '@/composables/envelopeQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { ApiError } from '@/lib/api';
-import { envelopes as envelopesRoute, ledger as ledgerRoute } from '@/routes';
 import type {
     AddTransactionInput,
     CreateLedgerInput,
     PickerEnvelope,
 } from '@/lib/ledgerApi';
+import { envelopes as envelopesRoute, ledger as ledgerRoute } from '@/routes';
 import type { ResourcePermission } from '@/types';
 
 defineOptions({
@@ -68,7 +68,7 @@ const isoToday = (): string => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-const viewMonth = ref(isoToday().slice(0, 8) + '01'); // first day of current month
+const viewMonth = ref(`${isoToday().slice(0, 8)}01`); // first day of current month
 const selectedDate = ref(isoToday());
 
 /** Clamp `date` into the inclusive [min, max] ISO-date period. */
@@ -95,7 +95,7 @@ const monthRange = computed(() => {
 const onSelectDate = (date: string) => {
     selectedDate.value = date;
     if (date.slice(0, 8) !== viewMonth.value.slice(0, 8)) {
-        viewMonth.value = date.slice(0, 8) + '01';
+        viewMonth.value = `${date.slice(0, 8)}01`;
     }
 };
 
@@ -157,7 +157,7 @@ watch(
             return;
         }
         selectedDate.value = clampDate(isoToday(), l.start_date, l.end_date);
-        viewMonth.value = selectedDate.value.slice(0, 8) + '01';
+        viewMonth.value = `${selectedDate.value.slice(0, 8)}01`;
     },
     { immediate: true },
 );
@@ -199,8 +199,8 @@ const currency = computed(() => {
         .filter((b) => b.published_at !== null)
         .sort(
             (a, b) =>
-                new Date(b.published_at!).getTime() -
-                new Date(a.published_at!).getTime(),
+                new Date(b.published_at ?? '').getTime() -
+                new Date(a.published_at ?? '').getTime(),
         );
     return published[0]?.currency ?? '';
 });
@@ -398,11 +398,11 @@ const onRemoveTransaction = (transactionId: number) => {
             class="relative overflow-hidden border-sidebar-border/70 dark:border-sidebar-border"
         >
             <div
-                class="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5"
+                class="pointer-events-none absolute inset-0 bg-linear-to-br from-primary/10 via-transparent to-primary/5"
                 aria-hidden="true"
             />
             <div
-                class="pointer-events-none absolute -top-24 left-1/2 h-64 w-[36rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
+                class="pointer-events-none absolute -top-24 left-1/2 h-64 w-xl -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
                 aria-hidden="true"
             />
 
@@ -420,7 +420,7 @@ const onRemoveTransaction = (transactionId: number) => {
                 </div>
 
                 <h3
-                    class="mt-6 bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
+                    class="mt-6 bg-linear-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
                 >
                     {{ $t('ledger.empty.title') }}
                 </h3>
@@ -595,7 +595,9 @@ const onRemoveTransaction = (transactionId: number) => {
                         variant="destructive"
                         :disabled="deleteLedger.isLoading.value"
                         @click="onDelete"
-                        >{{ $t('ledger.delete.confirm') }}</Button
+                        >{{
+                            $t('ledger.delete.confirm')
+                        }}</Button
                     >
                 </DialogFooter>
             </DialogContent>

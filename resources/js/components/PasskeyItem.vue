@@ -35,9 +35,9 @@ const handleDelete = () => {
     <div class="flex items-center justify-between border-b p-4 last:border-b-0">
         <div class="flex items-center gap-4">
             <div
-                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted"
+                class="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted"
             >
-                <KeyRound class="h-5 w-5 text-muted-foreground" />
+                <KeyRound class="size-5 text-muted-foreground" />
             </div>
             <div class="space-y-1">
                 <div class="flex items-center gap-2.5">
@@ -74,7 +74,7 @@ const handleDelete = () => {
                     size="sm"
                     class="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 >
-                    <Trash2 class="h-4 w-4" />
+                    <Trash2 class="size-4" />
                     <span class="sr-only">{{
                         $t('common.actions.remove')
                     }}</span>

@@ -1,16 +1,17 @@
+<!-- biome-ignore-all lint/a11y/noAutofocus: intentional focus on the first form field, matching the Laravel starter UX -->
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
+import {
+    index as confirmOptions,
+    store as confirmStore,
+} from '@/actions/Laravel/Passkeys/Http/Controllers/PasskeyConfirmationController';
 import InputError from '@/components/InputError.vue';
+import PasskeyVerify from '@/components/PasskeyVerify.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { store } from '@/routes/password/confirm';
-import {
-    index as confirmOptions,
-    store as confirmStore,
-} from '@/actions/Laravel/Passkeys/Http/Controllers/PasskeyConfirmationController';
-import PasskeyVerify from '@/components/PasskeyVerify.vue';
 
 defineOptions({
     layout: {
@@ -40,9 +41,7 @@ defineOptions({
     >
         <div class="space-y-6">
             <div class="grid gap-2">
-                <Label htmlFor="password">{{
-                    $t('common.fields.password')
-                }}</Label>
+                <Label for="password">{{ $t('common.fields.password') }}</Label>
                 <PasswordInput
                     id="password"
                     name="password"

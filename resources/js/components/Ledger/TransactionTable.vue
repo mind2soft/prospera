@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import Icon from '@/components/Icon.vue';
 import Currency from '@/components/Currency.vue';
+import Icon from '@/components/Icon.vue';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -31,9 +31,7 @@ const props = defineProps<{
     pendingId?: number | null;
 }>();
 
-const emit = defineEmits<{
-    (e: 'remove', transactionId: number): void;
-}>();
+const emit = defineEmits<(e: 'remove', transactionId: number) => void>();
 
 const canDelete = computed(
     () => (props.open ?? true) && props.permission !== null,
@@ -162,7 +160,7 @@ const stampLabel = (createdAt: string): string =>
                         >
                         <Currency
                             v-else
-                            :amount="remainingFor(transaction)!"
+                            :amount="remainingFor(transaction) ?? 0"
                             :currency="currency"
                         />
                     </td>
@@ -193,7 +191,9 @@ const stampLabel = (createdAt: string): string =>
                             <span
                                 v-else
                                 class="text-xs text-muted-foreground italic"
-                                >{{ $t('ledger.table.formerMember') }}</span
+                                >{{
+                                    $t('ledger.table.formerMember')
+                                }}</span
                             >
                         </TooltipProvider>
                     </td>

@@ -1,7 +1,8 @@
+<!-- biome-ignore-all lint/a11y/noAutofocus: intentional focus on the first form field, matching the Laravel starter UX -->
 <script setup lang="ts">
 import { Form } from '@inertiajs/vue3';
-import { useClipboard } from '@vueuse/core';
 import { Check, Copy, ScanLine } from '@lucide/vue';
+import { useClipboard } from '@vueuse/core';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import AlertError from '@/components/AlertError.vue';
@@ -70,13 +71,12 @@ const modalConfig = computed<TwoFactorConfigContent>(() => {
     };
 });
 
-const handleModalNextStep = () => {
+const handleModalNextStep = async () => {
     if (props.requiresConfirmation) {
         showVerificationStep.value = true;
 
-        nextTick(() => {
-            pinInputContainerRef.value?.querySelector('input')?.focus();
-        });
+        await nextTick();
+        pinInputContainerRef.value?.querySelector('input')?.focus();
 
         return;
     }
@@ -210,7 +210,7 @@ watch(
                             >
                                 <div
                                     v-if="!manualSetupKey"
-                                    class="flex h-full w-full items-center justify-center bg-muted p-3"
+                                    class="flex size-full items-center justify-center bg-muted p-3"
                                 >
                                     <Spinner />
                                 </div>
@@ -219,9 +219,10 @@ watch(
                                         type="text"
                                         readonly
                                         :value="manualSetupKey"
-                                        class="h-full w-full bg-background p-3 text-foreground"
+                                        class="size-full bg-background p-3 text-foreground"
                                     />
                                     <button
+                                        type="button"
                                         @click="copy(manualSetupKey || '')"
                                         class="relative block h-auto border-l border-border px-3 hover:bg-muted"
                                     >

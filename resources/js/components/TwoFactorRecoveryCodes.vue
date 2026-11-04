@@ -42,9 +42,8 @@ onMounted(async () => {
     <Card class="w-full">
         <CardHeader>
             <CardTitle class="flex gap-3">
-                <LockKeyhole class="size-4" />{{
-                    $t('settings.twoFactorRecovery.title')
-                }}
+                <LockKeyhole class="size-4" />
+                {{ $t('settings.twoFactorRecovery.title') }}
             </CardTitle>
             <CardDescription>
                 {{ $t('settings.twoFactorRecovery.description') }}
@@ -107,13 +106,14 @@ onMounted(async () => {
                                 class="h-4 animate-pulse rounded bg-muted-foreground/20"
                             ></div>
                         </div>
-                        <div
-                            v-else
-                            v-for="(code, index) in recoveryCodesList"
-                            :key="index"
-                        >
-                            {{ code }}
-                        </div>
+                        <template v-else>
+                            <div
+                                v-for="(code, index) in recoveryCodesList"
+                                :key="index"
+                            >
+                                {{ code }}
+                            </div>
+                        </template>
                     </div>
                     <p class="text-xs text-muted-foreground select-none">
                         {{ $t('settings.twoFactorRecovery.noteBefore') }}

@@ -38,13 +38,13 @@ const monthOffset = (offset: number): string => {
 const prevMonthDisabled = computed(
     () =>
         props.minDate !== undefined &&
-        monthOffset(-1) < props.minDate.slice(0, 8) + '01',
+        monthOffset(-1) < `${props.minDate.slice(0, 8)}01`,
 );
 
 const nextMonthDisabled = computed(
     () =>
         props.maxDate !== undefined &&
-        monthOffset(1) > props.maxDate.slice(0, 8) + '01',
+        monthOffset(1) > `${props.maxDate.slice(0, 8)}01`,
 );
 
 /** True when `date` falls outside of the calendar's period. */

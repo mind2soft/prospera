@@ -2,10 +2,10 @@
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     ArrowRight,
+    Banknote,
     BookOpenText,
     ChartPie,
     Mail,
-    Banknote,
     Users,
 } from '@lucide/vue';
 import { computed } from 'vue';
@@ -104,7 +104,7 @@ const features = [
                     class="flex items-center gap-2.5"
                 >
                     <span
-                        class="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand to-emerald-700 text-white shadow-sm shadow-brand/30"
+                        class="flex size-8 items-center justify-center rounded-lg bg-linear-to-br from-brand to-emerald-700 text-white shadow-sm shadow-brand/30"
                     >
                         <AppLogoIcon class="size-5" />
                     </span>
@@ -157,8 +157,10 @@ const features = [
                     >
                         {{ $t('welcome.hero.title') }}
                         <em
-                            class="bg-gradient-to-r from-brand to-teal-500 bg-clip-text pr-1 text-transparent"
-                            >{{ $t('welcome.hero.emphasis') }}</em
+                            class="bg-linear-to-r from-brand to-teal-500 bg-clip-text pr-1 text-transparent"
+                            >{{
+                                $t('welcome.hero.emphasis')
+                            }}</em
                         >
                     </h1>
                     <p
@@ -198,7 +200,7 @@ const features = [
                     aria-hidden="true"
                 >
                     <div
-                        class="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-br from-brand/25 via-transparent to-sky-400/20 blur-2xl"
+                        class="absolute -inset-6 -z-10 rounded-[2rem] bg-linear-to-br from-brand/25 via-transparent to-sky-400/20 blur-2xl"
                     />
                     <div
                         class="rounded-2xl border bg-card/90 p-6 shadow-2xl ring-1 shadow-black/5 ring-black/[0.02] backdrop-blur"
@@ -209,7 +211,9 @@ const features = [
                             }}</span>
                             <span
                                 class="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand"
-                                >{{ $t('welcome.preview.onTrack') }}</span
+                                >{{
+                                    $t('welcome.preview.onTrack')
+                                }}</span
                             >
                         </div>
                         <p class="mt-3 text-sm text-muted-foreground">

@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
-import { useQueryClient } from 'vue-query';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useQueryClient } from 'vue-query';
 import { toast } from 'vue-sonner';
-import Icon from '@/components/Icon.vue';
+import AddEnvelopeDialog from '@/components/Budget/AddEnvelopeDialog.vue';
+import BudgetEnvelopeTable from '@/components/Budget/BudgetEnvelopeTable.vue';
+import BudgetFlowBar from '@/components/Budget/BudgetFlowBar.vue';
+import BudgetSelector from '@/components/Budget/BudgetSelector.vue';
+import CloneBudgetDialog from '@/components/Budget/CloneBudgetDialog.vue';
+import CreateBudgetDialog from '@/components/Budget/CreateBudgetDialog.vue';
 import Heading from '@/components/Heading.vue';
+import Icon from '@/components/Icon.vue';
+import BudgetLoadingScreen from '@/components/Loading/BudgetLoadingScreen.vue';
+import ResourceShareDrawer from '@/components/share/ResourceShareDrawer.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -16,14 +24,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import BudgetSelector from '@/components/Budget/BudgetSelector.vue';
-import BudgetLoadingScreen from '@/components/Loading/BudgetLoadingScreen.vue';
-import BudgetFlowBar from '@/components/Budget/BudgetFlowBar.vue';
-import BudgetEnvelopeTable from '@/components/Budget/BudgetEnvelopeTable.vue';
-import CreateBudgetDialog from '@/components/Budget/CreateBudgetDialog.vue';
-import CloneBudgetDialog from '@/components/Budget/CloneBudgetDialog.vue';
-import AddEnvelopeDialog from '@/components/Budget/AddEnvelopeDialog.vue';
-import ResourceShareDrawer from '@/components/share/ResourceShareDrawer.vue';
 import {
     budgetKeys,
     useAddEnvelope,
@@ -41,8 +41,8 @@ import {
 } from '@/composables/budgetQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { ApiError } from '@/lib/api';
-import { budget as budgetRoute } from '@/routes';
 import type { AddEnvelopeInput } from '@/lib/budgetApi';
+import { budget as budgetRoute } from '@/routes';
 import type { BudgetDetail, ResourcePermission } from '@/types';
 
 defineOptions({
@@ -415,11 +415,11 @@ const onRemoveEnvelope = (envelopeId: number) => {
             class="relative overflow-hidden border-sidebar-border/70 dark:border-sidebar-border"
         >
             <div
-                class="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-primary/5"
+                class="pointer-events-none absolute inset-0 bg-linear-to-br from-primary/10 via-transparent to-primary/5"
                 aria-hidden="true"
             />
             <div
-                class="pointer-events-none absolute -top-24 left-1/2 h-64 w-[36rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
+                class="pointer-events-none absolute -top-24 left-1/2 h-64 w-xl -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
                 aria-hidden="true"
             />
 
@@ -437,7 +437,7 @@ const onRemoveEnvelope = (envelopeId: number) => {
                 </div>
 
                 <h3
-                    class="mt-6 bg-gradient-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
+                    class="mt-6 bg-linear-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
                 >
                     {{ $t('budget.empty.title') }}
                 </h3>

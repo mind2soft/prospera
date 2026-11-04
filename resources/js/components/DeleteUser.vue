@@ -44,7 +44,9 @@ const passwordInput = useTemplateRef('passwordInput');
                     <Button
                         variant="destructive"
                         data-test="delete-user-button"
-                        >{{ $t('settings.deleteUser.title') }}</Button
+                        >{{
+                            $t('settings.deleteUser.title')
+                        }}</Button
                     >
                 </DialogTrigger>
                 <DialogContent>

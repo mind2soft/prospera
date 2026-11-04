@@ -1,6 +1,6 @@
 import { computed, ref, watch } from 'vue';
-import type { FinancialProfile } from '@/types';
 import { useProfiles } from '@/composables/profileQueries';
+import type { FinancialProfile } from '@/types';
 
 const STORAGE_KEY = 'prospera.current_profile_id';
 

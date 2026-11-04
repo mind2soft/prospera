@@ -1,6 +1,6 @@
 import { usePage } from '@inertiajs/vue3';
-import { computed, watchEffect } from 'vue';
 import type { ComputedRef } from 'vue';
+import { computed, watchEffect } from 'vue';
 import { FALLBACK_LOCALE, i18n } from '@/i18n';
 
 export type Locale = string;
@@ -35,7 +35,7 @@ export function matchLocale(
             return exact;
         }
 
-        const base = lower.split('-')[0]!;
+        const base = lower.split('-')[0];
         const partial = available.find(
             (locale) => locale.toLowerCase() === base,
         );

@@ -1,8 +1,8 @@
-import { computed, toValue, type MaybeRefOrGetter } from 'vue';
+import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { useQueryClient } from 'vue-query';
-import { budgetApi, type AddEnvelopeInput } from '@/lib/budgetApi';
+import { type QueryKey, useMutation, useQuery } from '@/composables/query';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
-import { useMutation, useQuery, type QueryKey } from '@/composables/query';
+import { type AddEnvelopeInput, budgetApi } from '@/lib/budgetApi';
 
 export const budgetKeys = {
     all: (profileId: number) => ['budgets', profileId] as const,

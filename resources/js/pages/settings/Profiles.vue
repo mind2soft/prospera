@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import { computed, ref, watch } from 'vue';
-import { toast } from 'vue-sonner';
 import { useI18n } from 'vue-i18n';
-import Icon from '@/components/Icon.vue';
+import { toast } from 'vue-sonner';
 import Heading from '@/components/Heading.vue';
+import Icon from '@/components/Icon.vue';
 import InputError from '@/components/InputError.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -436,13 +436,17 @@ const joinedLabel = (joinedAt: string): string =>
                                     v-if="profile.is_owner"
                                     variant="default"
                                     class="shrink-0"
-                                    >{{ $t('settings.profiles.owned') }}</Badge
+                                    >{{
+                                        $t('settings.profiles.owned')
+                                    }}</Badge
                                 >
                                 <Badge
                                     v-else
                                     variant="secondary"
                                     class="shrink-0"
-                                    >{{ $t('settings.profiles.shared') }}</Badge
+                                    >{{
+                                        $t('settings.profiles.shared')
+                                    }}</Badge
                                 >
                                 <Badge
                                     v-if="profile.id === currentProfileId"
@@ -831,7 +835,9 @@ const joinedLabel = (joinedAt: string): string =>
                             createProfile.isLoading.value
                         "
                         @click="onCreate"
-                        >{{ $t('settings.profiles.createProfile') }}</Button
+                        >{{
+                            $t('settings.profiles.createProfile')
+                        }}</Button
                     >
                 </DialogFooter>
             </DialogContent>
@@ -863,7 +869,9 @@ const joinedLabel = (joinedAt: string): string =>
                         variant="destructive"
                         :disabled="deleteProfile.isLoading.value"
                         @click="onDelete"
-                        >{{ $t('settings.profiles.deleteProfile') }}</Button
+                        >{{
+                            $t('settings.profiles.deleteProfile')
+                        }}</Button
                     >
                 </DialogFooter>
             </DialogContent>
@@ -895,7 +903,9 @@ const joinedLabel = (joinedAt: string): string =>
                         variant="destructive"
                         :disabled="removeMember.isLoading.value"
                         @click="confirmRemove"
-                        >{{ $t('common.actions.remove') }}</Button
+                        >{{
+                            $t('common.actions.remove')
+                        }}</Button
                     >
                 </DialogFooter>
             </DialogContent>
@@ -924,7 +934,9 @@ const joinedLabel = (joinedAt: string): string =>
                         variant="destructive"
                         :disabled="removeMember.isLoading.value"
                         @click="confirmLeave"
-                        >{{ $t('settings.profiles.leaveProfile') }}</Button
+                        >{{
+                            $t('settings.profiles.leaveProfile')
+                        }}</Button
                     >
                 </DialogFooter>
             </DialogContent>
@@ -955,7 +967,9 @@ const joinedLabel = (joinedAt: string): string =>
                     <Button
                         variant="ghost"
                         @click="confirmingTransfer = false"
-                        >{{ $t('common.actions.cancel') }}</Button
+                        >{{
+                            $t('common.actions.cancel')
+                        }}</Button
                     >
                     <Button @click="confirmTransfer">{{
                         $t('settings.profiles.transfer')

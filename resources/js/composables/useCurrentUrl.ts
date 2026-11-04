@@ -15,11 +15,11 @@ export type UseCurrentUrlReturn = {
         urlToCheck: NonNullable<InertiaLinkProps['href']>,
         currentUrl?: string,
     ) => boolean;
-    whenCurrentUrl: <T, F = null>(
+    whenCurrentUrl: <T>(
         urlToCheck: NonNullable<InertiaLinkProps['href']>,
         ifTrue: T,
-        ifFalse?: F,
-    ) => T | F;
+        ifFalse?: T | null,
+    ) => T | null;
 };
 
 const page = usePage();
@@ -47,7 +47,7 @@ export function useCurrentUrl(): UseCurrentUrlReturn {
                 ? // Match on path-segment boundaries so `/settings/account`
                   // is not treated as a parent of `/settings/profiles`.
                   urlToCompare === path ||
-                  urlToCompare.startsWith(path.replace(/\/$/, '') + '/')
+                  urlToCompare.startsWith(`${path.replace(/\/$/, '')}/`)
                 : path === urlToCompare;
 
         if (!urlString.startsWith('http')) {
@@ -70,10 +70,10 @@ export function useCurrentUrl(): UseCurrentUrlReturn {
         return isCurrentUrl(urlToCheck, currentUrl, true);
     }
 
-    function whenCurrentUrl(
+    function whenCurrentUrl<T>(
         urlToCheck: NonNullable<InertiaLinkProps['href']>,
-        ifTrue: any,
-        ifFalse: any = null,
+        ifTrue: T,
+        ifFalse: T | null = null,
     ) {
         return isCurrentUrl(urlToCheck) ? ifTrue : ifFalse;
     }

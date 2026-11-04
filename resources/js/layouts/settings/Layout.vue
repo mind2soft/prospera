@@ -62,7 +62,7 @@ const { isCurrentOrParentUrl } = useCurrentUrl();
                         as-child
                     >
                         <Link :href="item.href">
-                            <component :is="item.icon" class="h-4 w-4" />
+                            <component :is="item.icon" class="size-4" />
                             {{ item.title }}
                         </Link>
                     </Button>

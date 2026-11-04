@@ -81,9 +81,9 @@ onUnmounted(() => clearTwoFactorAuthData());
         </div>
 
         <TwoFactorSetupModal
-            v-model:isOpen="showSetupModal"
-            :requiresConfirmation="requiresConfirmation"
-            :twoFactorEnabled="twoFactorEnabled"
+            v-model:is-open="showSetupModal"
+            :requires-confirmation="requiresConfirmation"
+            :two-factor-enabled="twoFactorEnabled"
         />
     </div>
 </template>

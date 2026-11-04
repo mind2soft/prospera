@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import { LayoutGrid } from '@lucide/vue';
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import AppLogo from '@/components/AppLogo.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -13,11 +15,9 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { budget, dashboard, ledger, envelopes } from '@/routes';
 import { materialSymbol } from '@/lib/materialIcon';
+import { budget, dashboard, envelopes, ledger } from '@/routes';
 import type { NavItem } from '@/types';
-import { computed } from 'vue';
-import { useI18n } from 'vue-i18n';
 
 const { t } = useI18n();
 
