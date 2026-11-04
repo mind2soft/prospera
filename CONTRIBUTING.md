@@ -46,7 +46,10 @@ In addition:
     ```
 
     The e2e suite runs against the isolated `.env.e2e` / `database/e2e.sqlite`
-    environment, never against your dev database.
+    environment, never against your dev database. The server it boots
+    (`e2e/serve.sh`) rebuilds the frontend assets (`npm run build`) first —
+    the suite always runs against the current source, never a stale
+    `public/build`.
 
 - Refactors may not change behaviour; if tests need to change, the PR
   description must explain why.
