@@ -154,15 +154,93 @@ amounts, permanently. Escrow it (password manager or secret store) and keep it
 encryption. Never run `php artisan key:generate` on an existing installation
 without following the rotation procedure below.
 
+### `APP_KEY` and `APP_PREVIOUS_KEYS` in production
+
+Both are secrets of the GitHub `Production` environment (Settings →
+Environments → Production), not repository secrets. Every deploy renders
+`shared/.env` from them (`scripts/ci/render-production-env.sh`): an edit to
+the `.env` on the host is overwritten by the next deploy.
+
+| Secret              | Holds                                           | Used                                                       |
+| ------------------- | ----------------------------------------------- | ---------------------------------------------------------- |
+| `APP_KEY`           | The current key (`base64:…`).                   | Encrypts everything new; tried first when decrypting.      |
+| `APP_PREVIOUS_KEYS` | Former keys, comma-separated (each `base64:…`). | Tried in order, only when decrypting with `APP_KEY` fails. |
+
+`APP_PREVIOUS_KEYS` is normally **not defined**: an undefined secret renders
+as empty, meaning no former key. It is only needed during a rotation. A key
+listed there still decrypts everything it ever protected, so remove it as soon
+as the rotation allows.
+
+What `APP_KEY` protects here, and what happens to data still encrypted with a
+key that is no longer listed:
+
+| Data                                                           | Re-encrypted with the new key                                                                      | If its key is gone                                            |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Amount data keys (`financial_profile_keys.wrapped_key`)        | By `amounts:rewrap-keys`.                                                                          | **Every amount is lost**, permanently.                        |
+| 2FA secrets and recovery codes (`users.two_factor_*`, Fortify) | Only when a user enables 2FA (secret) or uses or regenerates recovery codes; else by step 5 below. | Users with 2FA cannot log in until an admin resets their 2FA. |
+| Cookies (session, remember me, CSRF)                           | On the next response.                                                                              | Users are signed out.                                         |
+| Signed URLs (email verification links, valid 60 minutes)       | Never; new links use the new key.                                                                  | Pending links stop working.                                   |
+
+Not affected: passwords (bcrypt hashes, no key involved) and password reset
+links (stored as hashes too).
+
 ### Rotating `APP_KEY`
 
-1. Add the current key to `APP_PREVIOUS_KEYS` (comma-separated; GitHub secret
-   `APP_PREVIOUS_KEYS` in production) and set the new `APP_KEY`.
-2. Deploy. Wrapped keys, sessions and cookies still decrypt through the
-   previous key.
-3. Run `php artisan amounts:rewrap-keys`, then `php artisan amounts:verify`.
-4. Remove the old key from `APP_PREVIOUS_KEYS` and deploy again (once old
-   sessions no longer matter).
+Follow the steps in order: removing a key before its data is re-encrypted
+loses that data (table above).
+
+1. **Get the current key** from the escrow and check that it matches the
+   host's: `grep '^APP_KEY=' "$SSH_APP_PATH/shared/.env"`. GitHub secrets
+   cannot be read back.
+2. **Generate the new key** locally with `php artisan key:generate --show`
+   (prints a key, writes no file). Escrow it **before** deploying it.
+3. **Update the `Production` secrets.** `gh secret set` prompts for the value,
+   which keeps the keys out of the shell history:
+
+    ```sh
+    gh secret set APP_PREVIOUS_KEYS --env Production   # the old key
+    gh secret set APP_KEY --env Production             # the new key
+    ```
+
+    If `APP_PREVIOUS_KEYS` already lists keys, put the old key first:
+    `old,older`.
+
+4. **Deploy**: push the next `v*` tag or dispatch the `deploy` workflow
+   (which deploys `main`); re-deploying the live release is refused. The
+   secrets only reach the host through a deploy. Everything still decrypts
+   through the previous key, so the deploy's `amounts:verify` passes.
+5. **Re-encrypt with the new key**, on the host in `$SSH_APP_PATH/current`:
+
+    ```sh
+    php artisan amounts:rewrap-keys
+    php artisan amounts:verify
+    php artisan tinker --execute='App\Models\User::whereNotNull("two_factor_secret")->each(function ($u) { $u->forceFill(["two_factor_secret" => encrypt(decrypt($u->two_factor_secret)), "two_factor_recovery_codes" => $u->two_factor_recovery_codes === null ? null : encrypt(decrypt($u->two_factor_recovery_codes))])->saveQuietly(); }); echo "2FA re-encrypted\n";'
+    ```
+
+    `amounts:verify` does not cover 2FA. Check it decrypts with the new key
+    alone; it must print `2FA OK`:
+
+    ```sh
+    php artisan tinker --execute='$e = new Illuminate\Encryption\Encrypter(base64_decode(Str::after(config("app.key"), "base64:")), config("app.cipher")); $bad = App\Models\User::whereNotNull("two_factor_secret")->get()->reject(function ($u) use ($e) { try { $e->decrypt($u->two_factor_secret); $u->two_factor_recovery_codes === null || $e->decrypt($u->two_factor_recovery_codes); return true; } catch (Throwable) { return false; } })->pluck("id"); echo $bad->isEmpty() ? "2FA OK\n" : "2FA still on an old key: users ".$bad->implode(", ")."\n";'
+    ```
+
+    Users who enable 2FA after this point already use the new key.
+
+6. **Wait** for the cookies and links issued before step 4 to expire, if
+   signing users out matters: at least `SESSION_LIFETIME` (120 minutes by
+   default) and the 60-minute verification links. "Remember me" cookies last
+   longer; their users have to log in again.
+7. **Remove the old key**: `gh secret delete APP_PREVIOUS_KEYS --env
+   Production` (or set it without the old key), then deploy again. That
+   deploy's `amounts:verify` refuses to go live if an amount key is still
+   wrapped with the removed key; fix the secrets and deploy again (see
+   [Deployments](#deployments)).
+
+If `APP_KEY` leaked, also run `php artisan amounts:rotate-keys --all` after
+step 5: the leaked key unwraps the current data keys from any copy of the
+database, so the amounts need new data keys, not just a re-wrap. Skip the
+wait at step 6. Backups taken before the rotation stay readable with the
+leaked key.
 
 ### Restores and failed verification
 
@@ -230,7 +308,7 @@ scripts compare releases with the migrations the database actually ran
   `current`, both scripts wait `realpath_cache_ttl + 5` seconds (read from
   the host's CLI PHP; 125 if unreadable) before lifting maintenance mode and
   before the health check, so neither happens while the replaced release may
-  still serve requests. Set the `DEPLOY_SWITCH_WAIT` repository variable (in
+  still serve requests. Set the `DEPLOY_SWITCH_WAIT` variable of the `Production` environment (in
   seconds, at most 9999; `0` disables it) when the web PHP's TTL differs from the CLI's, or
   when the server resolves the symlink itself (nginx:
   `fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;` and
