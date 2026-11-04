@@ -1,0 +1,35 @@
+{
+    "share": {
+        "toast": {
+            "failed": "Une erreur est survenue.",
+            "accessGranted": "Accès accordé.",
+            "accessUpdated": "Accès mis à jour.",
+            "accessRevoked": "Accès révoqué.",
+            "ownershipTransferred": "Propriété transférée."
+        },
+        "permission": {
+            "owner": "Propriétaire",
+            "contributor": "Peut modifier",
+            "viewer": "Peut consulter"
+        },
+        "drawer": {
+            "description": "Membres du profil auquel cette ressource appartient.",
+            "you": "(vous)",
+            "revoke": "Révoquer l'accès",
+            "chooseMember": "Choisir un membre",
+            "transferOwnership": "Transférer la propriété",
+            "transfer": "Transférer",
+            "transferNote": "Le nouveau propriétaire obtient le contrôle total ; vous devenez contributeur.",
+            "transferTitle": "Transférer la propriété ?",
+            "transferDescription": "{name} deviendra le propriétaire de ce {resource} et en obtiendra le contrôle total. Vous deviendrez contributeur."
+        },
+        "envelope": {
+            "title": "Partager l'enveloppe",
+            "description": "Personnes qui partagent un profil avec vous.",
+            "empty": "Pas encore partagée avec d'autres membres.",
+            "grantAccess": "Accorder l'accès",
+            "transferDescription": "{name} deviendra le propriétaire de cette enveloppe et en obtiendra le contrôle total. Vous deviendrez contributeur."
+        },
+        "add": "Ajouter"
+    }
+}

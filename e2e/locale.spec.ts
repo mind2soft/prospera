@@ -32,13 +32,13 @@ test.beforeAll(() => {
 test('the interface stays in English when the browser requests an unavailable locale', async ({
     browser,
 }) => {
-    const context = await browser.newContext({ locale: 'fr-FR' });
+    const context = await browser.newContext({ locale: 'de-DE' });
     const page = await context.newPage();
 
     await login(page);
     await page.goto('/settings/account');
 
-    // fr-FR has no translation bundle yet: fall back to English.
+    // de-DE has no translation bundle yet: fall back to English.
     await expect(
         page.getByRole('heading', { name: 'Account', exact: true }),
     ).toBeVisible();

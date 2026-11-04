@@ -1,0 +1,61 @@
+{
+    "envelopes": {
+        "title": "Enveloppes",
+        "description": "Donnez à chaque euro, dollar ou franc un toit — le système des enveloppes classique, sans le papier.",
+        "newEnvelope": "Nouvelle enveloppe",
+        "empty": {
+            "title": "Créez votre première enveloppe",
+            "description": "Une enveloppe pour le logement, une pour l'épicerie, une pour les loisirs — les enveloppes permettent à Prospera de transformer une pile de transactions en une image claire de vos flux d'argent.",
+            "create": "Créer une enveloppe"
+        },
+        "groups": {
+            "expenses": "Dépenses",
+            "expensesEmpty": "Aucune enveloppe de dépenses pour le moment.",
+            "revenue": "Revenus",
+            "revenueEmpty": "Aucune enveloppe de revenus pour le moment."
+        },
+        "role": {
+            "owner": "Possédée",
+            "contributor": "Peut modifier",
+            "viewer": "Peut consulter",
+            "none": "Partagée"
+        },
+        "options": "Options de l'enveloppe",
+        "menu": {
+            "share": "Partager"
+        },
+        "dialog": {
+            "newTitle": "Nouvelle enveloppe",
+            "newDescription": "Un nom, une direction, une couleur — c'est tout ce qu'il faut.",
+            "editTitle": "Modifier l'enveloppe",
+            "editDescription": "Ajustez l'apparence et le comportement de cette enveloppe."
+        },
+        "form": {
+            "namePlaceholder": "p. ex. Épicerie",
+            "type": "Type",
+            "expense": "Dépense",
+            "revenue": "Revenu",
+            "color": "Couleur",
+            "saving": "Enregistrement…",
+            "saveChanges": "Enregistrer les modifications",
+            "create": "Créer l'enveloppe"
+        },
+        "colors": {
+            "indigo": "Indigo",
+            "blue": "Bleu",
+            "sky": "Bleu ciel",
+            "teal": "Sarcelle",
+            "emerald": "Émeraude",
+            "amber": "Ambre",
+            "orange": "Orange",
+            "rose": "Rose",
+            "violet": "Violet",
+            "slate": "Ardoise"
+        },
+        "delete": {
+            "title": "Supprimer l'enveloppe ?",
+            "description": "« {name} » sera retirée de vos enveloppes. Les transactions existantes ne sont pas supprimées.",
+            "failed": "Impossible de supprimer l'enveloppe."
+        }
+    }
+}

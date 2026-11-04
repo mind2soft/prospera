@@ -1,0 +1,97 @@
+{
+    "ledger": {
+        "title": "Grand livre",
+        "description": "Un registre financier annuel de tout ce qui entre et de tout ce qui sort.",
+        "toast": {
+            "accessUpdated": "Accès mis à jour.",
+            "accessRevoked": "Accès révoqué.",
+            "ownershipTransferred": "Propriété transférée.",
+            "ledgerCreated": "Grand livre créé.",
+            "ledgerClosed": "Grand livre clôturé.",
+            "ledgerReopened": "Grand livre rouvert.",
+            "ledgerDeleted": "Grand livre supprimé.",
+            "transactionAdded": "Transaction ajoutée."
+        },
+        "error": {
+            "generic": "Une erreur est survenue."
+        },
+        "empty": {
+            "title": "Créez votre premier grand livre",
+            "description": "Un grand livre consigne vos transactions sur une année. Créez-en un pour commencer à enregistrer vos dépenses et vos revenus.",
+            "onlyOwner": "Seul le propriétaire du profil peut créer des grands livres."
+        },
+        "actions": {
+            "createLedger": "Créer un grand livre"
+        },
+        "closedNotice": "Ce grand livre est clôturé et en lecture seule. Rouvrez-le depuis le menu d'actions pour enregistrer des transactions.",
+        "envelopesNotice": {
+            "required": "Des enveloppes sont nécessaires pour enregistrer des transactions.",
+            "manage": "Gérer les enveloppes"
+        },
+        "permissionNotice": "Vous n'avez pas la permission d'enregistrer des transactions dans ce grand livre.",
+        "newTransaction": {
+            "title": "Nouvelle transaction",
+            "description": "Choisissez un jour sur le calendrier, sélectionnez une enveloppe et saisissez le montant."
+        },
+        "share": {
+            "title": "Partager le grand livre",
+            "resource": "grand livre"
+        },
+        "delete": {
+            "title": "Supprimer ce grand livre ?",
+            "description": "Cette action supprime définitivement le grand livre et TOUTES ses transactions. Cette action est irréversible.",
+            "confirm": "Supprimer le grand livre"
+        },
+        "status": {
+            "open": "Ouvert",
+            "closed": "Clôturé"
+        },
+        "selector": {
+            "selectLedger": "Sélectionner un grand livre",
+            "actions": "Actions du grand livre"
+        },
+        "menu": {
+            "reopen": "Rouvrir",
+            "share": "Partager"
+        },
+        "calendar": {
+            "previousMonth": "Mois précédent",
+            "nextMonth": "Mois suivant"
+        },
+        "form": {
+            "envelope": "Enveloppe",
+            "envelopePlaceholder": "Choisir une enveloppe",
+            "amount": "Montant",
+            "amountPlaceholder": "p. ex. 42",
+            "eventDate": "Date de l'opération",
+            "add": "Ajouter"
+        },
+        "direction": {
+            "revenue": "revenu",
+            "expense": "dépense"
+        },
+        "createDialog": {
+            "title": "Créer un nouveau grand livre",
+            "description": "Un grand livre consigne vos transactions sur une année.",
+            "startDate": "Date de début",
+            "endDate": "Date de fin",
+            "startingBalance": "Solde de départ",
+            "balancePlaceholder": "p. ex. 1000",
+            "balanceType": "Type de solde",
+            "cash": "Espèces",
+            "debt": "Dette"
+        },
+        "table": {
+            "day": "Jour",
+            "envelope": "Enveloppe",
+            "amount": "Montant",
+            "remaining": "Restant",
+            "user": "Utilisateur",
+            "actions": "Actions",
+            "recorded": "Enregistré",
+            "formerMember": "Ancien membre",
+            "removeTransaction": "Retirer la transaction",
+            "empty": "Aucune transaction ce mois-ci."
+        }
+    }
+}

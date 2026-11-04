@@ -1,0 +1,57 @@
+{
+    "welcome": {
+        "title": "Le système des enveloppes, réinventé",
+        "nav": {
+            "openDashboard": "Ouvrir le tableau de bord",
+            "getStarted": "Commencer"
+        },
+        "hero": {
+            "badge": "Le système des enveloppes, réinventé",
+            "title": "Donnez à chaque dollar",
+            "emphasis": "un but.",
+            "description": "Prospera place votre argent dans des enveloppes — une par usage — pour que vous sachiez toujours ce qu'il reste à dépenser. Une budgétisation sereine et claire, sans tableur.",
+            "cta": "Commencez à budgéter — gratuitement",
+            "existingAccount": "J'ai déjà un compte"
+        },
+        "envelopes": {
+            "housing": "Logement",
+            "groceries": "Épicerie",
+            "transport": "Transport",
+            "fun": "Loisirs"
+        },
+        "preview": {
+            "month": "Octobre",
+            "onTrack": "Bien parti",
+            "leftToSpend": "Reste à dépenser",
+            "left": "Il reste {amount}",
+            "paycheckReceived": "Salaire reçu"
+        },
+        "features": {
+            "title": "Tout ce qu'il faut pour le budget d'un ménage.",
+            "subtitle": "Rien de ce que fait un comptable.",
+            "budgetFirst": {
+                "title": "Budgétez avant de dépenser",
+                "body": "Planifiez chaque mois en répartissant vos revenus dans des enveloppes. Factures fixes et dépenses flexibles, côte à côte."
+            },
+            "simpleLedger": {
+                "title": "Un grand livre qui reste simple",
+                "body": "Consignez vos dépenses et vos revenus ligne par ligne. Pas de partie double, pas de plan comptable — juste ce qui s'est passé."
+            },
+            "visibleEnvelopes": {
+                "title": "Des enveloppes bien visibles",
+                "body": "Les enveloppes colorées montrent d'un coup d'œil ce qu'il reste. Quand une enveloppe est vide, vous savez qu'il est temps de vous arrêter."
+            },
+            "shared": {
+                "title": "Des finances partagées",
+                "body": "Invitez un partenaire ou votre famille dans un profil partagé, avec des rôles de propriétaire, de contributeur et de lecteur pour chaque ressource."
+            }
+        },
+        "closing": {
+            "title": "Sachez où va votre argent — avant qu'il n'y aille.",
+            "cta": "Créez votre compte gratuit"
+        },
+        "footer": {
+            "tagline": "Prospera. Argent, enveloppes, clarté."
+        }
+    }
+}

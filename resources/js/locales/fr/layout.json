@@ -1,0 +1,31 @@
+{
+    "layout": {
+        "nav": {
+            "dashboard": "Tableau de bord",
+            "budget": "Budget",
+            "ledger": "Grand livre",
+            "envelopes": "Enveloppes"
+        },
+        "header": {
+            "navigationMenu": "Menu de navigation",
+            "repository": "Dépôt",
+            "documentation": "Documentation"
+        },
+        "user": {
+            "profiles": "Profils",
+            "owned": "Possédés",
+            "shared": "Partagés",
+            "manageProfiles": "Gérer les profils",
+            "settings": "Paramètres",
+            "logOut": "Se déconnecter"
+        },
+        "dashboard": {
+            "title": "Tableau de bord",
+            "welcome": "Bienvenue dans Prospera"
+        },
+        "loading": {
+            "budgets": "Chargement des budgets",
+            "ledgers": "Chargement des grands livres"
+        }
+    }
+}

@@ -1,0 +1,89 @@
+{
+    "budget": {
+        "title": "Budget",
+        "description": "Planifiez où va votre argent avant qu'il ne parte.",
+        "toast": {
+            "failed": "Une erreur est survenue.",
+            "accessUpdated": "Accès mis à jour.",
+            "accessRevoked": "Accès révoqué.",
+            "ownershipTransferred": "Propriété transférée.",
+            "published": "Budget publié.",
+            "deleted": "Budget supprimé.",
+            "draftCreated": "Brouillon de budget créé.",
+            "envelopeAdded": "Enveloppe ajoutée.",
+            "envelopeRemoved": "Enveloppe retirée."
+        },
+        "empty": {
+            "title": "Créez votre premier budget",
+            "description": "Commencez par un brouillon : choisissez votre devise, ajoutez vos enveloppes, puis publiez quand tout vous convient.",
+            "create": "Créer un budget",
+            "onlyOwner": "Seul le propriétaire du profil peut créer des budgets."
+        },
+        "flow": {
+            "revenues": "Revenus",
+            "expenses": "Dépenses",
+            "segmentTitle": "{name} — {amount}"
+        },
+        "selector": {
+            "selectBudget": "Sélectionner un budget",
+            "actions": "Actions du budget",
+            "publish": "Publier",
+            "newBudget": "Nouveau budget",
+            "share": "Partager"
+        },
+        "table": {
+            "addEnvelope": "Ajouter une enveloppe",
+            "envelope": "Enveloppe",
+            "type": "Type",
+            "amount": "Montant",
+            "leftToSpend": "Reste à dépenser",
+            "actions": "Actions",
+            "removeEnvelope": "Retirer l'enveloppe",
+            "empty": "Aucune enveloppe assignée pour le moment.",
+            "overspending": "Dépassement",
+            "leftOver": "Excédent",
+            "variableNote": "Les montants variables sont des valeurs prévues — ajustez-les à tout moment avec une révision du budget."
+        },
+        "addEnvelope": {
+            "title": "Ajouter une enveloppe",
+            "description": "Assignez l'une de vos enveloppes à ce budget avec son montant prévu.",
+            "envelope": "Enveloppe",
+            "chooseEnvelope": "Choisir une enveloppe",
+            "revenue": "revenu",
+            "expense": "dépense",
+            "allAssigned": "Toutes vos enveloppes figurent déjà dans ce budget.",
+            "type": "Type",
+            "fixed": "Fixe",
+            "variable": "Variable",
+            "amount": "Montant",
+            "amountPlaceholder": "p. ex. 800",
+            "savedAsExpense": "Enregistré comme dépense.",
+            "savedAsRevenue": "Enregistré comme revenu.",
+            "add": "Ajouter l'enveloppe"
+        },
+        "create": {
+            "title": "Créer un nouveau budget",
+            "description": "Commencez par un brouillon — choisissez la devise dans laquelle vous établirez votre budget.",
+            "createDraft": "Créer le brouillon"
+        },
+        "clone": {
+            "title": "Créer un nouveau budget ?",
+            "description": "Une copie en brouillon de ce budget sera créée — mêmes enveloppes, prête pour vos ajustements. La devise est pré-remplie à partir du budget actuel.",
+            "createDraft": "Créer le brouillon"
+        },
+        "share": {
+            "title": "Partager le budget",
+            "resource": "budget"
+        },
+        "confirm": {
+            "publishTitle": "Publier ce budget ?",
+            "publishDescription": "La publication valide ce budget pour le mois en cours et le passe en lecture seule. Cette action est irréversible.",
+            "publishDescriptionWithReplace": "La publication valide ce budget pour le mois en cours et le passe en lecture seule. Cette action est irréversible. Un budget déjà publié pour ce mois sera remplacé.",
+            "replaceWarning": "Un budget déjà publié pour ce mois sera remplacé.",
+            "deleteTitle": "Supprimer ce budget ?",
+            "deleteDescription": "Cette action supprime définitivement le budget, ainsi que toutes ses assignations d'enveloppes et ses partages.",
+            "publishButton": "Publier",
+            "deleteButton": "Supprimer le budget"
+        }
+    }
+}
