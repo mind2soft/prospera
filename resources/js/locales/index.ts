@@ -8,6 +8,7 @@
 import auth from './en/auth.json';
 import budget from './en/budget.json';
 import common from './en/common.json';
+import contact from './en/contact.json';
 import envelopes from './en/envelopes.json';
 import layout from './en/layout.json';
 import ledger from './en/ledger.json';
@@ -17,6 +18,7 @@ import welcome from './en/welcome.json';
 import authFr from './fr/auth.json';
 import budgetFr from './fr/budget.json';
 import commonFr from './fr/common.json';
+import contactFr from './fr/contact.json';
 import envelopesFr from './fr/envelopes.json';
 import layoutFr from './fr/layout.json';
 import ledgerFr from './fr/ledger.json';
@@ -28,6 +30,7 @@ const en = {
     ...common,
     ...auth,
     ...budget,
+    ...contact,
     ...envelopes,
     ...layout,
     ...ledger,
@@ -40,6 +43,7 @@ const fr = {
     ...commonFr,
     ...authFr,
     ...budgetFr,
+    ...contactFr,
     ...envelopesFr,
     ...layoutFr,
     ...ledgerFr,

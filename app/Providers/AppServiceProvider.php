@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use RuntimeException;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -67,6 +68,13 @@ class AppServiceProvider extends ServiceProvider
         DB::prohibitDestructiveCommands(
             app()->isProduction(),
         );
+
+        // The contact form has nowhere to deliver to without it (issue #17).
+        if (app()->isProduction() && blank(config('mail.contact_address'))) {
+            throw new RuntimeException(
+                'MAIL_CONTACT_ADDRESS must be set in production — the contact form needs a recipient.',
+            );
+        }
 
         Password::defaults(fn (): ?Password => app()->isProduction()
             ? Password::min(12)

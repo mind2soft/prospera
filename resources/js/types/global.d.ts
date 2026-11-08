@@ -20,6 +20,7 @@ declare module '@inertiajs/core' {
             name: string;
             auth: Auth;
             locales: Record<string, string>;
+            githubRepoUrl: string;
             sidebarOpen: boolean;
             [key: string]: unknown;
         };

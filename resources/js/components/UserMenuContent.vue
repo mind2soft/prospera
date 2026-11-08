@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { logout } from '@/routes';
+import { show as contact } from '@/routes/contact';
 import { edit } from '@/routes/profile';
 import { edit as editProfiles } from '@/routes/profiles';
 import type { User } from '@/types';
@@ -109,6 +110,12 @@ const menuProfiles = computed(() =>
             <Link class="block w-full cursor-pointer" :href="edit()" prefetch>
                 <Icon name="settings" class="size-4" aria-hidden="true" />
                 {{ $t('layout.user.settings') }}
+            </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem :as-child="true">
+            <Link class="block w-full cursor-pointer" :href="contact()">
+                <Icon name="mail" class="size-4" aria-hidden="true" />
+                {{ $t('layout.user.contact') }}
             </Link>
         </DropdownMenuItem>
     </DropdownMenuGroup>

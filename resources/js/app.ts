@@ -17,7 +17,10 @@ void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
     layout: (name) => {
         switch (true) {
+            // Public, self-contained pages (no app shell).
             case name === 'Welcome':
+            case name === 'Contact':
+            case name === 'ContactSent':
                 return null;
             case name.startsWith('auth/'):
                 return AuthLayout;

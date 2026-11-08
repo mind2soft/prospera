@@ -10,11 +10,14 @@ import {
 } from '@lucide/vue';
 import { computed } from 'vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
+import GithubIcon from '@/components/GithubIcon.vue';
 import { useLocale } from '@/composables/useLocale';
 import { dashboard, login, register } from '@/routes';
+import { show as contact } from '@/routes/contact';
 
 const page = usePage();
 const isSignedIn = computed(() => Boolean(page.props.auth?.user));
+const githubRepoUrl = computed(() => page.props.githubRepoUrl);
 const { locale } = useLocale();
 
 // Illustrative figures for the hero preview — not real data.
@@ -114,6 +117,17 @@ const features = [
                 </Link>
 
                 <div class="flex items-center gap-2 text-sm">
+                    <a
+                        :href="githubRepoUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex size-9 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                        :title="$t('contact.tooltip')"
+                        :aria-label="$t('contact.tooltip')"
+                        data-test="github-button"
+                    >
+                        <GithubIcon class="size-5" />
+                    </a>
                     <Link
                         v-if="isSignedIn"
                         :href="dashboard()"
@@ -353,6 +367,60 @@ const features = [
                     </div>
                 </div>
             </section>
+            <!-- Contact & open source -->
+            <section
+                class="mx-auto max-w-6xl px-6 pb-24"
+                data-test="contact-section"
+            >
+                <div
+                    class="grid gap-px overflow-hidden rounded-2xl border bg-border sm:grid-cols-2"
+                >
+                    <div class="bg-background p-8">
+                        <span
+                            class="flex size-10 items-center justify-center rounded-lg bg-brand/10 text-brand"
+                        >
+                            <Mail class="size-5" />
+                        </span>
+                        <h3 class="mt-5 font-display text-xl tracking-tight">
+                            {{ $t('contact.landing.title') }}
+                        </h3>
+                        <p class="mt-2 text-sm text-muted-foreground">
+                            {{ $t('contact.landing.body') }}
+                        </p>
+                        <Link
+                            :href="contact()"
+                            class="mt-5 inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground transition hover:opacity-90"
+                            data-test="contact-cta"
+                        >
+                            {{ $t('contact.landing.cta') }}
+                            <ArrowRight class="size-4" />
+                        </Link>
+                    </div>
+                    <div class="bg-background p-8">
+                        <span
+                            class="flex size-10 items-center justify-center rounded-lg bg-muted text-foreground"
+                        >
+                            <GithubIcon class="size-5" />
+                        </span>
+                        <h3 class="mt-5 font-display text-xl tracking-tight">
+                            {{ $t('contact.openSource.title') }}
+                        </h3>
+                        <p class="mt-2 text-sm text-muted-foreground">
+                            {{ $t('contact.openSource.body') }}
+                        </p>
+                        <a
+                            :href="githubRepoUrl"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="mt-5 inline-flex h-9 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition hover:bg-muted"
+                            data-test="github-link"
+                        >
+                            <GithubIcon class="size-4" />
+                            {{ $t('contact.openSource.cta') }}
+                        </a>
+                    </div>
+                </div>
+            </section>
         </main>
 
         <footer class="relative border-t">
@@ -362,6 +430,22 @@ const features = [
                 <span class="font-display text-lg text-foreground"
                     >Prospera</span
                 >
+                <div class="flex items-center gap-4">
+                    <Link
+                        :href="contact()"
+                        class="transition hover:text-foreground"
+                        >{{
+                            $t('contact.landing.cta')
+                        }}</Link
+                    >
+                    <a
+                        :href="githubRepoUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="transition hover:text-foreground"
+                        >GitHub</a
+                    >
+                </div>
                 <span
                     >&copy; {{ new Date().getFullYear() }}
                     {{ $t('welcome.footer.tagline') }}</span

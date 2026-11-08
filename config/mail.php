@@ -115,4 +115,17 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Contact Form
+    |--------------------------------------------------------------------------
+    |
+    | Recipient of the contact-form submissions (issue #17). The address
+    | must be configured for production deployments; the app fails fast at
+    | boot otherwise (see AppServiceProvider).
+    |
+    */
+
+    'contact_address' => env('MAIL_CONTACT_ADDRESS'),
+
 ];
