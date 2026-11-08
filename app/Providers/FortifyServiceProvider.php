@@ -106,6 +106,12 @@ class FortifyServiceProvider extends ServiceProvider
             return Limit::perMinute(20)->by($request->ip());
         });
 
+        // Public contact form (issue #17): first-line guard in front of the
+        // 12-hour per-IP cooldown.
+        RateLimiter::for('contact', function (Request $request) {
+            return Limit::perMinute(5)->by($request->ip() ?: 'unknown');
+        });
+
         RateLimiter::for('passkeys', function (Request $request) {
             return Limit::perMinute(10)->by(
                 ($request->input('credential.id') ?: $request->session()->getId()).'|'.$request->ip(),

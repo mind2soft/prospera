@@ -1,0 +1,28 @@
+{
+    "contact": {
+        "tooltip": "Suivez-nous sur Github !",
+        "title": "Nous contacter",
+        "description": "Questions, suggestions, ou tout ce qui n'est ni un bug ni une demande de fonctionnalité — c'est ici.",
+        "githubLink": "GitHub",
+        "githubNotice": " — s'il s'agit d'un bug ou d'une demande de fonctionnalité, veuillez plutôt ouvrir un ticket sur GitHub. Les demandes envoyées via ce formulaire seront ignorées.",
+        "emailReadonly": "L'adresse courriel de votre compte est utilisée — vous recevrez la réponse à cette adresse.",
+        "subject": "Sujet",
+        "message": "Message",
+        "submit": "Envoyer le message",
+        "landing": {
+            "title": "Parlez-nous",
+            "body": "Questions, suggestions, n'importe quoi — envoyez-nous un message et nous vous répondrons.",
+            "cta": "Nous contacter"
+        },
+        "openSource": {
+            "title": "C'est open source",
+            "body": "Prospera est libre et open source — venez lire le code, ouvrir des tickets et construire avec nous.",
+            "cta": "Voir sur GitHub"
+        },
+        "sent": {
+            "title": "Message envoyé",
+            "body": "Merci de nous avoir écrit ! Votre message a été mis en file d'attente et arrivera bientôt dans notre boîte de réception.",
+            "backHome": "Retour à l'accueil"
+        }
+    }
+}

@@ -38,7 +38,8 @@ resources/js/locales/
     ├── envelopes.json  # envelopes page + share drawer
     ├── ledger.json     # ledger page + calendar/tables
     ├── settings.json   # settings pages, security, two-factor, passkeys
-    └── share.json      # generic share drawer
+    ├── share.json      # generic share drawer
+    └── contact.json    # contact page, landing CTA, GitHub tooltip
 ```
 
 Every file owns a single top-level namespace named after the domain, so the

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BudgetController;
+use App\Http\Controllers\ContactController;
 use App\Http\Controllers\EnvelopeController;
 use App\Http\Controllers\FinancialProfileController;
 use App\Http\Controllers\FinancialProfileInviteController;
@@ -8,6 +9,14 @@ use App\Http\Controllers\LedgerController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
+
+// Public contact form (issue #17): reachable by guests and authenticated
+// users; submissions are throttled and rate-limited per IP.
+Route::get('contact', [ContactController::class, 'show'])->name('contact.show');
+Route::post('contact', [ContactController::class, 'store'])
+    ->name('contact.store')
+    ->middleware('throttle:contact');
+Route::get('contact/sent', [ContactController::class, 'sent'])->name('contact.sent');
 
 // Public invite validation (used by the invite landing page and the
 // registration flow); accepting requires authentication below.

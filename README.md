@@ -20,6 +20,8 @@ the filing cabinet.
   per-resource owner/contributor/viewer permissions.
 - **Encryption at rest** — money amounts are stored encrypted with a key per
   financial profile (AES-256-GCM), rotated monthly.
+- **Contact form** — a public, rate-limited contact page with a per-IP
+  cooldown, a submission log and a queued email to the maintainers.
 
 Design docs live in [`docs/`](docs/): [budget](docs/budget.md),
 [ledger](docs/ledger.md), [envelopes](docs/envelope.md),
@@ -114,11 +116,12 @@ configuration is the `staged` block in `vite.config.ts` and the committed
 
 ### Scheduled tasks
 
-Expired invites are pruned daily (`php artisan invites:prune`), amount
-encryption keys are rotated monthly (`php artisan amounts:rotate-keys --all`)
-and retired keys pruned daily (`php artisan amounts:prune-keys`). In
-production, run the scheduler (`php artisan schedule:run` every minute via
-cron).
+Expired invites are pruned daily (`php artisan invites:prune`), the
+contact-form submission log is pruned daily (`php artisan contact:prune`,
+retention configurable via `CONTACT_LOG_RETENTION_DAYS`), amount encryption
+keys are rotated monthly (`php artisan amounts:rotate-keys --all`) and
+retired keys pruned daily (`php artisan amounts:prune-keys`). In production,
+run the scheduler (`php artisan schedule:run` every minute via cron).
 
 ### Encryption at rest
 
@@ -143,6 +146,15 @@ Pushing a tag runs the `deploy` workflow: the full test suite (including the
 Playwright e2e suite) runs first, then the app is packaged and deployed as
 release `v1.2.3` to [prospera.mind2soft.com](https://prospera.mind2soft.com).
 Failing tests abort the release.
+
+Required production environment variables:
+
+- `MAIL_CONTACT_ADDRESS` — recipient of the contact-form submissions; the app
+  **fails fast at boot** without it (issue #17).
+- `GITHUB_REPO_URL` — public repository shown on the landing page (defaults
+  to the canonical repo; self-hosted deployments can point it elsewhere).
+- `CONTACT_LOG_RETENTION_DAYS` — retention of the contact-submission log
+  (default 90 days).
 
 - **Merges to `main`** run the full test suite (unit, static analysis and e2e)
   to catch regressions early — but never touch production.
