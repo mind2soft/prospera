@@ -12,7 +12,7 @@
         "lint": "biome lint --error-on-warnings",
         "lint:fix": "biome lint --write --unsafe",
         "format": "biome format --write",
-        "types:check": "vue-tsc --noEmit",
+        "types:check": "node ./scripts/vue-tsc-compat.cjs --noEmit",
         "e2e": "playwright test",
         "e2e:seed": "bash e2e/seed.sh"
     },
@@ -48,6 +48,7 @@
         "@types/node": "^26.6.6",
         "@vitejs/plugin-vue": "^6.0.0",
         "concurrently": "^10.0.3",
+        "typescript-classic": "npm:@typescript/typescript6@^6.0.2",
         "typescript": "^7.0.2",
         "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
         "vite-plus": "1.4.0",
