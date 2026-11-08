@@ -22,11 +22,14 @@ the filing cabinet.
   financial profile (AES-256-GCM), rotated monthly.
 - **Contact form** — a public, rate-limited contact page with a per-IP
   cooldown, a submission log and a queued email to the maintainers.
+- **Notification settings** — a master switch plus per-type toggles that
+  gate every system email at send time.
 
 Design docs live in [`docs/`](docs/): [budget](docs/budget.md),
 [ledger](docs/ledger.md), [envelopes](docs/envelope.md),
 [shared finances](docs/shared-finances.md),
-[encryption at rest](docs/encryption.md) and
+[encryption at rest](docs/encryption.md),
+[notifications](docs/notifications.md) and
 [localization](docs/localization.md).
 
 ## Tech stack

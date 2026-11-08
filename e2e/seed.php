@@ -24,7 +24,7 @@ $u = User::updateOrCreate(['email' => 'playwright@example.com'], [
     'name' => 'Playwright Tester',
     'password' => bcrypt('Password!234'),
 ]);
-$u->forceFill(['email_verified_at' => now()])->save();
+$u->forceFill(['email_verified_at' => now(), 'notification_settings' => null])->save();
 
 $profile = FinancialProfile::query()
     ->where('is_default', true)
