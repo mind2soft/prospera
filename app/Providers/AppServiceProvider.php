@@ -70,7 +70,12 @@ class AppServiceProvider extends ServiceProvider
         );
 
         // The contact form has nowhere to deliver to without it (issue #17).
-        if (app()->isProduction() && blank(config('mail.contact_address'))) {
+        // Only enforced when an environment file exists: a bare boot without
+        // one (e.g. `composer install` running `package:discover` in CI)
+        // defaults APP_ENV to production but is not a real deployment.
+        if (app()->isProduction()
+            && file_exists(app()->environmentFilePath())
+            && blank(config('mail.contact_address'))) {
             throw new RuntimeException(
                 'MAIL_CONTACT_ADDRESS must be set in production — the contact form needs a recipient.',
             );
