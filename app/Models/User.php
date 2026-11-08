@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Casts\AsNotificationSettings;
+use App\Settings\NotificationSettings;
 use Database\Factories\UserFactory;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -23,6 +25,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property string|null $locale
+ * @property NotificationSettings $notification_settings
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
@@ -31,7 +34,13 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $updated_at
  */
 #[Fillable(['name', 'email', 'password', 'locale'])]
-#[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
+#[Hidden([
+    'notification_settings',
+    'password',
+    'two_factor_secret',
+    'two_factor_recovery_codes',
+    'remember_token',
+])]
 class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
@@ -46,9 +55,23 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'notification_settings' => AsNotificationSettings::class,
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * The single gate every notification sender must check before sending
+     * an email to this user: the master switch **and** the individual
+     * toggle must both be enabled. The check happens at send time (inside
+     * the queued send), not only when the notification is enqueued.
+     *
+     * @param  string  $key  a `NotificationSettings::KEYS` constant
+     */
+    public function wantsNotification(string $key): bool
+    {
+        return $this->notification_settings->allows($key);
     }
 
     /**

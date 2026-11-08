@@ -5,6 +5,7 @@
         "nav": {
             "account": "Compte",
             "profiles": "Profils",
+            "notifications": "Notifications",
             "security": "Sécurité",
             "appearance": "Apparence"
         },
@@ -30,6 +31,22 @@
             "light": "Clair",
             "dark": "Sombre",
             "system": "Système"
+        },
+        "notifications": {
+            "title": "Paramètres de notification",
+            "description": "Choisissez les notifications par e-mail que vous recevez",
+            "master": "Activer les notifications par e-mail",
+            "masterDescription": "L'interrupteur général de tous les courriels système. Le désactiver coupe toutes les notifications ci-dessous.",
+            "payment_reminders": "Rappels de paiement",
+            "payment_remindersDescription": "Un rappel avant un paiement planifié à venir sur l'une de vos enveloppes.",
+            "ledger_expired": "Grand livre expiré",
+            "ledger_expiredDescription": "Un grand livre ouvert dont vous êtes membre et dont la date de fin est passée.",
+            "contributor_transactions": "Transactions des collaborateurs",
+            "contributor_transactionsDescription": "Un autre utilisateur enregistre une transaction dans un grand livre dont vous êtes le propriétaire.",
+            "envelope_limit_exceeded": "Limite d'enveloppe dépassée",
+            "envelope_limit_exceededDescription": "Les dépenses d'une enveloppe dépassent son allocation sur le budget publié du mois.",
+            "allOff": "Toutes les notifications sont désactivées — activez « Activer les notifications par e-mail » pour en recevoir.",
+            "saveFailed": "Impossible d'enregistrer vos paramètres de notification."
         },
         "profiles": {
             "title": "Profils",

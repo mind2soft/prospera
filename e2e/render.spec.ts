@@ -187,6 +187,28 @@ test('the appearance settings page renders', async ({ page }) => {
     await expectNoViolations(violations, 'Settings › Appearance');
 });
 
+test('the notifications settings page renders', async ({ page }) => {
+    const violations = watchForRenderErrors(page);
+
+    await login(page);
+    await visit(page, '/settings/notifications', 'Notification settings');
+
+    // The master switch and every toggle row are rendered (all defaults).
+    await expect(
+        page.getByRole('switch', { name: 'Enable email notifications' }),
+    ).toBeChecked();
+    for (const toggle of [
+        'Payment reminders',
+        'Ledger expired',
+        'Contributor transactions',
+        'Envelope limit exceeded',
+    ]) {
+        await expect(page.getByRole('switch', { name: toggle })).toBeChecked();
+    }
+
+    await expectNoViolations(violations, 'Settings › Notifications');
+});
+
 test('the security settings page renders after password confirmation', async ({
     page,
 }) => {

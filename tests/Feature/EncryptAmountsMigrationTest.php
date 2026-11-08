@@ -27,10 +27,26 @@ class EncryptAmountsMigrationTest extends TestCase
         parent::setUp();
 
         Artisan::call('migrate', ['--force' => true]);
-        Artisan::call('migrate:rollback', ['--step' => 1, '--force' => true]);
 
-        $this->assertFalse(Schema::hasTable('financial_profile_keys'));
+        // Roll back the encryption migration itself — not whatever migration
+        // happens to be the newest. Rolling back one migration at a time
+        // until the encryption tables are gone keeps this test agnostic of
+        // migrations added after it. Bounded: a stuck down() must fail the
+        // test, not hang it.
+        $this->rollbackUntilKeysAreGone();
+
         $this->seedPlaintext();
+    }
+
+    private function rollbackUntilKeysAreGone(): void
+    {
+        for ($i = 0; Schema::hasTable('financial_profile_keys'); $i++) {
+            if ($i > 50) {
+                $this->fail('migrate:rollback never removed the encryption tables.');
+            }
+
+            Artisan::call('migrate:rollback', ['--step' => 1, '--force' => true]);
+        }
     }
 
     private function seedPlaintext(): void
@@ -116,9 +132,9 @@ class EncryptAmountsMigrationTest extends TestCase
             $this->assertFalse(collect(Schema::getColumns($table))->firstWhere('name', $column)['nullable'], "{$target} is nullable.");
         }
 
-        $this->assertSame(0, Artisan::call('migrate:rollback', ['--step' => 1, '--force' => true]));
-
-        $this->assertFalse(Schema::hasTable('financial_profile_keys'));
+        // Roll back the encryption migration itself — not whatever migration
+        // happens to be the newest (see setUp).
+        $this->rollbackUntilKeysAreGone();
         $this->assertSame($this->plaintext, array_map(
             fn (array $values): array => array_map(fn ($value): int => (int) $value, $values),
             $this->rawValues(),
