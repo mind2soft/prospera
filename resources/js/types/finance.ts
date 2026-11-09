@@ -23,6 +23,7 @@ export type ProfileMember = {
 export type ProfileInvite = {
     id: number;
     email: string;
+    role: string; // the role granted on acceptance — only 'collaborator' today
     awaiting_verification: boolean; // reserved by a registration pending email verification
     expires_at: string; // ISO date time
 };
@@ -32,6 +33,7 @@ export type InviteContext = {
     profile: string;
     inviter: string;
     email: string;
+    role: string;
 };
 
 /**

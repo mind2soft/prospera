@@ -20,8 +20,11 @@ class CreateNewUser implements CreatesNewUsers
      * Validate and create a newly registered user.
      *
      * When a valid invite key is carried through registration, the invite is
-     * reserved for the new account; membership is granted (and the invite
-     * consumed) once the account verifies its email address — see
+     * reserved for the new account and the personal "Default profile" is
+     * **not** created — the shared profile becomes the account's only (and
+     * default) profile once it verifies its email; if the invite is gone by
+     * then (revoked, pruned, or the email changed), the default profile is
+     * seeded then instead. See
      * FinancialProfileInvite::completePendingFor().
      *
      * @param  array<string, mixed>  $input
@@ -62,7 +65,13 @@ class CreateNewUser implements CreatesNewUsers
                 'password' => $input['password'],
             ]);
 
-            FinancialProfile::createDefaultFor($user);
+            // Invite registrations skip the personal default profile: the
+            // shared profile they are joining becomes their only profile on
+            // email verification (and if the invite is gone by then, the
+            // default profile is seeded at that point instead).
+            if ($invite === null) {
+                FinancialProfile::createDefaultFor($user);
+            }
 
             $invite?->forceFill(['pending_user_id' => $user->id])->save();
 

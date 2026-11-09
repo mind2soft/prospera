@@ -66,6 +66,7 @@ class NotificationSettingsTest extends TestCase
                 'ledger_expired' => true,
                 'contributor_transactions' => true,
                 'envelope_limit_exceeded' => false,
+                'profile_invite' => false,
             ]);
 
         $response->assertSessionHasNoErrors();
@@ -78,9 +79,11 @@ class NotificationSettingsTest extends TestCase
             'ledger_expired' => true,
             'contributor_transactions' => true,
             'envelope_limit_exceeded' => false,
+            'profile_invite' => false,
         ], $user->notification_settings->toArray());
         $this->assertFalse($user->wantsNotification(NotificationSettings::PAYMENT_REMINDERS));
         $this->assertTrue($user->wantsNotification(NotificationSettings::LEDGER_EXPIRED));
+        $this->assertFalse($user->wantsNotification(NotificationSettings::PROFILE_INVITE));
     }
 
     public function test_updated_settings_are_returned_as_json(): void
@@ -95,6 +98,7 @@ class NotificationSettingsTest extends TestCase
                 'ledger_expired' => true,
                 'contributor_transactions' => true,
                 'envelope_limit_exceeded' => true,
+                'profile_invite' => true,
             ]);
 
         $response->assertOk()
@@ -115,6 +119,7 @@ class NotificationSettingsTest extends TestCase
                 'ledger_expired' => true,
                 'contributor_transactions' => true,
                 'envelope_limit_exceeded' => true,
+                'profile_invite' => true,
             ])
             ->assertSessionHasNoErrors();
 
@@ -134,14 +139,15 @@ class NotificationSettingsTest extends TestCase
             ->patchJson(route('notifications.update'), [
                 'master' => true,
                 'payment_reminders' => true,
-                // ledger_expired, contributor_transactions and
-                // envelope_limit_exceeded are missing.
+                // ledger_expired, contributor_transactions,
+                // envelope_limit_exceeded and profile_invite are missing.
             ]);
 
         $response->assertInvalid([
             'ledger_expired',
             'contributor_transactions',
             'envelope_limit_exceeded',
+            'profile_invite',
         ]);
 
         $this->assertTrue($user->refresh()->wantsNotification(NotificationSettings::LEDGER_EXPIRED));
@@ -159,6 +165,7 @@ class NotificationSettingsTest extends TestCase
                 'ledger_expired' => true,
                 'contributor_transactions' => true,
                 'envelope_limit_exceeded' => true,
+                'profile_invite' => true,
             ]);
 
         $response->assertInvalid('master');

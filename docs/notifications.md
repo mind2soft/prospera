@@ -17,9 +17,17 @@ regardless of the individual switches.**
 | **Ledger expired** | on | An open ledger you own (or are a member of) whose **end date has passed** — sent once, when the daily run first detects it. |
 | **Contributor transactions** | on | Another user records a transaction in a ledger you are the owner of — one email per transaction (the recipient list stays narrow to ledger owners to avoid noisy group mails; broader audiences can be added later). |
 | **Envelope limit exceeded** | on | Recorded spending for an envelope within a month **exceeds its allocation on that month's published budget** — checked when the exceeding transaction is recorded; recipients are the envelope owner + envelope contributors. Amounts are masked for recipients holding less than `viewer` permission on the envelope. |
+| **Profile invitations** | on | Someone shares a financial profile with you — the invite email with the one-click accept link (issue #39). The toggle only gates emails **received**; invitations you send are always delivered to their recipients. |
 
 Timing notes: notifications are queued per-event emails (no digests — a
 digest mode can be added later as a new option without a schema break).
+
+**Invite emails and unregistered recipients**: the profile-invitation email
+may target an email address that has no Prospera account yet. Such
+recipients have no settings to honor and always receive the invite (they
+cannot opt out of an account they don't have). Once the address belongs to
+an account, the toggle (and the master switch) gates the email, re-checked
+at send time.
 
 ## Storage
 
@@ -35,6 +43,7 @@ type NotificationSettings = {
     ledger_expired: boolean;
     contributor_transactions: boolean;
     envelope_limit_exceeded: boolean;
+    profile_invite: boolean;
 };
 ```
 
@@ -58,11 +67,16 @@ time.
 - Emails are **queued** (works with `MAIL_MAILER=log` locally and the
   existing queue worker).
 - Sent to **verified** addresses only (Fortify-verified accounts; unverified
-  users get nothing, silently).
+  users get nothing, silently). Exception — **profile invitations**: the
+  share must reach the owner of an existing (not yet verified) account too;
+  they cannot re-register with their email, and the one-click accept link
+  routes them through email verification before accepting.
 - Localized per recipient's `users.locale` (fallback `en`), including
   plain-text parts.
 - Every notification email carries a short "Manage your notifications"
-  footer link to **Settings → Notifications** (requires login).
+  footer link to **Settings → Notifications** (requires login) — except the
+  account-creation variant of the profile invitation, whose recipient has no
+  account to manage settings with.
 - Recipients holding less than `viewer` permission on a resource receive the
   notification **without the amounts** (see
   [envelopes](envelope.md) — amount-masking rule).

@@ -11,6 +11,7 @@ export type NotificationSettings = {
     ledger_expired: boolean;
     contributor_transactions: boolean;
     envelope_limit_exceeded: boolean;
+    profile_invite: boolean;
 };
 
 export const notificationApi = {
