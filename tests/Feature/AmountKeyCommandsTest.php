@@ -264,12 +264,13 @@ class AmountKeyCommandsTest extends TestCase
         $this->artisan('migrations:ran')->assertExitCode(ListRanMigrations::NO_REPOSITORY);
     }
 
-    public function test_rotation_and_pruning_are_scheduled(): void
+    public function test_rotation_pruning_and_verification_are_scheduled(): void
     {
         $commands = collect(app(Schedule::class)->events())
             ->map(fn (Event $event): array => [$event->command, $event->expression]);
 
         $this->assertTrue($commands->contains(fn (array $e): bool => str_contains((string) $e[0], 'amounts:rotate-keys --all') && $e[1] === '0 0 1 * *'));
         $this->assertTrue($commands->contains(fn (array $e): bool => str_contains((string) $e[0], 'amounts:prune-keys') && $e[1] === '0 0 * * *'));
+        $this->assertTrue($commands->contains(fn (array $e): bool => str_contains((string) $e[0], 'amounts:verify') && $e[1] === '0 0 * * *'));
     }
 }

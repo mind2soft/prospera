@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\FinancialProfileInvite;
 use App\Models\User;
 use App\Security\Amounts\AmountCipher;
+use App\Security\Amounts\AmountKeyHealthCheck;
 use App\Security\Amounts\AmountKeyRing;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Verified;
@@ -35,6 +36,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureDefaults();
         $this->configureEvents();
+        $this->assertAmountKeysAreReadable();
     }
 
     /**
@@ -70,12 +72,7 @@ class AppServiceProvider extends ServiceProvider
         );
 
         // The contact form has nowhere to deliver to without it (issue #17).
-        // Only enforced when an environment file exists: a bare boot without
-        // one (e.g. `composer install` running `package:discover` in CI)
-        // defaults APP_ENV to production but is not a real deployment.
-        if (app()->isProduction()
-            && file_exists(app()->environmentFilePath())
-            && blank(config('mail.contact_address'))) {
+        if ($this->isRealDeployment() && blank(config('mail.contact_address'))) {
             throw new RuntimeException(
                 'MAIL_CONTACT_ADDRESS must be set in production — the contact form needs a recipient.',
             );
@@ -90,5 +87,45 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null,
         );
+    }
+
+    /**
+     * Boot-time smoke check (issue #36): a rotated APP_KEY without
+     * APP_PREVIOUS_KEYS breaks every wrapped amount key at once — fail fast
+     * with an actionable error instead of scattered AmountDecryptionException
+     * 500s (docs/encryption.md).
+     *
+     * HTTP requests only: artisan must keep booting so the documented
+     * recovery (`amounts:rewrap-keys`) stays runnable. Console-side failures
+     * surface through the daily scheduled `amounts:verify` instead.
+     */
+    protected function assertAmountKeysAreReadable(): void
+    {
+        if (! $this->shouldVerifyAmountsAtBoot()) {
+            return;
+        }
+
+        $this->app->make(AmountKeyHealthCheck::class)->assertAppKeyCanUnwrap();
+    }
+
+    protected function shouldVerifyAmountsAtBoot(): bool
+    {
+        return $this->isRealDeployment() && ! $this->runsInConsole();
+    }
+
+    protected function runsInConsole(): bool
+    {
+        return $this->app->runningInConsole();
+    }
+
+    /**
+     * A production environment with an environment file: a bare boot without
+     * one (e.g. `composer install` running `package:discover` in CI) defaults
+     * APP_ENV to production but is not a real deployment.
+     */
+    private function isRealDeployment(): bool
+    {
+        return $this->app->isProduction()
+            && file_exists($this->app->environmentFilePath());
     }
 }

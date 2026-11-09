@@ -15,6 +15,9 @@ Schedule::command('invites:prune')->daily();
 Schedule::command('contact:prune')->daily();
 
 // Encryption at rest (docs/encryption.md): monthly data-key rotation; retired
-// key versions are deleted after their grace period.
+// key versions are deleted after their grace period. The daily verify catches
+// a broken APP_KEY in the logs even when no request touches amounts — the
+// boot-time check (issue #36) only covers HTTP requests.
 Schedule::command('amounts:rotate-keys --all')->monthly()->withoutOverlapping()->onOneServer();
 Schedule::command('amounts:prune-keys')->daily()->withoutOverlapping()->onOneServer();
+Schedule::command('amounts:verify')->daily()->withoutOverlapping()->onOneServer();

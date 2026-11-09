@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Security\Amounts\AmountKeyManager;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 
 class VerifyAmounts extends Command
 {
@@ -32,6 +33,14 @@ class VerifyAmounts extends Command
         }
 
         if ($failures !== []) {
+            // The scheduler's output goes to /dev/null (docs/encryption.md):
+            // log the failure so a rotated APP_KEY is caught even when no
+            // request touches amounts.
+            Log::error(
+                'Amount verification failed: '.count($failures).' encrypted amount(s) do not decrypt — a rotated APP_KEY without APP_PREVIOUS_KEYS? See docs/encryption.md, "Detecting a broken APP_KEY".',
+                ['failures' => array_slice($failures, 0, 20)],
+            );
+
             $this->error(count($failures).' amount(s) failed verification.');
 
             return self::FAILURE;
