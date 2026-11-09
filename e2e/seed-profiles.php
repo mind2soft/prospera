@@ -50,7 +50,7 @@ $partner->forceFill(['email_verified_at' => now()])->save();
 $default = FinancialProfile::createDefaultFor($owner);
 
 // The shared profile: owned by the partner, playwright is a collaborator.
-$family = FinancialProfile::create(['name' => 'Family', 'is_default' => false]);
+$family = FinancialProfile::create(['name' => 'Family']);
 $family->members()->attach($partner->id, ['is_owner' => true]);
 $family->members()->attach($owner->id, ['is_owner' => false]);
 

@@ -29,5 +29,10 @@ fi
 # suite against outdated code (see issue #27).
 npm run build
 
+# Wipe the database file first: `migrate:fresh` only drops tables — a
+# corrupt sqlite file (e.g. left over from a killed server mid-write)
+# would fail the boot entirely. The e2e database is disposable.
+rm -f database/e2e.sqlite database/e2e.sqlite-journal
+
 php artisan migrate:fresh --env=e2e --force
 exec php artisan serve --env=e2e --no-reload

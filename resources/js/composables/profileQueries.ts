@@ -124,6 +124,17 @@ export function useDeleteProfile() {
     });
 }
 
+export function useSetDefaultProfile() {
+    const invalidateAll = useInvalidateAll();
+
+    return useMutation(
+        (profileId: number) => profileApi.setDefault(profileId),
+        {
+            onSuccess: () => invalidateAll(),
+        },
+    );
+}
+
 export function useRemoveMember() {
     const invalidateAll = useInvalidateAll();
 

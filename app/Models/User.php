@@ -104,7 +104,7 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     {
         return $this->belongsToMany(FinancialProfile::class, 'financial_profile_user', 'user_id', 'profile_id')
             ->using(FinancialProfileUser::class)
-            ->withPivot('is_owner')
+            ->withPivot('is_owner', 'is_default')
             ->withTimestamps();
     }
 }

@@ -9,6 +9,7 @@ export type FinancialProfile = {
     id: number;
     name: string;
     is_owner: boolean;
+    /** The caller's default membership flag — exactly one per user. */
     is_default: boolean;
 };
 

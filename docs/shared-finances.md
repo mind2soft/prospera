@@ -10,7 +10,21 @@ profile membership is what makes data visible between users.
 Profiles are managed in the user settings called "Profiles". By default, when a
 user creates an account, they get an owned "Default profile" created — the
 exception is **registration through an invite** (see below): the account skips
-the default profile and joins the shared profile instead.
+the default profile and joins the shared profile instead, which becomes their
+default.
+
+Each user has **their own default profile** — a per-user `is_default` flag on
+the `financial_profile_user` membership pivot (issue #41). Users can select
+their default profile from **Settings → Profiles** or the user-menu profile
+switcher; on login the server-side default is the fallback when the locally
+stored current profile is gone. When a user's default membership disappears
+(the profile is deleted, or they leave / are removed), their default falls
+back to the **earliest-created owned profile** they still have, else the
+**earliest remaining membership**, and a fresh seeded default profile is
+created when nothing remains — an account never ends up without a profile.
+(The former "the Default profile cannot be deleted" rule is gone: profiles
+are deletable by their owner while they have no budgets or ledgers, and the
+fallbacks above keep every account usable.)
 
 A profile has exactly **one owner**; other members are **collaborators**.
 
@@ -172,11 +186,14 @@ access to its decrypted amounts through the API only (see
 In the user menu, above "Settings", a menu "Profiles" with a sub-menu listing
 the available profiles. There _must_ be a visual distinction between owned
 profiles and shared profiles. There must be a checkmark besides the currently
-selected profile.
+selected profile, and a "Default" marker with a "Set as default" action
+(issue #41).
 
-When the user first logs in, the selected profile is their owned profile. When
-the profile is switched, it is saved in `localStorage`. Next login checks
-`localStorage` for the profile to use, and defaults to the owned profile.
+The selected profile is tracked client-side in `localStorage`. Next login
+checks `localStorage` for the profile to use and falls back to the user's
+**server-side default profile** (per-user `financial_profile_user.is_default`
+— previously this fallback was the owned profile), else the first profile.
+The default is selectable in the Profiles settings page and the switcher.
 
 ## Profile management UI
 
@@ -189,6 +206,11 @@ The "Profiles" settings page shows:
   owner), invite creation with a copyable link, pending invites with revoke
   (invites expire after 48 hours), and ownership transfer to a member (the
   previous owner becomes a collaborator).
+- a **"Default" badge** on the user's default profile with a **"Set as
+  default"** action, on every profile the user belongs to (issue #41). The
+  "Default profile" is deletable like any other profile (its resources
+  guard applies); deletion reassigns the affected users' defaults
+  (see above).
 - Members may **leave a profile voluntarily** from this page (their owned
   resources auto-transfer to the profile owner).
 
@@ -207,6 +229,7 @@ type FinancialProfileUser = {
     profile_id: number; // FK financial_profiles.id
     user_id: number; // FK users.id
     is_owner: boolean; // only 1 per profile
+    is_default: boolean; // exactly 1 per user — the user's default profile
     created_at: string; // ISO date time — lowest wins for ownership transfer, ties by lowest user_id
     updated_at: string; // ISO date time
 };
@@ -242,13 +265,14 @@ data fetching.
 
 | Method   | Path                                         | Description                                                                                                                                                                                                                                                                                                                            |
 | -------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/api/profiles`                              | List all the user's profiles (owned + shared), each with `is_owner`; the currently selected profile is tracked client-side (`localStorage`), not server-flagged                                                                                                                                                                        |
+| `GET`    | `/api/profiles`                              | List all the user's profiles (owned + shared), each with the caller's `is_owner` and `is_default` membership flags; the currently selected profile is tracked client-side (`localStorage`), not server-flagged                                                                                                                          |
 | `POST`   | `/api/profiles`                              | Create a profile (`name`) — the creator becomes owner                                                                                                                                                                                                                                                                                  |
 | `PATCH`  | `/api/profiles/{profile}`                    | Rename a profile (owner only)                                                                                                                                                                                                                                                                                                          |
-| `DELETE` | `/api/profiles/{profile}`                    | Delete a profile (owner only; blocked while it has budgets or ledgers; the "Default profile" cannot be deleted but **can** be renamed)                                                                                                                                                                                                 |
+| `DELETE` | `/api/profiles/{profile}`                    | Delete a profile (owner only; blocked while it has budgets or ledgers). The former "Default profile cannot be deleted" rule is gone: deletion reassigns affected users' defaults (earliest-created owned profile, else earliest remaining membership, else a seeded default profile)                                                   |
 | `GET`    | `/api/profiles/{profile}/members`            | List members (id, name, email, is_owner, joined_at)                                                                                                                                                                                                                                                                                    |
 | `DELETE` | `/api/profiles/{profile}/members/{userId}`   | Remove a member (owner only; not the owner) or leave voluntarily (self). Resources owned by the removed member auto-transfer to the profile owner (except envelopes still referenced by another of their profiles — see [Transfer of ownership](#transfer-of-ownership)); their permission rows on the profile's resources are deleted |
 | `POST`   | `/api/profiles/{profile}/transfer-ownership` | Transfer ownership to a member (`user_id`); the previous owner becomes a collaborator                                                                                                                                                                                                                                                  |
+| `POST`   | `/api/profiles/{profile}/set-default`        | Set the caller's default profile (any member; one default per user, always exactly one)                                                                                                                                                                                                                                                |
 | `GET`    | `/api/profiles/{profile}/invites`            | List pending invites (`id`, `email`, `role`, `awaiting_verification`, `expires_at`)                                                                                                                                                                                                                                                    |
 | `POST`   | `/api/profiles/{profile}/invites`            | Create an invite (`email`, optional `role` — `collaborator` by default, only `collaborator` is grantable) → returns the invite link and queues the invitation email; replaces a previous unreserved invite for the same email (case-insensitive); `422` on `email` if already a member; rate-limited (the endpoint now triggers outbound email) |
 | `DELETE` | `/api/profiles/{profile}/invites/{invite}`   | Revoke a pending invite                                                                                                                                                                                                                                                                                                                |

@@ -626,6 +626,8 @@ class FinancialProfileInviteTest extends TestCase
             [$this->profile->id],
             $user->profiles()->pluck('financial_profiles.id')->all(),
         );
+        // The shared profile is the account's default (per-user pivot flag).
+        $this->assertTrue($this->profile->isDefaultFor($user));
         $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
     }
 
@@ -703,12 +705,13 @@ class FinancialProfileInviteTest extends TestCase
 
         $user = User::where('email', 'solo@example.com')->firstOrFail();
         $profile = FinancialProfile::where('name', FinancialProfile::DEFAULT_NAME)->firstOrFail();
-        $this->assertTrue($profile->is_default);
+        $this->assertTrue($profile->isDefaultFor($user));
 
         $this->assertDatabaseHas('financial_profile_user', [
             'profile_id' => $profile->id,
             'user_id' => $user->id,
             'is_owner' => true,
+            'is_default' => true,
         ]);
     }
 

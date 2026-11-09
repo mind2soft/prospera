@@ -63,6 +63,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('{profile}/members', [FinancialProfileController::class, 'members'])->name('members.index');
             Route::delete('{profile}/members/{user}', [FinancialProfileController::class, 'removeMember'])->name('members.destroy')->whereNumber('user');
             Route::post('{profile}/transfer-ownership', [FinancialProfileController::class, 'transferOwnership'])->name('transfer-ownership');
+            Route::post('{profile}/set-default', [FinancialProfileController::class, 'setDefault'])->name('set-default');
 
             Route::post('{profile}/invites', [FinancialProfileInviteController::class, 'store'])->name('invites.store')
                 ->middleware('throttle:invites');
