@@ -78,8 +78,11 @@ invite for an email and gets a link containing a hash key (`invite_key`).
   profile (and therefore its default experience — the profile switcher falls
   back to the only profile). If the invite is gone by the time the account
   verifies (revoked, pruned, or the email changed), no membership is granted
-  and the account is seeded with its own default profile then — an account
-  never ends up with zero profiles.
+  and the account is seeded with its own default profile then. The same
+  zero-profile guarantee applies at every membership exit: when a member
+  **leaves or is removed**, or when a profile they belonged to is **deleted**,
+  an account left without any profile gets its own default profile seeded —
+  an account never ends up with zero profiles.
 - An invalid, expired, reserved or email-mismatched invite shows an explicit error
   page.
 

@@ -360,6 +360,58 @@ class FinancialProfileTest extends TestCase
         ]);
     }
 
+    // ------------------------------------------------------------------
+    // Zero-profile guarantee (invite registrations skip the default profile)
+    // ------------------------------------------------------------------
+
+    public function test_a_member_who_would_end_up_without_any_profile_gets_a_default_profile_seeded(): void
+    {
+        // Like an invite-registered account: no owned profile of their own.
+        $invitee = User::factory()->create();
+        $shared = FinancialProfile::createOwnedBy($this->owner, 'Shared');
+        $shared->members()->attach($invitee->id, ['is_owner' => false]);
+
+        $this->actingAs($invitee)->deleteJson("/api/profiles/{$shared->id}/members/{$invitee->id}")
+            ->assertNoContent();
+
+        $default = FinancialProfile::where('name', FinancialProfile::DEFAULT_NAME)->sole();
+        $this->assertTrue($default->is_default);
+        $this->assertDatabaseHas('financial_profile_user', [
+            'profile_id' => $default->id,
+            'user_id' => $invitee->id,
+            'is_owner' => true,
+        ]);
+    }
+
+    public function test_a_leaving_member_who_keeps_another_profile_is_not_seeded_a_default(): void
+    {
+        $own = FinancialProfile::createOwnedBy($this->member, 'Mine');
+
+        $this->actingAs($this->member)->deleteJson("/api/profiles/{$this->profile->id}/members/{$this->member->id}")
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('financial_profiles', ['name' => FinancialProfile::DEFAULT_NAME]);
+        $this->assertSame([$own->id], $this->member->profiles()->pluck('financial_profiles.id')->all());
+    }
+
+    public function test_deleting_a_profile_seeds_stranded_members_a_default_profile(): void
+    {
+        $invitee = User::factory()->create();
+        $shared = FinancialProfile::createOwnedBy($this->owner, 'Shared');
+        $shared->members()->attach($invitee->id, ['is_owner' => false]);
+
+        $this->actingAs($this->owner)->deleteJson("/api/profiles/{$shared->id}")
+            ->assertNoContent();
+
+        $default = FinancialProfile::where('name', FinancialProfile::DEFAULT_NAME)->sole();
+        $this->assertTrue($default->is_default);
+        $this->assertDatabaseHas('financial_profile_user', [
+            'profile_id' => $default->id,
+            'user_id' => $invitee->id,
+            'is_owner' => true,
+        ]);
+    }
+
     public function test_non_owners_cannot_remove_other_members(): void
     {
         $other = User::factory()->create();

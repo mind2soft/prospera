@@ -124,6 +124,21 @@ class FinancialProfile extends Model
     }
 
     /**
+     * Guarantee the account belongs to a profile, seeding its own default
+     * profile when it has no membership left. Accounts that register through
+     * an invite skip the default-profile seeding (docs/shared-finances.md),
+     * so every membership exit — a discarded or revoked invite, leaving,
+     * being removed, or the shared profile being deleted — must run this to
+     * keep the account usable.
+     */
+    public static function ensureUserHasAProfile(User $user): void
+    {
+        if ($user->profiles()->doesntExist()) {
+            self::createDefaultFor($user);
+        }
+    }
+
+    /**
      * Whether the two users share membership in at least one profile.
      */
     public static function membersShareAProfile(User $a, User $b): bool
@@ -195,6 +210,12 @@ class FinancialProfile extends Model
             $this->transferReferencedEnvelopesOwnedBy($member, $owner, keepSharedElsewhere: ! $accountDeletion);
 
             $this->members()->detach($member);
+
+            // On account deletion the account itself goes away; otherwise a
+            // member left without any profile must get its own default one.
+            if (! $accountDeletion) {
+                self::ensureUserHasAProfile($member);
+            }
         });
     }
 
