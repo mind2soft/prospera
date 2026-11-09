@@ -410,7 +410,7 @@ class BudgetController extends Controller
      * Full budget payload with envelopes and shares, as consumed by the
      * frontend's `BudgetDetail` type.
      *
-     * @return array<string, array<int|string, array<string, int|string|null>>|int|string|null>
+     * @return array<string, array<int|string, array<string, bool|int|string|null>>|int|string|null>
      */
     private function serializeDetail(Budget $budget, User $user): array
     {

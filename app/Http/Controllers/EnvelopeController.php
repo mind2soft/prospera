@@ -142,15 +142,15 @@ class EnvelopeController extends Controller
     }
 
     /**
-     * List the envelope's permission rows (owner and profile co-members
-     * only).
+     * List the envelope's permission rows with the owner row first (owner
+     * and profile co-members only).
      */
     public function permissionsIndex(Request $request, Envelope $envelope): JsonResponse
     {
         $this->authorizeVisibleToOwnerCircle($request, $envelope);
 
         return response()->json([
-            'shares' => $this->permissionService->explicitPermissions('envelope_permissions', 'envelope_id', $envelope->id),
+            'shares' => $this->permissionService->explicitPermissions('envelope_permissions', 'envelope_id', $envelope->id, $envelope->user),
         ]);
     }
 
@@ -182,7 +182,7 @@ class EnvelopeController extends Controller
         $this->permissionService->updatePermission('envelope_permissions', 'envelope_id', $envelope->id, $userId, $permission);
 
         return response()->json([
-            'shares' => $this->permissionService->explicitPermissions('envelope_permissions', 'envelope_id', $envelope->id),
+            'shares' => $this->permissionService->explicitPermissions('envelope_permissions', 'envelope_id', $envelope->id, $envelope->user),
         ]);
     }
 

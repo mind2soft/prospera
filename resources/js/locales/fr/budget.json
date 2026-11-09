@@ -73,7 +73,7 @@
         },
         "share": {
             "title": "Partager le budget",
-            "resource": "budget"
+            "resource": "ce budget"
         },
         "confirm": {
             "publishTitle": "Publier ce budget ?",

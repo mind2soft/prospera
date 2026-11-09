@@ -41,17 +41,20 @@ test('the share drawer lists profile members with their effective permission', a
 
     // The owner row: no permission select, plain "Owner" label.
     const ownerRow = drawer
-        .locator('div[class*="py-1.5"]')
+        .getByRole('listitem')
         .filter({ hasText: 'playwright@example.com' });
     await expect(ownerRow).toContainText('Owner');
     await expect(ownerRow.getByRole('combobox')).toHaveCount(0);
 
-    // The partner row: implicit viewer escalated to contributor by the seed.
+    // The partner row: an explicit contributor (grantable via the select).
     const partnerRow = drawer
-        .locator('div[class*="py-1.5"]')
+        .getByRole('listitem')
         .filter({ hasText: 'partner@example.com' });
     await expect(partnerRow.getByRole('combobox')).toHaveCount(1);
     await expect(partnerRow.getByRole('combobox')).toContainText('Can edit');
+    await expect(
+        partnerRow.getByRole('button', { name: 'Revoke access' }),
+    ).toBeVisible();
 });
 
 test('the resource owner can change a member permission from the drawer', async ({
@@ -63,7 +66,7 @@ test('the resource owner can change a member permission from the drawer', async 
 
     const drawer = await openShareDrawer(page);
     const partnerRow = drawer
-        .locator('div[class*="py-1.5"]')
+        .getByRole('listitem')
         .filter({ hasText: 'partner@example.com' });
     const select = partnerRow.getByRole('combobox');
 
@@ -104,12 +107,68 @@ test('transferring ownership asks for confirmation and demotes the previous owne
 
     // The partner is now the owner; the previous owner is a contributor.
     const partnerRow = drawer
-        .locator('div[class*="py-1.5"]')
+        .getByRole('listitem')
         .filter({ hasText: 'partner@example.com' });
     await expect(partnerRow).toContainText('Owner');
 
     const ownerRow = drawer
-        .locator('div[class*="py-1.5"]')
+        .getByRole('listitem')
         .filter({ hasText: 'playwright@example.com' });
     await expect(ownerRow).toContainText('Can edit');
+});
+
+test('the envelope share drawer grants, updates and revokes access', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/envelopes');
+    await expect(page.getByText('Food').first()).toBeVisible();
+
+    // Open the Food envelope's action menu and its share drawer.
+    const foodCard = page
+        .locator('div.group')
+        .filter({ hasText: 'Food' })
+        .first();
+    await foodCard.getByRole('button', { name: 'Envelope options' }).click();
+    await page.getByRole('menuitem', { name: 'Share' }).click();
+    const drawer = page.getByRole('dialog');
+    await drawer.waitFor({ state: 'visible' });
+
+    // The owner row is always listed, labeled "Owner", without controls.
+    const ownerRow = drawer
+        .getByRole('listitem')
+        .filter({ hasText: 'playwright@example.com' });
+    await expect(ownerRow).toContainText('Owner');
+    await expect(ownerRow.getByRole('combobox')).toHaveCount(0);
+    await expect(
+        ownerRow.getByRole('button', { name: 'Revoke access' }),
+    ).toHaveCount(0);
+
+    // Grant access to the partner from the profile circle.
+    await drawer.getByRole('combobox').first().click();
+    await page.getByRole('option', { name: 'Partner Member' }).click();
+    await drawer.getByRole('button', { name: 'Add' }).click();
+    await expect(page.getByText('Access granted.')).toBeVisible();
+
+    const partnerRow = drawer
+        .getByRole('listitem')
+        .filter({ hasText: 'partner@example.com' });
+    await expect(partnerRow.getByRole('combobox')).toContainText('Can edit');
+    await expect(
+        partnerRow.getByRole('button', { name: 'Revoke access' }),
+    ).toBeVisible();
+
+    // Change the granted permission.
+    await partnerRow.getByRole('combobox').click();
+    await page.getByRole('option', { name: 'Can view' }).click();
+    await expect(page.getByText('Access updated.')).toBeVisible();
+    await expect(partnerRow.getByRole('combobox')).toContainText('Can view');
+
+    // Revoke — the row disappears, the owner row remains.
+    await partnerRow.getByRole('button', { name: 'Revoke access' }).click();
+    await expect(page.getByText('Access revoked.')).toBeVisible();
+    await expect(
+        drawer.getByRole('listitem').filter({ hasText: 'partner@example.com' }),
+    ).toHaveCount(0);
+    await expect(ownerRow).toBeVisible();
 });

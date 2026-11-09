@@ -97,7 +97,7 @@ data fetching.
 | `GET`    | `/api/envelopes`                               | List all envelopes visible to the user (their own + ones shared with them via profile membership), each with a `permission` field: `"owner" \| "contributor" \| "viewer" \| "none"` (`none` = metadata-only) |
 | `GET`    | `/api/envelopes/{envelope}/totals`             | Computed transaction totals (optional `from_date`/`to_date` date query params, `to_date` ≥ `from_date`; `422` if invalid); `403` without `viewer`+                                                           |
 | `GET`    | `/api/envelopes/{envelope}/transactions`       | Transactions referencing the envelope; `403` without `viewer`+                                                                                                                                               |
-| `GET`    | `/api/envelopes/{envelope}/shares`             | List shares (profile members only)                                                                                                                                                                           |
+| `GET`    | `/api/envelopes/{envelope}/shares`             | List shares — the owner row first (labeled `owner`), then explicit rows, each with an `explicit` flag (owner and profile co-members only)                                                                     |
 | `POST`   | `/api/envelopes/{envelope}/shares`             | Assign a permission to a profile member (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                                                                      |
 | `PATCH`  | `/api/envelopes/{envelope}/shares/{userId}`    | Change a member's permission (owner only; `owner` is rejected — use transfer-ownership); returns `200` with `{ shares: [...] }`                                                                              |
 | `DELETE` | `/api/envelopes/{envelope}/shares/{userId}`    | Revoke a share (owner only)                                                                                                                                                                                  |
@@ -121,10 +121,11 @@ data fetching.
   ledgers, but no transaction amounts unless they have at least `viewer`
   permission (planned budget amounts are budget data — see
   [Budget](budget.md)).
-- **Share** — a Google Drive-like drawer (right side, not a dialog) listing
-  the profile's members with their permission, allowing permission changes and
-  ownership transfer — no invites (see
-  [Shared Finances](shared-finances.md)).
+- **Share** — the unified Google Drive-like drawer (right side, not a dialog)
+  listing the envelope's explicit shares with the **owner row first**
+  (labeled **Owner**), a **Grant access** section picking members from the
+  owner's profile circle, permission changes, revoke and ownership transfer —
+  no invites (see [Shared Finances](shared-finances.md)).
 
 ## Integrity rules
 

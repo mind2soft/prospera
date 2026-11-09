@@ -11,7 +11,7 @@ import LedgerSelector from '@/components/Ledger/LedgerSelector.vue';
 import MonthCalendar from '@/components/Ledger/MonthCalendar.vue';
 import TransactionTable from '@/components/Ledger/TransactionTable.vue';
 import LedgerLoadingScreen from '@/components/Loading/LedgerLoadingScreen.vue';
-import ResourceShareDrawer from '@/components/share/ResourceShareDrawer.vue';
+import ShareDrawer from '@/components/share/ShareDrawer.vue';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -565,12 +565,13 @@ const onRemoveTransaction = (transactionId: number) => {
 
         <CreateLedgerDialog v-model:open="showCreate" @confirm="onCreate" />
 
-        <ResourceShareDrawer
+        <ShareDrawer
             v-if="ledgerId !== null"
             :open="showShare"
             :title="$t('ledger.share.title')"
             :transfer-resource="$t('ledger.share.resource')"
             :members="shareMembers"
+            :loading="sharesQuery.isPending.value"
             :current-user-id="meId"
             :can-manage="ledgerPermission === 'owner'"
             @update:open="showShare = $event"

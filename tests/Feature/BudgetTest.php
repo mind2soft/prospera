@@ -682,10 +682,26 @@ class BudgetTest extends TestCase
         $budget = $this->createBudget($this->user);
 
         $this->actingAs($this->member)->getJson("/api/budgets/{$budget->id}/shares")
-            ->assertOk()->assertJsonCount(2, 'shares');
+            ->assertOk()->assertJsonCount(2, 'shares')
+            ->assertJsonPath('shares.0.permission', 'owner')
+            ->assertJsonPath('shares.0.explicit', true)
+            // Members without a share row are implicit viewers and cannot
+            // be revoked (the Share drawer hides the revoke action).
+            ->assertJsonPath('shares.1.permission', 'viewer')
+            ->assertJsonPath('shares.1.explicit', false);
 
         $this->actingAs($this->stranger)->getJson("/api/budgets/{$budget->id}/shares")
             ->assertNotFound();
+    }
+
+    public function test_implicit_viewers_cannot_be_revoked(): void
+    {
+        $budget = $this->createBudget($this->user);
+
+        $this->actingAs($this->user)->deleteJson("/api/budgets/{$budget->id}/shares/{$this->member->id}")
+            ->assertNotFound();
+
+        $this->assertDatabaseCount('budget_permissions', 1);
     }
 
     public function test_ownership_can_be_transferred_to_a_member(): void

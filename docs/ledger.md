@@ -158,7 +158,7 @@ data fetching.
 | `GET`    | `/api/ledgers/{ledger}/transactions`       | Transactions filtered by `from_date` and `to_date` (query params). Rows on envelopes the requester lacks envelope-`viewer`+ permission on are **masked server-side**: `amount: null` + `masked: true` (metadata only — name, color, direction) |
 | `POST`   | `/api/ledgers/{ledger}/transactions`       | Add a transaction (`envelope_id`, `amount`, `event_at`) — ledger owner or contributor, who must also be contributor+ on the target envelope                                                                                                    |
 | `DELETE` | `/api/transactions/{transaction}`          | Delete a transaction (open ledgers only; ledger owner: any transaction; ledger contributor: own entries only; viewer: none)                                                                                                                    |
-| `GET`    | `/api/ledgers/{ledger}/shares`             | List shares (profile members only)                                                                                                                                                                                                             |
+| `GET`    | `/api/ledgers/{ledger}/shares`             | List shares — profile members with their effective permission and an `explicit` flag (`false` = implicit viewer, not revocable)                                                                                                               |
 | `POST`   | `/api/ledgers/{ledger}/shares`             | Assign a permission to a **profile member** (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                                                                                                    |
 | `PATCH`  | `/api/ledgers/{ledger}/shares/{userId}`    | Change a member's permission (owner only; `owner` is rejected — use transfer-ownership)                                                                                                                                                        |
 | `DELETE` | `/api/ledgers/{ledger}/shares/{userId}`    | Revoke a share                                                                                                                                                                                                                                 |
@@ -186,9 +186,11 @@ interface, an actions menu with:
 - **Close / Reopen** — toggles the ledger's read-only state.
 - **Delete** — deletes the ledger (and all of its transactions); asks for
   confirmation.
-- **Share** — a Google Drive-like drawer (right side, not a dialog) listing
-  the profile's members with their permission, allowing permission changes and
-  ownership transfer (see [Shared Finances](shared-finances.md)).
+- **Share** — the unified Google Drive-like drawer (right side, not a dialog)
+  listing the profile's members with their effective permission — the owner
+  row first, labeled **Owner**; permission changes and ownership transfer,
+  with revoke available only for members holding an explicit share row (see
+  [Shared Finances](shared-finances.md)).
 
 ### Calendar + transactions table
 

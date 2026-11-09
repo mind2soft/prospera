@@ -21,9 +21,11 @@ final class ResourcePermissionService
 {
     /**
      * The profile's members with their effective permission on the resource
-     * (row permission, or implicit viewer for members without a row).
+     * (row permission, or implicit viewer for members without a row). The
+     * `explicit` flag tells the Share drawer whether the member has an
+     * actual share row — implicit viewers cannot be revoked.
      *
-     * @return array<int, array<string, int|string>>
+     * @return array<int, array<string, int|string|bool>>
      */
     public function profilePermissions(FinancialProfile $profile, string $shareTable, string $resourceColumn, int $resourceId): array
     {
@@ -42,6 +44,7 @@ final class ResourcePermissionService
                 'name' => $member->name,
                 'email' => $member->email,
                 'permission' => $member->permission ?? ResourcePermissions::VIEWER,
+                'explicit' => $member->permission !== null,
             ])
             ->values()
             ->all();
@@ -49,15 +52,19 @@ final class ResourcePermissionService
 
     /**
      * The resource's explicit share rows with user info (user-owned
-     * resources have no implicit membership visibility).
+     * resources have no implicit membership visibility). When the resource
+     * owner is given, their row is listed first (labeled "owner" by the
+     * Share drawer) — the drawer always shows a people-with-access list
+     * anchored by the owner.
      *
-     * @return array<int, array<string, int|string>>
+     * @return array<int, array<string, int|string|bool>>
      */
-    public function explicitPermissions(string $shareTable, string $resourceColumn, int $resourceId): array
+    public function explicitPermissions(string $shareTable, string $resourceColumn, int $resourceId, ?User $owner = null): array
     {
-        return DB::table($shareTable)
+        $shares = DB::table($shareTable)
             ->join('users', 'users.id', '=', $shareTable.'.user_id')
             ->where($shareTable.'.'.$resourceColumn, $resourceId)
+            ->when($owner !== null, fn ($query) => $query->where('users.id', '!=', $owner->id))
             ->orderBy($shareTable.'.created_at')
             ->get(['users.id', 'users.name', 'users.email', $shareTable.'.permission'])
             ->map(fn ($member) => [
@@ -65,9 +72,22 @@ final class ResourcePermissionService
                 'name' => $member->name,
                 'email' => $member->email,
                 'permission' => $member->permission,
+                'explicit' => true,
             ])
             ->values()
             ->all();
+
+        if ($owner !== null) {
+            array_unshift($shares, [
+                'user_id' => $owner->id,
+                'name' => $owner->name,
+                'email' => $owner->email,
+                'permission' => ResourcePermissions::OWNER,
+                'explicit' => true,
+            ]);
+        }
+
+        return $shares;
     }
 
     /**

@@ -201,9 +201,16 @@ class EnvelopePermissionsTest extends TestCase
             'permission' => EnvelopePermission::PERMISSION_VIEWER,
         ]);
 
-        // The member (co-member of the owner) can list shares but not manage.
+        // The member (co-member of the owner) can list shares but not
+        // manage. The list anchors on the owner row, then explicit rows.
         $this->actingAs($this->member)->getJson("/api/envelopes/{$this->envelope->id}/shares")
-            ->assertOk()->assertJsonCount(1, 'shares');
+            ->assertOk()->assertJsonCount(2, 'shares')
+            ->assertJsonPath('shares.0.user_id', $this->owner->id)
+            ->assertJsonPath('shares.0.permission', 'owner')
+            ->assertJsonPath('shares.0.explicit', true)
+            ->assertJsonPath('shares.1.user_id', $this->member->id)
+            ->assertJsonPath('shares.1.permission', 'viewer')
+            ->assertJsonPath('shares.1.explicit', true);
 
         $this->actingAs($this->member)->patchJson("/api/envelopes/{$this->envelope->id}/shares/{$this->member->id}", [
             'permission' => 'contributor',
@@ -226,7 +233,7 @@ class EnvelopePermissionsTest extends TestCase
 
         $this->actingAs($this->owner)->patchJson("/api/envelopes/{$this->envelope->id}/shares/{$this->member->id}", [
             'permission' => 'contributor',
-        ])->assertOk()->assertJsonPath('shares.0.permission', 'contributor');
+        ])->assertOk()->assertJsonPath('shares.1.permission', 'contributor');
 
         $this->assertDatabaseHas('envelope_permissions', [
             'envelope_id' => $this->envelope->id,
@@ -241,6 +248,16 @@ class EnvelopePermissionsTest extends TestCase
             'envelope_id' => $this->envelope->id,
             'user_id' => $this->member->id,
         ]);
+    }
+
+    public function test_shares_always_include_the_owner_row(): void
+    {
+        // No explicit rows yet — the drawer still anchors on the owner.
+        $this->actingAs($this->owner)->getJson("/api/envelopes/{$this->envelope->id}/shares")
+            ->assertOk()->assertJsonCount(1, 'shares')
+            ->assertJsonPath('shares.0.user_id', $this->owner->id)
+            ->assertJsonPath('shares.0.permission', 'owner')
+            ->assertJsonPath('shares.0.explicit', true);
     }
 
     public function test_ownership_transfer_demotes_the_previous_owner_to_contributor(): void
