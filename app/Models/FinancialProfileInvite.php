@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
  * @property int $profile_id
  * @property string $invite_key
  * @property string $email
+ * @property string $role
  * @property int $invited_by
  * @property int|null $pending_user_id
  * @property Carbon $expires_at
@@ -22,7 +23,37 @@ use Illuminate\Support\Facades\DB;
  */
 class FinancialProfileInvite extends Model
 {
-    protected $fillable = ['profile_id', 'invite_key', 'email', 'invited_by', 'pending_user_id', 'expires_at'];
+    /** A member who can contribute but not manage the profile. */
+    public const ROLE_COLLABORATOR = 'collaborator';
+
+    /**
+     * The profile owner role — never grantable through invites (a profile
+     * has exactly one owner; ownership transfer stays in
+     * FinancialProfileController::transferOwnership). Defined for the
+     * role→membership mapping below.
+     */
+    public const ROLE_OWNER = 'owner';
+
+    /**
+     * The roles an invite may carry — validated on creation; anything else
+     * (`owner` included) is rejected.
+     *
+     * @var list<string>
+     */
+    public const GRANTABLE_ROLES = [self::ROLE_COLLABORATOR];
+
+    /**
+     * The role→membership mapping (`is_owner` pivot attribute per role key).
+     * Unknown role keys fall back to a non-owner membership.
+     *
+     * @var array<string, bool>
+     */
+    private const IS_OWNER_BY_ROLE = [
+        self::ROLE_COLLABORATOR => false,
+        self::ROLE_OWNER => true,
+    ];
+
+    protected $fillable = ['profile_id', 'invite_key', 'email', 'role', 'invited_by', 'pending_user_id', 'expires_at'];
 
     protected $casts = [
         'expires_at' => 'datetime',
@@ -73,6 +104,21 @@ class FinancialProfileInvite extends Model
     public function consume(): void
     {
         $this->delete();
+    }
+
+    /**
+     * The financial_profile_user pivot attributes granting this invite's
+     * role on membership grant. The role→membership mapping stays isolated
+     * here so future roles map cleanly; today every invited member joins as
+     * a collaborator (non-owner) — only grantable roles can reach an invite
+     * (creation validates against GRANTABLE_ROLES), so an invited membership
+     * can never make a profile's second owner.
+     *
+     * @return array<string, mixed>
+     */
+    public function membershipPivotAttributes(): array
+    {
+        return ['is_owner' => self::IS_OWNER_BY_ROLE[$this->role] ?? false];
     }
 
     /**
@@ -128,10 +174,10 @@ class FinancialProfileInvite extends Model
     }
 
     /**
-     * Invite context for the registration page (inviter's name, profile name
-     * and the locked email).
+     * Invite context for the registration page (inviter's name, profile
+     * name, the granted role and the locked email).
      *
-     * @return array{profile: string, inviter: string, email: string}
+     * @return array{profile: string, inviter: string, email: string, role: string}
      */
     public function context(): array
     {
@@ -139,6 +185,7 @@ class FinancialProfileInvite extends Model
             'profile' => $this->profile->name,
             'inviter' => $this->invitedBy->name,
             'email' => $this->email,
+            'role' => $this->role,
         ];
     }
 
@@ -146,7 +193,7 @@ class FinancialProfileInvite extends Model
      * Invite context for a raw key, or null for unknown, expired or reserved
      * keys.
      *
-     * @return array{profile: string, inviter: string, email: string}|null
+     * @return array{profile: string, inviter: string, email: string, role: string}|null
      */
     public static function contextFor(?string $inviteKey): ?array
     {
@@ -165,8 +212,13 @@ class FinancialProfileInvite extends Model
 
     /**
      * Grant the pending membership reserved by the given (now verified)
-     * user, then consume the invite. No-op when there is no reservation,
-     * the invite was revoked, or the email no longer matches.
+     * user, then consume the invite.
+     *
+     * Accounts that register through an invite skip the personal default
+     * profile seeding (docs/shared-finances.md — invites), so whenever the
+     * pending grant does not happen — the invite was revoked, pruned, or the
+     * account's email changed before verification — the account is seeded
+     * with its own default profile here to keep it usable.
      */
     public static function completePendingFor(User $user): void
     {
@@ -178,16 +230,33 @@ class FinancialProfileInvite extends Model
                 ->first();
 
             if ($invite === null) {
+                self::seedDefaultProfileForInviteRegistration($user);
+
                 return;
             }
 
             if (mb_strtolower($invite->email) === mb_strtolower($user->email)
                 && ! $invite->profile->isMember($user)) {
-                $invite->profile->members()->attach($user->id, ['is_owner' => false]);
+                $invite->profile->members()->attach($user->id, $invite->membershipPivotAttributes());
+            } else {
+                self::seedDefaultProfileForInviteRegistration($user);
             }
 
             $invite->consume();
         });
+    }
+
+    /**
+     * Seed the personal default profile for an account that registered
+     * through an invite and ended up without any profile membership — only
+     * invite registrations run with the default-profile seeding skipped, so
+     * an account that already has a profile is left untouched.
+     */
+    private static function seedDefaultProfileForInviteRegistration(User $user): void
+    {
+        if ($user->profiles()->doesntExist()) {
+            FinancialProfile::createDefaultFor($user);
+        }
     }
 
     /**

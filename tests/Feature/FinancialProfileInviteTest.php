@@ -2,14 +2,17 @@
 
 namespace Tests\Feature;
 
+use App\Mail\ProfileInvite;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileInvite;
 use App\Models\User;
+use App\Settings\NotificationSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class FinancialProfileInviteTest extends TestCase
@@ -29,6 +32,8 @@ class FinancialProfileInviteTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        Mail::fake();
 
         $this->owner = User::factory()->create();
         $this->member = User::factory()->create();
@@ -68,6 +73,28 @@ class FinancialProfileInviteTest extends TestCase
         $rawKey = $response->json('url');
         $this->assertMatchesRegularExpression('#^/invites/[0-9a-f]{40}$#', $rawKey);
         $this->assertSame(FinancialProfileInvite::keyHash(substr((string) $rawKey, strlen('/invites/'))), $invite->invite_key);
+        $this->assertSame('collaborator', $invite->role);
+        $this->assertSame('collaborator', $response->json('invite.role'));
+    }
+
+    public function test_the_invite_role_must_be_grantable(): void
+    {
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'invitee@example.com',
+            'role' => 'owner',
+        ])->assertUnprocessable()->assertJsonValidationErrors('role');
+
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'invitee@example.com',
+            'role' => 'emperor',
+        ])->assertUnprocessable()->assertJsonValidationErrors('role');
+
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'invitee@example.com',
+            'role' => FinancialProfileInvite::ROLE_COLLABORATOR,
+        ])->assertCreated();
+
+        $this->assertSame('collaborator', FinancialProfileInvite::where('email', 'invitee@example.com')->sole()->role);
     }
 
     public function test_only_the_owner_can_create_invites(): void
@@ -112,6 +139,7 @@ class FinancialProfileInviteTest extends TestCase
         $row = $invites->firstWhere('id', $pending->id);
         $this->assertNotNull($row);
         $this->assertEquals('pending@example.com', $row['email']);
+        $this->assertEquals('collaborator', $row['role']);
         $this->assertArrayNotHasKey('invite_key', $row);
         $this->assertFalse($row['awaiting_verification']);
         $this->assertNotNull($row['expires_at']);
@@ -139,8 +167,164 @@ class FinancialProfileInviteTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // Invite emails (issue #39)
+    // ------------------------------------------------------------------
+
+    public function test_creating_an_invite_emails_the_new_recipient_an_account_creation_invite(): void
+    {
+        $response = $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'stranger@example.com',
+        ])->assertCreated();
+
+        $rawKey = substr((string) $response->json('url'), strlen('/invites/'));
+
+        Mail::assertQueued(ProfileInvite::class, 1);
+        Mail::assertQueued(fn (ProfileInvite $mail) => $mail->hasTo('stranger@example.com')
+            && $mail->inviterName === $this->owner->name
+            && $mail->inviterEmail === $this->owner->email
+            && $mail->profileName === 'Family'
+            && $mail->role === 'collaborator'
+            && str_ends_with((string) $mail->inviteUrl, "/invites/{$rawKey}")
+            && $mail->acceptUrl === null
+            && $mail->recipientUserId === null
+            && $mail->locale === 'en'
+            && $mail->envelope()->subject
+                === "[Prospera] {$this->owner->name} shared their financial profile \"Family\" with you");
+    }
+
+    public function test_creating_an_invite_emails_the_registered_recipient_a_one_click_accept(): void
+    {
+        $this->profile->members()->detach($this->member->id);
+
+        $response = $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => $this->member->email,
+        ])->assertCreated();
+
+        $rawKey = substr((string) $response->json('url'), strlen('/invites/'));
+
+        Mail::assertQueued(ProfileInvite::class, 1);
+        Mail::assertQueued(fn (ProfileInvite $mail) => $mail->hasTo($this->member->email)
+            && $mail->inviterName === $this->owner->name
+            && $mail->profileName === 'Family'
+            && $mail->role === 'collaborator'
+            && str_ends_with((string) $mail->inviteUrl, "/invites/{$rawKey}")
+            && str_ends_with((string) $mail->acceptUrl, "/invites/{$rawKey}/accept")
+            && $mail->recipientUserId === $this->member->id);
+    }
+
+    public function test_the_one_click_accept_email_is_localized_per_recipient(): void
+    {
+        $this->profile->members()->detach($this->member->id);
+        $this->member->forceFill(['locale' => 'fr'])->save();
+
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => $this->member->email,
+        ])->assertCreated();
+
+        Mail::assertQueued(fn (ProfileInvite $mail) => $mail->hasTo($this->member->email)
+            && $mail->recipientUserId === $this->member->id
+            && $mail->locale === 'fr');
+    }
+
+    public function test_re_inviting_an_email_sends_a_fresh_email(): void
+    {
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'invitee@example.com',
+        ])->assertCreated();
+
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'INVITEE@example.com',
+        ])->assertCreated();
+
+        // Every share event sends exactly one email — even when the invite
+        // replaces a previous unreserved one (case-insensitive).
+        Mail::assertQueued(ProfileInvite::class, 2);
+    }
+
+    public function test_invite_emails_respect_the_notification_toggle(): void
+    {
+        $this->profile->members()->detach($this->member->id);
+        $this->member->notification_settings = NotificationSettings::default()
+            ->with([NotificationSettings::PROFILE_INVITE => false]);
+        $this->member->save();
+
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => $this->member->email,
+        ])->assertCreated();
+
+        Mail::assertNothingQueued();
+    }
+
+    public function test_queued_invite_emails_skip_delivery_when_the_recipient_opts_out(): void
+    {
+        // Bypass the Mail::fake() from setUp: these tests exercise the
+        // mailable's own send-time gate against the array transport.
+        $this->app->forgetInstance('mailer');
+        $this->app->forgetInstance('mail.manager');
+
+        $transport = $this->app['mailer']->getSymfonyTransport();
+
+        $optOut = NotificationSettings::default()->with([NotificationSettings::PROFILE_INVITE => false]);
+        $this->member->forceFill(['notification_settings' => $optOut])->save();
+
+        $mail = new ProfileInvite(
+            inviterName: 'Owner',
+            inviterEmail: 'owner@example.com',
+            profileName: 'Family',
+            role: 'collaborator',
+            inviteUrl: 'https://prospera.test/invites/key',
+            acceptUrl: 'https://prospera.test/invites/key/accept',
+            expiresAt: now()->addHours(48),
+            recipientUserId: $this->member->id,
+        );
+        $mail->to($this->member->email)->send($this->app['mailer']);
+
+        // The gate is checked at send time, inside the queued send.
+        $this->assertCount(0, $transport->messages());
+    }
+
+    public function test_queued_invite_emails_deliver_when_the_recipient_has_not_opted_out(): void
+    {
+        // Bypass the Mail::fake() from setUp (see the opt-out test above).
+        $this->app->forgetInstance('mailer');
+        $this->app->forgetInstance('mail.manager');
+
+        $transport = $this->app['mailer']->getSymfonyTransport();
+
+        $mail = new ProfileInvite(
+            inviterName: 'Owner',
+            inviterEmail: 'owner@example.com',
+            profileName: 'Family',
+            role: 'collaborator',
+            inviteUrl: 'https://prospera.test/invites/key',
+            acceptUrl: 'https://prospera.test/invites/key/accept',
+            expiresAt: now()->addHours(48),
+            recipientUserId: $this->member->id,
+        );
+        $mail->to($this->member->email)->send($this->app['mailer']);
+
+        $this->assertCount(1, $transport->messages());
+
+        $body = $transport->messages()[0]->toString();
+
+        $this->assertStringContainsString('shared their financial profile "Family" with you', $body);
+        $this->assertStringContainsString('as a collaborator', $body);
+        $this->assertStringContainsString('ignore this message', $body);
+        $this->assertStringContainsString('https://prospera.test/invites/key/accept', $body);
+    }
+
+    // ------------------------------------------------------------------
     // Validation endpoint
     // ------------------------------------------------------------------
+
+    public function test_the_validation_endpoint_returns_the_role(): void
+    {
+        $this->createInvite();
+
+        $this->getJson("/api/invites/{$this->key}")
+            ->assertOk()
+            ->assertJsonPath('invite.role', 'collaborator');
+    }
 
     public function test_the_validation_endpoint_returns_the_profile_and_inviter(): void
     {
@@ -257,6 +441,148 @@ class FinancialProfileInviteTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // One-click accept link (issue #39)
+    // ------------------------------------------------------------------
+
+    public function test_the_one_click_accept_link_accepts_the_matching_signed_in_user(): void
+    {
+        $invite = $this->createInvite(email: $this->member->email);
+        $this->profile->members()->detach($this->member->id);
+
+        $response = $this->actingAs($this->member)->get("/invites/{$this->key}/accept");
+
+        $response->assertRedirect(route('dashboard', absolute: false));
+        $this->assertDatabaseHas('financial_profile_user', [
+            'profile_id' => $this->profile->id,
+            'user_id' => $this->member->id,
+            'is_owner' => false,
+        ]);
+        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
+    }
+
+    public function test_the_one_click_accept_link_flashes_a_success_toast(): void
+    {
+        $this->createInvite(email: $this->member->email);
+        $this->profile->members()->detach($this->member->id);
+
+        $response = $this->actingAs($this->member)
+            ->followingRedirects()
+            ->get("/invites/{$this->key}/accept");
+
+        $page = $response->viewData('page');
+        $this->assertSame('success', $page['flash']['toast']['type'] ?? null);
+    }
+
+    public function test_the_one_click_accept_link_rejects_other_users(): void
+    {
+        $invite = $this->createInvite(email: 'invitee@example.com');
+        $visitor = User::factory()->create();
+
+        $response = $this->actingAs($visitor)
+            ->followingRedirects()
+            ->get("/invites/{$this->key}/accept");
+
+        // Falls back to the landing page (the signed-in accept view) with
+        // the mismatch error, behaving exactly as today.
+        $response->assertOk()->assertInertia(fn ($page) => $page->component('auth/Register'));
+
+        $page = $response->viewData('page');
+        $this->assertSame('error', $page['flash']['toast']['type'] ?? null);
+        $this->assertSame(__('This invite was issued to another email address.'), $page['flash']['toast']['message'] ?? null);
+
+        $this->assertDatabaseMissing('financial_profile_user', [
+            'profile_id' => $this->profile->id,
+            'user_id' => $visitor->id,
+        ]);
+        $this->assertDatabaseHas('financial_profile_invites', ['id' => $invite->id]);
+    }
+
+    public function test_the_one_click_accept_link_redirects_guests_to_sign_in(): void
+    {
+        $this->createInvite(email: $this->member->email);
+
+        $response = $this->get("/invites/{$this->key}/accept");
+
+        // The auth middleware redirects guests to the sign-in page with the
+        // accept URL preserved as the intended destination: signing in
+        // completes the accept step.
+        $response->assertRedirect(route('login'));
+        $this->assertStringEndsWith(
+            "/invites/{$this->key}/accept",
+            (string) session('url.intended'),
+        );
+    }
+
+    public function test_the_one_click_accept_link_sends_unverified_users_to_the_verification_notice(): void
+    {
+        $unverified = User::factory()->unverified()->create();
+        $this->createInvite(email: $unverified->email, key: 'unverified-key');
+
+        $response = $this->actingAs($unverified)->get('/invites/unverified-key/accept');
+
+        // The `verified` middleware bounces the matching but unverified
+        // account to the verification notice; the invite is untouched.
+        $response->assertRedirect(route('verification.notice'));
+        $this->assertDatabaseMissing('financial_profile_user', [
+            'profile_id' => $this->profile->id,
+            'user_id' => $unverified->id,
+        ]);
+        $this->assertDatabaseHas('financial_profile_invites', ['invite_key' => FinancialProfileInvite::keyHash('unverified-key')]);
+    }
+
+    public function test_the_one_click_accept_link_falls_back_to_the_landing_page_for_expired_invites(): void
+    {
+        $this->createInvite(email: 'invitee@example.com', expiresAt: now()->subMinute());
+        $visitor = User::factory()->create();
+
+        $response = $this->actingAs($visitor)
+            ->followingRedirects()
+            ->get("/invites/{$this->key}/accept");
+
+        $response->assertOk()->assertInertia(fn ($page) => $page->component('auth/Register')->where('invite', null));
+
+        $page = $response->viewData('page');
+        $this->assertSame(__('This invite has expired.'), $page['flash']['toast']['message'] ?? null);
+
+        $this->assertDatabaseMissing('financial_profile_user', [
+            'profile_id' => $this->profile->id,
+            'user_id' => $visitor->id,
+        ]);
+    }
+
+    public function test_the_one_click_accept_link_falls_back_to_the_landing_page_for_reserved_invites(): void
+    {
+        $invite = $this->createInvite(email: 'newbie@example.com');
+        $invitee = User::factory()->create();
+        $invite->forceFill(['pending_user_id' => $invitee->id])->save();
+
+        $this->actingAs($this->member)->get("/invites/{$this->key}/accept")
+            ->assertRedirect(route('invites.landing', ['inviteKey' => $this->key]));
+
+        // The reservation is untouched — the invite can't be used by anyone.
+        $this->assertDatabaseHas('financial_profile_invites', [
+            'id' => $invite->id,
+            'pending_user_id' => $invitee->id,
+        ]);
+    }
+
+    public function test_the_one_click_accept_link_reports_existing_members(): void
+    {
+        $invite = $this->createInvite(email: $this->member->email);
+
+        $response = $this->actingAs($this->member)
+            ->followingRedirects()
+            ->get("/invites/{$this->key}/accept");
+
+        $page = $response->viewData('page');
+        $this->assertSame('error', $page['flash']['toast']['type'] ?? null);
+        $this->assertSame(__('You are already a member of this profile.'), $page['flash']['toast']['message'] ?? null);
+
+        // The invite is not consumed by the failed accept.
+        $this->assertDatabaseHas('financial_profile_invites', ['id' => $invite->id]);
+    }
+
+    // ------------------------------------------------------------------
     // Registration through an invite
     // ------------------------------------------------------------------
 
@@ -288,21 +614,82 @@ class FinancialProfileInviteTest extends TestCase
         $user->markEmailAsVerified();
         event(new Verified($user));
 
-        // Member of the invited profile...
+        // Member of the invited profile, and it is their only profile: no
+        // personal "Default profile" is created for invite registrations.
         $this->assertDatabaseHas('financial_profile_user', [
             'profile_id' => $this->profile->id,
             'user_id' => $user->id,
             'is_owner' => false,
         ]);
-        // ...and owner of their own default profile.
-        $defaultProfile = FinancialProfile::where('name', 'Default profile')->firstOrFail();
-        $this->assertTrue($defaultProfile->is_default);
+        $this->assertDatabaseMissing('financial_profiles', ['name' => 'Default profile']);
+        $this->assertSame(
+            [$this->profile->id],
+            $user->profiles()->pluck('financial_profiles.id')->all(),
+        );
+        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
+    }
+
+    public function test_a_discarded_invite_registration_still_seeds_a_default_profile(): void
+    {
+        $invite = $this->createInvite(email: 'newbie@example.com');
+
+        $this->post('/register', [
+            'name' => 'New User',
+            'email' => 'newbie@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'invite_key' => self::RAW_KEY,
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        // The account changes its email before verifying: the invite is
+        // discarded (no membership), and the account still gets its own
+        // default profile.
+        $user = User::where('email', 'newbie@example.com')->firstOrFail();
+        $user->forceFill(['email' => 'changed@example.com'])->save();
+
+        event(new Verified($user));
+
+        $this->assertDatabaseMissing('financial_profile_user', [
+            'profile_id' => $this->profile->id,
+            'user_id' => $user->id,
+        ]);
+        $defaultProfile = FinancialProfile::where('name', FinancialProfile::DEFAULT_NAME)->firstOrFail();
         $this->assertDatabaseHas('financial_profile_user', [
             'profile_id' => $defaultProfile->id,
             'user_id' => $user->id,
             'is_owner' => true,
         ]);
         $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
+    }
+
+    public function test_a_revoked_reservation_still_seeds_a_default_profile(): void
+    {
+        $invite = $this->createInvite(email: 'newbie@example.com');
+
+        $this->post('/register', [
+            'name' => 'New User',
+            'email' => 'newbie@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'invite_key' => self::RAW_KEY,
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        // The owner revokes the reservation before the account verifies.
+        $user = User::where('email', 'newbie@example.com')->firstOrFail();
+        $invite->delete();
+
+        event(new Verified($user));
+
+        $this->assertDatabaseMissing('financial_profile_user', [
+            'profile_id' => $this->profile->id,
+            'user_id' => $user->id,
+        ]);
+        $defaultProfile = FinancialProfile::where('name', FinancialProfile::DEFAULT_NAME)->firstOrFail();
+        $this->assertDatabaseHas('financial_profile_user', [
+            'profile_id' => $defaultProfile->id,
+            'user_id' => $user->id,
+            'is_owner' => true,
+        ]);
     }
 
     public function test_registration_without_an_invite_still_creates_a_default_profile(): void
@@ -407,7 +794,8 @@ class FinancialProfileInviteTest extends TestCase
             ->component('auth/Register')
             ->where('invite.profile', 'Family')
             ->where('invite.inviter', $this->owner->name)
-            ->where('invite.email', 'newbie@example.com'));
+            ->where('invite.email', 'newbie@example.com')
+            ->where('invite.role', 'collaborator'));
     }
 
     public function test_the_invite_landing_route_renders_the_registration_page_with_the_context(): void
@@ -419,7 +807,8 @@ class FinancialProfileInviteTest extends TestCase
             ->component('auth/Register')
             ->where('invite.profile', 'Family')
             ->where('invite.inviter', $this->owner->name)
-            ->where('invite.email', 'newbie@example.com'));
+            ->where('invite.email', 'newbie@example.com')
+            ->where('invite.role', 'collaborator'));
     }
 
     public function test_the_invite_landing_route_rejects_unknown_keys(): void

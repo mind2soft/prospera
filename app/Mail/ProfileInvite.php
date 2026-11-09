@@ -1,0 +1,112 @@
+<?php
+
+namespace App\Mail;
+
+use App\Models\User;
+use App\Settings\NotificationSettings;
+use Carbon\CarbonInterface;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Content;
+use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Queue\SerializesModels;
+
+/**
+ * A financial profile share notification, sent when a profile owner invites
+ * an email address (issue #39). One email per share event — re-issuing a
+ * pending invite sends a new one. Two variants in one plain-text view:
+ *
+ * - The email is not linked to an account: the mail invites the recipient to
+ *   create an account through the invite link (registration carries the
+ *   invite, so the shared profile becomes their only profile).
+ * - The email matches a registered account: the mail carries a **one-click
+ *   accept link** that pre-authorizes the matching signed-in user; the mail
+ *   states that ignoring the request declines the share.
+ *
+ * Queued, localized per recipient (`users.locale`, fallback `en`), and
+ * gated through the `profile_invite` notification toggle — checked at
+ * dispatch time and again at send time (inside the queued send), per
+ * docs/notifications.md. Recipients without an account have no settings to
+ * honor and always receive the invite. The invite key hash never appears in
+ * any email.
+ */
+class ProfileInvite extends Mailable implements ShouldQueue
+{
+    use Queueable, SerializesModels;
+
+    /**
+     * Create a new message instance.
+     *
+     * @param  CarbonInterface  $expiresAt  when the invite stops working (now + 48h)
+     * @param  string|null  $acceptUrl  the one-click accept link — null for
+     *                                  recipients without an account
+     * @param  int|null  $recipientUserId  the registered recipient, for the
+     *                                     send-time notification gate — null
+     *                                     when the email has no account yet
+     */
+    public function __construct(
+        public readonly string $inviterName,
+        public readonly string $inviterEmail,
+        public readonly string $profileName,
+        public readonly string $role,
+        public readonly string $inviteUrl,
+        public readonly ?string $acceptUrl = null,
+        public readonly ?CarbonInterface $expiresAt = null,
+        public readonly ?int $recipientUserId = null,
+        string $locale = 'en',
+    ) {
+        $this->locale($locale);
+    }
+
+    /**
+     * Get the message envelope.
+     */
+    public function envelope(): Envelope
+    {
+        return new Envelope(
+            subject: __('[Prospera] :inviter shared their financial profile ":profile" with you', [
+                'inviter' => $this->inviterName,
+                'profile' => $this->profileName,
+            ]),
+        );
+    }
+
+    /**
+     * Get the message content definition.
+     */
+    public function content(): Content
+    {
+        return new Content(
+            text: 'mail.profile-invite',
+            with: [
+                'inviterName' => $this->inviterName,
+                'inviterEmail' => $this->inviterEmail,
+                'profileName' => $this->profileName,
+                'role' => $this->role,
+                'inviteUrl' => $this->inviteUrl,
+                'acceptUrl' => $this->acceptUrl,
+                'expiresAt' => $this->expiresAt,
+            ],
+        );
+    }
+
+    /**
+     * Deliver the message — unless the recipient opted out of profile
+     * invitation emails. The gate is re-checked here, at send time, because
+     * settings may change while the message sits in the queue.
+     */
+    public function send($mailer)
+    {
+        if ($this->recipientUserId !== null) {
+            $recipient = User::find($this->recipientUserId);
+
+            if ($recipient === null
+                || ! $recipient->wantsNotification(NotificationSettings::PROFILE_INVITE)) {
+                return null;
+            }
+        }
+
+        return parent::send($mailer);
+    }
+}

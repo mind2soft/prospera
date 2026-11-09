@@ -38,6 +38,9 @@ final class NotificationSettings implements Arrayable
     /** Recorded spending exceeded an envelope's monthly allocation. */
     public const ENVELOPE_LIMIT_EXCEEDED = 'envelope_limit_exceeded';
 
+    /** Someone shared a financial profile with you (the invite email). */
+    public const PROFILE_INVITE = 'profile_invite';
+
     /**
      * The togglable notification types (everything but the master switch).
      *
@@ -48,6 +51,7 @@ final class NotificationSettings implements Arrayable
         self::LEDGER_EXPIRED,
         self::CONTRIBUTOR_TRANSACTIONS,
         self::ENVELOPE_LIMIT_EXCEEDED,
+        self::PROFILE_INVITE,
     ];
 
     /** @var list<string> */
@@ -59,6 +63,7 @@ final class NotificationSettings implements Arrayable
         public readonly bool $ledgerExpired = true,
         public readonly bool $contributorTransactions = true,
         public readonly bool $envelopeLimitExceeded = true,
+        public readonly bool $profileInvite = true,
     ) {}
 
     /**
@@ -84,6 +89,7 @@ final class NotificationSettings implements Arrayable
             ledgerExpired: (bool) ($settings[self::LEDGER_EXPIRED] ?? true),
             contributorTransactions: (bool) ($settings[self::CONTRIBUTOR_TRANSACTIONS] ?? true),
             envelopeLimitExceeded: (bool) ($settings[self::ENVELOPE_LIMIT_EXCEEDED] ?? true),
+            profileInvite: (bool) ($settings[self::PROFILE_INVITE] ?? true),
         );
     }
 
@@ -98,6 +104,7 @@ final class NotificationSettings implements Arrayable
             ledgerExpired: $values[self::LEDGER_EXPIRED] ?? $this->ledgerExpired,
             contributorTransactions: $values[self::CONTRIBUTOR_TRANSACTIONS] ?? $this->contributorTransactions,
             envelopeLimitExceeded: $values[self::ENVELOPE_LIMIT_EXCEEDED] ?? $this->envelopeLimitExceeded,
+            profileInvite: $values[self::PROFILE_INVITE] ?? $this->profileInvite,
         );
     }
 
@@ -118,6 +125,7 @@ final class NotificationSettings implements Arrayable
             self::LEDGER_EXPIRED => $this->ledgerExpired,
             self::CONTRIBUTOR_TRANSACTIONS => $this->contributorTransactions,
             self::ENVELOPE_LIMIT_EXCEEDED => $this->envelopeLimitExceeded,
+            self::PROFILE_INVITE => $this->profileInvite,
         };
     }
 
@@ -132,6 +140,7 @@ final class NotificationSettings implements Arrayable
             self::LEDGER_EXPIRED => $this->ledgerExpired,
             self::CONTRIBUTOR_TRANSACTIONS => $this->contributorTransactions,
             self::ENVELOPE_LIMIT_EXCEEDED => $this->envelopeLimitExceeded,
+            self::PROFILE_INVITE => $this->profileInvite,
         ];
     }
 }

@@ -24,6 +24,7 @@ final class NotificationSettingsTest extends TestCase
             'ledger_expired' => true,
             'contributor_transactions' => true,
             'envelope_limit_exceeded' => true,
+            'profile_invite' => true,
         ]);
     }
 

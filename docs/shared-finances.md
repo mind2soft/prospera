@@ -8,7 +8,9 @@ Financial profiles group users. Budgets and ledgers are scoped to a profile —
 profile membership is what makes data visible between users.
 
 Profiles are managed in the user settings called "Profiles". By default, when a
-user creates an account, they get an owned "Default profile" created.
+user creates an account, they get an owned "Default profile" created — the
+exception is **registration through an invite** (see below): the account skips
+the default profile and joins the shared profile instead.
 
 A profile has exactly **one owner**; other members are **collaborators**.
 
@@ -17,6 +19,26 @@ A profile has exactly **one owner**; other members are **collaborators**.
 Invites are **link-based** (`FinancialProfileInvite`): the owner generates an
 invite for an email and gets a link containing a hash key (`invite_key`).
 
+- Invites carry the **role** the invitee will be granted — only
+  `collaborator` is grantable today (a profile has exactly one owner;
+  ownership transfer never happens through invites). The role appears in the
+  invite API responses, the landing-page context and the invitation email.
+- Every share event sends the invitee one **queued invitation email** (see
+  [Notifications](notifications.md)):
+
+  - When the email is **not linked to an account**, the mail invites the
+    recipient to create an account through the invite link (inviter name and
+    email, profile name, invite URL, 48 h expiry).
+  - When the email matches a **registered account**, the mail carries a
+    **one-click accept link** (`GET /invites/{inviteKey}/accept`): opening
+    it while signed in with the matching account email accepts the invite
+    straight through and lands on the dashboard. The mail states the
+    attributed role and that **ignoring the request declines the share**.
+    Guests are routed to the sign-in page first (the accept completes after
+    signing in), and every other case — email mismatch, expired, reserved,
+    already a member — falls back to the invite landing page, behaving
+    exactly as opening the plain invite link. Registered recipients can turn
+    these emails off via Settings → Notifications ("Profile invitations").
 - An **existing user** accepts by opening the link while signed in — the invite
   must match their account email.
 - A **new user** registers through the invite link; the invite key is carried
@@ -24,7 +46,8 @@ invite for an email and gets a link containing a hash key (`invite_key`).
   invite is **reserved** for the new account (`pending_user_id`), and
   membership is granted (and the invite consumed) when the account **verifies
   its email**. If the email was changed before verification, or the invite was
-  revoked, no membership is granted. A reserved invite can't be used by anyone
+  revoked, no membership is granted — the account is then seeded with its own
+  default profile (see below). A reserved invite can't be used by anyone
   else (treated as invalid).
 - Re-inviting the same email (case-insensitive) **replaces** the previous
   unreserved invite for that profile — the raw link key is never stored, so
@@ -44,12 +67,19 @@ invite for an email and gets a link containing a hash key (`invite_key`).
 ### Registration through an invite
 
 - `GET /invites/{inviteKey}` renders the registration page with invite
-  context: the inviter's name, the profile name, and the invite email
-  pre-filled and **locked**.
+  context: the inviter's name, the profile name, the granted role, and the
+  invite email pre-filled and **locked**.
 - The registration endpoint accepts `invite_key` alongside the normal
   registration fields.
 - On success the invite is **reserved** for the new account; it is consumed
   and membership is created once the account verifies its email.
+- The personal "Default profile" is **not** created for registrations that
+  carry a usable invite: the shared profile becomes the new account's only
+  profile (and therefore its default experience — the profile switcher falls
+  back to the only profile). If the invite is gone by the time the account
+  verifies (revoked, pruned, or the email changed), no membership is granted
+  and the account is seeded with its own default profile then — an account
+  never ends up with zero profiles.
 - An invalid, expired, reserved or email-mismatched invite shows an explicit error
   page.
 
@@ -185,6 +215,7 @@ type FinancialProfileInvite = {
     invite_key: string; // invite hash (never exposed by the API)
     pending_user_id: number | null; // FK users.id — new account the invite is reserved for until email verification
     email: string;
+    role: string; // the role granted on acceptance — only 'collaborator' today
     invited_by: number; // FK users.id (the owner)
     expires_at: string; // ISO date time
     created_at: string; // ISO date time
@@ -215,11 +246,12 @@ data fetching.
 | `GET`    | `/api/profiles/{profile}/members`            | List members (id, name, email, is_owner, joined_at)                                                                                                                                                                                                                                                                                    |
 | `DELETE` | `/api/profiles/{profile}/members/{userId}`   | Remove a member (owner only; not the owner) or leave voluntarily (self). Resources owned by the removed member auto-transfer to the profile owner (except envelopes still referenced by another of their profiles — see [Transfer of ownership](#transfer-of-ownership)); their permission rows on the profile's resources are deleted |
 | `POST`   | `/api/profiles/{profile}/transfer-ownership` | Transfer ownership to a member (`user_id`); the previous owner becomes a collaborator                                                                                                                                                                                                                                                  |
-| `GET`    | `/api/profiles/{profile}/invites`            | List pending invites (`id`, `email`, `awaiting_verification`, `expires_at`)                                                                                                                                                                                                                                                            |
-| `POST`   | `/api/profiles/{profile}/invites`            | Create an invite (`email`) → returns the invite link; replaces a previous unreserved invite for the same email (case-insensitive); `422` on `email` if already a member                                                                                                                                                                |
+| `GET`    | `/api/profiles/{profile}/invites`            | List pending invites (`id`, `email`, `role`, `awaiting_verification`, `expires_at`)                                                                                                                                                                                                                                                    |
+| `POST`   | `/api/profiles/{profile}/invites`            | Create an invite (`email`, optional `role` — `collaborator` by default, only `collaborator` is grantable) → returns the invite link and queues the invitation email; replaces a previous unreserved invite for the same email (case-insensitive); `422` on `email` if already a member; rate-limited (the endpoint now triggers outbound email) |
 | `DELETE` | `/api/profiles/{profile}/invites/{invite}`   | Revoke a pending invite                                                                                                                                                                                                                                                                                                                |
 | `GET`    | `/api/invites/{inviteKey}`                   | Public invite validation (rate-limited); `404` when invalid or reserved, `410` expired                                                                                                                                                                                                                                                 |
 | `POST`   | `/api/invites/{inviteKey}/accept`            | Accept an invite (signed-in user; the invite email must match the account email; rate-limited)                                                                                                                                                                                                                                         |
+| `GET`    | `/invites/{inviteKey}/accept`                | One-click accept from the invitation email (signed-in + verified user with a matching account email → accepts and lands on the dashboard; guests go to the sign-in page and complete the accept after; all other cases fall back to the invite landing page; rate-limited)                                                              |
 
 The invite link is the frontend route `/invites/{inviteKey}`: existing users
 get an accept confirmation; new users are routed to registration with the key

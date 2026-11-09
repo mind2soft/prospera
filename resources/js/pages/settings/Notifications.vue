@@ -53,6 +53,11 @@ const TOGGLES = [
         description:
             'settings.notifications.envelope_limit_exceededDescription',
     },
+    {
+        key: 'profile_invite',
+        label: 'settings.notifications.profile_invite',
+        description: 'settings.notifications.profile_inviteDescription',
+    },
 ] as const satisfies ReadonlyArray<{
     key: keyof NotificationSettings;
     label: string;

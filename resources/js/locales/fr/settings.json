@@ -45,6 +45,8 @@
             "contributor_transactionsDescription": "Un autre utilisateur enregistre une transaction dans un grand livre dont vous êtes le propriétaire.",
             "envelope_limit_exceeded": "Limite d'enveloppe dépassée",
             "envelope_limit_exceededDescription": "Les dépenses d'une enveloppe dépassent son allocation sur le budget publié du mois.",
+            "profile_invite": "Invitations de profil",
+            "profile_inviteDescription": "Quelqu'un partage un profil financier avec vous (les invitations que vous envoyez sont toujours remises).",
             "allOff": "Toutes les notifications sont désactivées — activez « Activer les notifications par e-mail » pour en recevoir.",
             "saveFailed": "Impossible d'enregistrer vos paramètres de notification."
         },

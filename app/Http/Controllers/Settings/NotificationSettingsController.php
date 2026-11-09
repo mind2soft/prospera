@@ -34,6 +34,7 @@ class NotificationSettingsController extends Controller
             NotificationSettings::LEDGER_EXPIRED => ['required', 'boolean'],
             NotificationSettings::CONTRIBUTOR_TRANSACTIONS => ['required', 'boolean'],
             NotificationSettings::ENVELOPE_LIMIT_EXCEEDED => ['required', 'boolean'],
+            NotificationSettings::PROFILE_INVITE => ['required', 'boolean'],
         ]);
 
         $settings = $request->user()->notification_settings->with($validated);

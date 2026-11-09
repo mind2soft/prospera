@@ -32,6 +32,15 @@ Route::get('invites/{inviteKey}', [FinancialProfileInviteController::class, 'lan
     ->middleware('throttle:invites');
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    // One-click accept from the invitation email: the signed-in user whose
+    // account email matches the invite is accepted straight through; guests
+    // are redirected to the sign-in page (the auth middleware preserves the
+    // intended URL), unverified users to the verification notice, and every
+    // other case falls back to the invite landing page.
+    Route::get('invites/{inviteKey}/accept', [FinancialProfileInviteController::class, 'acceptViaLink'])
+        ->name('invites.accept-link')
+        ->middleware('throttle:invites');
+
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
     Route::inertia('budget', 'Budget')->name('budget');
     Route::inertia('ledger', 'Ledger')->name('ledger');
@@ -55,7 +64,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::delete('{profile}/members/{user}', [FinancialProfileController::class, 'removeMember'])->name('members.destroy')->whereNumber('user');
             Route::post('{profile}/transfer-ownership', [FinancialProfileController::class, 'transferOwnership'])->name('transfer-ownership');
 
-            Route::post('{profile}/invites', [FinancialProfileInviteController::class, 'store'])->name('invites.store');
+            Route::post('{profile}/invites', [FinancialProfileInviteController::class, 'store'])->name('invites.store')
+                ->middleware('throttle:invites');
             Route::get('{profile}/invites', [FinancialProfileInviteController::class, 'index'])->name('invites.index');
             Route::delete('{profile}/invites/{invite}', [FinancialProfileInviteController::class, 'destroy'])->name('invites.destroy');
         })->whereNumber('profile');

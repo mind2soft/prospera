@@ -45,6 +45,8 @@
             "contributor_transactionsDescription": "Another user records a transaction in a ledger you own.",
             "envelope_limit_exceeded": "Envelope limit exceeded",
             "envelope_limit_exceededDescription": "Spending for an envelope exceeds its allocation on the month's published budget.",
+            "profile_invite": "Profile invitations",
+            "profile_inviteDescription": "Someone shares a financial profile with you (invitations you send are always delivered).",
             "allOff": "All notifications are off — turn on “Enable email notifications” to receive any.",
             "saveFailed": "Could not save your notification settings."
         },
