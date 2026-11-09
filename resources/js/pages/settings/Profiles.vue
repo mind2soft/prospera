@@ -28,6 +28,12 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
     useCreateInvite,
     useCreateProfile,
     useDeleteProfile,
@@ -391,455 +397,533 @@ const joinedLabel = (joinedAt: string): string =>
         <!-- `div`, not `p`: the HTML parser auto-closes a <p> before block
              elements, so <div>s inside a <p> hydrate into the wrong DOM
              shape and desync every sibling that follows. -->
-        <div v-if="isPending && !isError" class="space-y-2">
-            <Skeleton class="h-16 w-full" />
-            <Skeleton class="h-16 w-full" />
-        </div>
+        <TooltipProvider :delay-duration="0">
+            <div v-if="isPending && !isError" class="space-y-2">
+                <Skeleton class="h-16 w-full" />
+                <Skeleton class="h-16 w-full" />
+            </div>
 
-        <div v-else class="space-y-3">
-            <Card
-                v-for="profile in profiles"
-                :key="profile.id"
-                class="gap-0 overflow-hidden border-sidebar-border/70 py-0 transition-colors dark:border-sidebar-border"
-                :class="
-                    profile.id === currentProfileId ? 'border-primary/40' : ''
-                "
-            >
-                <CardContent class="p-0">
-                    <button
-                        type="button"
-                        class="flex w-full items-center gap-3 px-4 py-3.5 text-left"
-                        @click="toggleExpanded(profile)"
-                    >
-                        <span
-                            class="grid size-9 shrink-0 place-items-center rounded-xl"
-                            :class="
-                                profile.is_owner
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'bg-muted text-muted-foreground'
-                            "
+            <div v-else class="space-y-3">
+                <Card
+                    v-for="profile in profiles"
+                    :key="profile.id"
+                    class="gap-0 overflow-hidden border-sidebar-border/70 py-0 transition-colors dark:border-sidebar-border"
+                    :class="
+                        profile.id === currentProfileId
+                            ? 'border-primary/40'
+                            : ''
+                    "
+                >
+                    <CardContent class="p-0">
+                        <button
+                            type="button"
+                            class="flex w-full items-center gap-3 px-4 py-3.5 text-left"
+                            @click="toggleExpanded(profile)"
                         >
-                            <Icon
-                                :name="profile.is_owner ? 'person' : 'group'"
-                                class="size-5"
-                                aria-hidden="true"
-                            />
-                        </span>
-                        <span class="min-w-0 flex-1">
-                            <span class="flex items-center gap-2">
-                                <template v-if="renamingId === profile.id">
-                                    <Input
-                                        v-model="renameValue"
-                                        v-focus
-                                        class="h-7 max-w-56"
-                                        @click.stop
-                                        @keydown.enter.prevent="
-                                            commitRename(profile)
-                                        "
-                                        @keydown.escape="cancelRename"
-                                        @blur="commitRename(profile)"
-                                    />
-                                </template>
-                                <template v-else>
-                                    <span class="truncate text-sm font-medium">
-                                        {{ profile.name }}
-                                    </span>
-                                </template>
-                                <Badge
-                                    v-if="profile.is_owner"
-                                    variant="default"
-                                    class="shrink-0"
-                                    >{{
-                                        $t('settings.profiles.owned')
-                                    }}</Badge
-                                >
-                                <Badge
-                                    v-else
-                                    variant="secondary"
-                                    class="shrink-0"
-                                    >{{
-                                        $t('settings.profiles.shared')
-                                    }}</Badge
-                                >
-                                <Badge
-                                    v-if="profile.is_default"
-                                    variant="outline"
-                                    class="shrink-0 gap-1 border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                                    data-test="default-profile-badge"
-                                >
-                                    <Icon
-                                        name="star"
-                                        class="size-3"
-                                        aria-hidden="true"
-                                    />
-                                    {{ $t('settings.profiles.default') }}
-                                </Badge>
-                                <Badge
-                                    v-if="profile.id === currentProfileId"
-                                    variant="outline"
-                                    class="shrink-0"
-                                    >{{
-                                        $t('settings.profiles.current')
-                                    }}</Badge
-                                >
-                            </span>
-                        </span>
-                        <Button
-                            v-if="profile.is_owner"
-                            variant="ghost"
-                            size="icon-sm"
-                            class="shrink-0"
-                            :aria-label="$t('settings.profiles.rename')"
-                            @click.stop="startRename(profile)"
-                        >
-                            <Icon
-                                name="edit"
-                                class="size-4"
-                                aria-hidden="true"
-                            />
-                        </Button>
-                        <Button
-                            v-if="profile.id !== currentProfileId"
-                            variant="ghost"
-                            size="sm"
-                            class="shrink-0 text-xs"
-                            @click.stop="select(profile.id)"
-                        >
-                            {{ $t('settings.profiles.switchTo') }}
-                        </Button>
-                        <Button
-                            v-if="!profile.is_default"
-                            variant="ghost"
-                            size="icon-sm"
-                            class="shrink-0"
-                            :aria-label="$t('settings.profiles.setDefault')"
-                            :title="$t('settings.profiles.setDefault')"
-                            :disabled="setDefaultProfile.isLoading.value"
-                            data-test="set-default-button"
-                            @click.stop="setDefault(profile)"
-                        >
-                            <Icon
-                                name="star-outline"
-                                class="size-4"
-                                aria-hidden="true"
-                            />
-                        </Button>
-                        <Icon
-                            name="expand-more"
-                            class="size-5 shrink-0 text-muted-foreground transition-transform"
-                            :class="
-                                expandedId === profile.id ? 'rotate-180' : ''
-                            "
-                            aria-hidden="true"
-                        />
-                    </button>
-
-                    <div
-                        v-if="expandedId === profile.id"
-                        class="space-y-6 border-t px-4 pt-4 pb-5"
-                    >
-                        <!-- Members -->
-                        <div class="space-y-2">
-                            <p
-                                class="text-xs font-medium text-muted-foreground"
-                            >
-                                {{ $t('settings.profiles.members') }}
-                            </p>
-                            <p
-                                v-if="
-                                    membersQuery.isPending.value &&
-                                    !membersQuery.isError.value
+                            <span
+                                class="grid size-9 shrink-0 place-items-center rounded-xl"
+                                :class="
+                                    profile.is_owner
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'bg-muted text-muted-foreground'
                                 "
-                                class="text-sm text-muted-foreground"
                             >
-                                {{ $t('common.loading') }}
-                            </p>
-                            <div v-else class="space-y-1">
-                                <div
-                                    v-for="member in members"
-                                    :key="member.id"
-                                    class="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50"
-                                >
-                                    <span
-                                        class="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium uppercase"
-                                    >
-                                        {{ member.name.slice(0, 1) }}
-                                    </span>
-                                    <div class="min-w-0 flex-1">
-                                        <p class="truncate text-sm font-medium">
-                                            {{ member.name }}
-                                            <span
-                                                v-if="member.id === meId"
-                                                class="text-xs font-normal text-muted-foreground"
-                                                >{{
-                                                    $t('settings.profiles.you')
-                                                }}</span
-                                            >
-                                        </p>
-                                        <p
-                                            class="truncate text-xs text-muted-foreground"
-                                        >
-                                            {{ member.email }} ·
-                                            {{
-                                                $t('settings.profiles.joined', {
-                                                    date: joinedLabel(
-                                                        member.joined_at,
-                                                    ),
-                                                })
-                                            }}
-                                        </p>
-                                    </div>
-                                    <Badge
-                                        :variant="
-                                            member.is_owner
-                                                ? 'default'
-                                                : 'secondary'
-                                        "
-                                        class="shrink-0"
-                                    >
-                                        {{
-                                            member.is_owner
-                                                ? $t('settings.profiles.owner')
-                                                : $t(
-                                                      'settings.profiles.collaborator',
-                                                  )
-                                        }}
-                                    </Badge>
-                                    <Button
-                                        v-if="
-                                            profile.is_owner && !member.is_owner
-                                        "
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        class="shrink-0 text-muted-foreground hover:text-destructive"
-                                        :aria-label="
-                                            $t('settings.profiles.removeMember')
-                                        "
-                                        @click="removeTarget = member"
-                                    >
-                                        <Icon
-                                            name="person-remove"
-                                            class="size-4"
-                                            aria-hidden="true"
+                                <Icon
+                                    :name="
+                                        profile.is_owner ? 'person' : 'group'
+                                    "
+                                    class="size-5"
+                                    aria-hidden="true"
+                                />
+                            </span>
+                            <span class="min-w-0 flex-1">
+                                <span class="flex items-center gap-2">
+                                    <template v-if="renamingId === profile.id">
+                                        <Input
+                                            v-model="renameValue"
+                                            v-focus
+                                            class="h-7 max-w-56"
+                                            @click.stop
+                                            @keydown.enter.prevent="
+                                                commitRename(profile)
+                                            "
+                                            @keydown.escape="cancelRename"
+                                            @blur="commitRename(profile)"
                                         />
-                                    </Button>
-                                    <Button
-                                        v-else-if="
-                                            member.id === meId &&
-                                            !member.is_owner
-                                        "
-                                        variant="ghost"
-                                        size="sm"
-                                        class="shrink-0 text-xs text-muted-foreground hover:text-destructive"
-                                        @click="leaveTarget = member"
+                                    </template>
+                                    <template v-else>
+                                        <span
+                                            class="truncate text-sm font-medium"
+                                        >
+                                            {{ profile.name }}
+                                        </span>
+                                    </template>
+                                    <Badge
+                                        v-if="!profile.is_owner"
+                                        variant="secondary"
+                                        class="shrink-0"
+                                        >{{
+                                            $t('settings.profiles.shared')
+                                        }}</Badge
                                     >
-                                        {{ $t('settings.profiles.leave') }}
-                                    </Button>
-                                </div>
-                            </div>
-                        </div>
+                                    <!-- Status icons with tooltips instead
+                                         of badges: ownership alone is
+                                         stated in the members list
+                                         (Owner/Collaborator). -->
+                                    <Tooltip
+                                        v-if="profile.id === currentProfileId"
+                                    >
+                                        <TooltipTrigger as-child>
+                                            <span
+                                                class="grid shrink-0 place-items-center"
+                                                data-test="current-profile-badge"
+                                            >
+                                                <Icon
+                                                    name="check-circle"
+                                                    class="size-4 text-primary"
+                                                    aria-hidden="true"
+                                                />
+                                                <span class="sr-only">{{
+                                                    $t(
+                                                        'settings.profiles.current',
+                                                    )
+                                                }}</span>
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>
+                                                {{
+                                                    $t(
+                                                        'settings.profiles.current',
+                                                    )
+                                                }}
+                                            </p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                    <Tooltip v-if="profile.is_default">
+                                        <TooltipTrigger as-child>
+                                            <span
+                                                class="grid shrink-0 place-items-center text-amber-500"
+                                                data-test="default-profile-badge"
+                                            >
+                                                <Icon
+                                                    name="star"
+                                                    class="size-4"
+                                                    aria-hidden="true"
+                                                />
+                                                <span class="sr-only">{{
+                                                    $t(
+                                                        'settings.profiles.default',
+                                                    )
+                                                }}</span>
+                                            </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>
+                                                {{
+                                                    $t(
+                                                        'settings.profiles.default',
+                                                    )
+                                                }}
+                                            </p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </span>
+                            </span>
+                            <Button
+                                v-if="profile.is_owner"
+                                variant="ghost"
+                                size="icon-sm"
+                                class="shrink-0"
+                                :aria-label="$t('settings.profiles.rename')"
+                                @click.stop="startRename(profile)"
+                            >
+                                <Icon
+                                    name="edit"
+                                    class="size-4"
+                                    aria-hidden="true"
+                                />
+                            </Button>
+                            <Button
+                                v-if="profile.id !== currentProfileId"
+                                variant="ghost"
+                                size="sm"
+                                class="shrink-0 text-xs"
+                                @click.stop="select(profile.id)"
+                            >
+                                {{ $t('settings.profiles.switchTo') }}
+                            </Button>
+                            <Button
+                                v-if="!profile.is_default"
+                                variant="ghost"
+                                size="icon-sm"
+                                class="shrink-0"
+                                :aria-label="$t('settings.profiles.setDefault')"
+                                :title="$t('settings.profiles.setDefault')"
+                                :disabled="setDefaultProfile.isLoading.value"
+                                data-test="set-default-button"
+                                @click.stop="setDefault(profile)"
+                            >
+                                <Icon
+                                    name="star-outline"
+                                    class="size-4"
+                                    aria-hidden="true"
+                                />
+                            </Button>
+                            <Icon
+                                name="expand-more"
+                                class="size-5 shrink-0 text-muted-foreground transition-transform"
+                                :class="
+                                    expandedId === profile.id
+                                        ? 'rotate-180'
+                                        : ''
+                                "
+                                aria-hidden="true"
+                            />
+                        </button>
 
-                        <!-- Owner-only management -->
-                        <template v-if="profile.is_owner">
+                        <div
+                            v-if="expandedId === profile.id"
+                            class="space-y-6 border-t px-4 pt-4 pb-5"
+                        >
+                            <!-- Members -->
                             <div class="space-y-2">
                                 <p
                                     class="text-xs font-medium text-muted-foreground"
                                 >
-                                    {{ $t('settings.profiles.inviteSomeone') }}
+                                    {{ $t('settings.profiles.members') }}
                                 </p>
-                                <form
-                                    class="flex items-start gap-2"
-                                    @submit.prevent="onInvite"
+                                <p
+                                    v-if="
+                                        membersQuery.isPending.value &&
+                                        !membersQuery.isError.value
+                                    "
+                                    class="text-sm text-muted-foreground"
                                 >
-                                    <div class="flex-1 space-y-1">
-                                        <Input
-                                            v-model="inviteEmail"
-                                            type="email"
-                                            required
-                                            :placeholder="
-                                                $t(
-                                                    'settings.profiles.emailPlaceholder',
-                                                )
-                                            "
-                                        />
-                                        <InputError :message="inviteError" />
-                                    </div>
-                                    <Button
-                                        type="submit"
-                                        variant="outline"
-                                        class="gap-2"
-                                        :disabled="createInvite.isLoading.value"
+                                    {{ $t('common.loading') }}
+                                </p>
+                                <div v-else class="space-y-1">
+                                    <div
+                                        v-for="member in members"
+                                        :key="member.id"
+                                        class="flex items-center gap-3 rounded-md px-2 py-1.5 hover:bg-muted/50"
                                     >
-                                        <Icon
-                                            name="person-add"
-                                            class="size-4"
-                                            aria-hidden="true"
-                                        />
-                                        {{ $t('settings.profiles.invite') }}
-                                    </Button>
-                                </form>
-                                <p class="text-xs text-muted-foreground">
-                                    {{ $t('settings.profiles.inviteNote') }}
-                                </p>
-
-                                <div
-                                    v-for="invite in pendingInvites"
-                                    :key="invite.id"
-                                    class="flex items-center gap-2 rounded-md border px-3 py-2"
-                                    data-test="pending-invite"
-                                >
-                                    <Icon
-                                        name="link"
-                                        class="size-4 shrink-0 text-muted-foreground"
-                                        aria-hidden="true"
-                                    />
-                                    <div class="min-w-0 flex-1">
-                                        <p class="truncate text-sm">
-                                            {{ invite.email }}
-                                        </p>
-                                        <p
-                                            class="text-xs text-muted-foreground"
+                                        <span
+                                            class="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium uppercase"
+                                        >
+                                            {{ member.name.slice(0, 1) }}
+                                        </span>
+                                        <div class="min-w-0 flex-1">
+                                            <p
+                                                class="truncate text-sm font-medium"
+                                            >
+                                                {{ member.name }}
+                                                <span
+                                                    v-if="member.id === meId"
+                                                    class="text-xs font-normal text-muted-foreground"
+                                                    >{{
+                                                        $t(
+                                                            'settings.profiles.you',
+                                                        )
+                                                    }}</span
+                                                >
+                                            </p>
+                                            <p
+                                                class="truncate text-xs text-muted-foreground"
+                                            >
+                                                {{ member.email }} ·
+                                                {{
+                                                    $t(
+                                                        'settings.profiles.joined',
+                                                        {
+                                                            date: joinedLabel(
+                                                                member.joined_at,
+                                                            ),
+                                                        },
+                                                    )
+                                                }}
+                                            </p>
+                                        </div>
+                                        <Badge
+                                            :variant="
+                                                member.is_owner
+                                                    ? 'default'
+                                                    : 'secondary'
+                                            "
+                                            class="shrink-0"
                                         >
                                             {{
-                                                $t(
-                                                    'settings.profiles.expires',
-                                                    {
-                                                        date: expiryLabel(
-                                                            invite.expires_at,
-                                                        ),
-                                                    },
-                                                )
+                                                member.is_owner
+                                                    ? $t(
+                                                          'settings.profiles.owner',
+                                                      )
+                                                    : $t(
+                                                          'settings.profiles.collaborator',
+                                                      )
                                             }}
-                                        </p>
-                                    </div>
-                                    <Button
-                                        v-if="inviteUrls[invite.id]"
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        class="shrink-0"
-                                        :aria-label="
-                                            $t(
-                                                'settings.profiles.copyInviteLink',
-                                            )
-                                        "
-                                        @click="copyInvite(invite)"
-                                    >
-                                        <Icon
-                                            :name="
-                                                copiedInviteId === invite.id
-                                                    ? 'check'
-                                                    : 'content-copy'
+                                        </Badge>
+                                        <Button
+                                            v-if="
+                                                profile.is_owner &&
+                                                !member.is_owner
                                             "
-                                            class="size-4"
-                                            aria-hidden="true"
-                                        />
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        class="shrink-0 text-muted-foreground hover:text-destructive"
-                                        :aria-label="
-                                            $t('settings.profiles.revokeInvite')
-                                        "
-                                        :disabled="revokeInvite.isLoading.value"
-                                        @click="revoke(invite)"
-                                    >
-                                        <Icon
-                                            name="close"
-                                            class="size-4"
-                                            aria-hidden="true"
-                                        />
-                                    </Button>
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            class="shrink-0 text-muted-foreground hover:text-destructive"
+                                            :aria-label="
+                                                $t(
+                                                    'settings.profiles.removeMember',
+                                                )
+                                            "
+                                            @click="removeTarget = member"
+                                        >
+                                            <Icon
+                                                name="person-remove"
+                                                class="size-4"
+                                                aria-hidden="true"
+                                            />
+                                        </Button>
+                                        <Button
+                                            v-else-if="
+                                                member.id === meId &&
+                                                !member.is_owner
+                                            "
+                                            variant="ghost"
+                                            size="sm"
+                                            class="shrink-0 text-xs text-muted-foreground hover:text-destructive"
+                                            @click="leaveTarget = member"
+                                        >
+                                            {{ $t('settings.profiles.leave') }}
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div
-                                v-if="transferCandidates.length > 0"
-                                class="space-y-2"
-                            >
-                                <p
-                                    class="text-xs font-medium text-muted-foreground"
-                                >
-                                    {{
-                                        $t(
-                                            'settings.profiles.transferOwnership',
-                                        )
-                                    }}
-                                </p>
-                                <div class="flex items-center gap-2">
-                                    <Select
-                                        :model-value="
-                                            transferTarget ?? undefined
-                                        "
-                                        @update:model-value="
-                                            (value) =>
-                                                (transferTarget = Number(value))
-                                        "
+                            <!-- Owner-only management -->
+                            <template v-if="profile.is_owner">
+                                <div class="space-y-2">
+                                    <p
+                                        class="text-xs font-medium text-muted-foreground"
                                     >
-                                        <SelectTrigger class="flex-1">
-                                            <SelectValue
+                                        {{
+                                            $t(
+                                                'settings.profiles.inviteSomeone',
+                                            )
+                                        }}
+                                    </p>
+                                    <form
+                                        class="flex items-start gap-2"
+                                        @submit.prevent="onInvite"
+                                    >
+                                        <div class="flex-1 space-y-1">
+                                            <Input
+                                                v-model="inviteEmail"
+                                                type="email"
+                                                required
                                                 :placeholder="
                                                     $t(
-                                                        'settings.profiles.chooseCollaborator',
+                                                        'settings.profiles.emailPlaceholder',
                                                     )
                                                 "
                                             />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem
-                                                v-for="member in transferCandidates"
-                                                :key="member.id"
-                                                :value="member.id"
-                                            >
-                                                {{ member.name }}
-                                            </SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <Button
-                                        variant="outline"
-                                        :disabled="transferTarget === null"
-                                        @click="askTransfer"
-                                    >
-                                        {{ $t('settings.profiles.transfer') }}
-                                    </Button>
-                                </div>
-                            </div>
-
-                            <!-- Deleting reassigns affected users' defaults server-side. -->
-                            <div class="space-y-2 border-t pt-4">
-                                <p class="text-xs font-medium text-destructive">
-                                    {{ $t('settings.profiles.dangerZone') }}
-                                </p>
-                                <div
-                                    class="flex items-center justify-between gap-4"
-                                >
-                                    <p class="text-sm text-muted-foreground">
-                                        {{ $t('settings.profiles.deleteNote') }}
+                                            <InputError
+                                                :message="inviteError"
+                                            />
+                                        </div>
+                                        <Button
+                                            type="submit"
+                                            variant="outline"
+                                            class="gap-2"
+                                            :disabled="
+                                                createInvite.isLoading.value
+                                            "
+                                        >
+                                            <Icon
+                                                name="person-add"
+                                                class="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            {{ $t('settings.profiles.invite') }}
+                                        </Button>
+                                    </form>
+                                    <p class="text-xs text-muted-foreground">
+                                        {{ $t('settings.profiles.inviteNote') }}
                                     </p>
-                                    <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        class="shrink-0 gap-2"
-                                        @click="deleteTarget = profile"
+
+                                    <div
+                                        v-for="invite in pendingInvites"
+                                        :key="invite.id"
+                                        class="flex items-center gap-2 rounded-md border px-3 py-2"
+                                        data-test="pending-invite"
                                     >
                                         <Icon
-                                            name="delete"
-                                            class="size-4"
+                                            name="link"
+                                            class="size-4 shrink-0 text-muted-foreground"
                                             aria-hidden="true"
                                         />
+                                        <div class="min-w-0 flex-1">
+                                            <p class="truncate text-sm">
+                                                {{ invite.email }}
+                                            </p>
+                                            <p
+                                                class="text-xs text-muted-foreground"
+                                            >
+                                                {{
+                                                    $t(
+                                                        'settings.profiles.expires',
+                                                        {
+                                                            date: expiryLabel(
+                                                                invite.expires_at,
+                                                            ),
+                                                        },
+                                                    )
+                                                }}
+                                            </p>
+                                        </div>
+                                        <Button
+                                            v-if="inviteUrls[invite.id]"
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            class="shrink-0"
+                                            :aria-label="
+                                                $t(
+                                                    'settings.profiles.copyInviteLink',
+                                                )
+                                            "
+                                            @click="copyInvite(invite)"
+                                        >
+                                            <Icon
+                                                :name="
+                                                    copiedInviteId === invite.id
+                                                        ? 'check'
+                                                        : 'content-copy'
+                                                "
+                                                class="size-4"
+                                                aria-hidden="true"
+                                            />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            class="shrink-0 text-muted-foreground hover:text-destructive"
+                                            :aria-label="
+                                                $t(
+                                                    'settings.profiles.revokeInvite',
+                                                )
+                                            "
+                                            :disabled="
+                                                revokeInvite.isLoading.value
+                                            "
+                                            @click="revoke(invite)"
+                                        >
+                                            <Icon
+                                                name="close"
+                                                class="size-4"
+                                                aria-hidden="true"
+                                            />
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div
+                                    v-if="transferCandidates.length > 0"
+                                    class="space-y-2"
+                                >
+                                    <p
+                                        class="text-xs font-medium text-muted-foreground"
+                                    >
                                         {{
                                             $t(
-                                                'settings.profiles.deleteProfile',
+                                                'settings.profiles.transferOwnership',
                                             )
                                         }}
-                                    </Button>
+                                    </p>
+                                    <div class="flex items-center gap-2">
+                                        <Select
+                                            :model-value="
+                                                transferTarget ?? undefined
+                                            "
+                                            @update:model-value="
+                                                (value) =>
+                                                    (transferTarget =
+                                                        Number(value))
+                                            "
+                                        >
+                                            <SelectTrigger class="flex-1">
+                                                <SelectValue
+                                                    :placeholder="
+                                                        $t(
+                                                            'settings.profiles.chooseCollaborator',
+                                                        )
+                                                    "
+                                                />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem
+                                                    v-for="member in transferCandidates"
+                                                    :key="member.id"
+                                                    :value="member.id"
+                                                >
+                                                    {{ member.name }}
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <Button
+                                            variant="outline"
+                                            :disabled="transferTarget === null"
+                                            @click="askTransfer"
+                                        >
+                                            {{
+                                                $t('settings.profiles.transfer')
+                                            }}
+                                        </Button>
+                                    </div>
                                 </div>
-                            </div>
-                        </template>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
+
+                                <!-- Deleting reassigns affected users' defaults server-side. -->
+                                <div class="space-y-2 border-t pt-4">
+                                    <p
+                                        class="text-xs font-medium text-destructive"
+                                    >
+                                        {{ $t('settings.profiles.dangerZone') }}
+                                    </p>
+                                    <div
+                                        class="flex items-center justify-between gap-4"
+                                    >
+                                        <p
+                                            class="text-sm text-muted-foreground"
+                                        >
+                                            {{
+                                                $t(
+                                                    'settings.profiles.deleteNote',
+                                                )
+                                            }}
+                                        </p>
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            class="shrink-0 gap-2"
+                                            @click="deleteTarget = profile"
+                                        >
+                                            <Icon
+                                                name="delete"
+                                                class="size-4"
+                                                aria-hidden="true"
+                                            />
+                                            {{
+                                                $t(
+                                                    'settings.profiles.deleteProfile',
+                                                )
+                                            }}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        </TooltipProvider>
 
         <!-- Create profile -->
         <Dialog :open="showCreate" @update:open="showCreate = false">

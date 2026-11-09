@@ -54,7 +54,6 @@
             "title": "Profiles",
             "description": "Group people, then share budgets and ledgers within a profile",
             "newProfile": "New profile",
-            "owned": "Owned",
             "shared": "Shared",
             "current": "Current",
             "default": "Default",
