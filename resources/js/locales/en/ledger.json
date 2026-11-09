@@ -35,7 +35,7 @@
         },
         "share": {
             "title": "Share ledger",
-            "resource": "ledger"
+            "resource": "this ledger"
         },
         "delete": {
             "title": "Delete this ledger?",

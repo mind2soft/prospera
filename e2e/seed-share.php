@@ -5,7 +5,6 @@
  * playwright user, shared with a second profile member as contributor.
  *
  * Runs against the isolated e2e database (.env.e2e — see
- * Runs against the isolated e2e database (.env.e2e — see
  * e2e/serve.sh), never the developer's database:
  * npm run e2e:seed -- seed-share.php
  */

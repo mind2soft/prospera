@@ -8,10 +8,10 @@ import {
     store,
     update,
 } from '@/actions/App/Http/Controllers/EnvelopeController';
-import EnvelopeShareDrawer from '@/components/Envelopes/EnvelopeShareDrawer.vue';
 import Heading from '@/components/Heading.vue';
 import Icon from '@/components/Icon.vue';
 import InputError from '@/components/InputError.vue';
+import ShareDrawer from '@/components/share/ShareDrawer.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -31,8 +31,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    useEnvelopeShares,
+    useRemoveEnvelopeShare,
+    useSetEnvelopeShare,
+    useTransferEnvelopeOwnership,
+} from '@/composables/envelopeQueries';
+import { useProfileCircle } from '@/composables/profileQueries';
+import { ApiError } from '@/lib/api';
 import { envelopes as envelopesRoute } from '@/routes';
-import type { Envelope } from '@/types';
+import type { Envelope, ResourcePermission } from '@/types';
 
 defineOptions({
     layout: {
@@ -173,6 +181,86 @@ const remove = () => {
 const shareTarget = computed(
     () => props.envelopes.find((c) => c.id === shareTargetId.value) ?? null,
 );
+
+// --- share drawer (mutations live here — the drawer is presentational) -----
+const sharesQuery = useEnvelopeShares(computed(() => shareTargetId.value));
+const circleQuery = useProfileCircle(
+    computed(() => shareTargetId.value !== null),
+);
+
+const setShare = useSetEnvelopeShare();
+const removeShare = useRemoveEnvelopeShare();
+const transferOwnership = useTransferEnvelopeOwnership();
+
+const shareMembers = computed(() => sharesQuery.data.value ?? []);
+
+const shareFail = (e: unknown) => {
+    toast.error(e instanceof ApiError ? e.firstError : t('share.toast.failed'));
+};
+
+const onSetSharePermission = (
+    userId: number,
+    permission: ResourcePermission,
+) => {
+    const id = shareTargetId.value;
+    if (id === null) {
+        return;
+    }
+    setShare.mutate(
+        { envelopeId: id, userId, permission },
+        {
+            onSuccess: () => toast.success(t('share.toast.accessUpdated')),
+            onError: shareFail,
+        },
+    );
+};
+
+const onGrantShare = (userId: number, permission: ResourcePermission) => {
+    const id = shareTargetId.value;
+    if (id === null) {
+        return;
+    }
+    setShare.mutate(
+        { envelopeId: id, userId, permission },
+        {
+            onSuccess: () => toast.success(t('share.toast.accessGranted')),
+            onError: shareFail,
+        },
+    );
+};
+
+const onRevokeShare = (userId: number) => {
+    const id = shareTargetId.value;
+    if (id === null) {
+        return;
+    }
+    removeShare.mutate(
+        { envelopeId: id, userId },
+        {
+            onSuccess: () => toast.success(t('share.toast.accessRevoked')),
+            onError: shareFail,
+        },
+    );
+};
+
+const onTransferOwnership = (userId: number) => {
+    const id = shareTargetId.value;
+    if (id === null) {
+        return;
+    }
+    transferOwnership.mutate(
+        { envelopeId: id, userId },
+        {
+            onSuccess: () => {
+                // Envelope ownership changed — the Inertia props (and with
+                // them `canManage`) are stale until reload; close the drawer.
+                shareTargetId.value = null;
+                toast.success(t('share.toast.ownershipTransferred'));
+            },
+            onError: shareFail,
+        },
+    );
+};
 
 const roleLabel: Record<string, string> = {
     owner: 'envelopes.role.owner',
@@ -380,13 +468,22 @@ const roleLabel: Record<string, string> = {
         </div>
 
         <!-- Share drawer -->
-        <EnvelopeShareDrawer
+        <ShareDrawer
             v-if="shareTarget !== null"
-            :envelope-id="shareTarget.id"
             :open="shareTargetId !== null"
-            :can-manage="shareTarget.permission === 'owner'"
+            :title="$t('share.envelope.title')"
+            :description="$t('share.envelope.description')"
+            :transfer-resource="$t('share.envelope.resource')"
+            :members="shareMembers"
+            :loading="sharesQuery.isPending.value"
             :current-user-id="meId"
+            :can-manage="shareTarget.permission === 'owner'"
+            :profile-circle="circleQuery.data.value ?? []"
             @update:open="shareTargetId = null"
+            @set-permission="onSetSharePermission"
+            @grant="onGrantShare"
+            @revoke="onRevokeShare"
+            @transfer="onTransferOwnership"
         />
 
         <!-- Create / Edit dialog -->

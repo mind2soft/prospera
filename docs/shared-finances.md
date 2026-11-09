@@ -158,9 +158,25 @@ type ResourcePermission = 'owner' | 'contributor' | 'viewer';
 - **Contributor** semantics are per resource type — see
   [Budget](budget.md), [Ledger](ledger.md) and [Envelope](envelope.md).
 
-The **Share** drawer (Google Drive-like, used on the Budget, Ledger and
-Envelopes pages) no longer invites users — it assigns permissions to existing
-**profile members** and allows transferring ownership of the resource.
+The **Share drawer** (Google Drive-like, `resources/js/components/share/ShareDrawer.vue`)
+is shared by the Budget, Ledger and Envelopes pages. It no longer invites
+users — it assigns permissions to existing **profile members** and allows
+transferring ownership of the resource. It is **presentational** (props and
+emits only); each page owns its queries and mutations.
+
+- **People with access** — all members (with their effective permission) for
+  budgets and ledgers; the owner row is listed first, labeled **Owner**, and
+  carries no controls. Members show a colored initial avatar, name
+  (with a "(you)" marker for the current user) and email; the owner changes
+  permissions through a per-member dropdown and revokes access with the
+  row's ✕ action. Members **without an explicit share row** (implicit
+  viewers) are marked `explicit: false` by the API and show **no revoke
+  action** — revoking would 404, since there is nothing to delete.
+- **Grant access** (envelopes only) — the owner picks a member from their
+  profile circle (people sharing a profile with them) and a permission.
+- **Transfer ownership** — with a confirmation dialog; the previous owner
+  becomes a contributor.
+- **Done** — closes the drawer.
 
 Envelopes are the exception: they stay **user-owned** (the creator is the
 owner) and are not profile-scoped for their data. Only the owner can record

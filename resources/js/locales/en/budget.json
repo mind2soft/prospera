@@ -73,7 +73,7 @@
         },
         "share": {
             "title": "Share budget",
-            "resource": "budget"
+            "resource": "this budget"
         },
         "confirm": {
             "publishTitle": "Publish this budget?",

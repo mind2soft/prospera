@@ -14,21 +14,22 @@
         },
         "drawer": {
             "description": "Members of the profile this resource belongs to.",
+            "people": "People with access",
             "you": "(you)",
             "revoke": "Revoke access",
+            "grantAccess": "Grant access",
             "chooseMember": "Choose a member",
             "transferOwnership": "Transfer ownership",
             "transfer": "Transfer",
             "transferNote": "The new owner gets full control; you become a contributor.",
             "transferTitle": "Transfer ownership?",
-            "transferDescription": "{name} will become the owner of this {resource} and get full control over it. You will become a contributor."
+            "transferDescription": "{name} will become the owner of {resource} and get full control over it. You will become a contributor.",
+            "done": "Done"
         },
         "envelope": {
             "title": "Share envelope",
             "description": "People who share a profile with you.",
-            "empty": "Not shared with anyone yet.",
-            "grantAccess": "Grant access",
-            "transferDescription": "{name} will become the owner of this envelope and get full control over it. You will become a contributor."
+            "resource": "this envelope"
         },
         "add": "Add"
     }

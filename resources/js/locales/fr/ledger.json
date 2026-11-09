@@ -35,7 +35,7 @@
         },
         "share": {
             "title": "Partager le grand livre",
-            "resource": "grand livre"
+            "resource": "ce grand livre"
         },
         "delete": {
             "title": "Supprimer ce grand livre ?",

@@ -13,7 +13,7 @@ import CreateBudgetDialog from '@/components/Budget/CreateBudgetDialog.vue';
 import Heading from '@/components/Heading.vue';
 import Icon from '@/components/Icon.vue';
 import BudgetLoadingScreen from '@/components/Loading/BudgetLoadingScreen.vue';
-import ResourceShareDrawer from '@/components/share/ResourceShareDrawer.vue';
+import ShareDrawer from '@/components/share/ShareDrawer.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -525,7 +525,7 @@ const onRemoveEnvelope = (envelopeId: number) => {
             @confirm="onAddEnvelope"
         />
 
-        <ResourceShareDrawer
+        <ShareDrawer
             v-if="budgetId !== null && budget !== null"
             :open="showShare"
             :title="$t('budget.share.title')"

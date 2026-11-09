@@ -151,7 +151,7 @@ All endpoints require authentication (session + CSRF). The frontend consumes the
 | `POST`   | `/api/budgets/{budget}/envelopes`              | Assign an envelope (`envelope_id`, `type`, `amount`) to a draft — requires `contributor`+ on the envelope (`none`/`viewer` → `422` on `envelope_id`)         |
 | `PATCH`  | `/api/budgets/{budget}/envelopes/{envelopeId}` | Update amount (and type)                                                                                                                                     |
 | `DELETE` | `/api/budgets/{budget}/envelopes/{envelopeId}` | Remove an assignment                                                                                                                                         |
-| `GET`    | `/api/budgets/{budget}/shares`                 | List shares (profile members only)                                                                                                                           |
+| `GET`    | `/api/budgets/{budget}/shares`                 | List shares — profile members with their effective permission and an `explicit` flag (`false` = implicit viewer, not revocable)                              |
 | `POST`   | `/api/budgets/{budget}/shares`                 | Assign a permission to a **profile member** (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                  |
 | `PATCH`  | `/api/budgets/{budget}/shares/{userId}`        | Change a member's permission (owner only; `owner` is rejected — use transfer-ownership)                                                                      |
 | `DELETE` | `/api/budgets/{budget}/shares/{userId}`        | Revoke a share                                                                                                                                               |
@@ -180,9 +180,11 @@ three-dots button — with actions for the selected budget:
 - **Publish** — draft budgets only; asks confirmation.
 - **New Budget** — published budgets only; creates a clone in draft mode; asks
   confirmation.
-- **Share** — a Google Drive-like drawer (right side, not a dialog) listing
-  the profile's members with their permission, allowing permission changes and
-  ownership transfer (see [Shared Finances](shared-finances.md)).
+- **Share** — the unified Google Drive-like drawer (right side, not a dialog)
+  listing the profile's members with their effective permission — the owner
+  row first, labeled **Owner**; permission changes and ownership transfer,
+  with revoke available only for members holding an explicit share row (see
+  [Shared Finances](shared-finances.md)).
 - **Delete** — owner only; deletes the budget; asks for confirmation.
 
 ### Income vs expense bars

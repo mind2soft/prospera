@@ -805,7 +805,10 @@ class LedgerTest extends TestCase
 
         // Members can list shares.
         $this->actingAs($this->member)->getJson("/api/ledgers/{$ledger->id}/shares")
-            ->assertOk()->assertJsonCount(2, 'shares');
+            ->assertOk()->assertJsonCount(2, 'shares')
+            ->assertJsonPath('shares.0.permission', 'owner')
+            ->assertJsonPath('shares.0.explicit', true)
+            ->assertJsonPath('shares.1.explicit', true);
 
         // Revoke.
         $this->actingAs($this->user)->deleteJson("/api/ledgers/{$ledger->id}/shares/{$this->member->id}")
@@ -823,5 +826,17 @@ class LedgerTest extends TestCase
             'user_id' => $this->user->id,
             'permission' => 'contributor',
         ]);
+    }
+
+    public function test_implicit_viewers_cannot_be_revoked(): void
+    {
+        $ledger = $this->createLedger($this->user);
+
+        // The member has no share row (implicit viewer): the Share drawer
+        // hides the revoke action and the endpoint 404s.
+        $this->actingAs($this->user)->deleteJson("/api/ledgers/{$ledger->id}/shares/{$this->member->id}")
+            ->assertNotFound();
+
+        $this->assertDatabaseCount('ledger_permissions', 1);
     }
 }

@@ -39,13 +39,16 @@ export type InviteContext = {
 
 /**
  * A profile member with their effective permission on a resource
- * (implicit viewer for members without an explicit share row).
+ * (implicit viewer for members without an explicit share row). `explicit`
+ * is false for those implicit viewers — they have no share row and cannot
+ * be revoked.
  */
 export type ResourceMember = {
     user_id: number;
     name: string;
     email: string;
     permission: ResourcePermission;
+    explicit: boolean;
 };
 
 // ---- Envelope (docs/envelope.md) -----------------------------------------
