@@ -138,7 +138,7 @@ production host must run the scheduler:
 | `amounts:rotate-keys --profile=<id>` | Rotate given profiles (repeatable), e.g. after a suspected leak.                                                                                                                                         |
 | `amounts:prune-keys [--grace=24]`    | Scheduled daily. Deletes key versions retired more than `--grace` hours ago, after re-encrypting any amount still using them; refuses to delete a version still in use.                                  |
 | `amounts:rewrap-keys`                | Re-wraps every data key with the current `APP_KEY` (see below).                                                                                                                                          |
-| `amounts:verify [--profile=<id>]`    | Decrypts every amount and lists failures by table and id; non-zero exit on any failure. Runs on every deploy.                                                                                            |
+| `amounts:verify [--profile=<id>]`    | Decrypts every amount and lists failures by table and id; non-zero exit on any failure. Runs on every deploy and daily via the scheduler.                                                                |
 
 Retired versions stay readable for the grace period so a request that loaded
 the previous key just before a rotation can still write; pruning re-encrypts
@@ -153,6 +153,29 @@ amounts, permanently. Escrow it (password manager or secret store) and keep it
 **separate** from database backups — storing them together defeats the
 encryption. Never run `php artisan key:generate` on an existing installation
 without following the rotation procedure below.
+
+### Detecting a broken `APP_KEY`
+
+A rotated `APP_KEY` without `APP_PREVIOUS_KEYS` breaks every wrapped amount
+key at once (e.g. `composer setup`, which runs `key:generate`
+unconditionally). Instead of scattered `AmountDecryptionException` 500s, two
+safeguards report it explicitly (issue #36):
+
+- **Boot-time smoke check** — on every production HTTP request, one active
+  amount key per profile is unwrapped; a failure aborts the request with an
+  explicit, actionable error in the logs: restore the previous `APP_KEY` from
+  the backup, or, if the rotation was intentional, list the old key in
+  `APP_PREVIOUS_KEYS` and run `amounts:rewrap-keys`. HTTP requests only:
+  artisan must keep booting so the recovery itself stays runnable. A broken
+  key also fails the deploy's `/up` health check, leaving the previous
+  release live or the app in maintenance mode (the deploy's own pre-switch
+  `amounts:verify` catches it before the switch).
+- **Daily scheduled `amounts:verify`** — so the failure surfaces in the logs
+  even when no request touches amounts; the command logs a failure summary
+  itself, since the scheduler's own output goes to `/dev/null`.
+
+Neither check decrypts amounts: they only unwrap the data keys (individual
+corrupted amounts are caught by `amounts:verify` on deploy).
 
 ### `APP_KEY` and `APP_PREVIOUS_KEYS` in production
 
@@ -357,8 +380,9 @@ cascade-delete child rows.
 ### Performance
 
 Decryption costs one AES-GCM operation per amount plus one key unwrap per
-profile and request. Totals hydrate and decrypt the rows they sum; rotation
-and `amounts:verify` scan every amount.
+profile and request; the boot-time smoke check adds one more unwrap per
+profile (its highest active key only) and one small query. Totals hydrate and
+decrypt the rows they sum; rotation and `amounts:verify` scan every amount.
 
 ## Why not the original proposal
 

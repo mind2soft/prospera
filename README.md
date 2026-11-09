@@ -122,9 +122,11 @@ configuration is the `staged` block in `vite.config.ts` and the committed
 Expired invites are pruned daily (`php artisan invites:prune`), the
 contact-form submission log is pruned daily (`php artisan contact:prune`,
 retention configurable via `CONTACT_LOG_RETENTION_DAYS`), amount encryption
-keys are rotated monthly (`php artisan amounts:rotate-keys --all`) and
-retired keys pruned daily (`php artisan amounts:prune-keys`). In production,
-run the scheduler (`php artisan schedule:run` every minute via cron).
+keys are rotated monthly (`php artisan amounts:rotate-keys --all`),
+retired keys pruned daily (`php artisan amounts:prune-keys`) and a daily
+`php artisan amounts:verify` re-checks that every amount still decrypts. In
+production, run the scheduler (`php artisan schedule:run` every minute via
+cron).
 
 ### Encryption at rest
 
@@ -134,6 +136,15 @@ the database: without it, no amount can be read.** Rotate it with
 `APP_PREVIOUS_KEYS` and `php artisan amounts:rewrap-keys`, never with a bare
 `key:generate`; `php artisan amounts:verify` checks that every amount
 decrypts.
+
+Beware: `composer setup` runs `php artisan key:generate` unconditionally. Run
+it against an existing database only after backing the current `APP_KEY` up
+and restoring it (or adding it to `APP_PREVIOUS_KEYS`) — a rotated key with
+no previous key left makes every amount undecryptable, permanently. A rotated
+key is caught early: production refuses HTTP requests at boot with an
+explicit, actionable error once the amount keys no longer unwrap, and the
+scheduled daily `amounts:verify` reports it in the logs even when no request
+touches amounts.
 
 ## Releases & deployment
 
