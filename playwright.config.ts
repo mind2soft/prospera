@@ -4,13 +4,16 @@ import { defineConfig } from '@playwright/test';
 // -------------------------
 // The suite NEVER touches the developer's database. `npm run e2e` boots the
 // app through e2e/serve.sh, which:
-//   1. derives .env.e2e from .env once (same APP_KEY/APP_URL → identical
-//      signed links and Fortify behaviour) with DB_DATABASE=database/e2e.sqlite;
+//   1. enforces the isolation rules via e2e/guard-e2e-env.sh: .env.e2e may
+//      only point at database/e2e.sqlite (otherwise refused), and a stale
+//      .env.e2e (APP_KEY diverged from .env) is re-derived — same
+//      APP_KEY/APP_URL → identical signed links and Fortify behaviour;
 //   2. refuses to start if port 8000 is taken by a dev `php artisan serve`
 //      (stop the dev server before running the suite);
 //   3. runs `migrate:fresh` against the e2e database, then serves on :8000.
 // Specs seed through `npm run e2e:seed -- <seed>.php` (e2e/seed.sh), which
-// runs the seed with `--env=e2e` against the same isolated database.
+// sources the same guard and runs the seed with `--env=e2e` against the
+// same isolated database.
 
 export default defineConfig({
     testDir: './e2e',
