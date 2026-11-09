@@ -101,7 +101,18 @@ class FinancialProfileController extends Controller
             ]);
         }
 
-        $profile->delete();
+        // Capture the members first: deleting cascades the pivot rows away.
+        $members = $profile->members()->get();
+
+        DB::transaction(function () use ($profile, $members): void {
+            $profile->delete();
+
+            // Deleting detaches the members (FK cascade). An account left
+            // without any profile — e.g. one registered through an invite,
+            // with no owned default profile — gets its own default profile
+            // seeded.
+            $members->each(fn (User $member) => FinancialProfile::ensureUserHasAProfile($member));
+        });
 
         return response()->json(status: 204);
     }

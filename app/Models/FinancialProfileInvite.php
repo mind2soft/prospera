@@ -230,7 +230,7 @@ class FinancialProfileInvite extends Model
                 ->first();
 
             if ($invite === null) {
-                self::seedDefaultProfileForInviteRegistration($user);
+                FinancialProfile::ensureUserHasAProfile($user);
 
                 return;
             }
@@ -239,24 +239,11 @@ class FinancialProfileInvite extends Model
                 && ! $invite->profile->isMember($user)) {
                 $invite->profile->members()->attach($user->id, $invite->membershipPivotAttributes());
             } else {
-                self::seedDefaultProfileForInviteRegistration($user);
+                FinancialProfile::ensureUserHasAProfile($user);
             }
 
             $invite->consume();
         });
-    }
-
-    /**
-     * Seed the personal default profile for an account that registered
-     * through an invite and ended up without any profile membership — only
-     * invite registrations run with the default-profile seeding skipped, so
-     * an account that already has a profile is left untouched.
-     */
-    private static function seedDefaultProfileForInviteRegistration(User $user): void
-    {
-        if ($user->profiles()->doesntExist()) {
-            FinancialProfile::createDefaultFor($user);
-        }
     }
 
     /**
