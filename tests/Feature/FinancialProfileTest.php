@@ -90,7 +90,8 @@ class FinancialProfileTest extends TestCase
         $response->assertCreated();
         $profile = FinancialProfile::where('name', 'Business')->firstOrFail();
         $this->assertTrue($profile->isOwner($this->stranger));
-        $this->assertFalse($profile->is_default);
+        // A new profile never becomes the creator's default implicitly.
+        $this->assertFalse($profile->isDefaultFor($this->stranger));
     }
 
     public function test_store_requires_a_name(): void
@@ -179,27 +180,69 @@ class FinancialProfileTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors('profile');
     }
 
-    public function test_the_default_profile_cannot_be_deleted_but_can_be_renamed(): void
+    public function test_the_default_profile_can_be_deleted_and_renamed(): void
     {
-        $profile = FinancialProfile::createDefaultFor($this->owner);
+        $solo = User::factory()->create();
+        $default = FinancialProfile::createDefaultFor($solo);
 
-        $this->actingAs($this->owner)->deleteJson("/api/profiles/{$profile->id}")
-            ->assertUnprocessable()->assertJsonValidationErrors('profile');
+        // Renaming still works; the response carries the caller's flags.
+        $this->actingAs($solo)->patchJson("/api/profiles/{$default->id}", ['name' => 'Renamed'])
+            ->assertOk()
+            ->assertJsonPath('profile.name', 'Renamed')
+            ->assertJsonPath('profile.is_default', true);
 
-        $this->assertDatabaseHas('financial_profiles', ['id' => $profile->id]);
-
-        $this->actingAs($this->owner)->patchJson("/api/profiles/{$profile->id}", ['name' => 'Renamed'])
-            ->assertOk()->assertJsonPath('profile.name', 'Renamed');
-    }
-
-    public function test_the_deletion_guard_uses_the_default_flag_not_the_name(): void
-    {
-        $profile = FinancialProfile::createOwnedBy($this->owner, FinancialProfile::DEFAULT_NAME);
-
-        $this->actingAs($this->owner)->deleteJson("/api/profiles/{$profile->id}")
+        // Deleting their only profile seeds a fresh default profile (the
+        // old row-flag deletion guard is gone — issue #41).
+        $this->actingAs($solo)->deleteJson("/api/profiles/{$default->id}")
             ->assertNoContent();
 
-        $this->assertDatabaseMissing('financial_profiles', ['id' => $profile->id]);
+        $replacement = FinancialProfile::where('name', FinancialProfile::DEFAULT_NAME)->sole();
+        $this->assertDatabaseHas('financial_profile_user', [
+            'profile_id' => $replacement->id,
+            'user_id' => $solo->id,
+            'is_owner' => true,
+            'is_default' => true,
+        ]);
+    }
+
+    public function test_setting_the_default_prefers_the_earliest_created_owned_profile(): void
+    {
+        // A shared membership created *before* any owned profile must lose
+        // to the owned-first rule when the default is deleted.
+        $sharedFirst = FinancialProfile::createOwnedBy($this->owner, 'Shared first');
+        $sharedFirst->members()->attach($this->member->id, ['is_owner' => false]);
+
+        $ownedLater = FinancialProfile::createOwnedBy($this->owner, 'Owned later');
+        $ownedLater->members()->attach($this->member->id, ['is_owner' => true]);
+
+        $default = FinancialProfile::createDefaultFor($this->owner);
+        $default->members()->attach($this->member->id, ['is_owner' => false, 'is_default' => true]);
+
+        // The default profile is deleted: the member's default is reassigned
+        // to their earliest *owned* profile, not to the earlier shared
+        // membership.
+        $default->delete();
+        FinancialProfile::ensureDefaultFor($this->member);
+
+        $this->assertTrue($ownedLater->isDefaultFor($this->member));
+        $this->assertFalse($sharedFirst->isDefaultFor($this->member));
+    }
+
+    public function test_the_default_falls_back_to_the_earliest_membership_when_the_user_owns_nothing(): void
+    {
+        $invitee = User::factory()->create();
+
+        $first = FinancialProfile::createOwnedBy($this->owner, 'First shared');
+        $first->members()->attach($invitee->id, ['is_owner' => false, 'is_default' => true]);
+
+        $second = FinancialProfile::createOwnedBy($this->owner, 'Second shared');
+        $second->members()->attach($invitee->id, ['is_owner' => false, 'is_default' => false]);
+
+        $first->delete();
+
+        FinancialProfile::ensureDefaultFor($invitee);
+
+        $this->assertTrue($second->isDefaultFor($invitee));
     }
 
     // ------------------------------------------------------------------
@@ -375,15 +418,15 @@ class FinancialProfileTest extends TestCase
             ->assertNoContent();
 
         $default = FinancialProfile::where('name', FinancialProfile::DEFAULT_NAME)->sole();
-        $this->assertTrue($default->is_default);
         $this->assertDatabaseHas('financial_profile_user', [
             'profile_id' => $default->id,
             'user_id' => $invitee->id,
             'is_owner' => true,
+            'is_default' => true,
         ]);
     }
 
-    public function test_a_leaving_member_who_keeps_another_profile_is_not_seeded_a_default(): void
+    public function test_a_leaving_member_who_keeps_another_profile_gets_it_as_their_new_default(): void
     {
         $own = FinancialProfile::createOwnedBy($this->member, 'Mine');
 
@@ -392,6 +435,7 @@ class FinancialProfileTest extends TestCase
 
         $this->assertDatabaseMissing('financial_profiles', ['name' => FinancialProfile::DEFAULT_NAME]);
         $this->assertSame([$own->id], $this->member->profiles()->pluck('financial_profiles.id')->all());
+        $this->assertTrue($own->isDefaultFor($this->member));
     }
 
     public function test_deleting_a_profile_seeds_stranded_members_a_default_profile(): void
@@ -404,12 +448,43 @@ class FinancialProfileTest extends TestCase
             ->assertNoContent();
 
         $default = FinancialProfile::where('name', FinancialProfile::DEFAULT_NAME)->sole();
-        $this->assertTrue($default->is_default);
         $this->assertDatabaseHas('financial_profile_user', [
             'profile_id' => $default->id,
             'user_id' => $invitee->id,
             'is_owner' => true,
+            'is_default' => true,
         ]);
+    }
+
+    // ------------------------------------------------------------------
+    // Set default endpoint (issue #41)
+    // ------------------------------------------------------------------
+
+    public function test_a_member_can_set_a_shared_profile_as_their_default(): void
+    {
+        FinancialProfile::createDefaultFor($this->member);
+
+        $this->actingAs($this->member)->postJson("/api/profiles/{$this->profile->id}/set-default")
+            ->assertOk()
+            ->assertJsonPath('profile.is_default', true)
+            ->assertJsonPath('profile.is_owner', false);
+
+        $this->assertTrue($this->profile->isDefaultFor($this->member));
+        // Exactly one default per user: the previous one was cleared.
+        $this->assertDatabaseHas('financial_profile_user', [
+            'user_id' => $this->member->id,
+            'is_default' => true,
+            'profile_id' => $this->profile->id,
+        ]);
+        $this->assertEquals(1, $this->member->profiles()->wherePivot('is_default', true)->count());
+    }
+
+    public function test_non_members_cannot_set_a_default(): void
+    {
+        $this->actingAs($this->stranger)->postJson("/api/profiles/{$this->profile->id}/set-default")
+            ->assertNotFound();
+
+        $this->assertFalse($this->profile->isDefaultFor($this->stranger));
     }
 
     public function test_non_owners_cannot_remove_other_members(): void

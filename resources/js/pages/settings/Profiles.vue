@@ -36,6 +36,7 @@ import {
     useRemoveMember,
     useRenameProfile,
     useRevokeInvite,
+    useSetDefaultProfile,
     useTransferProfileOwnership,
 } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
@@ -69,6 +70,7 @@ const {
 const createProfile = useCreateProfile();
 const renameProfile = useRenameProfile();
 const deleteProfile = useDeleteProfile();
+const setDefaultProfile = useSetDefaultProfile();
 const removeMember = useRemoveMember();
 const transferOwnership = useTransferProfileOwnership();
 const createInvite = useCreateInvite();
@@ -168,6 +170,17 @@ const onDelete = () => {
             deleteTarget.value = null;
             fail(e);
         },
+    });
+};
+
+// --- set default (reversible, auto-saved) ------------------------------------
+const setDefault = (profile: FinancialProfile) => {
+    setDefaultProfile.mutate(profile.id, {
+        onSuccess: () =>
+            toast.success(
+                t('settings.profiles.defaultToast', { name: profile.name }),
+            ),
+        onError: fail,
     });
 };
 
@@ -449,6 +462,19 @@ const joinedLabel = (joinedAt: string): string =>
                                     }}</Badge
                                 >
                                 <Badge
+                                    v-if="profile.is_default"
+                                    variant="outline"
+                                    class="shrink-0 gap-1 border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                    data-test="default-profile-badge"
+                                >
+                                    <Icon
+                                        name="star"
+                                        class="size-3"
+                                        aria-hidden="true"
+                                    />
+                                    {{ $t('settings.profiles.default') }}
+                                </Badge>
+                                <Badge
                                     v-if="profile.id === currentProfileId"
                                     variant="outline"
                                     class="shrink-0"
@@ -480,6 +506,23 @@ const joinedLabel = (joinedAt: string): string =>
                             @click.stop="select(profile.id)"
                         >
                             {{ $t('settings.profiles.switchTo') }}
+                        </Button>
+                        <Button
+                            v-if="!profile.is_default"
+                            variant="ghost"
+                            size="icon-sm"
+                            class="shrink-0"
+                            :aria-label="$t('settings.profiles.setDefault')"
+                            :title="$t('settings.profiles.setDefault')"
+                            :disabled="setDefaultProfile.isLoading.value"
+                            data-test="set-default-button"
+                            @click.stop="setDefault(profile)"
+                        >
+                            <Icon
+                                name="star-outline"
+                                class="size-4"
+                                aria-hidden="true"
+                            />
                         </Button>
                         <Icon
                             name="expand-more"
@@ -762,11 +805,8 @@ const joinedLabel = (joinedAt: string): string =>
                                 </div>
                             </div>
 
-                            <!-- The Default profile cannot be deleted (renamable only). -->
-                            <div
-                                v-if="!profile.is_default"
-                                class="space-y-2 border-t pt-4"
-                            >
+                            <!-- Deleting reassigns affected users' defaults server-side. -->
+                            <div class="space-y-2 border-t pt-4">
                                 <p class="text-xs font-medium text-destructive">
                                     {{ $t('settings.profiles.dangerZone') }}
                                 </p>

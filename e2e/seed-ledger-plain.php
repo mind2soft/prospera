@@ -28,8 +28,7 @@ $mk = function (string $email): array {
     $u->forceFill(['email_verified_at' => now()])->save();
 
     $profile = FinancialProfile::query()
-        ->where('is_default', true)
-        ->whereHas('members', fn ($q) => $q->whereKey($u->id))
+        ->whereHas('members', fn ($q) => $q->whereKey($u->id)->where('financial_profile_user.is_default', true))
         ->first() ?? FinancialProfile::createDefaultFor($u);
 
     Transaction::whereIn('ledger_id', Ledger::query()->where('profile_id', $profile->id)->select('id'))->delete();

@@ -11,11 +11,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * @property int $id
  * @property string $name
- * @property bool $is_default
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
@@ -23,11 +23,9 @@ class FinancialProfile extends Model
 {
     public const DEFAULT_NAME = 'Default profile';
 
-    protected $fillable = ['name', 'is_default'];
+    protected $fillable = ['name'];
 
-    protected $casts = [
-        'is_default' => 'boolean',
-    ];
+    protected $casts = [];
 
     /**
      * Every profile gets its amount data key on creation
@@ -59,7 +57,7 @@ class FinancialProfile extends Model
     {
         return $this->belongsToMany(User::class, 'financial_profile_user', 'profile_id', 'user_id')
             ->using(FinancialProfileUser::class)
-            ->withPivot('is_owner')
+            ->withPivot('is_owner', 'is_default')
             ->withTimestamps();
     }
 
@@ -101,22 +99,24 @@ class FinancialProfile extends Model
 
     /**
      * Create a profile owned by the given user. Wrapped in a transaction:
-     * profile and owner pivot row are created together or not at all.
+     * profile and owner pivot row are created together or not at all. When
+     * $isDefault, the profile becomes the creator's default profile (per-user
+     * pivot flag — issue #41).
      */
     public static function createOwnedBy(User $user, string $name = self::DEFAULT_NAME, bool $isDefault = false): self
     {
         return DB::transaction(function () use ($user, $name, $isDefault): self {
-            $profile = self::create(['name' => $name, 'is_default' => $isDefault]);
+            $profile = self::create(['name' => $name]);
 
-            $profile->members()->attach($user->id, ['is_owner' => true]);
+            $profile->members()->attach($user->id, ['is_owner' => true, 'is_default' => $isDefault]);
 
             return $profile;
         });
     }
 
     /**
-     * Create the per-user seeded "Default profile" (deletion-guarded via the
-     * is_default flag).
+     * Create the per-user seeded "Default profile" and mark it as the
+     * creator's default (per-user pivot flag).
      */
     public static function createDefaultFor(User $user): self
     {
@@ -124,18 +124,80 @@ class FinancialProfile extends Model
     }
 
     /**
-     * Guarantee the account belongs to a profile, seeding its own default
-     * profile when it has no membership left. Accounts that register through
-     * an invite skip the default-profile seeding (docs/shared-finances.md),
-     * so every membership exit — a discarded or revoked invite, leaving,
-     * being removed, or the shared profile being deleted — must run this to
-     * keep the account usable.
+     * Whether the profile is the given user's default profile (per-user
+     * pivot flag — docs/shared-finances.md).
      */
-    public static function ensureUserHasAProfile(User $user): void
+    public function isDefaultFor(User $user): bool
     {
-        if ($user->profiles()->doesntExist()) {
-            self::createDefaultFor($user);
+        return $this->members()
+            ->whereKey($user->id)
+            ->wherePivot('is_default', true)
+            ->exists();
+    }
+
+    /**
+     * Mark the profile as the given user's default, clearing their previous
+     * default. The user must be a member.
+     */
+    public function markDefaultFor(User $user): void
+    {
+        DB::transaction(function () use ($user): void {
+            // Lock the user's membership rows first: two concurrent marks
+            // (or a mark racing a membership-exit fallback) must not end up
+            // with two defaults when none exists yet. SQLite serializes
+            // writes; MySQL takes the row locks.
+            DB::table('financial_profile_user')
+                ->where('user_id', $user->id)
+                ->lockForUpdate()
+                ->get();
+
+            if (! $this->isMember($user)) {
+                throw new LogicException(
+                    'Only a profile member can have the profile as their default.',
+                );
+            }
+
+            DB::table('financial_profile_user')
+                ->where('user_id', $user->id)
+                ->where('is_default', true)
+                ->update(['is_default' => false, 'updated_at' => now()]);
+
+            $this->members()->updateExistingPivot($user, ['is_default' => true]);
+        });
+    }
+
+    /**
+     * Guarantee the account has a default profile: keep the current one when
+     * it still exists; otherwise reassign to the **earliest-created owned**
+     * profile (ties by lowest id), else the **earliest remaining membership**
+     * for users who own none; seed a fresh default profile when no membership
+     * is left. Every membership exit — a discarded or revoked invite, leaving,
+     * being removed, or a profile being deleted — must run this so an account
+     * never ends up without a default (issue #41).
+     */
+    public static function ensureDefaultFor(User $user): void
+    {
+        if ($user->profiles()->wherePivot('is_default', true)->exists()) {
+            return;
         }
+
+        $target = $user->profiles()
+            ->wherePivot('is_owner', true)
+            ->orderBy('financial_profiles.created_at')
+            ->orderBy('financial_profiles.id')
+            ->first()
+            ?? $user->profiles()
+                ->orderBy('financial_profiles.created_at')
+                ->orderBy('financial_profiles.id')
+                ->first();
+
+        if ($target !== null) {
+            $target->markDefaultFor($user);
+
+            return;
+        }
+
+        self::createDefaultFor($user);
     }
 
     /**
@@ -214,7 +276,7 @@ class FinancialProfile extends Model
             // On account deletion the account itself goes away; otherwise a
             // member left without any profile must get its own default one.
             if (! $accountDeletion) {
-                self::ensureUserHasAProfile($member);
+                self::ensureDefaultFor($member);
             }
         });
     }

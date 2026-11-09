@@ -43,6 +43,9 @@ export const profileApi = {
             body: { user_id: userId },
         }),
 
+    setDefault: (profileId: number): Promise<{ profile: FinancialProfile }> =>
+        api(`/api/profiles/${profileId}/set-default`, { method: 'POST' }),
+
     /** Pending (non-expired) invites — owner only. */
     pendingInvites: (
         profileId: number,

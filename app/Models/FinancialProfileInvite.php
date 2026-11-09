@@ -230,7 +230,7 @@ class FinancialProfileInvite extends Model
                 ->first();
 
             if ($invite === null) {
-                FinancialProfile::ensureUserHasAProfile($user);
+                FinancialProfile::ensureDefaultFor($user);
 
                 return;
             }
@@ -238,8 +238,13 @@ class FinancialProfileInvite extends Model
             if (mb_strtolower($invite->email) === mb_strtolower($user->email)
                 && ! $invite->profile->isMember($user)) {
                 $invite->profile->members()->attach($user->id, $invite->membershipPivotAttributes());
+
+                // The account registered through the invite: the shared
+                // profile becomes their default (their only membership —
+                // issue #41, completing #39's intent).
+                FinancialProfile::ensureDefaultFor($user);
             } else {
-                FinancialProfile::ensureUserHasAProfile($user);
+                FinancialProfile::ensureDefaultFor($user);
             }
 
             $invite->consume();

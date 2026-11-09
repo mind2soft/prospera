@@ -11,10 +11,16 @@ use Illuminate\Support\Carbon;
  * @property int $profile_id
  * @property int $user_id
  * @property bool $is_owner
+ * @property bool $is_default
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
 class FinancialProfileUser extends Pivot
 {
     protected $table = 'financial_profile_user';
+
+    protected $casts = [
+        'is_owner' => 'boolean',
+        'is_default' => 'boolean',
+    ];
 }

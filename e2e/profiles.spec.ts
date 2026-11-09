@@ -106,3 +106,58 @@ test('switching profiles scopes the data and persists across reloads', async ({
         await page.evaluate((key) => localStorage.getItem(key), PROFILE_KEY),
     ).toBe(storedBefore);
 });
+
+test('the user can set a shared profile as their default from the switcher', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/budget');
+    // Generous timeout: the first hit may compile fresh Vite modules.
+    await expect(page.getByText('Paychecks').first()).toBeVisible({
+        timeout: 15_000,
+    });
+
+    const menu = await openProfilesMenu(page);
+    const defaultItem = menu.getByRole('menuitem', {
+        name: /Default profile/,
+    });
+    const familyItem = menu.getByRole('menuitem', { name: /Family/ });
+
+    // The seeded default profile carries the star marker; the shared one
+    // offers the set-default action instead.
+    await expect(
+        defaultItem.locator('[data-test="default-profile-star"]'),
+    ).toHaveCount(1);
+    await expect(
+        familyItem.locator('[data-test="set-default-button"]'),
+    ).toHaveCount(1);
+
+    // Selecting the action marks the shared profile as the user's default.
+    // The button stops propagation, so the menu stays open and the reactive
+    // update is observable in place: the star moves to the shared profile.
+    await familyItem.locator('[data-test="set-default-button"]').click();
+    await expect(
+        familyItem.locator('[data-test="default-profile-star"]'),
+    ).toHaveCount(1);
+    await expect(
+        defaultItem.locator('[data-test="default-profile-star"]'),
+    ).toHaveCount(0);
+
+    // The server-side default survives a wipe of the locally stored current
+    // profile: with no stored id, the shared profile is selected on boot.
+    await page.evaluate((key) => localStorage.removeItem(key), PROFILE_KEY);
+    await page.reload();
+    await expect(page.getByText('Create your first budget')).toBeVisible();
+
+    // Restore the default to the owned profile: later specs seed their data
+    // into the user's default profile and expect the suite's baseline state
+    // (data lives in the owned "Default profile").
+    const restored = await openProfilesMenu(page);
+    const ownedItem = restored.getByRole('menuitem', {
+        name: /Default profile/,
+    });
+    await ownedItem.locator('[data-test="set-default-button"]').click();
+    await expect(
+        ownedItem.locator('[data-test="default-profile-star"]'),
+    ).toHaveCount(1);
+});

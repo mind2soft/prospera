@@ -15,13 +15,17 @@ use Illuminate\Validation\ValidationException;
 class FinancialProfileController extends Controller
 {
     /**
-     * List all the user's profiles (owned + shared), each with is_owner.
+     * List all the user's profiles (owned + shared), each with the caller's
+     * is_owner and is_default membership flags.
      */
     public function index(Request $request): JsonResponse
     {
         $memberships = DB::table('financial_profile_user')
             ->where('user_id', $request->user()->id)
-            ->pluck('is_owner', 'profile_id');
+            ->get(['profile_id', 'is_owner', 'is_default'])
+            ->mapWithKeys(fn (object $row): array => [
+                (int) $row->profile_id => (array) $row,
+            ]);
 
         $profiles = FinancialProfile::query()
             ->whereIn('id', $memberships->keys())
@@ -29,7 +33,8 @@ class FinancialProfileController extends Controller
             ->get()
             ->map(fn (FinancialProfile $profile) => $this->serialize(
                 $profile,
-                (bool) $memberships->get($profile->id),
+                (bool) ($memberships[$profile->id]['is_owner'] ?? false),
+                (bool) ($memberships[$profile->id]['is_default'] ?? false),
             ))
             ->values();
 
@@ -47,7 +52,9 @@ class FinancialProfileController extends Controller
 
         $profile = FinancialProfile::createOwnedBy($request->user(), $validated['name']);
 
-        return response()->json(['profile' => $this->serialize($profile, true)], 201);
+        return response()->json([
+            'profile' => $this->serialize($profile, true, $profile->isDefaultFor($request->user())),
+        ], 201);
     }
 
     /**
@@ -58,7 +65,11 @@ class FinancialProfileController extends Controller
         $this->authorizeProfile($request, $profile);
 
         return response()->json([
-            'profile' => $this->serialize($profile, $profile->isOwner($request->user())),
+            'profile' => $this->serialize(
+                $profile,
+                $profile->isOwner($request->user()),
+                $profile->isDefaultFor($request->user()),
+            ),
         ]);
     }
 
@@ -75,22 +86,44 @@ class FinancialProfileController extends Controller
 
         $profile->update($validated);
 
-        return response()->json(['profile' => $this->serialize($profile, true)]);
+        return response()->json([
+            'profile' => $this->serialize(
+                $profile,
+                $profile->isOwner($request->user()),
+                $profile->isDefaultFor($request->user()),
+            ),
+        ]);
     }
 
     /**
-     * Delete a profile (owner only; blocked while it has budgets or ledgers;
-     * the "Default profile" cannot be deleted but can be renamed).
+     * Set the caller's default profile (any member; one default per user,
+     * docs/shared-finances.md — issue #41). Shared profiles may be set as
+     * default too.
+     */
+    public function setDefault(Request $request, FinancialProfile $profile): JsonResponse
+    {
+        $this->authorizeProfile($request, $profile);
+
+        $profile->markDefaultFor($request->user());
+
+        return response()->json([
+            'profile' => $this->serialize(
+                $profile,
+                $profile->isOwner($request->user()),
+                $profile->isDefaultFor($request->user()),
+            ),
+        ]);
+    }
+
+    /**
+     * Delete a profile (owner only; blocked while it has budgets or ledgers).
+     * Since issue #41 the "Default profile" is deletable: affected users'
+     * defaults are reassigned afterwards (earliest created owned profile,
+     * else earliest remaining membership, else a seeded default).
      */
     public function destroy(Request $request, FinancialProfile $profile): JsonResponse
     {
         $this->authorizeProfile($request, $profile, ownerOnly: true);
-
-        if ($profile->is_default) {
-            throw ValidationException::withMessages([
-                'profile' => __('The default profile cannot be deleted.'),
-            ]);
-        }
 
         $hasBudgets = Budget::query()->where('profile_id', $profile->id)->exists();
         $hasLedgers = Ledger::query()->where('profile_id', $profile->id)->exists();
@@ -101,17 +134,17 @@ class FinancialProfileController extends Controller
             ]);
         }
 
-        // Capture the members first: deleting cascades the pivot rows away.
-        $members = $profile->members()->get();
+        DB::transaction(function () use ($profile): void {
+            // Capture the members first: deleting cascades the pivot rows
+            // away, so the capture must happen before the delete.
+            $members = $profile->members()->get();
 
-        DB::transaction(function () use ($profile, $members): void {
             $profile->delete();
 
-            // Deleting detaches the members (FK cascade). An account left
-            // without any profile — e.g. one registered through an invite,
-            // with no owned default profile — gets its own default profile
-            // seeded.
-            $members->each(fn (User $member) => FinancialProfile::ensureUserHasAProfile($member));
+            // Deleting detaches the members (FK cascade). Affected users'
+            // defaults are reassigned here (earliest created owned profile,
+            // else earliest remaining membership, else a seeded default).
+            $members->each(fn (User $member) => FinancialProfile::ensureDefaultFor($member));
         });
 
         return response()->json(status: 204);
@@ -211,19 +244,25 @@ class FinancialProfileController extends Controller
 
         $profile->transferOwnershipTo($target);
 
-        return response()->json(['profile' => $this->serialize($profile, true)]);
+        return response()->json([
+            'profile' => $this->serialize(
+                $profile,
+                $profile->isOwner($request->user()),
+                $profile->isDefaultFor($request->user()),
+            ),
+        ]);
     }
 
     /**
      * @return array<string, string|int|bool>
      */
-    private function serialize(FinancialProfile $profile, bool $isOwner): array
+    private function serialize(FinancialProfile $profile, bool $isOwner, bool $isDefault): array
     {
         return [
             'id' => $profile->id,
             'name' => $profile->name,
             'is_owner' => $isOwner,
-            'is_default' => $profile->is_default,
+            'is_default' => $isDefault,
         ];
     }
 }

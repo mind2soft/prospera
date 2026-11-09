@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { Link, router } from '@inertiajs/vue3';
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+import { toast } from 'vue-sonner';
 import Icon from '@/components/Icon.vue';
 import UserInfo from '@/components/UserInfo.vue';
+import { Button } from '@/components/ui/button';
 import {
     DropdownMenuGroup,
     DropdownMenuItem,
@@ -12,12 +15,14 @@ import {
     DropdownMenuSubContent,
     DropdownMenuSubTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useSetDefaultProfile } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
+import { ApiError } from '@/lib/api';
 import { logout } from '@/routes';
 import { show as contact } from '@/routes/contact';
 import { edit } from '@/routes/profile';
 import { edit as editProfiles } from '@/routes/profiles';
-import type { User } from '@/types';
+import type { FinancialProfile, User } from '@/types';
 
 type Props = {
     user: User;
@@ -29,7 +34,23 @@ const handleLogout = () => {
 
 defineProps<Props>();
 
+const { t } = useI18n();
+
 const { profiles, profileId, select } = useCurrentProfile();
+const setDefaultProfile = useSetDefaultProfile();
+
+const setDefault = (profile: FinancialProfile) => {
+    setDefaultProfile.mutate(profile.id, {
+        onSuccess: () =>
+            toast.success(
+                t('layout.user.defaultToast', { name: profile.name }),
+            ),
+        onError: (e) =>
+            toast.error(
+                e instanceof ApiError ? e.firstError : t('common.error'),
+            ),
+    });
+};
 
 const menuProfiles = computed(() =>
     [...profiles.value].sort((a, b) => Number(b.is_owner) - Number(a.is_owner)),
@@ -68,9 +89,18 @@ const menuProfiles = computed(() =>
                             class="size-4 shrink-0 text-muted-foreground"
                             aria-hidden="true"
                         />
-                        <span class="min-w-0 flex-1 truncate">{{
-                            profile.name
-                        }}</span>
+                        <span class="flex min-w-0 flex-1 items-center gap-1">
+                            <Icon
+                                v-if="profile.is_default"
+                                name="star"
+                                class="size-3.5 shrink-0 text-amber-500"
+                                aria-hidden="true"
+                                data-test="default-profile-star"
+                            />
+                            <span class="min-w-0 truncate">{{
+                                profile.name
+                            }}</span>
+                        </span>
                         <span
                             class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
                             :class="
@@ -85,6 +115,23 @@ const menuProfiles = computed(() =>
                                     : $t('layout.user.shared')
                             }}
                         </span>
+                        <Button
+                            v-if="!profile.is_default"
+                            variant="ghost"
+                            size="icon-sm"
+                            class="shrink-0"
+                            :aria-label="$t('layout.user.setDefault')"
+                            :title="$t('layout.user.setDefault')"
+                            :disabled="setDefaultProfile.isLoading.value"
+                            data-test="set-default-button"
+                            @click.stop="setDefault(profile)"
+                        >
+                            <Icon
+                                name="star-outline"
+                                class="size-4"
+                                aria-hidden="true"
+                            />
+                        </Button>
                         <Icon
                             v-if="profile.id === profileId"
                             name="check"
