@@ -11,7 +11,10 @@ the filing cabinet.
 
 ## Features
 
-- **Dashboard** — your financial pulse at a glance
+- **Dashboard** — your financial pulse at a glance: a configurable widget
+  grid (envelope spending, income & expenses history, radial ratios),
+  computed server-side and masked per envelope permissions
+  ([docs/dashboard.md](docs/dashboard.md))
 - **Budget** — plan where your money goes before it goes anywhere
 - **Ledger** — a running log of expenses and revenues, one line at a time
 - **Envelopes** — category envelopes (housing, groceries, fun…) with a name,
@@ -28,7 +31,8 @@ the filing cabinet.
 - **Notification settings** — a master switch plus per-type toggles that
   gate every system email at send time.
 
-Design docs live in [`docs/`](docs/): [budget](docs/budget.md),
+Design docs live in [`docs/`](docs/): [dashboard](docs/dashboard.md),
+[budget](docs/budget.md),
 [ledger](docs/ledger.md), [envelopes](docs/envelope.md),
 [shared finances](docs/shared-finances.md),
 [encryption at rest](docs/encryption.md),

@@ -35,6 +35,7 @@ resources/js/locales/
     ├── welcome.json    # landing page
     ├── layout.json     # app shell (sidebar, header, user menu, dashboard)
     ├── budget.json     # budget page + dialogs
+    ├── dashboard.json  # dashboard page: catalog, widget settings, states
     ├── envelopes.json  # envelopes page + share drawer
     ├── ledger.json     # ledger page + calendar/tables
     ├── settings.json   # settings pages, security, two-factor, passkeys
