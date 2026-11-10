@@ -29,7 +29,7 @@ const columns = computed(() => {
         return 5;
     }
 
-    if (w >= 1280) {
+    if (w >= 1100) {
         return 5;
     }
 

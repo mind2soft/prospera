@@ -51,7 +51,7 @@ Configuration only — **no money amounts are stored** in
 ## Grid & layout
 
 - Responsive columns: **1 column at `xs`, 5 columns at `xl`** (measured on
-  the grid container: `≥1280px` → 5, `≥1024px` → 4, `≥768px` → 3,
+  the grid container: `≥1100px` → 5, `≥1024px` → 4, `≥768px` → 3,
   `≥640px` → 2, below → 1). Widgets flow top-to-bottom (vertical packing)
   and follow the layout direction (`ltr`/`rtl`) of the active locale —
   CSS grid placement is direction-aware.
