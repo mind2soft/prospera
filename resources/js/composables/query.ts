@@ -17,6 +17,7 @@ export type Query<TData, TError = Error> = {
     isPending: Ref<boolean>;
     isError: Ref<boolean>;
     isLoading: Ref<boolean>;
+    refetch: () => Promise<unknown>;
 };
 
 export type MutateOptions<TData, TError, TVariables> = {
@@ -40,6 +41,15 @@ type QueryOptions<TQueryFnData, TData> = {
     queryFn: (context: QueryFnContext) => Promise<TQueryFnData>;
     enabled?: boolean | Ref<boolean>;
     select?: (data: TQueryFnData) => TData;
+    /**
+     * Polling interval, passed through to TanStack Query. A zero-argument
+     * function may return `false` to pause the polling (the dashboard
+     * refreshes every 15 minutes while its tab is visible).
+     */
+    refetchInterval?:
+        | number
+        | false
+        | ((data: TData | undefined, query: unknown) => number | false);
 };
 
 /**
@@ -63,6 +73,7 @@ export function useQuery<TQueryFnData, TError, TData>(
         queryKey: options.queryKey,
         queryFn: options.queryFn,
         select: options.select,
+        refetchInterval: options.refetchInterval,
         // The SSR pass can never fetch successfully: there is no session
         // cookie, no CSRF token, and Node's fetch cannot resolve relative
         // URLs. Disable every query server-side so the SSR markup is the
@@ -90,6 +101,8 @@ export function useQuery<TQueryFnData, TError, TData>(
         }),
         isError: query.isError,
         isLoading: query.isLoading,
+        // vue-query's ToRefs result wraps `refetch` in a Ref.
+        refetch: () => query.refetch.value(),
     };
 }
 

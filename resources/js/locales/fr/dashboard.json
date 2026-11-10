@@ -1,0 +1,108 @@
+{
+    "dashboard": {
+        "title": "Tableau de bord",
+        "add": "Ajouter un widget",
+        "catalog": {
+            "envelope_spending": {
+                "name": "Dépenses par enveloppe",
+                "description": "Totaux dépensés par enveloppe avec progression du budget."
+            },
+            "income_expenses": {
+                "name": "Historique revenus et dépenses",
+                "description": "Revenus et dépenses sur la période choisie."
+            },
+            "radial": {
+                "name": "Radial",
+                "description": "La proportion des montants des enveloppes choisies."
+            }
+        },
+        "widget": {
+            "defaultTitle": {
+                "envelope_spending": "Dépenses par enveloppe",
+                "income_expenses": "Revenus et dépenses",
+                "radial": "Radial"
+            },
+            "settings": "Paramètres du widget",
+            "remove": "Supprimer le widget",
+            "drag": "Glisser pour réorganiser",
+            "emptySelection": "Choisissez des enveloppes dans les paramètres du widget pour voir des données.",
+            "masked": "Montants masqués — vous n'avez pas accès aux montants de cette enveloppe.",
+            "error": "Ce widget n'a pas pu être chargé.",
+            "retry": "Réessayer",
+            "overBudget": "Hors budget",
+            "noBudget": "Aucun budget ne couvre cette période"
+        },
+        "settings": {
+            "title": "Titre",
+            "titlePlaceholder": "Titre par défaut",
+            "viewType": "Type de vue",
+            "viewTypes": {
+                "single": "Tableau",
+                "stacked_bars": "Barres empilées",
+                "line": "Graphique linéaire",
+                "pie": "Diagramme circulaire",
+                "donut": "Anneau"
+            },
+            "columnWidth": "Largeur en colonnes",
+            "periodType": "Type de période",
+            "periodTypes": {
+                "days": "Jours",
+                "months": "Mois"
+            },
+            "periodRange": "Plage de la période",
+            "ranges": {
+                "days": {
+                    "1": "Aujourd'hui",
+                    "2": "2 derniers jours",
+                    "3": "3 derniers jours",
+                    "7": "Semaine dernière",
+                    "14": "2 dernières semaines"
+                },
+                "months": {
+                    "1": "Mois courant",
+                    "2": "2 derniers mois",
+                    "3": "3 derniers mois",
+                    "6": "6 derniers mois",
+                    "12": "12 derniers mois"
+                }
+            },
+            "selection": "Sélection d'enveloppes",
+            "addEnvelope": "Ajouter une enveloppe",
+            "addGroup": "Ajouter un groupe",
+            "groupName": "Nom du groupe",
+            "groupNamePlaceholder": "p. ex. Revenus combinés",
+            "groupMember": "Membre",
+            "noEnvelopesLeft": "Toutes les enveloppes visibles sont déjà sélectionnées.",
+            "removeItem": "Retirer de la sélection",
+            "renameGroup": "Renommer le groupe",
+            "done": "Terminé"
+        },
+        "empty": {
+            "title": "Personnalisez-le",
+            "description": "Ajoutez des widgets pour voir les dépenses par enveloppe, les tendances de revenus et les proportions d'un coup d'œil.",
+            "add": "Ajouter un widget"
+        },
+        "removeConfirm": {
+            "title": "Supprimer le widget ?",
+            "description": "Le widget et ses paramètres seront retirés de votre tableau de bord. Vos données financières ne sont pas touchées.",
+            "cancel": "Annuler",
+            "confirm": "Supprimer"
+        },
+        "toast": {
+            "failed": "Une erreur est survenue.",
+            "saveFailed": "Impossible d'enregistrer votre tableau de bord.",
+            "added": "Widget ajouté au tableau de bord."
+        },
+        "history": {
+            "revenue": "Revenus",
+            "expenses": "Dépenses"
+        },
+        "spending": {
+            "envelope": "Enveloppe",
+            "spent": "Dépensé"
+        },
+        "radial": {
+            "legendTitle": "Sélection"
+        }
+    }
+}

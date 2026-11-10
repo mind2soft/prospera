@@ -1,0 +1,175 @@
+<script setup lang="ts">
+import { Donut } from '@unovis/ts';
+import { VisDonut, VisSingleContainer, VisTooltip } from '@unovis/vue';
+import { computed } from 'vue';
+import { useLocale } from '@/composables/useLocale';
+import { formatMoney } from '@/lib/budget';
+import { isClient } from '@/lib/ssr';
+import type { DashboardRadialRow, DashboardWidgetData } from '@/types';
+
+const props = defineProps<{
+    data: DashboardWidgetData;
+    viewType: string;
+    currency: string;
+}>();
+
+const { locale } = useLocale();
+
+const rows = computed(() =>
+    props.data.type === 'radial' ? props.data.rows : [],
+);
+
+/** Only amount-visible rows are charted; masked rows stay in the legend. */
+const chartRows = computed(() =>
+    rows.value.filter((row) => !row.masked && (row.value ?? 0) > 0),
+);
+
+const total = computed(() =>
+    chartRows.value.reduce((sum, row) => sum + (row.value ?? 0), 0),
+);
+
+/** Fallback palette for groups (which carry no envelope color). */
+const PALETTE = [
+    '#3b82f6',
+    '#f97316',
+    '#a855f7',
+    '#14b8a6',
+    '#eab308',
+    '#ec4899',
+    '#6366f1',
+    '#84cc16',
+];
+
+const FALLBACK_COLOR = 'var(--muted-foreground)';
+
+function colorOf(row: DashboardRadialRow, index: number): string {
+    return row.color ?? PALETTE[index % PALETTE.length];
+}
+
+const value = (d: DashboardRadialRow): number => d.value ?? 0;
+
+/** Segment colors keyed by row key (masked rows fall back to muted). */
+const colorByKey = computed(() => {
+    const map: Record<string, string> = {};
+
+    chartRows.value.forEach((row, index) => {
+        map[row.key] = colorOf(row, index);
+    });
+
+    return map;
+});
+
+const color = (d: DashboardRadialRow): string =>
+    colorByKey.value[d.key] ?? FALLBACK_COLOR;
+
+// arcWidth is in pixels; 0 renders a full pie.
+const arcWidth = computed(() => (props.viewType === 'donut' ? 28 : 0));
+
+const tooltipTemplate = (datum?: DashboardRadialRow): string => {
+    if (!datum) {
+        return '';
+    }
+
+    const share =
+        total.value > 0 && datum.value !== null
+            ? ` (${((datum.value / total.value) * 100).toFixed(1)}%)`
+            : '';
+
+    return `<div style="font-size:12px">
+        <strong>${datum.name}</strong><br/>
+        <span style="font-variant-numeric:tabular-nums">${
+            datum.value === null
+                ? '•••'
+                : formatMoney(datum.value, props.currency)
+        }${share}</span>
+    </div>`;
+};
+
+function legendShare(row: DashboardRadialRow): string | null {
+    if (row.masked || row.value === null || total.value === 0) {
+        return null;
+    }
+
+    const percentage = new Intl.NumberFormat(locale.value, {
+        style: 'percent',
+        maximumFractionDigits: 1,
+    }).format(row.value / total.value);
+
+    return percentage;
+}
+</script>
+
+<template>
+    <div class="flex h-full min-h-0 flex-col gap-2">
+        <p
+            v-if="rows.length === 0"
+            class="m-auto px-4 text-center text-sm text-muted-foreground"
+        >
+            {{ $t('dashboard.widget.emptySelection') }}
+        </p>
+
+        <template v-else>
+            <div
+                v-if="isClient && chartRows.length > 0"
+                class="flex min-h-0 flex-1 items-center justify-center"
+            >
+                <VisSingleContainer :data="chartRows" :height="180">
+                    <VisDonut
+                        :value="value"
+                        :color="color"
+                        :arc-width="arcWidth"
+                        :pad-angle="0.01"
+                        :corner-radius="4"
+                    />
+                    <VisTooltip
+                        :triggers="{
+                            [Donut.selectors.segment]: tooltipTemplate,
+                        }"
+                    />
+                </VisSingleContainer>
+            </div>
+
+            <div
+                v-else-if="isClient"
+                class="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground"
+            >
+                {{ $t('dashboard.widget.emptySelection') }}
+            </div>
+
+            <div
+                v-else
+                class="min-h-24 flex-1 animate-pulse rounded-md bg-muted"
+            />
+
+            <!-- Legend: masked rows stay listed, without amounts. -->
+            <ul
+                class="flex flex-wrap justify-center gap-x-4 gap-y-1 px-1 pb-1 text-xs"
+            >
+                <li
+                    v-for="row in rows"
+                    :key="row.key"
+                    class="flex items-center gap-1.5"
+                    :class="row.masked ? 'text-muted-foreground' : ''"
+                >
+                    <span
+                        class="size-2.5 shrink-0 rounded-full"
+                        :style="{
+                            backgroundColor: row.masked
+                                ? 'var(--muted)'
+                                : (colorByKey[row.key] ?? FALLBACK_COLOR),
+                        }"
+                        aria-hidden="true"
+                    />
+                    <span class="font-medium">{{ row.name }}</span>
+                    <span
+                        v-if="legendShare(row) !== null"
+                        class="text-muted-foreground tabular-nums"
+                    >
+                        {{ legendShare(row) }}
+                    </span>
+                    <span v-else-if="row.masked">•••</span>
+                </li>
+            </ul>
+        </template>
+    </div>
+</template>

@@ -1,5 +1,6 @@
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { useQueryClient } from 'vue-query';
+import { invalidateDashboardData } from '@/composables/dashboardQueries';
 import { useMutation, useQuery } from '@/composables/query';
 import { envelopeApi } from '@/lib/envelopeApi';
 import type { Envelope } from '@/types';
@@ -50,6 +51,7 @@ export function useSetEnvelopeShare() {
                     envelopeKeys.shares(envelopeId),
                 );
                 void queryClient.invalidateQueries(envelopeKeys.all);
+                invalidateDashboardData(queryClient);
             },
         },
     );
@@ -67,6 +69,7 @@ export function useRemoveEnvelopeShare() {
                     envelopeKeys.shares(envelopeId),
                 );
                 void queryClient.invalidateQueries(envelopeKeys.all);
+                invalidateDashboardData(queryClient);
             },
         },
     );

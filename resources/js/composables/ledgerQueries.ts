@@ -1,5 +1,6 @@
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { useQueryClient } from 'vue-query';
+import { invalidateDashboardData } from '@/composables/dashboardQueries';
 import { type QueryKey, useMutation, useQuery } from '@/composables/query';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import {
@@ -80,6 +81,7 @@ export function useCreateLedger() {
                     ledger: data.ledger,
                 });
                 void queryClient.invalidateQueries({ queryKey: ['ledgers'] });
+                invalidateDashboardData(queryClient);
             },
         },
     );
@@ -94,6 +96,7 @@ export function useDeleteLedger() {
             queryClient.removeQueries(ledgerKeys.transactions(id));
             queryClient.removeQueries(ledgerKeys.shares(id));
             void queryClient.invalidateQueries({ queryKey: ['ledgers'] });
+            invalidateDashboardData(queryClient);
         },
     });
 }
@@ -135,6 +138,7 @@ export function useAddTransaction(ledgerId: MaybeRefOrGetter<number | null>) {
                 void queryClient.invalidateQueries({
                     queryKey: ledgerKeys.transactions(toValue(ledgerId) ?? 0),
                 });
+                invalidateDashboardData(queryClient);
             },
         },
     );
@@ -153,6 +157,7 @@ export function useDeleteTransaction(
                 void queryClient.invalidateQueries({
                     queryKey: ledgerKeys.transactions(toValue(ledgerId) ?? 0),
                 });
+                invalidateDashboardData(queryClient);
             },
         },
     );
