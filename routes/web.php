@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
 
+// Public privacy policy (issue #18): reachable without authentication; the
+// localized copy is loaded and rendered client-side (see docs/localization.md).
+Route::inertia('privacy', 'Privacy')->name('privacy');
+
 // Public contact form (issue #17): reachable by guests and authenticated
 // users; submissions are throttled and rate-limited per IP.
 Route::get('contact', [ContactController::class, 'show'])->name('contact.show');

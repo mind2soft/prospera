@@ -111,6 +111,22 @@ dependency order — transactions first, then ledgers (cascading their
 transactions), then budgets, then envelopes — which cannot violate the
 integrity rules, so solo-profile deletion is never blocked in practice.
 
+### Account termination
+
+These rules are exactly what the public privacy policy (the `/privacy` page,
+[resources/content/privacy.en.md](../resources/content/privacy.en.md))
+communicates to users — keep the two in sync:
+
+- every financial profile left **without any remaining member** — including
+  all of its ledgers, budgets and transactions — is deleted;
+- every shared profile that **still has other members keeps its data**:
+  ownership passes to the **earliest-joined remaining member** (lowest
+  `financial_profile_user.created_at`, ties broken by the lowest `user_id`),
+  matching the ownership-transfer rules above;
+- **the user is responsible for revoking sharing permissions before deleting
+  their account** if they do not want a financial profile to keep existing —
+  and be transferred — without them.
+
 Resources (budgets, ledgers, envelopes) owned by a member **auto-transfer to
 the profile owner** when that member is removed from the profile (or leaves
 voluntarily) or when their account is deleted. Auto-transfer edge cases:

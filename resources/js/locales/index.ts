@@ -12,6 +12,7 @@ import contact from './en/contact.json';
 import envelopes from './en/envelopes.json';
 import layout from './en/layout.json';
 import ledger from './en/ledger.json';
+import privacy from './en/privacy.json';
 import settings from './en/settings.json';
 import share from './en/share.json';
 import welcome from './en/welcome.json';
@@ -22,6 +23,7 @@ import contactFr from './fr/contact.json';
 import envelopesFr from './fr/envelopes.json';
 import layoutFr from './fr/layout.json';
 import ledgerFr from './fr/ledger.json';
+import privacyFr from './fr/privacy.json';
 import settingsFr from './fr/settings.json';
 import shareFr from './fr/share.json';
 import welcomeFr from './fr/welcome.json';
@@ -34,6 +36,7 @@ const en = {
     ...envelopes,
     ...layout,
     ...ledger,
+    ...privacy,
     ...settings,
     ...share,
     ...welcome,
@@ -47,6 +50,7 @@ const fr = {
     ...envelopesFr,
     ...layoutFr,
     ...ledgerFr,
+    ...privacyFr,
     ...settingsFr,
     ...shareFr,
     ...welcomeFr,

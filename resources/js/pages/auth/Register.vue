@@ -18,7 +18,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { profileKeys, useAcceptInvite } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { ApiError } from '@/lib/api';
-import { dashboard, login } from '@/routes';
+import { dashboard, login, privacy } from '@/routes';
 import { store } from '@/routes/register';
 import type { InviteContext } from '@/types';
 
@@ -319,6 +319,18 @@ const onDecline = () => {
                     :tabindex="6"
                     >{{
                         $t('auth.login.submit')
+                    }}</TextLink
+                >
+            </div>
+
+            <div class="text-center text-xs text-muted-foreground">
+                <TextLink
+                    :href="privacy()"
+                    class="underline underline-offset-4"
+                    :tabindex="7"
+                    data-test="privacy-link"
+                    >{{
+                        $t('privacy.link')
                     }}</TextLink
                 >
             </div>

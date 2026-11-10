@@ -22,6 +22,9 @@ the filing cabinet.
   financial profile (AES-256-GCM), rotated monthly.
 - **Contact form** — a public, rate-limited contact page with a per-IP
   cooldown, a submission log and a queued email to the maintainers.
+- **Privacy page** — a public, localized privacy policy at `/privacy`
+  (sanitized markdown per locale, with English fallback), linked from the
+  landing footer, the sign-up/login pages and the user menu.
 - **Notification settings** — a master switch plus per-type toggles that
   gate every system email at send time.
 
@@ -30,7 +33,8 @@ Design docs live in [`docs/`](docs/): [budget](docs/budget.md),
 [shared finances](docs/shared-finances.md),
 [encryption at rest](docs/encryption.md),
 [notifications](docs/notifications.md) and
-[localization](docs/localization.md).
+[localization](docs/localization.md) (long-form content such as the
+[privacy policy](resources/content/privacy.en.md) is documented there too).
 
 ## Tech stack
 
