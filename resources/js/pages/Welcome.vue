@@ -12,7 +12,7 @@ import { computed } from 'vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import GithubIcon from '@/components/GithubIcon.vue';
 import { useLocale } from '@/composables/useLocale';
-import { dashboard, login, register } from '@/routes';
+import { dashboard, login, privacy, register } from '@/routes';
 import { show as contact } from '@/routes/contact';
 
 const page = usePage();
@@ -436,6 +436,14 @@ const features = [
                         class="transition hover:text-foreground"
                         >{{
                             $t('contact.landing.cta')
+                        }}</Link
+                    >
+                    <Link
+                        :href="privacy()"
+                        class="transition hover:text-foreground"
+                        data-test="privacy-link"
+                        >{{
+                            $t('privacy.link')
                         }}</Link
                     >
                     <a

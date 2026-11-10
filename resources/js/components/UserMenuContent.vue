@@ -18,7 +18,7 @@ import {
 import { useSetDefaultProfile } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { ApiError } from '@/lib/api';
-import { logout } from '@/routes';
+import { logout, privacy } from '@/routes';
 import { show as contact } from '@/routes/contact';
 import { edit } from '@/routes/profile';
 import { edit as editProfiles } from '@/routes/profiles';
@@ -163,6 +163,16 @@ const menuProfiles = computed(() =>
             <Link class="block w-full cursor-pointer" :href="contact()">
                 <Icon name="mail" class="size-4" aria-hidden="true" />
                 {{ $t('layout.user.contact') }}
+            </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem :as-child="true">
+            <Link
+                class="block w-full cursor-pointer"
+                :href="privacy()"
+                data-test="privacy-link"
+            >
+                <Icon name="shield-lock" class="size-4" aria-hidden="true" />
+                {{ $t('privacy.link') }}
             </Link>
         </DropdownMenuItem>
     </DropdownMenuGroup>

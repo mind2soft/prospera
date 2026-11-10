@@ -39,6 +39,7 @@ resources/js/locales/
     ├── ledger.json     # ledger page + calendar/tables
     ├── settings.json   # settings pages, security, two-factor, passkeys
     ├── share.json      # generic share drawer
+    ├── privacy.json    # privacy page chrome (long-form copy lives in resources/content/)
     └── contact.json    # contact page, landing CTA, GitHub tooltip
 ```
 
@@ -67,3 +68,46 @@ more locales is tracked in separate issues.
   `resources/js/locales/` with the same namespaces, an entry in
   `messages` in [`resources/js/locales/index.ts`](../resources/js/locales/index.ts),
   and an entry in `config/app.php` → `available_locales`.
+
+## Long-form markdown content
+
+Long-form copy (privacy policy, future legal/about pages) does **not** live
+in the i18n JSON files: those hold short UI strings, while multi-page
+documents are painful to review, diff and translate in JSON. Such documents
+are **markdown files, one per locale**, loaded separately and rendered on the
+client.
+
+```
+resources/content/
+└── privacy.en.md    # English is the source of truth
+└── privacy.fr.md    # optional translations
+```
+
+- **File naming** — `<name>.<locale>.md` (e.g. `privacy.fr.md`); the
+  `<name>` is consumed by
+  [`useLocalizedDocument()`](../resources/js/composables/useLocalizedDocument.ts),
+  which loads the file for the active locale and **falls back to the English
+  file** when no translation exists (same rule as the JSON bundles).
+- **Front matter** — each file starts with a small front-matter block
+  (`---` delimited) carrying the document's publication date:
+
+  ```markdown
+  ---
+  last-updated: 2026-11-09
+  ---
+  ```
+
+  The page shows it as a localized "Last updated" date (formatted in UTC, so
+  the displayed date matches the published one in every timezone). The front
+  matter is stripped before rendering.
+- **Sanitization is mandatory** — the markdown is rendered client-side with
+  a sanitized renderer ([`marked`](https://marked.js.org/) +
+  [`DOMPurify`](https://github.com/cure53/DOMPurify) in
+  [`Privacy.vue`](../resources/js/pages/Privacy.vue)); user-visible HTML must
+  be inert. Any new long-form page must go through the same pattern — never
+  render raw markdown as HTML.
+- The files are bundled as **lazy chunks** (`import.meta.glob`, non-eager),
+  so the app bundle carries none of the copy until the page needs it.
+- The document body contains **no `<h1>` heading** — the page component owns
+  the (localized) `<h1>` title, so the title stays localized even when the
+  content falls back to English. Start document headings at `##`.
