@@ -37,6 +37,10 @@ export function useDashboardWidgets() {
 
 /**
  * Full layout save (the dashboard autosaves; there is no partial update).
+ * The profile id is part of the mutation variables — resolving it in the
+ * callbacks would let an in-flight save land on the wrong profile's cache
+ * when the user switches profiles mid-request.
+ *
  * The widget data endpoint computes from the SAVED configuration, so every
  * successful save invalidates the data queries — a config edit refetches
  * its data immediately (query key) but the response raced against the
@@ -44,19 +48,18 @@ export function useDashboardWidgets() {
  */
 export function useSaveDashboardLayout() {
     const queryClient = useQueryClient();
-    const { profileId } = useCurrentProfile();
 
     return useMutation(
-        (widgets: DashboardWidgetConfig[]) =>
-            dashboardApi.save(toValue(profileId) ?? 0, { widgets }),
+        (input: { profileId: number; widgets: DashboardWidgetConfig[] }) =>
+            dashboardApi.save(input.profileId, { widgets: input.widgets }),
         {
-            onSuccess: (data) => {
+            onSuccess: (data, { profileId }) => {
                 queryClient.setQueryData(
-                    dashboardKeys.widgets(toValue(profileId) ?? 0),
+                    dashboardKeys.widgets(profileId),
                     data,
                 );
                 void queryClient.invalidateQueries({
-                    queryKey: ['dashboard', toValue(profileId) ?? 0, 'data'],
+                    queryKey: ['dashboard', profileId, 'data'],
                 });
             },
         },
@@ -114,7 +117,7 @@ export function useWidgetData(
         enabled: computed(
             () => toValue(profileId) !== null && toValue(widget) !== null,
         ),
-        // refetchInterval: refreshInterval,
+        refetchInterval: refreshInterval,
     });
 }
 

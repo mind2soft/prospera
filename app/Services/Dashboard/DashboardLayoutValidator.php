@@ -50,9 +50,22 @@ final class DashboardLayoutValidator
         $visibleIds = $this->visibleEnvelopeIds($request, $user);
 
         $normalized = [];
+        $seenWidgetIds = [];
 
         foreach ($widgets as $index => $widget) {
-            $normalized[] = $this->validateWidget($index, $widget, $visibleIds);
+            $normalized[] = $normalizedWidget = $this->validateWidget($index, $widget, $visibleIds);
+
+            // The same existing widget may not appear twice in one payload —
+            // the save updates in place by id.
+            $id = $normalizedWidget['id'] ?? null;
+
+            if ($id !== null) {
+                if (isset($seenWidgetIds[$id])) {
+                    throw $this->error($index, 'id', __('The widget configuration is invalid.'));
+                }
+
+                $seenWidgetIds[$id] = true;
+            }
         }
 
         return $normalized;
@@ -170,6 +183,21 @@ final class DashboardLayoutValidator
 
         $period = $this->validatePeriod($index, $widget['period'] ?? null);
         $selection = $this->validateSelection($index, $widget['selection'] ?? null, $visibleIds);
+
+        // Bound the total referenced envelopes per widget (rows + group
+        // members) — aggregates hydrate every referenced transaction into
+        // PHP, so runaway selections must stay impossible.
+        $referenced = [];
+
+        foreach ($selection as $item) {
+            foreach ($item['kind'] === 'envelope' ? [$item['envelope_id']] : $item['envelope_ids'] as $envelopeId) {
+                $referenced[$envelopeId] = true;
+            }
+        }
+
+        if (count($referenced) > self::MAX_SELECTION_ITEMS) {
+            throw $this->error($index, 'selection', __('A widget can reference at most :max envelopes.', ['max' => self::MAX_SELECTION_ITEMS]));
+        }
 
         return [
             'id' => $id,

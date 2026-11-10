@@ -105,7 +105,13 @@ const onCardDragOver = (
 
     const insertBefore = rtl ? !beforePointer : beforePointer;
 
-    const targetIndex = insertBefore ? (to > from ? to - 1 : to) : to;
+    const targetIndex = insertBefore
+        ? to > from
+            ? to - 1
+            : to
+        : to > from
+          ? to
+          : to + 1;
 
     if (targetIndex === from) {
         return;

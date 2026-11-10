@@ -20,10 +20,11 @@ amounts never reach a client that is not allowed to see them.
 ## Data schema
 
 ```typescript
+// Stored columns (dashboard_widgets table):
 type DashboardWidget = {
     id: number;                    // PK
-    user_id: number;               // FK users.id — each member owns their widgets
-    profile_id: number;            // FK financial_profiles.id — config is per profile
+    user_id: number;               // FK users.id — each member owns their widgets (not part of the API payload)
+    financial_profile_id: number;  // FK financial_profiles.id — config is per profile (not part of the API payload)
     type: 'envelope_spending' | 'income_expenses' | 'radial';
     title: string | null;          // null → localized default title
     view_type: string;             // widget-specific (below); validated against the type
@@ -31,9 +32,12 @@ type DashboardWidget = {
     period: { type: 'days' | 'months'; range: PeriodRange };
     selection: SelectionItem[];    // ordered; see below
     order: number;                 // drag & drop ordering (column: sort_order)
-    created_at: string;
-    updated_at: string;
+    created_at: string;            // not part of the API payload
+    updated_at: string;            // not part of the API payload
 };
+
+// API payload per widget (serializeWidget): id, type, title, view_type,
+// column_width, period, selection, order.
 
 type SelectionItem =
     | { kind: 'envelope'; envelope_id: number }

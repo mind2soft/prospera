@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
@@ -24,8 +24,6 @@ const title = computed(
         props.widget.title ??
         t(`dashboard.widget.defaultTitle.${props.widget.type}`),
 );
-
-const card = useTemplateRef<HTMLElement>('card');
 
 /**
  * The card element is always `draggable` (Chromium snapshots the attribute
@@ -73,7 +71,6 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', onWindowMouseUp));
 
 <template>
     <article
-        ref="card"
         draggable="true"
         :aria-label="title"
         class="group/card flex h-full flex-col rounded-xl border bg-card text-card-foreground shadow-sm transition-shadow hover:shadow-md"

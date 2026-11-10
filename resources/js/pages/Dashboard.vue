@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
 import { useDebounceFn } from '@vueuse/core';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, ref, toValue, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import DashboardGrid from '@/components/dashboard/DashboardGrid.vue';
@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBudgets } from '@/composables/budgetQueries';
+import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import {
     useDashboardWidgets,
     useRemoveDashboardWidget,
@@ -42,6 +43,7 @@ defineOptions({
 });
 
 const { t } = useI18n();
+const { profileId } = useCurrentProfile();
 
 const widgetsQuery = useDashboardWidgets();
 // Destructured for the template — refs nested in plain objects do not
@@ -90,6 +92,14 @@ const withoutAutosave = (apply: () => void): void => {
     });
 };
 
+// Switching profiles clears the local layout immediately (widget config is
+// per profile); the new profile's canonical list replaces it on load.
+watch(profileId, () => {
+    withoutAutosave(() => {
+        widgets.value = [];
+    });
+});
+
 /** The save payload of a widget — existing widgets keep their id. */
 const configOf = (widget: DashboardWidgetConfig): DashboardWidgetConfig => ({
     ...((widget.id ?? 0) > 0 ? { id: widget.id } : {}),
@@ -132,30 +142,53 @@ watch(
 );
 
 // Debounced autosave on every change — the project convention: no save
-// buttons. The full layout is sent; the server assigns ids + order.
-const saveNow = (): void => {
-    saveLayout.mutate(widgets.value.map(configOf), {
-        onSuccess: (data) => {
-            // Adopt the server-assigned ids for widgets added this round; a
-            // temp id → real id transition must not re-trigger the watcher.
-            withoutAutosave(() => {
-                data.widgets.forEach((widget, index) => {
-                    const local = widgets.value[index];
+// buttons. The full layout is sent; the server assigns ids + order. Saves
+// are serialized (one in flight; a change during a save re-queues) so
+// responses can never land out of order and clobber newer edits.
+let queuedSave = false;
 
-                    if (local && (local.id ?? 0) <= 0) {
-                        local.id = widget.id;
-                    }
+const saveNow = (): void => {
+    if (saveLayout.isLoading.value) {
+        queuedSave = true;
+
+        return;
+    }
+
+    queuedSave = false;
+
+    saveLayout.mutate(
+        {
+            profileId: toValue(profileId) ?? 0,
+            widgets: widgets.value.map(configOf),
+        },
+        {
+            onSuccess: (data) => {
+                // Adopt the server-assigned ids for widgets added this round; a
+                // temp id → real id transition must not re-trigger the watcher.
+                withoutAutosave(() => {
+                    data.widgets.forEach((widget, index) => {
+                        const local = widgets.value[index];
+
+                        if (local && (local.id ?? 0) <= 0) {
+                            local.id = widget.id;
+                        }
+                    });
                 });
-            });
+            },
+            onError: (error) => {
+                toast.error(
+                    error instanceof ApiError
+                        ? error.firstError
+                        : t('dashboard.toast.saveFailed'),
+                );
+            },
+            onSettled: () => {
+                if (queuedSave) {
+                    saveNow();
+                }
+            },
         },
-        onError: (error) => {
-            toast.error(
-                error instanceof ApiError
-                    ? error.firstError
-                    : t('dashboard.toast.saveFailed'),
-            );
-        },
-    });
+    );
 };
 
 const scheduleSave = useDebounceFn(saveNow, 600);

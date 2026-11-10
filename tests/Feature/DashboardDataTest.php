@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Budget;
 use App\Models\DashboardWidget;
 use App\Models\Envelope;
+use App\Models\EnvelopePermission;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
 use App\Models\User;
@@ -392,6 +393,91 @@ class DashboardDataTest extends TestCase
                     ['kind' => 'envelope', 'name' => 'Gas', 'masked' => true, 'value' => null],
                 ],
             ]);
+    }
+
+    // ---- Masking, history and scoping edge cases ----
+
+    public function test_revoking_a_share_masks_the_widget_after_the_fact(): void
+    {
+        // The member's widget was built while they had viewer access to the
+        // gas envelope; the share is revoked afterwards — the aggregate must
+        // mask on read (permissions are recomputed per request).
+        $this->gas->permissions()->create([
+            'user_id' => $this->member->id,
+            'permission' => EnvelopePermission::PERMISSION_VIEWER,
+        ]);
+
+        $widget = $this->createWidget('envelope_spending', 'single', ['type' => 'days', 'range' => 14], [
+            ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
+        ], $this->member);
+
+        $this->actingAs($this->member)
+            ->getJson($this->dataUrl($widget))
+            ->assertOk()
+            ->assertJsonPath('rows.0.masked', false)
+            ->assertJsonPath('rows.0.spent', -200);
+
+        $this->gas->permissions()->where('user_id', $this->member->id)->first()->delete();
+
+        $this->actingAs($this->member)
+            ->getJson($this->dataUrl($widget))
+            ->assertOk()
+            ->assertJsonPath('rows.0.masked', true)
+            ->assertJsonPath('rows.0.spent', null);
+    }
+
+    public function test_a_partially_masked_group_is_masked_as_a_whole(): void
+    {
+        // The member can amount-see the gas envelope but not the paycheck —
+        // the group summing both must be masked even though one member is
+        // visible (sums never leak member amounts by omission).
+        $this->gas->permissions()->create([
+            'user_id' => $this->member->id,
+            'permission' => EnvelopePermission::PERMISSION_VIEWER,
+        ]);
+
+        $widget = $this->createWidget('envelope_spending', 'single', ['type' => 'days', 'range' => 14], [
+            ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
+            ['kind' => 'group', 'name' => 'Mix', 'envelope_ids' => [$this->gas->id, $this->paycheck->id]],
+        ], $this->member);
+
+        $this->actingAs($this->member)
+            ->getJson($this->dataUrl($widget))
+            ->assertOk()
+            ->assertJsonPath('rows.0.masked', false)
+            ->assertJsonPath('rows.0.spent', -200)
+            ->assertJsonPath('rows.1.masked', true)
+            ->assertJsonPath('rows.1.spent', null);
+    }
+
+    public function test_closed_ledgers_still_count_toward_the_history(): void
+    {
+        // History is history: a closed ledger's transactions are part of the
+        // profile's aggregates.
+        $closed = Ledger::create([
+            'profile_id' => $this->profile->id,
+            'name' => 'Old ledger',
+            'start_date' => '2025-01-01',
+            'end_date' => '2027-12-31',
+            'starting_balance' => 0,
+            'closed_at' => now(),
+        ]);
+
+        $closed->transactions()->create([
+            'user_id' => $this->owner->id,
+            'envelope_id' => $this->gas->id,
+            'amount' => -33,
+            'event_at' => Carbon::parse('2026-11-09 00:00:00'),
+        ]);
+
+        $widget = $this->createWidget('envelope_spending', 'single', ['type' => 'days', 'range' => 14], [
+            ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
+        ]);
+
+        $this->actingAs($this->owner)
+            ->getJson($this->dataUrl($widget))
+            ->assertOk()
+            ->assertJsonPath('rows.0.spent', -233); // -200 (open) - 33 (closed)
     }
 
     // ---- Scoping, pruning and ownership ----

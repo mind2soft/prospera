@@ -107,7 +107,7 @@ final class DashboardAggregator
 
         $rows = [];
 
-        foreach ($selection->items() as $item) {
+        foreach ($selection->items() as $index => $item) {
             if ($item['kind'] === 'envelope') {
                 $envelopeId = $item['envelope_id'];
                 $envelope = $envelopes->get($envelopeId);
@@ -146,7 +146,7 @@ final class DashboardAggregator
                     ->filter(fn (?int $allocation): bool => $allocation !== null);
 
                 $rows[] = [
-                    'key' => 'g'.$item['name'],
+                    'key' => 'g'.$index,
                     'kind' => 'group',
                     'name' => $item['name'],
                     'masked' => $masked,
@@ -241,7 +241,7 @@ final class DashboardAggregator
 
         $rows = [];
 
-        foreach ($selection->items() as $item) {
+        foreach ($selection->items() as $index => $item) {
             if ($item['kind'] === 'envelope') {
                 $envelopeId = $item['envelope_id'];
                 $envelope = $envelopes->get($envelopeId);
@@ -268,7 +268,7 @@ final class DashboardAggregator
                 );
 
                 $rows[] = [
-                    'key' => 'g'.$item['name'],
+                    'key' => 'g'.$index,
                     'kind' => 'group',
                     'name' => $item['name'],
                     'masked' => $masked,

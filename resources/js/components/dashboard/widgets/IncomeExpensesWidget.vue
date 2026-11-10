@@ -102,12 +102,16 @@ const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
 
 <template>
     <div class="flex h-full min-h-0 flex-col">
-        <p v-if="masked" class="mb-1 text-center text-xs text-muted-foreground">
+        <!-- Masked series: no chart at all — zero-filled bars would imply data. -->
+        <p
+            v-if="masked"
+            class="m-auto px-4 text-center text-sm text-muted-foreground"
+        >
             {{ $t('dashboard.widget.masked') }}
         </p>
 
         <!-- Unovis needs a DOM to measure — client-side only. -->
-        <div v-if="isClient" class="min-h-0 flex-1">
+        <div v-else-if="isClient" class="min-h-0 flex-1">
             <VisXYContainer :data="series" :height="180">
                 <VisStackedBar
                     v-if="viewType === 'stacked_bars'"
