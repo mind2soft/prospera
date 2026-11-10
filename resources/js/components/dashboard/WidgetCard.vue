@@ -73,14 +73,19 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', onWindowMouseUp));
     <article
         draggable="true"
         :aria-label="title"
-        class="group/card flex h-full flex-col rounded-xl border bg-card text-card-foreground shadow-sm transition-shadow hover:shadow-md"
+        class="group/card relative flex h-full flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-card transition-[box-shadow,translate] duration-200 ease-out outline-none focus-within:ring-2 focus-within:ring-ring/60 hover:-translate-y-px hover:shadow-card-hover"
         @dragstart="onDragStart"
         @dragend="onDragEnd"
     >
+        <span
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-border/80 to-transparent"
+        />
+
         <header class="flex items-center gap-1 px-3 pt-2.5">
             <button
                 type="button"
-                class="cursor-grab touch-none rounded p-1 text-muted-foreground opacity-60 transition-opacity hover:opacity-100 active:cursor-grabbing"
+                class="-ml-1 cursor-grab touch-none rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-muted/70 hover:text-foreground active:cursor-grabbing active:bg-muted active:text-foreground"
                 :aria-label="`${t('dashboard.widget.drag')} — ${title}`"
                 :title="t('dashboard.widget.drag')"
                 @mousedown="onHandleDown"
@@ -88,14 +93,16 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', onWindowMouseUp));
                 <Icon name="drag_indicator" class="size-4" aria-hidden="true" />
             </button>
 
-            <h3 class="min-w-0 flex-1 truncate text-sm font-semibold">
+            <h3
+                class="min-w-0 flex-1 truncate text-[13px] leading-5 font-medium tracking-[-0.01em] text-foreground"
+            >
                 {{ title }}
             </h3>
 
             <Button
                 variant="ghost"
                 size="icon-sm"
-                class="text-muted-foreground opacity-0 transition-opacity group-hover/card:opacity-100 focus-visible:opacity-100"
+                class="text-muted-foreground/70 opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100 hover:text-foreground focus-visible:opacity-100 pointer-coarse:opacity-100"
                 :aria-label="t('dashboard.widget.settings')"
                 @click="emit('settings')"
             >
@@ -103,7 +110,7 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', onWindowMouseUp));
             </Button>
         </header>
 
-        <div class="min-h-0 flex-1 p-3 pt-1.5">
+        <div class="min-h-0 flex-1 px-3.5 pt-1 pb-3.5">
             <slot />
         </div>
     </article>

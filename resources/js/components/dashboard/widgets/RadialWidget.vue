@@ -48,6 +48,21 @@ function colorOf(row: DashboardRadialRow, index: number): string {
 
 const value = (d: DashboardRadialRow): number => d.value ?? 0;
 
+/** Compact currency for the donut's central total ("$2.5K"). */
+const compactMoney = (amount: number): string => {
+    try {
+        return new Intl.NumberFormat(locale.value, {
+            style: 'currency',
+            currency: props.currency,
+            currencyDisplay: 'narrowSymbol',
+            notation: 'compact',
+            maximumFractionDigits: 1,
+        }).format(amount);
+    } catch {
+        return formatMoney(amount, props.currency);
+    }
+};
+
 /** Segment colors keyed by row key (masked rows fall back to muted). */
 const colorByKey = computed(() => {
     const map: Record<string, string> = {};
@@ -63,7 +78,7 @@ const color = (d: DashboardRadialRow): string =>
     colorByKey.value[d.key] ?? FALLBACK_COLOR;
 
 // arcWidth is in pixels; 0 renders a full pie.
-const arcWidth = computed(() => (props.viewType === 'donut' ? 28 : 0));
+const arcWidth = computed(() => (props.viewType === 'donut' ? 24 : 0));
 
 const tooltipTemplate = (datum?: DashboardRadialRow): string => {
     if (!datum) {
@@ -113,13 +128,22 @@ function legendShare(row: DashboardRadialRow): string | null {
                 v-if="isClient && chartRows.length > 0"
                 class="flex min-h-0 flex-1 items-center justify-center"
             >
-                <VisSingleContainer :data="chartRows" :height="180">
+                <VisSingleContainer
+                    :data="chartRows"
+                    :height="200"
+                    class="chart-surface"
+                >
                     <VisDonut
                         :value="value"
                         :color="color"
                         :arc-width="arcWidth"
-                        :pad-angle="0.01"
-                        :corner-radius="4"
+                        :pad-angle="0.03"
+                        :corner-radius="6"
+                        :central-label="
+                            viewType === 'donut'
+                                ? compactMoney(total)
+                                : undefined
+                        "
                     />
                     <VisTooltip
                         :triggers="{
@@ -143,16 +167,16 @@ function legendShare(row: DashboardRadialRow): string | null {
 
             <!-- Legend: masked rows stay listed, without amounts. -->
             <ul
-                class="flex flex-wrap justify-center gap-x-4 gap-y-1 px-1 pb-1 text-xs"
+                class="flex flex-wrap items-center justify-center gap-1.5 px-1 pb-1 text-xs"
             >
                 <li
                     v-for="row in rows"
                     :key="row.key"
-                    class="flex items-center gap-1.5"
+                    class="flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-2.5 py-0.5 font-medium text-muted-foreground"
                     :class="row.masked ? 'text-muted-foreground' : ''"
                 >
                     <span
-                        class="size-2.5 shrink-0 rounded-full"
+                        class="size-2 shrink-0 rounded-full"
                         :style="{
                             backgroundColor: row.masked
                                 ? 'var(--muted)'

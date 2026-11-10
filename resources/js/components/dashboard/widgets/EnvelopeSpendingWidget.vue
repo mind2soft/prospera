@@ -52,6 +52,44 @@ function allocatedLabel(row: DashboardSpendingRow): string | null {
 
     return formatMoney(row.allocated, props.currency);
 }
+
+/** Presentation colors derived from the envelope's hex color (RTL-safe). */
+function barColors(row: DashboardSpendingRow): {
+    solid: string;
+    track: string;
+    glow: string | null;
+} {
+    if (row.masked || progress(row) === null) {
+        return {
+            solid: 'var(--muted-foreground)',
+            track: 'var(--muted)',
+            glow: null,
+        };
+    }
+
+    if (isOverBudget(row)) {
+        return {
+            solid: 'var(--destructive)',
+            track: 'color-mix(in oklab, var(--destructive) 12%, transparent)',
+            glow: null,
+        };
+    }
+
+    const hex = row.color;
+    if (!hex) {
+        return {
+            solid: 'var(--chart-revenue)',
+            track: 'var(--muted)',
+            glow: null,
+        };
+    }
+
+    return {
+        solid: hex,
+        track: `${hex}1a`, // 10% tint of the envelope color
+        glow: `0 0 8px ${hex}33`, // 20% soft halo
+    };
+}
 </script>
 
 <template>
@@ -66,37 +104,44 @@ function allocatedLabel(row: DashboardSpendingRow): string | null {
         <!-- Long lists scroll inside the widget instead of stretching the grid row. -->
         <ul
             v-else
-            class="flex max-h-64 min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-1 py-0.5"
+            class="flex max-h-64 min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-0.5"
         >
             <li v-for="row in rows" :key="row.key" class="space-y-1.5">
-                <div class="flex items-baseline justify-between gap-3">
-                    <span class="flex min-w-0 items-center gap-1.5">
+                <div class="flex items-center justify-between gap-3">
+                    <span class="flex min-w-0 items-center gap-2">
                         <span
-                            class="size-2.5 shrink-0 rounded-full"
-                            :style="{
-                                backgroundColor: row.color ?? 'currentColor',
-                            }"
+                            class="size-2 shrink-0 rounded-full"
+                            :style="{ backgroundColor: barColors(row).solid }"
                             aria-hidden="true"
                         />
-                        <span class="truncate text-sm font-medium">
+                        <span
+                            class="truncate text-[13px] font-medium text-foreground"
+                        >
                             {{ row.name }}
                         </span>
                         <Icon
                             v-if="row.masked"
                             name="lock"
-                            class="size-4 shrink-0 text-muted-foreground"
+                            class="size-3.5 shrink-0 text-muted-foreground"
                             :aria-label="$t('dashboard.widget.masked')"
                         />
                     </span>
-                    <span class="shrink-0 text-sm tabular-nums">
+                    <span class="shrink-0 text-[13px] leading-5 tabular-nums">
                         <span
-                            :class="row.masked ? 'text-muted-foreground' : ''"
+                            class="font-semibold"
+                            :class="
+                                row.masked
+                                    ? 'text-muted-foreground'
+                                    : isOverBudget(row)
+                                      ? 'text-destructive'
+                                      : 'text-foreground'
+                            "
                         >
                             {{ spentLabel(row) }}
                         </span>
                         <template v-if="allocatedLabel(row) !== null">
-                            <span class="text-muted-foreground">
-                                /
+                            <span class="text-muted-foreground/50"> / </span>
+                            <span class="font-medium text-muted-foreground">
                                 {{ allocatedLabel(row) }}
                             </span>
                         </template>
@@ -105,23 +150,20 @@ function allocatedLabel(row: DashboardSpendingRow): string | null {
 
                 <div
                     v-if="progress(row) !== null"
-                    class="relative h-2 overflow-hidden rounded-full bg-muted"
+                    class="relative h-1.5 overflow-hidden rounded-full"
+                    :style="{ backgroundColor: barColors(row).track }"
                     :title="
                         isOverBudget(row)
                             ? $t('dashboard.widget.overBudget')
                             : undefined
                     "
+                    aria-hidden="true"
                 >
                     <div
                         class="absolute inset-y-0 rounded-full"
-                        :class="
-                            isOverBudget(row)
-                                ? 'bg-destructive'
-                                : isRevenue(row)
-                                  ? 'bg-emerald-500'
-                                  : 'bg-primary'
-                        "
                         :style="{
+                            backgroundColor: barColors(row).solid,
+                            boxShadow: barColors(row).glow ?? undefined,
                             width: `${Math.min(progress(row) ?? 0, 1) * 100}%`,
                             ...(isRevenue(row)
                                 ? { insetInlineEnd: 0 }
@@ -132,7 +174,7 @@ function allocatedLabel(row: DashboardSpendingRow): string | null {
 
                 <p
                     v-else-if="!row.masked"
-                    class="text-xs text-muted-foreground"
+                    class="text-xs text-muted-foreground/80"
                 >
                     {{ $t('dashboard.widget.noBudget') }}
                 </p>

@@ -22,12 +22,12 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBudgets } from '@/composables/budgetQueries';
-import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import {
     useDashboardWidgets,
     useRemoveDashboardWidget,
     useSaveDashboardLayout,
 } from '@/composables/dashboardQueries';
+import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { ApiError } from '@/lib/api';
 import { dashboard as dashboardRoute } from '@/routes';
 import type {
@@ -71,6 +71,13 @@ const DEFAULT_VIEWS: Record<DashboardWidgetType, DashboardWidgetViewType> = {
     envelope_spending: 'single',
     income_expenses: 'stacked_bars',
     radial: 'donut',
+};
+
+/** Default composition: the stock widgets fill whole rows (2 + 3, then 2). */
+const DEFAULT_WIDTH: Record<DashboardWidgetType, 1 | 2 | 3 | 4 | 5> = {
+    envelope_spending: 2,
+    income_expenses: 3,
+    radial: 2,
 };
 
 /** Local, editable copy of the layout; autosaved (no save buttons). */
@@ -213,7 +220,7 @@ const onAdd = (type: DashboardWidgetType): void => {
         type,
         title: null,
         view_type: DEFAULT_VIEWS[type],
-        column_width: 3,
+        column_width: DEFAULT_WIDTH[type],
         period: { type: 'months', range: 1 },
         selection: [],
     });
@@ -311,7 +318,7 @@ const onDestroy = (): void => {
             v-if="widgetsPending && !widgetsError"
             class="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5"
         >
-            <Skeleton v-for="i in 3" :key="i" class="h-48 rounded-xl" />
+            <Skeleton v-for="i in 3" :key="i" class="h-56 rounded-xl" />
         </div>
 
         <!-- Empty dashboard: no seeded widgets — the user composes their own. -->
