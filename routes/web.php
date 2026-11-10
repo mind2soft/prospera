@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\ContactController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EnvelopeController;
 use App\Http\Controllers\FinancialProfileController;
 use App\Http\Controllers\FinancialProfileInviteController;
@@ -120,6 +121,17 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::delete('transactions/{transaction}', [LedgerController::class, 'destroyTransaction'])
             ->name('transactions.destroy')->whereNumber('transaction');
+
+        // Dashboard (issue #29): per-user widget configuration per profile
+        // plus the server-computed aggregate data per widget.
+        Route::prefix('dashboard')->name('dashboard.')->group(function () {
+            Route::get('{profile}/widgets', [DashboardController::class, 'index'])->name('widgets.index');
+            Route::put('{profile}/widgets', [DashboardController::class, 'save'])->name('widgets.save');
+            Route::delete('{profile}/widgets/{widget}', [DashboardController::class, 'destroy'])->name('widgets.destroy')
+                ->whereNumber('widget');
+            Route::get('{profile}/widgets/{widget}/data', [DashboardController::class, 'data'])->name('widgets.data')
+                ->whereNumber('widget');
+        })->whereNumber('profile');
     });
 });
 
