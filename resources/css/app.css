@@ -219,6 +219,7 @@
   animationend/transitionend events that unmount dialogs and sheets still
   fire.
 */
+/* biome-ignore-start lint/complexity/noImportantStyles: must beat every component's own durations */
 @media (prefers-reduced-motion: reduce) {
     *,
     ::before,
@@ -231,6 +232,7 @@
         scroll-behavior: auto !important;
     }
 }
+/* biome-ignore-end lint/complexity/noImportantStyles: must beat every component's own durations */
 
 /* Unovis chart surfaces — token theming (see dashboard design spec) */
 .chart-surface {
