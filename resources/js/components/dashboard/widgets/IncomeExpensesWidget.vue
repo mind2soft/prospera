@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CurveType } from '@unovis/ts';
+import { CurveType } from '@unovis/ts/types/curve';
 // Per-component entry points: the @unovis/vue barrel is flagged as having
 // side effects, so importing from it bundles every chart, map and graph.
 import VisArea from '@unovis/vue/components/area';

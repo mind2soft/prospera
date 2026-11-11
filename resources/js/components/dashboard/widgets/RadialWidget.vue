@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Donut } from '@unovis/ts';
+import { Donut } from '@unovis/ts/components/donut';
 // Per-component entry points (see IncomeExpensesWidget.vue).
 import VisDonut from '@unovis/vue/components/donut';
 import VisTooltip from '@unovis/vue/components/tooltip';
