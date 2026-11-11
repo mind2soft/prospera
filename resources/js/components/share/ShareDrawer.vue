@@ -61,6 +61,12 @@ const props = defineProps<{
      * circle members without an explicit share row yet.
      */
     profileCircle?: ProfileMember[];
+    /**
+     * Restricts ownership transfer to these users (a draft budget can only
+     * be handed to the profile owner), explained by `transferRestriction`.
+     */
+    transferTo?: number[];
+    transferRestriction?: string;
 }>();
 
 const emit = defineEmits<{
@@ -147,17 +153,23 @@ const confirmingTransfer = ref(false);
 
 /** Transfer candidates normalized to {id, name}, whichever the source list. */
 const transferCandidates = computed((): { id: number; name: string }[] => {
-    if (props.profileCircle) {
-        return props.profileCircle
-            .filter((m) => m.id !== props.currentUserId)
-            .map((m) => ({ id: m.id, name: m.name }));
-    }
-    return props.members
-        .filter(
-            (m) =>
-                m.permission !== 'owner' && m.user_id !== props.currentUserId,
-        )
-        .map((m) => ({ id: m.user_id, name: m.name }));
+    const candidates = props.profileCircle
+        ? props.profileCircle
+              .filter((m) => m.id !== props.currentUserId)
+              .map((m) => ({ id: m.id, name: m.name }))
+        : props.members
+              .filter(
+                  (m) =>
+                      m.permission !== 'owner' &&
+                      m.user_id !== props.currentUserId,
+              )
+              .map((m) => ({ id: m.user_id, name: m.name }));
+
+    const allowed = props.transferTo;
+
+    return allowed === undefined
+        ? candidates
+        : candidates.filter((m) => allowed.includes(m.id));
 });
 
 const transferTargetName = computed(
@@ -450,6 +462,14 @@ watch(
                         {{ $t('share.drawer.transferNote') }}
                     </p>
                 </div>
+
+                <p
+                    v-else-if="transferRestriction"
+                    class="text-xs text-muted-foreground"
+                    data-test="transfer-restriction"
+                >
+                    {{ transferRestriction }}
+                </p>
             </template>
 
             <div class="mt-auto pt-2">

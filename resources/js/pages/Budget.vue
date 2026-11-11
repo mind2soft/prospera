@@ -49,6 +49,7 @@ import {
     useTransferBudgetOwnership,
     useUpdateEnvelope,
 } from '@/composables/budgetQueries';
+import { useProfileMembers } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useLocale } from '@/composables/useLocale';
 import { ApiError } from '@/lib/api';
@@ -137,6 +138,21 @@ const {
     refetch: refetchProfiles,
 } = useCurrentProfile();
 const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
+
+/**
+ * A draft can only be handed to the profile owner (docs/budget.md —
+ * ownership): anyone else could neither publish nor delete it.
+ */
+const profileMembersQuery = useProfileMembers(
+    computed(() => (isDraft.value ? (currentProfile.value?.id ?? null) : null)),
+);
+const draftTransferTo = computed(() =>
+    isDraft.value
+        ? (profileMembersQuery.data.value ?? [])
+              .filter((member) => member.is_owner)
+              .map((member) => member.id)
+        : undefined,
+);
 
 // "No data yet, no error" — unlike `isLoading`, this state is identical
 // between the SSR render and the client's hydration pass, so the skeleton
@@ -665,6 +681,10 @@ const onRemoveEnvelope = (envelopeId: number) => {
             :title="$t('budget.share.title')"
             :transfer-resource="$t('budget.share.resource')"
             :members="budget.shares"
+            :transfer-to="draftTransferTo"
+            :transfer-restriction="
+                isDraft ? $t('budget.share.draftTransferNote') : undefined
+            "
             :current-user-id="currentUserId"
             :can-manage="budget.permission === 'owner'"
             @update:open="showShare = $event"
