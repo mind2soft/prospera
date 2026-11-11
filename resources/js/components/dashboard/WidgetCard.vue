@@ -52,7 +52,7 @@ const onDragStart = (event: DragEvent): void => {
 
     if (event.dataTransfer) {
         event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', String(props.widget.id ?? ''));
+        event.dataTransfer.setData('text/plain', String(props.widget.id));
     }
 
     emit('drag-start');

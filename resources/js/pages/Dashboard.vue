@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Head } from '@inertiajs/vue3';
+import { useQueryClient } from '@tanstack/vue-query';
 import { useDebounceFn } from '@vueuse/core';
-import { computed, nextTick, ref, toValue, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import DashboardGrid from '@/components/dashboard/DashboardGrid.vue';
@@ -24,6 +25,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBudgets } from '@/composables/budgetQueries';
 import {
+    dashboardKeys,
     useDashboardWidgets,
     useRemoveDashboardWidget,
     useSaveDashboardLayout,
@@ -33,6 +35,7 @@ import { ApiError } from '@/lib/api';
 import { moveItem } from '@/lib/list';
 import { dashboard as dashboardRoute } from '@/routes';
 import type {
+    DashboardWidget,
     DashboardWidgetConfig,
     DashboardWidgetPayload,
     DashboardWidgetType,
@@ -61,18 +64,11 @@ const {
     refetch: refetchWidgets,
 } = widgetsQuery;
 
-/**
- * Whether the canonical layout has loaded. Until it has (still loading, or
- * the load failed), the local list is NOT the user's layout: the full-layout
- * save would delete every saved widget missing from it, so adding widgets
- * and autosaving are both blocked.
- */
-const layoutLoaded = computed(() => widgetsQuery.data.value !== undefined);
-
 /** The widget list waits on the profile list: a failed profile load fails it too. */
 const retryLoad = (): void => {
     void (profilesError.value ? refetchProfiles() : refetchWidgets());
 };
+const queryClient = useQueryClient();
 const saveLayout = useSaveDashboardLayout();
 const removeWidget = useRemoveDashboardWidget();
 
@@ -123,14 +119,6 @@ const withoutAutosave = (apply: () => void): void => {
     });
 };
 
-// Switching profiles clears the local layout immediately (widget config is
-// per profile); the new profile's canonical list replaces it on load.
-watch(profileId, () => {
-    withoutAutosave(() => {
-        widgets.value = [];
-    });
-});
-
 /** The save payload of a widget — existing widgets keep their id. */
 const configOf = (widget: DashboardWidgetConfig): DashboardWidgetPayload => ({
     ...(widget.id > 0 ? { id: widget.id } : {}),
@@ -142,75 +130,165 @@ const configOf = (widget: DashboardWidgetConfig): DashboardWidgetPayload => ({
     selection: widget.selection.map((item) => ({ ...item })),
 });
 
-// Resync from the server when the canonical list changes (initial load,
-// profile switch, removal invalidation). Skipped while a save is in flight
-// so an edit made during the save round-trip is not clobbered, and skipped
-// when the incoming layout equals the local one (no redundant autosave).
-watch(
-    () => widgetsQuery.data.value,
-    (data) => {
-        if (!data || saveLayout.isPending.value) {
-            return;
-        }
+/**
+ * The profile whose canonical layout the local list holds (null while none
+ * is). Until the current profile's layout has been applied (still loading,
+ * load failed, or waiting for an in-flight save), the local list is NOT the
+ * user's layout: the full-layout save would delete every saved widget
+ * missing from it, so adding widgets and autosaving are both blocked.
+ */
+const layoutProfileId = ref<number | null>(null);
 
-        const incoming: DashboardWidgetConfig[] = data.map((widget) => ({
-            ...configOf(widget),
-            id: widget.id,
-        }));
-
-        const fingerprint = (list: DashboardWidgetConfig[]): string =>
-            JSON.stringify(list.map((w) => [w.id, configOf(w)]));
-
-        if (fingerprint(incoming) === fingerprint(widgets.value)) {
-            return;
-        }
-
-        withoutAutosave(() => {
-            widgets.value = incoming;
-        });
-    },
-    { immediate: true },
+const layoutLoaded = computed(
+    () => profileId.value !== null && layoutProfileId.value === profileId.value,
 );
 
-// Debounced autosave on every change — the project convention: no save
-// buttons. The full layout is sent; the server assigns ids + order. Saves
-// are serialized (one in flight; a change during a save re-queues) so
-// responses can never land out of order and clobber newer edits.
-let queuedSave = false;
-// Tracked locally: the mutation's own `isPending` still reads true inside
-// its onSettled callback, which would re-queue the follow-up save forever
-// (and lose it).
-let saving = false;
+/** The layout is cached but not applied yet (a save for it is settling). */
+const layoutSyncing = computed(
+    () => widgetsQuery.data.value !== undefined && !layoutLoaded.value,
+);
 
-const saveNow = (): void => {
-    if (saving) {
-        queuedSave = true;
+/**
+ * One layout save: the payload, and the local id of each payload entry
+ * (negative for widgets added since the last save) so the server-assigned
+ * ids are adopted by identity, never by position.
+ */
+type LayoutSave = {
+    profileId: number;
+    keys: number[];
+    widgets: DashboardWidgetPayload[];
+};
+
+// Saves are serialized (one in flight, at most one queued per profile) so
+// responses can never land out of order and clobber newer edits. Tracked
+// locally: the mutation's own `isPending` still reads true inside its
+// onSettled callback.
+let inFlight: number | null = null;
+const queued = new Map<number, LayoutSave>();
+/** A local edit waits for the debounced autosave. */
+let editPending = false;
+/** A canonical list arrived while local edits were unsaved. */
+let resyncSkipped = false;
+
+const isSaving = (id: number): boolean =>
+    inFlight === id || queued.has(id) || (editPending && layoutLoaded.value);
+
+const snapshotOf = (id: number): LayoutSave => ({
+    profileId: id,
+    keys: widgets.value.map((widget) => widget.id),
+    widgets: widgets.value.map(configOf),
+});
+
+/**
+ * Replaces the local list with the current profile's canonical layout
+ * (initial load, profile switch, removal invalidation, settled save). Read
+ * from the cache by key, so a list can never be applied to another profile.
+ * Skipped while the profile has unsaved or in-flight edits — they are newer
+ * than the server's copy — and retried once they settle.
+ */
+const resync = (): void => {
+    const id = profileId.value;
+    const data =
+        id === null
+            ? undefined
+            : queryClient.getQueryData<{ widgets: DashboardWidget[] }>(
+                  dashboardKeys.widgets(id),
+              )?.widgets;
+
+    if (id === null || data === undefined) {
+        return;
+    }
+
+    if (isSaving(id)) {
+        resyncSkipped = true;
 
         return;
     }
 
-    queuedSave = false;
-    saving = true;
+    resyncSkipped = false;
+
+    const incoming: DashboardWidgetConfig[] = data.map((widget) => ({
+        ...configOf(widget),
+        id: widget.id,
+    }));
+
+    const fingerprint = (list: DashboardWidgetConfig[]): string =>
+        JSON.stringify(list.map((w) => [w.id, configOf(w)]));
+
+    if (
+        layoutProfileId.value === id &&
+        fingerprint(incoming) === fingerprint(widgets.value)
+    ) {
+        return;
+    }
+
+    withoutAutosave(() => {
+        widgets.value = incoming;
+        layoutProfileId.value = id;
+    });
+};
+
+/** Maps the temporary ids of a save to the ids the server assigned. */
+const adoptIds = (save: LayoutSave, saved: DashboardWidget[]): void => {
+    if (saved.length !== save.keys.length) {
+        return;
+    }
+
+    const assigned = new Map<number, number>();
+
+    save.keys.forEach((key, index) => {
+        if (key <= 0) {
+            assigned.set(key, saved[index].id);
+        }
+    });
+
+    if (assigned.size === 0) {
+        return;
+    }
+
+    // A queued save of the same profile was captured before this response:
+    // without the ids it would create the new widgets a second time.
+    const next = queued.get(save.profileId);
+
+    next?.keys.forEach((key, index) => {
+        const id = assigned.get(key);
+
+        if (id !== undefined) {
+            next.keys[index] = id;
+            next.widgets[index].id = id;
+        }
+    });
+
+    // The local list belongs to another profile after a switch.
+    if (layoutProfileId.value !== save.profileId) {
+        return;
+    }
+
+    // A temp id → real id transition must not re-trigger the autosave.
+    withoutAutosave(() => {
+        for (const widget of widgets.value) {
+            const id = assigned.get(widget.id);
+
+            if (id !== undefined) {
+                widget.id = id;
+            }
+        }
+    });
+};
+
+const send = (save: LayoutSave): void => {
+    if (inFlight !== null) {
+        queued.set(save.profileId, save);
+
+        return;
+    }
+
+    inFlight = save.profileId;
 
     saveLayout.mutate(
+        { profileId: save.profileId, widgets: save.widgets },
         {
-            profileId: toValue(profileId) ?? 0,
-            widgets: widgets.value.map(configOf),
-        },
-        {
-            onSuccess: (data) => {
-                // Adopt the server-assigned ids for widgets added this round; a
-                // temp id → real id transition must not re-trigger the watcher.
-                withoutAutosave(() => {
-                    data.widgets.forEach((widget, index) => {
-                        const local = widgets.value[index];
-
-                        if (local && local.id <= 0) {
-                            local.id = widget.id;
-                        }
-                    });
-                });
-            },
+            onSuccess: (data) => adoptIds(save, data.widgets),
             onError: (error) => {
                 toast.error(
                     error instanceof ApiError
@@ -219,16 +297,43 @@ const saveNow = (): void => {
                 );
             },
             onSettled: () => {
-                saving = false;
-                if (queuedSave) {
-                    saveNow();
+                inFlight = null;
+
+                const [next] = queued.values();
+
+                if (next !== undefined) {
+                    queued.delete(next.profileId);
+                    send(next);
+
+                    return;
+                }
+
+                if (resyncSkipped || !layoutLoaded.value) {
+                    resync();
                 }
             },
         },
     );
 };
 
-const scheduleSave = useDebounceFn(saveNow, 600);
+/** Saves the current profile's local layout now. */
+const saveNow = (): void => {
+    editPending = false;
+
+    if (!layoutLoaded.value || profileId.value === null) {
+        return;
+    }
+
+    send(snapshotOf(profileId.value));
+};
+
+// Debounced autosave on every change — the project convention: no save
+// buttons. The full layout is sent; the server assigns ids + order.
+const debouncedSave = useDebounceFn(() => {
+    if (editPending) {
+        saveNow();
+    }
+}, 600);
 
 watch(
     widgets,
@@ -237,10 +342,44 @@ watch(
             return;
         }
 
-        scheduleSave();
+        editPending = true;
+        void debouncedSave();
     },
     { deep: true },
 );
+
+// Switching profiles (widget config is per profile): a pending edit of the
+// previous profile is saved right away — it can no longer be debounced —
+// and the local list is cleared until the new profile's canonical list
+// replaces it.
+watch(profileId, (_next, previous) => {
+    if (
+        editPending &&
+        previous !== null &&
+        previous !== undefined &&
+        layoutProfileId.value === previous
+    ) {
+        send(snapshotOf(previous));
+    }
+
+    editPending = false;
+
+    withoutAutosave(() => {
+        widgets.value = [];
+        layoutProfileId.value = null;
+    });
+
+    resync();
+});
+
+watch(() => widgetsQuery.data.value, resync, { immediate: true });
+
+// Leaving the page must not drop a debounced edit.
+onBeforeUnmount(() => {
+    if (editPending) {
+        saveNow();
+    }
+});
 
 // ---- Adding widgets --------------------------------------------------------
 
@@ -376,7 +515,7 @@ const onDestroy = (): void => {
 
         <!-- Loading -->
         <div
-            v-if="widgetsPending && !profilesError"
+            v-if="(widgetsPending || layoutSyncing) && !profilesError"
             class="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5"
         >
             <Skeleton v-for="i in 3" :key="i" class="h-56 rounded-xl" />
