@@ -132,9 +132,29 @@ contact-form submission log is pruned daily (`php artisan contact:prune`,
 retention configurable via `CONTACT_LOG_RETENTION_DAYS`), amount encryption
 keys are rotated monthly (`php artisan amounts:rotate-keys --all`),
 retired keys pruned daily (`php artisan amounts:prune-keys`) and a daily
-`php artisan amounts:verify` re-checks that every amount still decrypts. In
-production, run the scheduler (`php artisan schedule:run` every minute via
-cron).
+`php artisan amounts:verify` re-checks that every amount still decrypts.
+
+Emails (profile invitations, contact messages) are queued on the `database`
+queue. In production there is no long-lived worker (shared hosting): the
+scheduler runs `php artisan queue:work --stop-when-empty --max-time=50` every
+minute, in the background and without overlapping, and failed jobs are pruned
+after 30 days (`queue:prune-failed --hours=720`). Mails retry 5 times with a
+backoff, then land in `failed_jobs` and the log (`php artisan queue:failed`,
+`php artisan queue:retry all`).
+
+**In production, the scheduler is mandatory** — without it no email is ever
+sent and no key rotates. Install this crontab entry for the deploy user once
+(it follows the `current` release link, so it survives deploys):
+
+```cron
+* * * * * cd /path/to/app/current && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Deploys and rollbacks run `php artisan queue:restart` after switching
+releases, so a long-lived worker — if a host runs one instead, e.g. under
+systemd or supervisor with `php artisan queue:work --tries=3 --max-time=3600`
+— never keeps serving the replaced release's code. Remove the scheduled
+`queue:work` from `routes/console.php` on such a host.
 
 ### Encryption at rest
 
@@ -172,7 +192,9 @@ Failing tests abort the release.
 Required production environment variables:
 
 - `MAIL_CONTACT_ADDRESS` — recipient of the contact-form submissions; the app
-  **fails fast at boot** without it (issue #17).
+  **fails fast at boot** without it (issue #17). Set it as a variable of the
+  GitHub `Production` environment: the deploy renders it into the `.env` and
+  refuses to deploy when it is missing or not a single email address.
 - `GITHUB_REPO_URL` — public repository shown on the landing page (defaults
   to the canonical repo; self-hosted deployments can point it elsewhere).
 - `CONTACT_LOG_RETENTION_DAYS` — retention of the contact-submission log
@@ -186,7 +208,10 @@ Required production environment variables:
   migrations are forward-only: a rollback only switches to a release with the
   same migrations, and a deploy failing during or after its migrations stays
   in maintenance mode until a fix is deployed — see
-  [docs/encryption.md](docs/encryption.md#deployments).
+  [docs/encryption.md](docs/encryption.md#deployments). Every deploy with
+  pending migrations backs the database up first (`shared/backups/`, the 5
+  newest kept) and aborts if that fails; the restore procedure is in
+  [docs/encryption.md](docs/encryption.md#pre-migration-backups).
 
 ## The envelope system, briefly
 

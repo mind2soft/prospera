@@ -2,15 +2,18 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\RetriesDelivery;
 use App\Models\User;
 use App\Settings\NotificationSettings;
 use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Lang;
 
 /**
  * A financial profile share notification, sent when a profile owner invites
@@ -29,11 +32,13 @@ use Illuminate\Queue\SerializesModels;
  * dispatch time and again at send time (inside the queued send), per
  * docs/notifications.md. Recipients without an account have no settings to
  * honor and always receive the invite. The invite key hash never appears in
- * any email.
+ * any email. The links carry the raw invite key, which is never stored: the
+ * queued payload is encrypted (ShouldBeEncrypted), so the jobs and
+ * failed_jobs tables do not hold it in the clear either.
  */
-class ProfileInvite extends Mailable implements ShouldQueue
+class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
 {
-    use Queueable, SerializesModels;
+    use Queueable, RetriesDelivery, SerializesModels;
 
     /**
      * Create a new message instance.
@@ -65,7 +70,7 @@ class ProfileInvite extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: __('[Prospera] :inviter shared their financial profile ":profile" with you', [
+            subject: __('mail.invite.subject', [
                 'inviter' => $this->inviterName,
                 'profile' => $this->profileName,
             ]),
@@ -73,10 +78,14 @@ class ProfileInvite extends Mailable implements ShouldQueue
     }
 
     /**
-     * Get the message content definition.
+     * Get the message content definition: a plain-text view, localized
+     * through lang/{locale}/mail.php and rendered unescaped ({!! !!} — the
+     * text part is not HTML, so `&` must not become `&amp;`).
      */
     public function content(): Content
     {
+        $roleKey = 'mail.roles.'.$this->role;
+
         return new Content(
             text: 'mail.profile-invite',
             with: [
@@ -84,6 +93,7 @@ class ProfileInvite extends Mailable implements ShouldQueue
                 'inviterEmail' => $this->inviterEmail,
                 'profileName' => $this->profileName,
                 'role' => $this->role,
+                'roleLabel' => Lang::has($roleKey) ? __($roleKey) : $this->role,
                 'inviteUrl' => $this->inviteUrl,
                 'acceptUrl' => $this->acceptUrl,
                 'expiresAt' => $this->expiresAt,

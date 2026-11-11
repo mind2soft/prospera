@@ -64,15 +64,23 @@ time.
 
 ## Email conventions (for all consumers of these settings)
 
-- Emails are **queued** (works with `MAIL_MAILER=log` locally and the
-  existing queue worker).
+- Emails are **queued**, encrypted in the queue (`ShouldBeEncrypted` —
+  payloads carry links and user content), and retried with a backoff
+  (`App\Mail\Concerns\RetriesDelivery`: 5 tries over about 20 minutes,
+  then logged). Locally `composer dev` runs a worker (works with
+  `MAIL_MAILER=log`); in production the scheduler runs it — see
+  [Scheduled tasks](../README.md#scheduled-tasks).
 - Sent to **verified** addresses only (Fortify-verified accounts; unverified
   users get nothing, silently). Exception — **profile invitations**: the
   share must reach the owner of an existing (not yet verified) account too;
   they cannot re-register with their email, and the accept link
   routes them through email verification before accepting.
 - Localized per recipient's `users.locale` (fallback `en`), including
-  plain-text parts.
+  plain-text parts: the copy lives in `lang/{locale}/mail.php`, one key set
+  per available locale (checked by `tests/Feature/QueuedMailTest.php`).
+- Plain-text views print values with `{!! !!}`: `{{ }}` HTML-escapes, so a
+  name like `Smith & Co` would arrive as `Smith &amp; Co`. Never pass a view
+  variable named `$message` — the mailer injects its own.
 - Every notification email carries a short "Manage your notifications"
   footer link to **Settings → Notifications** (requires login) — except the
   account-creation variant of the profile invitation, whose recipient has no

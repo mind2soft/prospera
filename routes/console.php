@@ -25,3 +25,18 @@ Schedule::command('users:prune-unverified')->daily()->withoutOverlapping()->onOn
 Schedule::command('amounts:rotate-keys --all')->monthly()->withoutOverlapping()->onOneServer();
 Schedule::command('amounts:prune-keys')->daily()->withoutOverlapping()->onOneServer();
 Schedule::command('amounts:verify')->daily()->withoutOverlapping()->onOneServer();
+
+// Queued emails (docs/notifications.md). The production host is shared
+// hosting with no long-lived worker: the scheduler drains the queue every
+// minute instead. Each run stops once the queue is empty or after 50s (the
+// next run takes over); in the background, so it does not delay the other
+// tasks. The overlap lock expires after 10 minutes should a run be killed.
+// Mailables set their own retries and backoff (RetriesDelivery).
+Schedule::command('queue:work --stop-when-empty --max-time=50 --tries=3')
+    ->everyMinute()
+    ->withoutOverlapping(10)
+    ->runInBackground()
+    ->onOneServer();
+
+// Failed jobs (encrypted payloads) are kept 30 days for inspection and retry.
+Schedule::command('queue:prune-failed --hours=720')->daily();

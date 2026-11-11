@@ -124,7 +124,8 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
 ### Scheduler
 
 Data keys are rotated monthly and retired versions pruned daily. The
-production host must run the scheduler:
+production host must run the scheduler (it also runs the queue worker that
+sends the emails — see [Scheduled tasks](../README.md#scheduled-tasks)):
 
 ```cron
 * * * * * cd /path/to/current && php artisan schedule:run >> /dev/null 2>&1
@@ -280,6 +281,35 @@ A failing row was tampered with, corrupted or written outside Eloquent; it
 makes the pages reading it fail (HTTP 500). There is no automatic repair:
 restore the row from a backup taken with the same `APP_KEY`.
 
+#### Pre-migration backups
+
+Every deploy with pending migrations backs the database up first, with
+`php artisan db:backup` (PostgreSQL: `pg_dump --format=custom`; SQLite:
+`VACUUM INTO`), in maintenance mode right before `migrate --force`. If the
+backup fails, nothing is migrated: the deploy lifts the maintenance mode it
+turned on and fails. Backups land in `shared/backups/<release>-<UTC
+timestamp>.dump` (directory `700`, files `600`); the `KEEP_BACKUPS` newest
+(default 5, a variable of `deploy-production.sh`) are kept. They hold every
+row — amounts encrypted, their keys wrapped by the `APP_KEY` live at that
+time — so keep that `APP_KEY` escrowed as long as the backup. They sit on the
+production host: they protect against a bad migration, not against losing the
+host; keep the hosting provider's backups (or copy these off-host) too.
+
+To undo a migrating deploy (everything written since the backup is lost):
+
+1. On the host, `cd <app>/current && php artisan down` (an operator's
+   maintenance mode: deploys and rollbacks leave it on).
+2. Restore the backup taken by that deploy — PostgreSQL, with the database
+   credentials of `shared/.env`:
+   `PGPASSWORD=… pg_restore --clean --if-exists --no-owner --no-privileges --single-transaction -h <DB_HOST> -p <DB_PORT> -U <DB_USERNAME> -d <DB_DATABASE> shared/backups/<file>.dump`
+   (SQLite: copy the file over the database file).
+3. Run the `deploy` workflow with `action: rollback`, naming the release that
+   was live before that deploy (its `previous` release): it matches the
+   restored schema, and the rollback checks it against the migrations the
+   restored database ran.
+4. `php artisan amounts:verify` from `current`, with the `APP_KEY` of the
+   backup current or in `APP_PREVIOUS_KEYS`, then `php artisan up`.
+
 ### Deployments
 
 Production migrations are **forward-only**: the app prohibits destructive
@@ -311,9 +341,17 @@ scripts compare releases with the migrations the database actually ran
   has already replaced it: the live release keeps its cached configuration,
   but fix the secrets and deploy again before any rollback (which rebuilds
   the configuration from it, then refuses if `amounts:verify` fails).
+- Both scripts connect only to a host whose key is pinned in the
+  `SSH_KNOWN_HOSTS` variable of the `Production` environment (known_hosts
+  lines, e.g. from `ssh-keyscan -H <host>` run once and checked against the
+  host's fingerprint out of band). It is mandatory: a blank value fails the
+  deploy or rollback before connecting — there is no trust-on-first-use
+  fallback, since the deploy uploads the `.env` (with `APP_KEY`) over that
+  connection. After a host key change, update the variable.
 - It switches to maintenance mode before running pending migrations, so the
   previous release stops accepting requests (ones already in flight may still
-  complete). `amounts:verify` must pass before the release goes live. Any
+  complete), then backs the database up and refuses to migrate if that fails
+  (see [Pre-migration backups](#pre-migration-backups)). `amounts:verify` must pass before the release goes live. Any
   failure during or after migrating — including a failed health check —
   **leaves the app in maintenance mode**: the previous release is not
   restored on the migrated schema. Recover by deploying a fix: once verified,
@@ -348,6 +386,11 @@ scripts compare releases with the migrations the database actually ran
   8.4), checked on 2026-11-02: the docroot is `current/public`,
   `realpath_cache_ttl` is 120 and OPcache is not loaded; the web handler's
   process model could not be inspected, so the default wait applies.
+- After switching `current` (and after reverting it), the deploy and the
+  rollback run `php artisan queue:restart` from the live release, so
+  long-lived queue workers exit after their current job instead of running
+  the replaced release's code on the new schema. A failure only warns: the
+  switch is done; restart the workers by hand.
 - After migrating (or failing to), the deploy records the migrations the
   database ran in `shared/schema-migrations`.
 - `scripts/ci/rollback-production.sh` only switches to a release shipping

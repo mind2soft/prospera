@@ -219,6 +219,15 @@ settle_switch() {
     fi
 }
 
+# Long-lived queue workers keep the code of the release they started from:
+# ask them to exit after their current job, so they come back on the live
+# one. Best effort: the release switch is already done.
+restart_queue() {
+    if ! (cd "$CURRENT_LINK" && php artisan queue:restart); then
+        printf 'Warning: "php artisan queue:restart" failed; restart the queue workers by hand\n' >&2
+    fi
+}
+
 restore_links() {
     safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
 
@@ -227,6 +236,8 @@ restore_links() {
     else
         rm -f "$PREVIOUS_LINK"
     fi
+
+    restart_queue
 }
 
 # A marker not matching the maintenance mode on is stale (lifted by hand).
@@ -269,6 +280,7 @@ fi
 
 safe_symlink "$CURRENT_TARGET" "$PREVIOUS_LINK"
 safe_symlink "$TARGET_RELEASE" "$CURRENT_LINK"
+restart_queue
 
 # A deploy's maintenance mode (failed deploy) is lifted now that the live
 # release matches the schema; an operator's is left on.

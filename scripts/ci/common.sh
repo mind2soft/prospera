@@ -35,18 +35,21 @@ release_id() {
 
 # GitHub Actions exposes secrets as values (not files): SSH_PRIVATE_KEY holds
 # the private key content and SSH_KNOWN_HOSTS holds known_hosts lines.
+# SSH_KNOWN_HOSTS is mandatory: trusting whatever key the host presents
+# (ssh-keyscan, trust on first use) would hand the rendered .env — APP_KEY
+# included — to anyone intercepting the connection.
 prepare_ssh() {
-    require_env SSH_PRIVATE_KEY SSH_HOST
+    require_env SSH_PRIVATE_KEY SSH_HOST SSH_KNOWN_HOSTS
+
+    if [ -z "$(printf '%s' "$SSH_KNOWN_HOSTS" | tr -d '[:space:]')" ]; then
+        printf 'Missing required environment variables: SSH_KNOWN_HOSTS (blank)\n' >&2
+        exit 1
+    fi
 
     mkdir -p "$HOME/.ssh"
     chmod 700 "$HOME/.ssh"
 
-    if [ -n "${SSH_KNOWN_HOSTS:-}" ]; then
-        printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-    else
-        ssh-keyscan -H "$SSH_HOST" >> "$HOME/.ssh/known_hosts"
-    fi
-
+    printf '%s\n' "$SSH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
     chmod 600 "$HOME/.ssh/known_hosts"
 
     printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > "$SSH_KEY_PATH"
@@ -54,7 +57,7 @@ prepare_ssh() {
 }
 
 ssh_remote() {
-    ssh -i "$SSH_KEY_PATH" -o IdentitiesOnly=yes -o BatchMode=yes -o ServerAliveInterval=30 "$SSH_USER@$SSH_HOST" "$@"
+    ssh -i "$SSH_KEY_PATH" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 "$SSH_USER@$SSH_HOST" "$@"
 }
 
 shell_quote() {
@@ -96,5 +99,5 @@ valid_release_id() {
 
 scp_to_remote() {
     require_env SSH_USER SSH_HOST
-    scp -i "$SSH_KEY_PATH" -o IdentitiesOnly=yes -o BatchMode=yes "$@"
+    scp -i "$SSH_KEY_PATH" -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes "$@"
 }
