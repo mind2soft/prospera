@@ -88,7 +88,7 @@ class SharingLifecycleTest extends TestCase
         $this->assertSame(ResourcePermissions::NONE, $envelope->fresh()->permissionFor($this->alice));
         $this->assertSame(
             ResourcePermissions::NONE,
-            Envelope::permissionsFor($this->alice, [$envelope->id])->get($envelope->id),
+            $this->eagerLoadedPermission($envelope, $this->alice),
         );
         $this->assertNotContains($envelope->id, $this->listedEnvelopeIds($this->alice));
     }
@@ -143,11 +143,24 @@ class SharingLifecycleTest extends TestCase
         $this->assertSame(ResourcePermissions::NONE, $envelope->permissionFor($this->alice));
         $this->assertSame(
             ResourcePermissions::NONE,
-            Envelope::permissionsFor($this->alice, [$envelope->id])->get($envelope->id),
+            $this->eagerLoadedPermission($envelope, $this->alice),
         );
         $listed = collect($this->actingAs($this->alice)->getJson('/api/envelopes')->assertOk()->json('envelopes'))
             ->firstWhere('id', $envelope->id);
         $this->assertSame(ResourcePermissions::NONE, $listed['permission'] ?? ResourcePermissions::NONE);
+    }
+
+    /**
+     * The permission resolved through the bulk path the ledger and the
+     * dashboard aggregator use: the caller's share rows eager-loaded and
+     * the co-member ids precomputed.
+     */
+    private function eagerLoadedPermission(Envelope $envelope, User $user): string
+    {
+        return Envelope::query()
+            ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
+            ->findOrFail($envelope->id)
+            ->permissionFor($user, FinancialProfile::coMemberIdsOf($user->id));
     }
 
     /**

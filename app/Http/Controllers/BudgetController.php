@@ -423,7 +423,7 @@ class BudgetController extends Controller
      */
     private function serializeDetail(Budget $budget, User $user): array
     {
-        $budget->loadMissing(['envelopes.envelope', 'permissions.user']);
+        $budget->loadMissing('envelopes.envelope');
 
         return [
             ...$this->serializeBudget($budget, $user),

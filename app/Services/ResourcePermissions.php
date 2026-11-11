@@ -60,13 +60,4 @@ final class ResourcePermissions
             ? Response::allow()
             : Response::denyWithStatus(403);
     }
-
-    /**
-     * Whether the given permission row value is a grantable permission
-     * ("owner" is reserved for transfer-ownership).
-     */
-    public static function isGrantable(string $permission): bool
-    {
-        return in_array($permission, self::GRANTABLE, true);
-    }
 }

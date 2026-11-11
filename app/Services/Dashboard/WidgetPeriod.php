@@ -47,16 +47,6 @@ final class WidgetPeriod
         return new self('months', $range);
     }
 
-    public function type(): string
-    {
-        return $this->type;
-    }
-
-    public function range(): int
-    {
-        return $this->range;
-    }
-
     /**
      * The inclusive [from, to] date window ending today — the requester's
      * calendar day (see LocalCalendar), the server's by default.

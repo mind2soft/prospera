@@ -64,13 +64,13 @@ final class DashboardAggregator
 
         return match ($widget->type) {
             DashboardWidget::TYPE_ENVELOPE_SPENDING => $this->envelopeSpending(
-                $widget, $profile, $period, $selection, $envelopes, $amountVisible, $transactions, $today,
+                $profile, $period, $selection, $envelopes, $amountVisible, $transactions, $today,
             ),
             DashboardWidget::TYPE_INCOME_EXPENSES => $this->incomeExpenses(
-                $widget, $period, $selection, $amountVisible, $transactions, $today,
+                $period, $selection, $amountVisible, $transactions, $today,
             ),
             DashboardWidget::TYPE_RADIAL => $this->radial(
-                $widget, $period, $selection, $envelopes, $amountVisible, $transactions,
+                $selection, $envelopes, $amountVisible, $transactions,
             ),
             default => throw new \InvalidArgumentException("Unknown widget type [{$widget->type}]."),
         };
@@ -89,7 +89,6 @@ final class DashboardAggregator
      * @return array<string, mixed>
      */
     private function envelopeSpending(
-        DashboardWidget $widget,
         FinancialProfile $profile,
         WidgetPeriod $period,
         WidgetSelection $selection,
@@ -172,7 +171,6 @@ final class DashboardAggregator
      * @return array<string, mixed>
      */
     private function incomeExpenses(
-        DashboardWidget $widget,
         WidgetPeriod $period,
         WidgetSelection $selection,
         Collection $amountVisible,
@@ -227,8 +225,6 @@ final class DashboardAggregator
      * @return array<string, mixed>
      */
     private function radial(
-        DashboardWidget $widget,
-        WidgetPeriod $period,
         WidgetSelection $selection,
         Collection $envelopes,
         Collection $amountVisible,

@@ -200,29 +200,4 @@ class Envelope extends Model
     {
         return $this->type === self::DIRECTION_EXPENSE ? -$amount : $amount;
     }
-
-    /**
-     * The given user's effective permission on each of the given envelopes
-     * in three queries (instead of one per envelope), keyed by envelope id.
-     * Unknown ids are omitted.
-     *
-     * @param  array<int, int>  $envelopeIds
-     * @return Collection<int, string>
-     */
-    public static function permissionsFor(User $user, array $envelopeIds): Collection
-    {
-        if ($envelopeIds === []) {
-            return collect();
-        }
-
-        $coMemberIds = FinancialProfile::coMemberIdsOf($user->id);
-
-        return self::query()
-            ->whereIn('id', $envelopeIds)
-            ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
-            ->get()
-            ->mapWithKeys(fn (Envelope $envelope): array => [
-                $envelope->id => $envelope->permissionFor($user, $coMemberIds),
-            ]);
-    }
 }
