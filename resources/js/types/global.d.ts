@@ -19,6 +19,7 @@ declare module '@inertiajs/core' {
         sharedPageProps: {
             name: string;
             auth: Auth;
+            locale: string;
             locales: Record<string, string>;
             githubRepoUrl: string;
             sidebarOpen: boolean;

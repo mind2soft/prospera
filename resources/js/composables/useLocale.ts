@@ -61,20 +61,27 @@ export function browserLocales(): readonly string[] {
 
 /**
  * Resolve the active locale: the user's preferred locale when set, else the
- * best match from the browser locales, else the fallback locale.
+ * locale the server negotiated (from Accept-Language — the one its own
+ * messages are rendered in), else the best match from the browser locales,
+ * else the fallback locale.
  */
-export function resolveLocale(userLocale?: string | null): Locale {
+export function resolveLocale(
+    userLocale?: string | null,
+    serverLocale?: string | null,
+): Locale {
     return (
         matchLocale(userLocale ? [userLocale] : []) ??
+        matchLocale(serverLocale ? [serverLocale] : []) ??
         matchLocale(browserLocales()) ??
         FALLBACK_LOCALE
     );
 }
 
 /**
- * Keep the i18n locale in sync with the user's preference as shared by the
- * backend, falling back to the browser locales. The effect starts before
- * Inertia resolves the initial page, so the props may not be set yet.
+ * Keep the i18n locale in sync with the user's preference and the server
+ * locale shared by the backend, falling back to the browser locales. The
+ * effect starts before Inertia resolves the initial page, so the props may
+ * not be set yet.
  */
 export function initializeLocale(): void {
     const page = usePage();
@@ -82,7 +89,10 @@ export function initializeLocale(): void {
     watchEffect(() => {
         const user = page.props?.auth?.user;
 
-        i18n.global.locale.value = resolveLocale(user?.locale ?? null);
+        i18n.global.locale.value = resolveLocale(
+            user?.locale ?? null,
+            page.props?.locale ?? null,
+        );
     });
 }
 
