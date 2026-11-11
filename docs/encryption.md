@@ -304,6 +304,13 @@ scripts compare releases with the migrations the database actually ran
   has already replaced it: the live release keeps its cached configuration,
   but fix the secrets and deploy again before any rollback (which rebuilds
   the configuration from it, then refuses if `amounts:verify` fails).
+- Both scripts connect only to a host whose key is pinned in the
+  `SSH_KNOWN_HOSTS` variable of the `Production` environment (known_hosts
+  lines, e.g. from `ssh-keyscan -H <host>` run once and checked against the
+  host's fingerprint out of band). It is mandatory: a blank value fails the
+  deploy or rollback before connecting — there is no trust-on-first-use
+  fallback, since the deploy uploads the `.env` (with `APP_KEY`) over that
+  connection. After a host key change, update the variable.
 - It switches to maintenance mode before running pending migrations, so the
   previous release stops accepting requests (ones already in flight may still
   complete). `amounts:verify` must pass before the release goes live. Any

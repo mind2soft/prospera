@@ -84,7 +84,8 @@ for _a in "$@"; do _src=$_dst; _dst=$_a; done
 echo "scp $_src" >> "$WORK/ssh-log"
 cp "$_src" "${_dst#*:}"
 EOF
-chmod +x "$WORK/bin/php" "$WORK/bin/composer" "$WORK/bin/curl" "$WORK/bin/sleep" "$WORK/bin/ssh" "$WORK/bin/scp"
+printf '#!/bin/sh\necho "ssh-keyscan $*" >> "$WORK/ssh-log"\necho "$2 ssh-ed25519 ATTACKER"\n' > "$WORK/bin/ssh-keyscan"
+chmod +x "$WORK/bin/php" "$WORK/bin/composer" "$WORK/bin/curl" "$WORK/bin/sleep" "$WORK/bin/ssh" "$WORK/bin/scp" "$WORK/bin/ssh-keyscan"
 
 extract_remote() {
     awk "/<<'REMOTE'/{f=1;next} /^REMOTE\$/{f=0} f" "$1"
@@ -844,6 +845,25 @@ for _arg in "$WORK/app with space|0" "app|0" "$APP/|0" "$WORK//app|0" "$APP|1000
     expect "rollback: an invalid app path or wait [$_arg] is refused on the host too" \
         "$_rc $(live) $(grep -c 'invalid app path\|must be a number' "$WORK/out")" '1 new 1'
 done
+
+# No trust on first use: without pinned host keys nothing connects.
+for _hosts in '' ' ' "$(printf '\n\t')"; do
+    setup
+    rc=$(deploy_wrapper RELEASE_ID=e2e-$$ SSH_KNOWN_HOSTS="$_hosts")
+    expect "deploy wrapper: a blank SSH_KNOWN_HOSTS [$_hosts] is refused before ssh-keyscan, scp and ssh" \
+        "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh) $(grep -c 'SSH_KNOWN_HOSTS' "$WORK/out")" '1 old no-ssh 1'
+
+    setup_rollback
+    release "$APP/releases/old" '' a b
+    rc=$(rollback_wrapper SSH_KNOWN_HOSTS="$_hosts")
+    expect "rollback wrapper: a blank SSH_KNOWN_HOSTS [$_hosts] is refused before ssh-keyscan and ssh" \
+        "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh) $(grep -c 'SSH_KNOWN_HOSTS' "$WORK/out")" '1 new no-ssh 1'
+done
+
+setup
+rc=$(deploy_wrapper RELEASE_ID=e2e-$$ SSH_KNOWN_HOSTS='example.test ssh-ed25519 PINNED')
+expect 'deploy wrapper: SSH_KNOWN_HOSTS is the only trusted host key' \
+    "$rc $(cat "$WORK/home/.ssh/known_hosts") $(ls -l "$WORK/home/.ssh/known_hosts" | cut -c1-10)" '0 example.test ssh-ed25519 PINNED -rw-------'
 
 setup
 DEPLOY_E2E_ID=e2e-$$
