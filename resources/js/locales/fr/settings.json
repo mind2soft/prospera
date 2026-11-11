@@ -134,7 +134,12 @@
             "continueSetup": "Poursuivre la configuration",
             "enable": "Activer la 2FA",
             "enabledInfo": "Un code sécurisé et aléatoire vous sera demandé lors de la connexion ; vous pouvez le récupérer depuis l'application prenant en charge TOTP sur votre téléphone.",
-            "disable": "Désactiver la 2FA"
+            "disable": "Désactiver la 2FA",
+            "errors": {
+                "qrCode": "Le code QR n’a pas pu être chargé.",
+                "setupKey": "La clé de configuration n’a pas pu être chargée.",
+                "recoveryCodes": "Les codes de récupération n’ont pas pu être chargés."
+            }
         },
         "twoFactorSetup": {
             "title": "Activer l'authentification à deux facteurs",

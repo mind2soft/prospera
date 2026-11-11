@@ -88,3 +88,28 @@ test('shared controls have translated accessible names', async ({
 
     await context.close();
 });
+
+test('the mobile navigation sheet is named and described in the app locale', async ({
+    browser,
+}) => {
+    const context = await browser.newContext({
+        locale: 'fr-FR',
+        viewport: { width: 390, height: 844 },
+    });
+    const page = await context.newPage();
+    await login(page);
+    await page.goto('/budget');
+
+    await page
+        .getByRole('button', {
+            name: 'Afficher ou masquer la barre latérale',
+        })
+        .click();
+    const sheet = page.getByRole('dialog', { name: 'Navigation' });
+    await expect(sheet).toBeVisible();
+    await expect(sheet).toHaveAccessibleDescription(
+        "La navigation principale de l'application.",
+    );
+
+    await context.close();
+});

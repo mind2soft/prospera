@@ -134,7 +134,12 @@
             "continueSetup": "Continue setup",
             "enable": "Enable 2FA",
             "enabledInfo": "You will be prompted for a secure, random pin during login, which you can retrieve from the TOTP-supported application on your phone.",
-            "disable": "Disable 2FA"
+            "disable": "Disable 2FA",
+            "errors": {
+                "qrCode": "The QR code could not be loaded.",
+                "setupKey": "The setup key could not be loaded.",
+                "recoveryCodes": "The recovery codes could not be loaded."
+            }
         },
         "twoFactorSetup": {
             "title": "Enable two-factor authentication",
