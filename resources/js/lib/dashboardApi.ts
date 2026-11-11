@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { browserTimeZone } from '@/lib/calendar';
 import * as widgets from '@/routes/api/dashboard/widgets';
 import type {
     DashboardWidget,
@@ -23,6 +24,12 @@ export const dashboardApi = {
     remove: (profileId: number, widgetId: number): Promise<void> =>
         api(widgets.destroy({ profile: profileId, widget: widgetId })),
 
+    /** "Today" is the browser's day: the request carries its time zone. */
     data: (profileId: number, widgetId: number): Promise<DashboardWidgetData> =>
-        api(widgets.data({ profile: profileId, widget: widgetId })),
+        api(
+            widgets.data(
+                { profile: profileId, widget: widgetId },
+                { query: { timezone: browserTimeZone() } },
+            ),
+        ),
 };
