@@ -35,10 +35,7 @@ const { mutate: submit, isPending: isLoading } = useMutation({
         genericError.value = null;
         fieldErrors.value = {};
 
-        return api<{ redirect: string }>(store.url(), {
-            method: 'POST',
-            body: form.value,
-        });
+        return api<{ redirect: string }>(store(), { body: form.value });
     },
     onSuccess: (data) => {
         router.visit(data.redirect);
