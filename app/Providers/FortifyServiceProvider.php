@@ -17,6 +17,14 @@ use Laravel\Fortify\Fortify;
 
 class FortifyServiceProvider extends ServiceProvider
 {
+    public const INVITES_PER_MINUTE = 10;
+
+    public const INVITES_PER_DAY = 50;
+
+    public const REGISTRATIONS_PER_MINUTE = 5;
+
+    public const REGISTRATIONS_PER_HOUR = 20;
+
     /**
      * Register any application services.
      */
@@ -104,6 +112,27 @@ class FortifyServiceProvider extends ServiceProvider
         // Public invite endpoints (landing page and key validation).
         RateLimiter::for('invites', function (Request $request) {
             return Limit::perMinute(20)->by($request->ip());
+        });
+
+        // Invite creation sends an email to an arbitrary address: limited
+        // per IP and, so rotating IPs does not help, per user per minute and
+        // per day.
+        RateLimiter::for('invite-creation', function (Request $request) {
+            $userId = (string) $request->user()?->getAuthIdentifier();
+
+            return [
+                Limit::perMinute(20)->by('ip:'.$request->ip()),
+                Limit::perMinute(self::INVITES_PER_MINUTE)->by('user-minute:'.$userId),
+                Limit::perDay(self::INVITES_PER_DAY)->by('user-day:'.$userId),
+            ];
+        });
+
+        // Registration sends a verification email to the submitted address.
+        RateLimiter::for('register', function (Request $request) {
+            return [
+                Limit::perMinute(self::REGISTRATIONS_PER_MINUTE)->by('minute:'.$request->ip()),
+                Limit::perHour(self::REGISTRATIONS_PER_HOUR)->by('hour:'.$request->ip()),
+            ];
         });
 
         // Public contact form (issue #17): first-line guard in front of the

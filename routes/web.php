@@ -8,6 +8,8 @@ use App\Http\Controllers\FinancialProfileController;
 use App\Http\Controllers\FinancialProfileInviteController;
 use App\Http\Controllers\LedgerController;
 use Illuminate\Support\Facades\Route;
+use Laravel\Fortify\Features;
+use Laravel\Fortify\Http\Controllers\RegisteredUserController;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -22,6 +24,15 @@ Route::post('contact', [ContactController::class, 'store'])
     ->name('contact.store')
     ->middleware('throttle:contact');
 Route::get('contact/sent', [ContactController::class, 'sent'])->name('contact.sent');
+
+// Registration (Fortify's own route has no throttle): redeclared here — app
+// routes load after Fortify's, so this one replaces it — to rate-limit the
+// verification emails it sends to arbitrary addresses.
+if (Features::enabled(Features::registration())) {
+    Route::post('register', [RegisteredUserController::class, 'store'])
+        ->middleware(['guest:'.config('fortify.guard'), 'throttle:register'])
+        ->name('register.store');
+}
 
 // Public invite validation (used by the invite landing page and the
 // registration flow); accepting requires authentication below.
@@ -73,7 +84,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('{profile}/set-default', [FinancialProfileController::class, 'setDefault'])->name('set-default');
 
             Route::post('{profile}/invites', [FinancialProfileInviteController::class, 'store'])->name('invites.store')
-                ->middleware('throttle:invites');
+                ->middleware('throttle:invite-creation');
             Route::get('{profile}/invites', [FinancialProfileInviteController::class, 'index'])->name('invites.index');
             Route::delete('{profile}/invites/{invite}', [FinancialProfileInviteController::class, 'destroy'])->name('invites.destroy');
         })->whereNumber('profile');
