@@ -270,9 +270,11 @@ const weekDays = computed(() =>
                     type="button"
                     class="flex h-9 w-full items-center justify-center rounded-lg text-sm tabular-nums transition-colors disabled:pointer-events-none disabled:opacity-30"
                     :class="[
-                        day.disabled || !day.inMonth
-                            ? 'text-muted-foreground/40'
-                            : 'text-foreground hover:bg-muted',
+                        day.disabled
+                            ? 'text-muted-foreground'
+                            : day.inMonth
+                              ? 'text-foreground hover:bg-muted'
+                              : 'text-muted-foreground hover:bg-muted',
                         !day.disabled && day.date === selectedDate
                             ? 'bg-primary font-semibold text-primary-foreground hover:bg-primary'
                             : !day.disabled && day.date === todayIso
