@@ -18,7 +18,6 @@ use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class FinancialProfileInviteController extends Controller
 {
@@ -172,47 +171,34 @@ class FinancialProfileInviteController extends Controller
     }
 
     /**
-     * One-click accept from the invitation email (issue #39): the signed-in
-     * user whose account email matches the invite is accepted straight
-     * through and lands on the dashboard. Guests are sent to the sign-in
-     * page with the accept URL as the intended destination (they complete
-     * the accept after signing in), unverified users are redirected to the
-     * verification notice by the `verified` middleware, and every other
-     * case (unknown, reserved, expired, email mismatch, already a member)
-     * falls back to the invite landing page, behaving exactly as opening
-     * the plain invite link today.
+     * Accept link from the invitation email (issue #39). A GET never changes
+     * state (a cross-site link must not make a signed-in user join a
+     * profile): the link lands on the invite confirmation page, whose
+     * "Accept invite" button sends the CSRF-protected
+     * `POST /api/invites/{inviteKey}/accept`. Guests are sent to the sign-in
+     * page with the accept URL as the intended destination (they land on
+     * the confirmation after signing in), unverified users are redirected to
+     * the verification notice by the `verified` middleware, and the cases
+     * the confirmation cannot complete (email mismatch, already a member)
+     * flash their error up front. Unknown, reserved and expired keys get the
+     * landing page's own error.
      */
     public function acceptViaLink(Request $request, string $inviteKey): RedirectResponse
     {
         $invite = FinancialProfileInvite::findByKey($inviteKey);
 
-        if ($invite === null || $invite->isReserved() || $invite->isExpired()) {
-            // The landing page re-resolves the key and flashes the
-            // appropriate error for each of these states.
-            return redirect()->route('invites.landing', ['inviteKey' => $inviteKey]);
+        if ($invite !== null && ! $invite->isReserved() && ! $invite->isExpired()) {
+            $user = $request->user();
+
+            $error = $invite->usageError($user->email)
+                ?? ($invite->profile->isMember($user) ? 'You are already a member of this profile.' : null);
+
+            if ($error !== null) {
+                Inertia::flash('toast', ['type' => 'error', 'message' => __($error)]);
+            }
         }
 
-        try {
-            $profile = $this->grantMembership($inviteKey, $request->user());
-        } catch (ValidationException $exception) {
-            Inertia::flash('toast', [
-                'type' => 'error',
-                'message' => $exception->errors()['invite_key'][0] ?? __('This invite is invalid.'),
-            ]);
-
-            return redirect()->route('invites.landing', ['inviteKey' => $inviteKey]);
-        } catch (HttpException $exception) {
-            // The invite vanished between the pre-check and the locked
-            // re-verification (a concurrent accept won) — same fallback.
-            return redirect()->route('invites.landing', ['inviteKey' => $inviteKey]);
-        }
-
-        Inertia::flash('toast', [
-            'type' => 'success',
-            'message' => __('You joined the profile ":profile."', ['profile' => $profile->name]),
-        ]);
-
-        return redirect()->route('dashboard');
+        return redirect()->route('invites.landing', ['inviteKey' => $inviteKey]);
     }
 
     /**

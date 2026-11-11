@@ -444,33 +444,57 @@ class FinancialProfileInviteTest extends TestCase
     // One-click accept link (issue #39)
     // ------------------------------------------------------------------
 
-    public function test_the_one_click_accept_link_accepts_the_matching_signed_in_user(): void
+    public function test_the_accept_link_lands_on_the_confirmation_without_granting_membership(): void
     {
         $invite = $this->createInvite(email: $this->member->email);
         $this->profile->members()->detach($this->member->id);
 
-        $response = $this->actingAs($this->member)->get("/invites/{$this->key}/accept");
+        // SEC-3: a GET never changes state, even for the matching signed-in
+        // user — the confirmation page's button POSTs the accept.
+        $this->actingAs($this->member)->get("/invites/{$this->key}/accept")
+            ->assertRedirect(route('invites.landing', ['inviteKey' => $this->key]));
 
-        $response->assertRedirect(route('dashboard', absolute: false));
-        $this->assertDatabaseHas('financial_profile_user', [
+        $this->assertDatabaseMissing('financial_profile_user', [
             'profile_id' => $this->profile->id,
             'user_id' => $this->member->id,
-            'is_owner' => false,
         ]);
-        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
-    }
-
-    public function test_the_one_click_accept_link_flashes_a_success_toast(): void
-    {
-        $this->createInvite(email: $this->member->email);
-        $this->profile->members()->detach($this->member->id);
+        $this->assertDatabaseHas('financial_profile_invites', ['id' => $invite->id]);
 
         $response = $this->actingAs($this->member)
             ->followingRedirects()
             ->get("/invites/{$this->key}/accept");
 
-        $page = $response->viewData('page');
-        $this->assertSame('success', $page['flash']['toast']['type'] ?? null);
+        $response->assertOk()->assertInertia(fn ($page) => $page
+            ->component('auth/Register')
+            ->where('invite.profile', 'Family'));
+        $this->assertArrayNotHasKey('toast', $response->viewData('page')['flash'] ?? []);
+    }
+
+    public function test_a_cross_site_accept_link_navigation_does_not_join_the_profile(): void
+    {
+        $this->createInvite(email: $this->member->email);
+        $this->profile->members()->detach($this->member->id);
+
+        $this->actingAs($this->member)
+            ->withHeaders(['Sec-Fetch-Site' => 'cross-site'])
+            ->get("/invites/{$this->key}/accept");
+
+        $this->assertDatabaseMissing('financial_profile_user', [
+            'profile_id' => $this->profile->id,
+            'user_id' => $this->member->id,
+        ]);
+    }
+
+    public function test_the_confirmation_post_completes_the_accept_link_flow(): void
+    {
+        $invite = $this->createInvite(email: $this->member->email);
+        $this->profile->members()->detach($this->member->id);
+
+        $this->actingAs($this->member)->get("/invites/{$this->key}/accept");
+        $this->actingAs($this->member)->postJson("/api/invites/{$this->key}/accept")->assertOk();
+
+        $this->assertTrue($this->profile->isMember($this->member));
+        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
     }
 
     public function test_the_one_click_accept_link_rejects_other_users(): void

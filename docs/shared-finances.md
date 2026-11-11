@@ -43,16 +43,20 @@ invite for an email and gets a link containing a hash key (`invite_key`).
   - When the email is **not linked to an account**, the mail invites the
     recipient to create an account through the invite link (inviter name and
     email, profile name, invite URL, 48 h expiry).
-  - When the email matches a **registered account**, the mail carries a
-    **one-click accept link** (`GET /invites/{inviteKey}/accept`): opening
-    it while signed in with the matching account email accepts the invite
-    straight through and lands on the dashboard. The mail states the
-    attributed role and that **ignoring the request declines the share**.
-    Guests are routed to the sign-in page first (the accept completes after
-    signing in), and every other case — email mismatch, expired, reserved,
-    already a member — falls back to the invite landing page, behaving
-    exactly as opening the plain invite link. Registered recipients can turn
-    these emails off via Settings → Notifications ("Profile invitations").
+  - When the email matches a **registered account**, the mail carries an
+    **accept link** (`GET /invites/{inviteKey}/accept`): opening it while
+    signed in with the matching account email lands on the invite
+    **confirmation page**, where one click on **Accept invite** joins the
+    profile (a CSRF-protected `POST /api/invites/{inviteKey}/accept`) and
+    lands on the dashboard. The `GET` itself **never changes state**, so a
+    link or redirect on a third-party page cannot make a signed-in user
+    join a profile without their consent. The mail states the attributed
+    role and that **ignoring the request declines the share**. Guests are
+    routed to the sign-in page first (they land on the confirmation after
+    signing in); an email mismatch or an existing membership flashes its
+    error on the landing page, and expired, reserved or unknown invites show
+    the landing page's error. Registered recipients can turn these emails
+    off via Settings → Notifications ("Profile invitations").
 - An **existing user** accepts by opening the link while signed in — the invite
   must match their account email.
 - A **new user** registers through the invite link; the invite key is carried
@@ -327,7 +331,7 @@ data fetching.
 | `DELETE` | `/api/profiles/{profile}/invites/{invite}`   | Revoke a pending invite                                                                                                                                                                                                                                                                                                                |
 | `GET`    | `/api/invites/{inviteKey}`                   | Public invite validation (rate-limited); `404` when invalid or reserved, `410` expired                                                                                                                                                                                                                                                 |
 | `POST`   | `/api/invites/{inviteKey}/accept`            | Accept an invite (signed-in user; the invite email must match the account email; rate-limited)                                                                                                                                                                                                                                         |
-| `GET`    | `/invites/{inviteKey}/accept`                | One-click accept from the invitation email (signed-in + verified user with a matching account email → accepts and lands on the dashboard; guests go to the sign-in page and complete the accept after; all other cases fall back to the invite landing page; rate-limited)                                                              |
+| `GET`    | `/invites/{inviteKey}/accept`                | Accept link from the invitation email — never changes state: signed-in + verified users land on the invite confirmation page (one click on **Accept invite** POSTs the accept); guests go to the sign-in page first; email mismatches and existing members get an error toast; rate-limited                                             |
 
 The invite link is the frontend route `/invites/{inviteKey}`: existing users
 get an accept confirmation; new users are routed to registration with the key

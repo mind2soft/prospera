@@ -17,7 +17,7 @@ regardless of the individual switches.**
 | **Ledger expired** | on | An open ledger you own (or are a member of) whose **end date has passed** — sent once, when the daily run first detects it. |
 | **Contributor transactions** | on | Another user records a transaction in a ledger you are the owner of — one email per transaction (the recipient list stays narrow to ledger owners to avoid noisy group mails; broader audiences can be added later). |
 | **Envelope limit exceeded** | on | Recorded spending for an envelope within a month **exceeds its allocation on that month's published budget** — checked when the exceeding transaction is recorded; recipients are the envelope owner + envelope contributors. Amounts are masked for recipients holding less than `viewer` permission on the envelope. |
-| **Profile invitations** | on | Someone shares a financial profile with you — the invite email with the one-click accept link (issue #39). The toggle only gates emails **received**; invitations you send are always delivered to their recipients. |
+| **Profile invitations** | on | Someone shares a financial profile with you — the invite email with the accept link to the invite confirmation (issue #39). The toggle only gates emails **received**; invitations you send are always delivered to their recipients. |
 
 Timing notes: notifications are queued per-event emails (no digests — a
 digest mode can be added later as a new option without a schema break).
@@ -69,7 +69,7 @@ time.
 - Sent to **verified** addresses only (Fortify-verified accounts; unverified
   users get nothing, silently). Exception — **profile invitations**: the
   share must reach the owner of an existing (not yet verified) account too;
-  they cannot re-register with their email, and the one-click accept link
+  they cannot re-register with their email, and the accept link
   routes them through email verification before accepting.
 - Localized per recipient's `users.locale` (fallback `en`), including
   plain-text parts.

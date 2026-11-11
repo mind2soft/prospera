@@ -37,11 +37,10 @@ Route::get('invites/{inviteKey}', [FinancialProfileInviteController::class, 'lan
     ->middleware('throttle:invites');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    // One-click accept from the invitation email: the signed-in user whose
-    // account email matches the invite is accepted straight through; guests
+    // Accept link from the invitation email: never changes state — it lands
+    // on the invite confirmation page, whose button POSTs the accept. Guests
     // are redirected to the sign-in page (the auth middleware preserves the
-    // intended URL), unverified users to the verification notice, and every
-    // other case falls back to the invite landing page.
+    // intended URL) and unverified users to the verification notice.
     Route::get('invites/{inviteKey}/accept', [FinancialProfileInviteController::class, 'acceptViaLink'])
         ->name('invites.accept-link')
         ->middleware('throttle:invites');
