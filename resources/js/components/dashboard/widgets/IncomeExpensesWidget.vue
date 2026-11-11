@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { CurveType } from '@unovis/ts';
-import {
-    VisArea,
-    VisAxis,
-    VisCrosshair,
-    VisLine,
-    VisStackedBar,
-    VisTooltip,
-    VisXYContainer,
-} from '@unovis/vue';
+// Per-component entry points: the @unovis/vue barrel is flagged as having
+// side effects, so importing from it bundles every chart, map and graph.
+import VisArea from '@unovis/vue/components/area';
+import VisAxis from '@unovis/vue/components/axis';
+import VisCrosshair from '@unovis/vue/components/crosshair';
+import VisLine from '@unovis/vue/components/line';
+import VisStackedBar from '@unovis/vue/components/stacked-bar';
+import VisTooltip from '@unovis/vue/components/tooltip';
+import VisXYContainer from '@unovis/vue/containers/xy-container';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useLocale } from '@/composables/useLocale';
