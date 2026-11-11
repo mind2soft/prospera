@@ -64,10 +64,7 @@ class EnvelopeController extends Controller
             // under a shared lock (transactions, budget assignments).
             $locked = Envelope::query()->whereKey($envelope->id)->lockForUpdate()->firstOrFail();
 
-            $referenced = fn (): bool => $locked->budgetEnvelopes()->exists()
-                || $locked->transactions()->exists();
-
-            if ($validated['type'] !== $locked->type && $referenced()) {
+            if ($validated['type'] !== $locked->type && $locked->isReferenced()) {
                 throw ValidationException::withMessages([
                     'type' => __('This envelope is already used by a budget or transactions: its direction cannot be changed.'),
                 ]);
@@ -85,15 +82,13 @@ class EnvelopeController extends Controller
     {
         $this->authorize('delete', $envelope);
 
-        if ($envelope->budgetEnvelopes()->exists()) {
-            throw ValidationException::withMessages([
-                'envelope' => __('This envelope is used in a budget and cannot be deleted.'),
-            ]);
-        }
+        $referencedBy = $envelope->referencedBy();
 
-        if ($envelope->transactions()->exists()) {
+        if ($referencedBy !== null) {
             throw ValidationException::withMessages([
-                'envelope' => __('This envelope has transactions and cannot be deleted.'),
+                'envelope' => $referencedBy === 'budget'
+                    ? __('This envelope is used in a budget and cannot be deleted.')
+                    : __('This envelope has transactions and cannot be deleted.'),
             ]);
         }
 

@@ -113,6 +113,38 @@ class Envelope extends Model
     }
 
     /**
+     * What references the envelope and so blocks its deletion and a
+     * direction change (docs/envelope.md): "budget" (a budget assignment),
+     * "transactions", or null when nothing does.
+     *
+     * @return 'budget'|'transactions'|null
+     */
+    public function referencedBy(): ?string
+    {
+        return match (true) {
+            $this->budgetEnvelopes()->exists() => 'budget',
+            $this->transactions()->exists() => 'transactions',
+            default => null,
+        };
+    }
+
+    public function isReferenced(): bool
+    {
+        return $this->referencedBy() !== null;
+    }
+
+    /**
+     * Scope envelopes referenced by a budget assignment or a transaction.
+     *
+     * @param  Builder<Envelope>  $query
+     */
+    #[Scope]
+    protected function referenced(Builder $query): void
+    {
+        $query->where(fn (Builder $query) => $query->whereHas('budgetEnvelopes')->orWhereHas('transactions'));
+    }
+
+    /**
      * Whether the envelope is owned by the given user.
      */
     public function isOwner(User $user): bool

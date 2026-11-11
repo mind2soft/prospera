@@ -4,7 +4,6 @@ namespace App\Actions;
 
 use App\Models\FinancialProfileInvite;
 use App\Models\User;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -73,7 +72,7 @@ class DeleteAccount
     private function transferReferencedEnvelopes(User $user): void
     {
         $envelopes = $user->envelopes()
-            ->where(fn (Builder $query) => $query->whereHas('budgetEnvelopes')->orWhereHas('transactions'))
+            ->referenced()
             ->get();
 
         if ($envelopes->isEmpty()) {

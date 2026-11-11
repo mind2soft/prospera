@@ -195,6 +195,31 @@ class EnvelopesTest extends TestCase
         $this->assertDatabaseHas('envelopes', ['id' => $envelope->id, 'type' => 'revenue']);
     }
 
+    public function test_deleting_a_referenced_envelope_names_what_references_it(): void
+    {
+        $user = User::factory()->create();
+        $profile = FinancialProfile::createOwnedBy($user, 'Home');
+        $budgeted = $user->envelopes()->create(['name' => 'Rent', 'type' => 'expense']);
+        $spent = $user->envelopes()->create(['name' => 'Food', 'type' => 'expense']);
+        Budget::create(['profile_id' => $profile->id, 'currency' => 'CAD', 'effective_year' => 0, 'effective_month' => 0])
+            ->envelopes()->create(['envelope_id' => $budgeted->id, 'amount' => -100, 'type' => 'fixed']);
+        Ledger::create([
+            'profile_id' => $profile->id,
+            'name' => '2026',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+            'starting_balance' => 0,
+        ])->transactions()->create(['user_id' => $user->id, 'envelope_id' => $spent->id, 'amount' => -10, 'event_at' => '2026-03-03 00:00:00']);
+
+        $this->actingAs($user)->delete("/envelopes/{$budgeted->id}")
+            ->assertSessionHasErrors(['envelope' => 'This envelope is used in a budget and cannot be deleted.']);
+        $this->actingAs($user)->delete("/envelopes/{$spent->id}")
+            ->assertSessionHasErrors(['envelope' => 'This envelope has transactions and cannot be deleted.']);
+
+        $this->assertModelExists($budgeted);
+        $this->assertModelExists($spent);
+    }
+
     public function test_guests_are_redirected(): void
     {
         $this->get('/envelopes')->assertRedirect('/login');
