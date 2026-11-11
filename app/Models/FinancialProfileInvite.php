@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\MatchesEmail;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,6 +25,8 @@ use Illuminate\Support\Facades\DB;
  */
 class FinancialProfileInvite extends Model
 {
+    use MatchesEmail;
+
     /** A member who can contribute but not manage the profile. */
     public const ROLE_COLLABORATOR = 'collaborator';
 
@@ -278,7 +281,7 @@ class FinancialProfileInvite extends Model
     {
         self::query()
             ->where('profile_id', $profile->id)
-            ->whereRaw('lower(email) = ?', [mb_strtolower($user->email)])
+            ->forEmail($user->email)
             ->delete();
     }
 

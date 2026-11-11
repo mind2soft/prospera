@@ -75,9 +75,7 @@ class FinancialProfileInviteController extends Controller
     {
         $validated = $request->validated();
 
-        $alreadyMember = $profile->members()
-            ->whereRaw('lower(users.email) = ?', [mb_strtolower($validated['email'])])
-            ->exists();
+        $alreadyMember = $profile->members()->forEmail($validated['email'], 'users.email')->exists();
 
         if ($alreadyMember) {
             throw ValidationException::withMessages([
@@ -90,7 +88,7 @@ class FinancialProfileInviteController extends Controller
         // outlive the grant in the pending list.
         $awaitingVerification = FinancialProfileInvite::query()
             ->where('profile_id', $profile->id)
-            ->whereRaw('lower(email) = ?', [mb_strtolower($validated['email'])])
+            ->forEmail($validated['email'])
             ->whereNotNull('pending_user_id')
             ->notExpired()
             ->exists();
@@ -106,7 +104,7 @@ class FinancialProfileInviteController extends Controller
         $invite = DB::transaction(function () use ($profile, $validated, $rawKey, $request): FinancialProfileInvite {
             FinancialProfileInvite::query()
                 ->where('profile_id', $profile->id)
-                ->whereRaw('lower(email) = ?', [mb_strtolower($validated['email'])])
+                ->forEmail($validated['email'])
                 ->whereNull('pending_user_id')
                 ->delete();
 
@@ -313,9 +311,7 @@ class FinancialProfileInviteController extends Controller
      */
     private function notifyInvitee(FinancialProfileInvite $invite, string $rawKey): void
     {
-        $recipient = User::query()
-            ->whereRaw('lower(email) = ?', [mb_strtolower($invite->email)])
-            ->first();
+        $recipient = User::query()->forEmail($invite->email)->first();
 
         if ($recipient !== null
             && ! $recipient->wantsNotification(NotificationSettings::PROFILE_INVITE)) {

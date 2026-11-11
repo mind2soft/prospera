@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Casts\AsNotificationSettings;
+use App\Models\Concerns\MatchesEmail;
 use App\Settings\NotificationSettings;
 use Carbon\CarbonImmutable;
 use Database\Factories\UserFactory;
@@ -45,7 +46,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 class User extends Authenticatable implements HasLocalePreference, MustVerifyEmail, PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+    use HasFactory, MatchesEmail, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
 
     /**
      * Get the attributes that should be cast.
