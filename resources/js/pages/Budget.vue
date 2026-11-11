@@ -1,14 +1,7 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import { useQueryClient } from '@tanstack/vue-query';
-import {
-    computed,
-    nextTick,
-    onBeforeUnmount,
-    ref,
-    useTemplateRef,
-    watch,
-} from 'vue';
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import AddEnvelopeDialog from '@/components/Budget/AddEnvelopeDialog.vue';
@@ -51,6 +44,7 @@ import {
 } from '@/composables/budgetQueries';
 import { useProfileMembers } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
+import { useFlushOnLeave } from '@/composables/useFlushOnLeave';
 import { useLocale } from '@/composables/useLocale';
 import { errorMessage } from '@/lib/api';
 import { budgetMonthLabel } from '@/lib/budget';
@@ -506,7 +500,8 @@ const flushAmountSaves = async (): Promise<boolean> => {
     return results.every(Boolean);
 };
 
-onBeforeUnmount(() => {
+// Leaving the page (or unloading it) sends the debounced edits right away.
+useFlushOnLeave(() => {
     void flushAmountSaves();
 });
 

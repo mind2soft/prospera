@@ -23,6 +23,22 @@ test('amount edits report their autosave status', async ({ page }) => {
     ).toHaveValue('850');
 });
 
+test('an amount edit is saved when the page is reloaded', async ({ page }) => {
+    await login(page);
+    await page.goto('/budget');
+
+    // Reload within the autosave debounce: the page flushes on `pagehide`.
+    await page.getByRole('spinbutton', { name: 'Food amount' }).fill('875');
+    await page.reload();
+
+    await expect(async () => {
+        await page.reload();
+        await expect(
+            page.getByRole('spinbutton', { name: 'Food amount' }),
+        ).toHaveValue('875', { timeout: 5_000 });
+    }).toPass({ timeout: 20_000 });
+});
+
 test('a failed save is reported as not saved', async ({ page }) => {
     await login(page);
     await page.goto('/budget');
