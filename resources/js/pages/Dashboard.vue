@@ -30,9 +30,11 @@ import {
 } from '@/composables/dashboardQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { ApiError } from '@/lib/api';
+import { moveItem } from '@/lib/list';
 import { dashboard as dashboardRoute } from '@/routes';
 import type {
     DashboardWidgetConfig,
+    DashboardWidgetPayload,
     DashboardWidgetType,
     DashboardWidgetViewType,
 } from '@/types';
@@ -130,8 +132,8 @@ watch(profileId, () => {
 });
 
 /** The save payload of a widget — existing widgets keep their id. */
-const configOf = (widget: DashboardWidgetConfig): DashboardWidgetConfig => ({
-    ...((widget.id ?? 0) > 0 ? { id: widget.id } : {}),
+const configOf = (widget: DashboardWidgetConfig): DashboardWidgetPayload => ({
+    ...(widget.id > 0 ? { id: widget.id } : {}),
     type: widget.type,
     title: widget.title,
     view_type: widget.view_type,
@@ -151,7 +153,7 @@ watch(
             return;
         }
 
-        const incoming = data.map((widget) => ({
+        const incoming: DashboardWidgetConfig[] = data.map((widget) => ({
             ...configOf(widget),
             id: widget.id,
         }));
@@ -203,7 +205,7 @@ const saveNow = (): void => {
                     data.widgets.forEach((widget, index) => {
                         const local = widgets.value[index];
 
-                        if (local && (local.id ?? 0) <= 0) {
+                        if (local && local.id <= 0) {
                             local.id = widget.id;
                         }
                     });
@@ -263,9 +265,7 @@ const onAdd = (type: DashboardWidgetType): void => {
 // ---- Reordering ------------------------------------------------------------
 
 const onReorder = (ids: number[]): void => {
-    const byId = new Map(
-        widgets.value.map((widget) => [widget.id ?? 0, widget]),
-    );
+    const byId = new Map(widgets.value.map((widget) => [widget.id, widget]));
 
     const reordered = ids
         .map((id) => byId.get(id))
@@ -315,10 +315,13 @@ const onMoveFromSettings = (direction: 'earlier' | 'later'): void => {
         return;
     }
 
-    const ids = widgets.value.map((w) => w.id ?? 0);
-    const [moved] = ids.splice(from, 1);
-    ids.splice(to, 0, moved);
-    onReorder(ids);
+    onReorder(
+        moveItem(
+            widgets.value.map((w) => w.id),
+            from,
+            to,
+        ),
+    );
 };
 
 const onSettingsUpdate = (patch: Partial<DashboardWidgetConfig>): void => {
@@ -337,14 +340,14 @@ const onRemove = (): void => {
 const onDestroy = (): void => {
     const widget = settingsWidget.value;
 
-    if (widget === null || (widget.id ?? 0) <= 0) {
+    if (widget === null || widget.id <= 0) {
         // Not saved yet — drop it locally.
         widgets.value = widgets.value.filter((w) => w !== widget);
         confirmRemove.value = false;
         return;
     }
 
-    removeWidget.mutate(widget.id ?? 0, {
+    removeWidget.mutate(widget.id, {
         onSuccess: () => {
             confirmRemove.value = false;
             // The canonical list is invalidated by the mutation; keep the
