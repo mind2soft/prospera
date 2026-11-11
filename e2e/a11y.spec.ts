@@ -173,6 +173,12 @@ test('budget form controls have accessible names', async ({ page }) => {
     await page.getByRole('menuitem', { name: 'Share' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await expectNamedControls(page, 'share drawer');
+    // Member avatars use token surfaces with readable initials.
+    const contrast = await new AxeBuilder({ page })
+        .include('[role="dialog"] ul')
+        .withRules(['color-contrast'])
+        .analyze();
+    expect(contrast.violations).toEqual([]);
 });
 
 test('validation errors are linked to their field, announced and focused', async ({

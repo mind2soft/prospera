@@ -68,21 +68,6 @@ const emit = defineEmits<{
 
 const { getInitials } = useInitials();
 
-/** Deterministic avatar background per user (Drive-style colored initials). */
-const AVATAR_COLORS = [
-    '#6366f1',
-    '#0ea5e9',
-    '#14b8a6',
-    '#10b981',
-    '#f59e0b',
-    '#f97316',
-    '#f43f5e',
-    '#8b5cf6',
-] as const;
-
-const avatarColor = (member: { user_id: number }): string =>
-    AVATAR_COLORS[member.user_id % AVATAR_COLORS.length];
-
 const permissionLabels: Record<ResourcePermission, string> = {
     owner: 'share.permission.owner',
     contributor: 'share.permission.contributor',
@@ -117,6 +102,24 @@ const onPermissionChange = (
         return;
     }
     emit('set-permission', member.user_id, permission as ResourcePermission);
+};
+
+// Revoking cannot be undone from every drawer (budgets and ledgers have no
+// grant section): confirm it, naming the member.
+const revokeTarget = ref<ResourceMember | null>(null);
+const confirmingRevoke = ref(false);
+
+const askRevoke = (member: ResourceMember): void => {
+    revokeTarget.value = member;
+    confirmingRevoke.value = true;
+};
+
+const confirmRevoke = (): void => {
+    if (revokeTarget.value === null) {
+        return;
+    }
+    confirmingRevoke.value = false;
+    emit('revoke', revokeTarget.value.user_id);
 };
 
 // --- transfer ---------------------------------------------------------------
@@ -168,6 +171,7 @@ watch(
             newPermission.value = 'contributor';
             transferTarget.value = null;
             confirmingTransfer.value = false;
+            confirmingRevoke.value = false;
         }
     },
 );
@@ -203,10 +207,7 @@ watch(
                     >
                         <Avatar class="size-8 shrink-0">
                             <AvatarFallback
-                                class="text-xs font-medium text-white"
-                                :style="{
-                                    backgroundColor: avatarColor(member),
-                                }"
+                                class="bg-muted text-xs font-medium text-foreground"
                             >
                                 {{ getInitials(member.name) }}
                             </AvatarFallback>
@@ -280,8 +281,12 @@ watch(
                             variant="ghost"
                             size="icon-sm"
                             class="shrink-0 text-muted-foreground hover:text-destructive"
-                            :aria-label="$t('share.drawer.revoke')"
-                            @click="emit('revoke', member.user_id)"
+                            :aria-label="
+                                $t('share.drawer.revokeFor', {
+                                    name: member.name,
+                                })
+                            "
+                            @click="askRevoke(member)"
                         >
                             <Icon
                                 name="close"
@@ -431,6 +436,49 @@ watch(
                     }}</Button
                 >
             </div>
+
+            <Dialog
+                :open="confirmingRevoke"
+                @update:open="confirmingRevoke = false"
+            >
+                <DialogContent class="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>{{
+                            $t('share.drawer.revokeTitle', {
+                                name: revokeTarget?.name ?? '',
+                            })
+                        }}</DialogTitle>
+                        <DialogDescription>
+                            {{
+                                profileCircle
+                                    ? $t('share.drawer.revokeDescription', {
+                                          name: revokeTarget?.name ?? '',
+                                          resource: transferResource,
+                                      })
+                                    : $t(
+                                          'share.drawer.revokeDescriptionMember',
+                                          {
+                                              name: revokeTarget?.name ?? '',
+                                              resource: transferResource,
+                                          },
+                                      )
+                            }}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="ghost"
+                            @click="confirmingRevoke = false"
+                            >{{
+                                $t('common.actions.cancel')
+                            }}</Button
+                        >
+                        <Button variant="destructive" @click="confirmRevoke">{{
+                            $t('share.drawer.revoke')
+                        }}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog
                 :open="confirmingTransfer"

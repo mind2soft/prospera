@@ -26,7 +26,11 @@
             "transferDescription": "{name} deviendra le propriétaire de {resource} et en obtiendra le contrôle total. Vous deviendrez contributeur.",
             "done": "Terminé",
             "accessFor": "{name} : niveau d’accès",
-            "accessLevel": "Niveau d’accès"
+            "accessLevel": "Niveau d’accès",
+            "revokeFor": "Révoquer l’accès de {name}",
+            "revokeTitle": "Révoquer l’accès de {name} ?",
+            "revokeDescription": "{name} perdra l’accès à {resource}. Vous pourrez le lui accorder de nouveau depuis ce panneau.",
+            "revokeDescriptionMember": "{name} perdra l’accès accordé à {resource} et ne gardera que l’accès en lecture des membres du profil."
         },
         "envelope": {
             "title": "Partager l'enveloppe",
