@@ -197,7 +197,11 @@ type RadialData = {
 
 - Saved with **debounced autosave** (~600 ms) on every change (project
   convention: no save buttons); the layout is sent in full and the server
-  assigns ids and order. Removing widgets is destructive → confirmation.
+  assigns ids and order. Saves are serialized (one in flight, at most one
+  queued per profile) by `composables/useLayoutAutosave.ts`; leaving the
+  page — another page, a reload or closing the tab — sends a pending edit
+  right away (`useFlushOnLeave`, `keepalive` requests), and a failed save
+  shows an error toast. Removing widgets is destructive → confirmation.
 - Widget data auto-refreshes **every 15 minutes** via vue Query
   `refetchInterval`, **paused when the tab is hidden**
   (`document.visibilityState`) so background tabs don't burn requests.
