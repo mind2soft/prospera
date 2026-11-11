@@ -1,11 +1,19 @@
 <script setup lang="ts">
 import { Monitor, Moon, Sun } from '@lucide/vue';
-import { computed } from 'vue';
+import { RadioGroupItem, RadioGroupRoot } from 'reka-ui';
+import { computed, useId } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAppearance } from '@/composables/useAppearance';
 
 const { t } = useI18n();
 const { appearance, updateAppearance } = useAppearance();
+const labelId = useId();
+
+const onSelect = (value: unknown): void => {
+    if (value === 'light' || value === 'dark' || value === 'system') {
+        updateAppearance(value);
+    }
+};
 
 const tabs = computed(
     () =>
@@ -26,23 +34,28 @@ const tabs = computed(
 </script>
 
 <template>
-    <div
-        class="inline-flex gap-1 rounded-lg bg-neutral-100 p-1 dark:bg-neutral-800"
-    >
-        <button
-            v-for="{ value, Icon, label } in tabs"
-            :key="value"
-            type="button"
-            @click="updateAppearance(value)"
-            :class="[
-                'flex items-center rounded-md px-3.5 py-1.5 transition-colors',
-                appearance === value
-                    ? 'bg-white shadow-xs dark:bg-neutral-700 dark:text-neutral-100'
-                    : 'text-neutral-500 hover:bg-neutral-200/60 hover:text-black dark:text-neutral-400 dark:hover:bg-neutral-700/60',
-            ]"
+    <div class="grid gap-2">
+        <span :id="labelId" class="text-sm font-medium">
+            {{ $t('settings.appearance.theme') }}
+        </span>
+        <!-- A single choice among three: radio semantics expose the selected
+             option (not only its styling). -->
+        <RadioGroupRoot
+            :model-value="appearance"
+            :aria-labelledby="labelId"
+            orientation="horizontal"
+            class="inline-flex w-fit flex-wrap gap-1 rounded-lg bg-muted p-1"
+            @update:model-value="onSelect"
         >
-            <component :is="Icon" class="-ml-1 size-4" />
-            <span class="ml-1.5 text-sm">{{ label }}</span>
-        </button>
+            <RadioGroupItem
+                v-for="{ value, Icon, label } in tabs"
+                :key="value"
+                :value="value"
+                class="flex items-center gap-1.5 rounded-md px-3.5 py-1.5 text-sm text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[state=checked]:bg-background data-[state=checked]:text-foreground data-[state=checked]:shadow-xs data-[state=checked]:ring-1 data-[state=checked]:ring-border"
+            >
+                <component :is="Icon" class="-ml-1 size-4" aria-hidden="true" />
+                {{ label }}
+            </RadioGroupItem>
+        </RadioGroupRoot>
     </div>
 </template>

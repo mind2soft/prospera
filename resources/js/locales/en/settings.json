@@ -30,7 +30,8 @@
             "description": "Update the appearance settings for your account",
             "light": "Light",
             "dark": "Dark",
-            "system": "System"
+            "system": "System",
+            "theme": "Theme"
         },
         "notifications": {
             "title": "Notification settings",

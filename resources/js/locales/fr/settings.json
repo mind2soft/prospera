@@ -30,7 +30,8 @@
             "description": "Mettez à jour les paramètres d'apparence de votre compte",
             "light": "Clair",
             "dark": "Sombre",
-            "system": "Système"
+            "system": "Système",
+            "theme": "Thème"
         },
         "notifications": {
             "title": "Paramètres de notification",
