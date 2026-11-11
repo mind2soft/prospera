@@ -1,5 +1,4 @@
 <!-- biome-ignore-all lint/a11y/noHeaderScope: vue-i18n `scope` prop, not the HTML attribute -->
-<!-- biome-ignore-all lint/a11y/noPositiveTabindex: deliberate tab order for the invite page form -->
 <script setup lang="ts">
 import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
 import { useQueryClient } from '@tanstack/vue-query';
@@ -252,7 +251,6 @@ const onDecline = async () => {
                         type="text"
                         required
                         v-focus
-                        :tabindex="1"
                         autocomplete="name"
                         name="name"
                         :placeholder="$t('auth.register.namePlaceholder')"
@@ -266,7 +264,6 @@ const onDecline = async () => {
                         id="email"
                         type="email"
                         required
-                        :tabindex="2"
                         autocomplete="email"
                         name="email"
                         placeholder="email@example.com"
@@ -286,7 +283,6 @@ const onDecline = async () => {
                     <PasswordInput
                         id="password"
                         required
-                        :tabindex="3"
                         autocomplete="new-password"
                         name="password"
                         :placeholder="$t('common.fields.password')"
@@ -302,7 +298,6 @@ const onDecline = async () => {
                     <PasswordInput
                         id="password_confirmation"
                         required
-                        :tabindex="4"
                         autocomplete="new-password"
                         name="password_confirmation"
                         :placeholder="$t('auth.register.confirmPassword')"
@@ -314,7 +309,6 @@ const onDecline = async () => {
                 <Button
                     type="submit"
                     class="mt-2 w-full"
-                    tabindex="5"
                     :disabled="processing"
                     data-test="register-user-button"
                 >
@@ -334,7 +328,6 @@ const onDecline = async () => {
                 <TextLink
                     :href="login()"
                     class="underline underline-offset-4"
-                    :tabindex="6"
                     >{{
                         $t('auth.login.submit')
                     }}</TextLink
@@ -345,7 +338,6 @@ const onDecline = async () => {
                 <TextLink
                     :href="privacy()"
                     class="underline underline-offset-4"
-                    :tabindex="7"
                     data-test="privacy-link"
                     >{{
                         $t('privacy.link')
