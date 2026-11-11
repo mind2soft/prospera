@@ -6,6 +6,7 @@ use App\Mail\ContactMessage;
 use App\Models\ContactSubmission;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -96,23 +97,28 @@ class ContactController extends Controller
 
         $user = $request->user();
 
-        ContactSubmission::create([
-            'email' => $validated['email'],
-            'subject' => $subject,
-            'message' => $message,
-            'ip_address' => $ip,
-            'user_id' => $user?->id,
-        ]);
+        // The log entry drives the cooldown: it must only exist once the mail
+        // is queued, or a failed dispatch would block the resend. With the
+        // database queue, both inserts commit (or roll back) together.
+        DB::transaction(function () use ($validated, $subject, $message, $ip, $user): void {
+            ContactSubmission::create([
+                'email' => $validated['email'],
+                'subject' => $subject,
+                'message' => $message,
+                'ip_address' => $ip,
+                'user_id' => $user?->id,
+            ]);
 
-        Mail::to(config('mail.contact_address'))
-            ->send(new ContactMessage(
-                contactEmail: $validated['email'],
-                contactSubject: $subject,
-                contactMessage: $message,
-                accountName: $user?->name,
-                accountId: $user?->id,
-                senderLocale: $user->locale ?? app()->getLocale(),
-            ));
+            Mail::to(config('mail.contact_address'))
+                ->queue(new ContactMessage(
+                    contactEmail: $validated['email'],
+                    contactSubject: $subject,
+                    contactMessage: $message,
+                    accountName: $user?->name,
+                    accountId: $user?->id,
+                    senderLocale: $user->locale ?? app()->getLocale(),
+                ));
+        });
 
         return response()->json(['redirect' => route('contact.sent')]);
     }

@@ -5,8 +5,11 @@ namespace Tests\Feature;
 use App\Mail\ContactMessage;
 use App\Models\ContactSubmission;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -239,6 +242,37 @@ class ContactTest extends TestCase
 
         $this->postJson(route('contact.store'), self::PAYLOAD)->assertTooManyRequests();
         Mail::assertQueued(ContactMessage::class, 1);
+    }
+
+    public function test_the_submission_and_its_queued_mail_are_stored_together(): void
+    {
+        config()->set('queue.default', 'database');
+
+        $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.20'])
+            ->postJson(route('contact.store'), self::PAYLOAD)
+            ->assertOk();
+
+        $this->assertDatabaseCount('contact_submissions', 1);
+        $this->assertSame(ContactMessage::class, json_decode((string) DB::table('jobs')->value('payload'), true)['displayName']);
+    }
+
+    public function test_a_failed_queueing_leaves_no_submission_and_no_cooldown(): void
+    {
+        config()->set('queue.default', 'database');
+        Schema::drop('jobs');
+
+        $this->withoutExceptionHandling();
+
+        try {
+            $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.21'])
+                ->postJson(route('contact.store'), self::PAYLOAD);
+            $this->fail('Expected the queue insert to fail.');
+        } catch (QueryException) {
+            // The jobs table is gone: queueing the mail fails.
+        }
+
+        $this->assertDatabaseCount('contact_submissions', 0);
+        $this->assertFalse(ContactSubmission::onCooldownFor('192.0.2.21'));
     }
 
     public function test_contact_prune_deletes_submissions_past_the_retention_window(): void
