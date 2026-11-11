@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { useMutation } from '@/composables/query';
-import { ApiError } from '@/lib/api';
+import { errorMessage } from '@/lib/api';
 import {
     type NotificationSettings,
     notificationApi,
@@ -115,9 +115,7 @@ const toggle = (key: keyof NotificationSettings) => {
             if (id === requestId) {
                 settings.value = previous;
                 toast.error(
-                    error instanceof ApiError
-                        ? error.firstError
-                        : t('settings.notifications.saveFailed'),
+                    errorMessage(error, t('settings.notifications.saveFailed')),
                 );
             }
         },

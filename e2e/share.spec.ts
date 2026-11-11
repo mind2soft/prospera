@@ -199,3 +199,46 @@ test('the envelope share drawer grants, updates and revokes access', async ({
     ).toHaveCount(0);
     await expect(ownerRow).toBeVisible();
 });
+
+test('an envelope share drawer that failed to load offers no grant', async ({
+    page,
+}) => {
+    const SHARES = /\/api\/envelopes\/\d+\/shares$/;
+    await page.route(SHARES, (route) =>
+        route.request().method() === 'GET'
+            ? route.fulfill({
+                  status: 500,
+                  contentType: 'application/json',
+                  body: JSON.stringify({ message: 'Server Error' }),
+              })
+            : route.fallback(),
+    );
+
+    await login(page);
+    await page.goto('/envelopes');
+    await expect(page.getByText('Food').first()).toBeVisible();
+    const foodCard = page
+        .locator('div.group')
+        .filter({ hasText: 'Food' })
+        .first();
+    await foodCard.getByRole('button', { name: 'Envelope options' }).click();
+    await page.getByRole('menuitem', { name: 'Share' }).click();
+    const drawer = page.getByRole('dialog');
+
+    // Without the list, the circle members who already have access cannot
+    // be told apart: the grant section stays hidden until it loads.
+    await expect(
+        drawer.getByText('The people with access could not be loaded.'),
+    ).toBeVisible({ timeout: 15_000 });
+    const grant = drawer.getByRole('combobox', { name: 'Grant access' });
+    await expect(grant).toHaveCount(0);
+
+    await page.unroute(SHARES);
+    await drawer.getByRole('button', { name: 'Retry' }).click();
+    await expect(
+        drawer
+            .getByRole('listitem')
+            .filter({ hasText: 'playwright@example.com' }),
+    ).toBeVisible();
+    await expect(grant).toBeVisible();
+});

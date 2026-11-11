@@ -100,7 +100,9 @@ lang/
   localized, user-facing `message` (never a model class name); a 403
   keeps the reason the application gave, translated. The client
   (`resources/js/lib/api.ts`) falls back to the same messages
-  (`common.errors.*`) when a response carries none.
+  (`common.errors.*`) when a response carries none;
+  [`ErrorMessageParityTest`](../tests/Feature/ErrorMessageParityTest.php)
+  keeps the two tables identical in every locale.
 - [`LangParityTest`](../tests/Unit/LangParityTest.php) fails when a locale
   misses a key of `lang/en/*.php`, when a literal `__('…')` string of `app/`
   has no `lang/{locale}.json` entry, or when placeholders differ.
@@ -122,6 +124,10 @@ lang/
   `date.toLocaleDateString(locale.value, { ... })`.
 - Never change rendered English text while extracting a string: e2e specs
   assert on the visible text.
+- One term per concept in each language, in the interface and the server
+  messages alike (a server error shows next to client copy). French uses
+  **« courriel »** for email — « adresse courriel », « par courriel », « le
+  courriel de vérification » — never « e-mail » or « mail ».
 - Registering a new locale requires:
   - a sibling folder under `resources/js/locales/` with the same
     namespaces, and an entry in `messages` in

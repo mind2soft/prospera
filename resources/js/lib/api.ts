@@ -29,6 +29,18 @@ export class ApiError extends Error {
 }
 
 /**
+ * The message to show for a failed request: the API's own (validation or
+ * localized error) message, else the given, already translated fallback
+ * (network failure, unexpected exception).
+ */
+export function errorMessage<T extends string | undefined>(
+    error: unknown,
+    fallback: T,
+): string | T {
+    return error instanceof ApiError ? error.firstError : fallback;
+}
+
+/**
  * The localized, generic message of an HTTP error status. The server
  * already sends localized messages (app/Exceptions/LocalizedJsonErrors.php);
  * this covers an empty body, a proxy error page or a non-JSON response.
@@ -61,6 +73,8 @@ type ApiMethod = 'get' | 'post' | 'patch' | 'put' | 'delete';
 type ApiOptions = {
     body?: unknown;
     signal?: AbortSignal;
+    /** Let the request outlive the page (a save sent while it unloads). */
+    keepalive?: boolean;
 };
 
 /**
@@ -84,7 +98,7 @@ export async function api<T>(
     }
 
     const method = route.method.toUpperCase();
-    const { body, signal } = options;
+    const { body, signal, keepalive } = options;
 
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (body !== undefined) {
@@ -103,6 +117,7 @@ export async function api<T>(
         method,
         headers,
         signal,
+        keepalive,
         body: body === undefined ? undefined : JSON.stringify(body),
     });
 

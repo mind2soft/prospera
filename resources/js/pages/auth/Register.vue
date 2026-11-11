@@ -25,8 +25,9 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { profileKeys, useAcceptInvite } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
-import { ApiError } from '@/lib/api';
+import { errorMessage } from '@/lib/api';
 import { profileApi } from '@/lib/profileApi';
+import { registerHeading } from '@/lib/registerHeading';
 import { dashboard, login, logout, privacy } from '@/routes';
 import { acceptLink } from '@/routes/invites';
 import { store } from '@/routes/register';
@@ -39,31 +40,17 @@ const props = defineProps<{
     invite?: InviteContext | null;
 }>();
 
-/**
- * The page doubles as the signed-in invite confirmation (guests only reach
- * plain registration): the layout's heading follows what the page is for.
- */
 defineOptions({
     layout: (pageProps: {
         auth?: { user: User | null };
         invite?: InviteContext | null;
     }) => {
-        if (!pageProps.auth?.user) {
-            return {
-                title: 'auth.register.layoutTitle',
-                description: 'auth.register.layoutDescription',
-            };
-        }
+        const { title, description } = registerHeading(
+            Boolean(pageProps.auth?.user),
+            Boolean(pageProps.invite),
+        );
 
-        return pageProps.invite
-            ? {
-                  title: 'auth.invite.title',
-                  description: 'auth.invite.description',
-              }
-            : {
-                  title: 'auth.register.inviteUnavailable',
-                  description: '',
-              };
+        return { title, description };
     },
 });
 
@@ -104,15 +91,9 @@ const emailMismatch = computed(
 
 const { t } = useI18n();
 
-const documentTitle = computed(() => {
-    if (!signedIn.value) {
-        return t('auth.register.title');
-    }
-
-    return props.invite
-        ? t('auth.invite.title')
-        : t('auth.register.inviteUnavailable');
-});
+const documentTitle = computed(() =>
+    t(registerHeading(signedIn.value, Boolean(props.invite)).documentTitle),
+);
 
 /**
  * A guest with an account signs in through the email's accept link: the
@@ -144,10 +125,7 @@ const onAccept = () => {
         },
         onError: (e) => {
             accepting.value = false;
-            acceptError.value =
-                e instanceof ApiError
-                    ? e.firstError
-                    : t('auth.register.acceptError');
+            acceptError.value = errorMessage(e, t('auth.register.acceptError'));
         },
     });
 };
@@ -165,10 +143,7 @@ const onDecline = async () => {
     } catch (e) {
         declining.value = false;
         confirmingDecline.value = false;
-        acceptError.value =
-            e instanceof ApiError
-                ? e.firstError
-                : t('auth.register.declineError');
+        acceptError.value = errorMessage(e, t('auth.register.declineError'));
         return;
     }
     confirmingDecline.value = false;
@@ -214,30 +189,9 @@ const onDecline = async () => {
                     </div>
                 </div>
 
-                <!-- Unverified: the accept API would refuse (403). -->
-                <template v-if="!verified">
-                    <Alert data-test="invite-verify-first">
-                        <Icon name="mail" aria-hidden="true" />
-                        <AlertTitle>{{
-                            $t('auth.invite.verifyFirst')
-                        }}</AlertTitle>
-                        <AlertDescription>
-                            {{
-                                $t('auth.invite.verifyFirstDescription', {
-                                    email: user?.email,
-                                })
-                            }}
-                        </AlertDescription>
-                    </Alert>
-                    <Button as-child>
-                        <Link :href="notice()">
-                            {{ $t('auth.invite.goToVerification') }}
-                        </Link>
-                    </Button>
-                </template>
-
-                <!-- Another account: only the invited address can accept. -->
-                <template v-else-if="emailMismatch">
+                <!-- Another account: only the invited address can accept — checked
+                     first, verifying this address would not change it. -->
+                <template v-if="emailMismatch">
                     <Alert variant="destructive" data-test="invite-mismatch">
                         <Icon name="error" aria-hidden="true" />
                         <AlertTitle>{{
@@ -264,6 +218,28 @@ const onDecline = async () => {
                             </Link>
                         </Button>
                     </div>
+                </template>
+
+                <!-- Unverified: the accept API would refuse (403). -->
+                <template v-else-if="!verified">
+                    <Alert data-test="invite-verify-first">
+                        <Icon name="mail" aria-hidden="true" />
+                        <AlertTitle>{{
+                            $t('auth.invite.verifyFirst')
+                        }}</AlertTitle>
+                        <AlertDescription>
+                            {{
+                                $t('auth.invite.verifyFirstDescription', {
+                                    email: user?.email,
+                                })
+                            }}
+                        </AlertDescription>
+                    </Alert>
+                    <Button as-child>
+                        <Link :href="notice()">
+                            {{ $t('auth.invite.goToVerification') }}
+                        </Link>
+                    </Button>
                 </template>
 
                 <template v-else>

@@ -127,6 +127,85 @@ test('switching profile during a pending save keeps the other profile layout', a
     await expect(cards(page).first()).toContainText('Home trend');
 });
 
+test('an edit made while a save is in flight survives leaving the page', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/dashboard');
+    await expect(cards(page)).toHaveCount(2, { timeout: 15_000 });
+
+    const saves = await holdSaves(page);
+
+    // A keyboard reorder saves immediately — the PUT is now held.
+    await cards(page)
+        .first()
+        .getByRole('button', { name: 'Reorder Home spending' })
+        .press('ArrowRight');
+    await expect(cards(page).first()).toContainText('Home trend');
+    await expect.poll(() => saves.sent.length).toBe(1);
+
+    // Rename a widget while that save is pending (its debounce never
+    // elapses: the user leaves first).
+    await cards(page)
+        .first()
+        .getByRole('button', { name: 'Widget settings' })
+        .click();
+    await page.getByRole('textbox', { name: 'Title' }).fill('Renamed trend');
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    await page
+        .locator('[data-sidebar="sidebar"]')
+        .getByRole('link', { name: 'Envelopes' })
+        .click();
+    await page.waitForURL((url) => url.pathname === '/envelopes');
+
+    // The queued rename goes out once the held save settles, even though
+    // the dashboard is gone.
+    const followUp = page.waitForResponse(
+        (r) =>
+            r.request().method() === 'PUT' &&
+            SAVE_URL.test(r.url()) &&
+            r
+                .request()
+                .postDataJSON()
+                ?.widgets?.some(
+                    (w: { title?: string }) => w.title === 'Renamed trend',
+                ),
+    );
+    saves.release();
+    expect((await followUp).ok()).toBe(true);
+
+    await page.goto('/dashboard');
+    await expect(cards(page)).toHaveCount(2, { timeout: 15_000 });
+    await expect(cards(page).first()).toContainText('Renamed trend');
+    await expect(cards(page).last()).toContainText('Home spending');
+});
+
+test('a debounced edit is saved when the page is reloaded', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/dashboard');
+    await expect(cards(page)).toHaveCount(2, { timeout: 15_000 });
+
+    await cards(page)
+        .first()
+        .getByRole('button', { name: 'Widget settings' })
+        .click();
+
+    await page.getByRole('textbox', { name: 'Title' }).fill('Reloaded title');
+    // Reload within the autosave debounce: the page flushes on `pagehide`.
+    await page.reload();
+
+    await expect(async () => {
+        await page.reload();
+        await expect(cards(page).first()).toContainText('Reloaded title', {
+            timeout: 5_000,
+        });
+    }).toPass({ timeout: 20_000 });
+});
+
 test('reordering a widget while it is being created keeps unique ids', async ({
     page,
 }) => {

@@ -1,14 +1,7 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import { useQueryClient } from '@tanstack/vue-query';
-import {
-    computed,
-    nextTick,
-    onBeforeUnmount,
-    ref,
-    useTemplateRef,
-    watch,
-} from 'vue';
+import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import AddEnvelopeDialog from '@/components/Budget/AddEnvelopeDialog.vue';
@@ -51,11 +44,12 @@ import {
 } from '@/composables/budgetQueries';
 import { useProfileMembers } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
+import { useFlushOnLeave } from '@/composables/useFlushOnLeave';
 import { useLocale } from '@/composables/useLocale';
-import { ApiError } from '@/lib/api';
+import { errorMessage } from '@/lib/api';
 import { budgetMonthLabel } from '@/lib/budget';
 import type { AddEnvelopeInput } from '@/lib/budgetApi';
-import { currentMonth } from '@/lib/calendar';
+import { currentMonth, parseMonth } from '@/lib/calendar';
 import { budget as budgetRoute } from '@/routes';
 import type { BudgetDetail, ResourcePermission } from '@/types';
 
@@ -141,10 +135,15 @@ const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
 
 /**
  * A draft can only be handed to the profile owner (docs/budget.md —
- * ownership): anyone else could neither publish nor delete it.
+ * ownership): anyone else could neither publish nor delete it. Only the
+ * budget's owner sees the transfer, so only they fetch the members.
  */
 const profileMembersQuery = useProfileMembers(
-    computed(() => (isDraft.value ? (currentProfile.value?.id ?? null) : null)),
+    computed(() =>
+        isDraft.value && isOwner.value
+            ? (currentProfile.value?.id ?? null)
+            : null,
+    ),
 );
 const draftTransferTo = computed(() =>
     isDraft.value
@@ -203,9 +202,7 @@ const working = computed(
 );
 
 const fail = (e: unknown) => {
-    toast.error(
-        e instanceof ApiError ? e.firstError : t('budget.toast.failed'),
-    );
+    toast.error(errorMessage(e, t('budget.toast.failed')));
 };
 
 // --- dialogs ---------------------------------------------------------------
@@ -227,7 +224,7 @@ const askPublish = () => {
 };
 
 const publishMonthLabel = computed(() => {
-    const [year, month] = publishMonth.value.split('-').map(Number);
+    const [year, month] = parseMonth(publishMonth.value);
     return budgetMonthLabel(year, month, locale.value);
 });
 
@@ -239,7 +236,7 @@ const replaceWarning = computed(() => {
     if (budget.value === null) {
         return false;
     }
-    const [year, month] = publishMonth.value.split('-').map(Number);
+    const [year, month] = parseMonth(publishMonth.value);
     return budgets.value.some(
         (b) =>
             b.id !== budget.value?.id &&
@@ -508,7 +505,8 @@ const flushAmountSaves = async (): Promise<boolean> => {
     return results.every(Boolean);
 };
 
-onBeforeUnmount(() => {
+// Leaving the page (or unloading it) sends the debounced edits right away.
+useFlushOnLeave(() => {
     void flushAmountSaves();
 });
 
@@ -686,7 +684,7 @@ const onRemoveEnvelope = (envelopeId: number) => {
                 isDraft ? $t('budget.share.draftTransferNote') : undefined
             "
             :current-user-id="currentUserId"
-            :can-manage="budget.permission === 'owner'"
+            :can-manage="isOwner"
             @update:open="showShare = $event"
             @set-permission="onSetSharePermission"
             @revoke="onRevokeShare"

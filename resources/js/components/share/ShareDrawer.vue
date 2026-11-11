@@ -86,6 +86,16 @@ const permissionLabels: Record<ResourcePermission, string> = {
     viewer: 'share.permission.viewer',
 };
 
+/** The member list failed to load (and nothing is known from before). */
+const loadFailed = computed(
+    () => props.error === true && props.members.length === 0,
+);
+
+/** The member list is known: loaded, not loading and not failed. */
+const membersKnown = computed(
+    () => !loadFailed.value && !(props.loading ?? props.members.length === 0),
+);
+
 // --- grant access (profile-circle resources) --------------------------------
 const newUserId = ref<number | null>(null);
 const newPermission = ref<'contributor' | 'viewer'>('contributor');
@@ -224,14 +234,14 @@ watch(
                 </p>
 
                 <QueryErrorState
-                    v-if="error && members.length === 0"
+                    v-if="loadFailed"
                     :message="$t('share.drawer.loadError')"
                     :retrying="retrying"
                     @retry="emit('retry')"
                 />
 
                 <p
-                    v-else-if="props.loading ?? members.length === 0"
+                    v-else-if="!membersKnown"
                     class="py-4 text-sm text-muted-foreground"
                 >
                     {{ $t('common.loading') }}
@@ -339,7 +349,9 @@ watch(
             <template v-if="canManage">
                 <Separator />
 
-                <div v-if="profileCircle" class="space-y-2">
+                <!-- Grant candidates are the circle minus the people with
+                     access: unknown until the list has loaded. -->
+                <div v-if="profileCircle && membersKnown" class="space-y-2">
                     <Label for="share-grant-member">
                         {{ $t('share.drawer.grantAccess') }}
                     </Label>
