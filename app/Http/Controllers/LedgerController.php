@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Budget;
 use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
+use App\Models\FinancialProfile;
 use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
@@ -214,11 +215,14 @@ class LedgerController extends Controller
                     (string) $allocation->envelope_id => $allocation->amount,
                 ]);
 
+        // Resolved once for every row's permission check (stale grants).
+        $coMemberIds = FinancialProfile::coMemberIdsOf($user->id);
+
         return response()->json([
             'transactions' => $transactions
                 ->map(fn (Transaction $transaction) => $this->serializeTransaction(
                     $transaction,
-                    $transaction->envelope->permissionFor($user),
+                    $transaction->envelope->permissionFor($user, $coMemberIds),
                     $this->remainingAllocated($transaction, $allocations, $totals),
                 ))
                 ->values(),
