@@ -52,3 +52,14 @@ test('budget labels and money use the app locale', async ({ browser }) => {
 
     await context.close();
 });
+
+test('budget envelope types are translated', async ({ browser }) => {
+    const { context, page } = await frenchPage(browser);
+    await login(page);
+    await page.goto('/budget');
+
+    const row = page.getByRole('row', { name: /Mortgage/ });
+    await expect(row.getByRole('cell').nth(1)).toHaveText('Fixe');
+
+    await context.close();
+});

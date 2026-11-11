@@ -178,10 +178,8 @@ const runningLeft = computed(() => {
                                 {{ row.name }}
                             </span>
                         </td>
-                        <td
-                            class="px-4 py-2.5 text-muted-foreground capitalize"
-                        >
-                            {{ row.type }}
+                        <td class="px-4 py-2.5 text-muted-foreground">
+                            {{ $t(`budget.addEnvelope.${row.type}`) }}
                         </td>
                         <td class="px-4 py-2.5 text-right">
                             <template v-if="editable">
