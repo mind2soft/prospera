@@ -20,7 +20,7 @@
             "viewer": "Can view",
             "none": "Shared"
         },
-        "options": "Envelope options",
+        "optionsFor": "Envelope options for {name}",
         "menu": {
             "share": "Share"
         },

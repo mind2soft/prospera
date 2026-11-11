@@ -20,7 +20,7 @@
             "viewer": "Peut consulter",
             "none": "Partagée"
         },
-        "options": "Options de l'enveloppe",
+        "optionsFor": "Options de l'enveloppe {name}",
         "menu": {
             "share": "Partager"
         },

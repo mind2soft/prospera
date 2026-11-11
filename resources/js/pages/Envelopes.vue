@@ -412,10 +412,18 @@ const roleLabel: Record<string, string> = {
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        class="size-8 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
-                                        :aria-label="$t('envelopes.options')"
+                                        class="size-8 text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
+                                        :aria-label="
+                                            $t('envelopes.optionsFor', {
+                                                name: envelope.name,
+                                            })
+                                        "
                                     >
-                                        <Icon name="more-vert" class="size-4" />
+                                        <Icon
+                                            name="more-vert"
+                                            class="size-4"
+                                            aria-hidden="true"
+                                        />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
