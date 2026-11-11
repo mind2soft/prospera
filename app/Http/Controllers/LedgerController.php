@@ -30,12 +30,6 @@ class LedgerController extends Controller
     /** @use ManagesShares<Ledger> */
     use ManagesShares;
 
-    /**
-     * The longest from_date..to_date span (inclusive, in days) the
-     * transactions endpoint serves.
-     */
-    public const MAX_RANGE_DAYS = 366;
-
     public function __construct(
         private readonly ResourcePermissionService $permissionService,
     ) {}
@@ -357,7 +351,9 @@ class LedgerController extends Controller
      */
     protected function shareList(Model $resource, User $caller): array
     {
-        return $this->permissionService->profilePermissions($resource->profile, 'ledger_permissions', 'ledger_id', $resource->id);
+        [$table, $column] = $this->shareTable();
+
+        return $this->permissionService->profilePermissions($resource->profile, $table, $column, $resource->id);
     }
 
     /**
