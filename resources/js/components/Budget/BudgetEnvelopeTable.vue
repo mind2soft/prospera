@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue';
 import Currency from '@/components/Currency.vue';
+import EnvelopeChip from '@/components/EnvelopeChip.vue';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -159,24 +160,11 @@ const runningLeft = computed(() => {
                         class="border-b last:border-0"
                     >
                         <td class="px-4 py-2.5">
-                            <span
-                                class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
-                                :style="{
-                                    backgroundColor: `${row.color}22`,
-                                    color: row.color,
-                                }"
-                            >
-                                <Icon
-                                    :name="
-                                        row.direction === 'revenue'
-                                            ? 'north'
-                                            : 'south'
-                                    "
-                                    class="size-3"
-                                    aria-hidden="true"
-                                />
-                                {{ row.name }}
-                            </span>
+                            <EnvelopeChip
+                                :name="row.name"
+                                :color="row.color"
+                                :direction="row.direction"
+                            />
                         </td>
                         <td class="px-4 py-2.5 text-muted-foreground">
                             {{ $t(`budget.addEnvelope.${row.type}`) }}

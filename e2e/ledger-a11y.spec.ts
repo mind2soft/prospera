@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 import { login, seed } from './support';
 
@@ -16,4 +17,19 @@ test('the calendar only sticks in the two-column layout', async ({ page }) => {
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await expect(calendar.locator('..')).toHaveCSS('position', 'sticky');
+});
+
+test('envelope names in the transaction table meet contrast', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/ledger');
+    await expect(page.getByRole('table')).toBeVisible();
+    await expect(page.getByRole('row').nth(1)).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+        .include('table')
+        .withRules(['color-contrast'])
+        .analyze();
+    expect(results.violations).toEqual([]);
 });

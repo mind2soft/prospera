@@ -369,11 +369,12 @@ const roleLabel: Record<string, string> = {
                     >
                         <CardContent class="flex items-center gap-3 p-4">
                             <div
-                                class="flex size-10 shrink-0 items-center justify-center rounded-xl text-lg font-semibold"
+                                class="flex size-10 shrink-0 items-center justify-center rounded-xl border-2 text-lg font-semibold text-foreground"
                                 :style="{
                                     backgroundColor: `${envelope.color}1a`,
-                                    color: envelope.color,
+                                    borderColor: envelope.color,
                                 }"
+                                aria-hidden="true"
                             >
                                 {{ envelope.name.charAt(0).toUpperCase() }}
                             </div>

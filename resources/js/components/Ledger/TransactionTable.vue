@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import Currency from '@/components/Currency.vue';
+import EnvelopeChip from '@/components/EnvelopeChip.vue';
 import Icon from '@/components/Icon.vue';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -128,24 +129,11 @@ const stampLabel = (createdAt: string): string =>
                         {{ dayLabel(transaction.event_at) }}
                     </td>
                     <td class="px-4 py-2.5">
-                        <span
-                            class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
-                            :style="{
-                                backgroundColor: `${transaction.color}22`,
-                                color: transaction.color,
-                            }"
-                        >
-                            <Icon
-                                :name="
-                                    transaction.direction === 'revenue'
-                                        ? 'north'
-                                        : 'south'
-                                "
-                                class="size-3"
-                                aria-hidden="true"
-                            />
-                            {{ transaction.name }}
-                        </span>
+                        <EnvelopeChip
+                            :name="transaction.name"
+                            :color="transaction.color"
+                            :direction="transaction.direction"
+                        />
                     </td>
                     <td class="px-4 py-2.5 text-right">
                         <span

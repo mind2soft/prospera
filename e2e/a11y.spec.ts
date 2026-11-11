@@ -107,7 +107,7 @@ test('empty-state headlines are solid text, not gradient-clipped', async ({
     await expect(headline).toHaveCSS('background-image', 'none');
 });
 
-test('budget status text meets contrast in both themes', async ({ page }) => {
+test('the budget table meets contrast in both themes', async ({ page }) => {
     await login(page);
     for (const appearance of ['light', 'dark'] as const) {
         // The default "system" appearance follows the color scheme.
@@ -120,7 +120,7 @@ test('budget status text meets contrast in both themes', async ({ page }) => {
         ).toBe(appearance === 'dark');
         await expect(page.getByText('Left over')).toBeVisible();
         const results = await new AxeBuilder({ page })
-            .include('tfoot')
+            .include('table')
             .withRules(['color-contrast'])
             .analyze();
         expect(results.violations, appearance).toEqual([]);
