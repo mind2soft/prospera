@@ -90,7 +90,7 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', onWindowMouseUp));
                 :title="t('dashboard.widget.drag')"
                 @mousedown="onHandleDown"
             >
-                <Icon name="drag_indicator" class="size-4" aria-hidden="true" />
+                <Icon name="drag-indicator" class="size-4" aria-hidden="true" />
             </button>
 
             <h3

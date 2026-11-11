@@ -472,7 +472,7 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                         <div v-else class="space-y-2">
                             <div class="flex items-center gap-2">
                                 <Icon
-                                    name="check_indeterminate_small"
+                                    name="check-indeterminate-small"
                                     class="size-4 text-muted-foreground"
                                     aria-hidden="true"
                                 />
@@ -692,7 +692,7 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                     @click="startGroup"
                 >
                     <Icon
-                        name="check_indeterminate_small"
+                        name="check-indeterminate-small"
                         class="size-4"
                         aria-hidden="true"
                     />

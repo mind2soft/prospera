@@ -107,6 +107,12 @@ test('the dashboard renders', async ({ page }) => {
     await login(page);
     await visit(page, '/dashboard', 'Dashboard');
 
+    // Material Symbols come from the bundled build-time subset: they render
+    // as inline SVG (an unregistered icon renders nothing).
+    await expect(
+        page.locator('svg.iconify--material-symbols').first(),
+    ).toBeVisible();
+
     await expectNoViolations(violations, 'Dashboard');
 });
 
