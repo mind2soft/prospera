@@ -6,6 +6,7 @@ use App\Models\FinancialProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Support\Facades\Route;
 use RuntimeException;
@@ -33,6 +34,11 @@ class LocalizedJsonErrorsTest extends TestCase
             Route::get('throttled', fn () => throw new ThrottleRequestsException('Too Many Attempts.', null, ['Retry-After' => 42]));
             Route::get('crash', fn () => throw new RuntimeException('SQLSTATE secret details'));
             Route::get('unavailable', fn () => abort(503));
+            Route::get('user-lookup-fails', function (Request $request): never {
+                $request->setUserResolver(fn () => throw new RuntimeException('database down while resolving the user'));
+
+                throw new RuntimeException('original failure');
+            });
         });
 
         Route::middleware('web')->get('__errors/page', fn () => abort(404));
@@ -96,6 +102,15 @@ class LocalizedJsonErrorsTest extends TestCase
         $this->french()->getJson('/api/__errors/unavailable')
             ->assertServiceUnavailable()
             ->assertExactJson(['message' => 'Prospera est momentanément indisponible pour maintenance. Réessayez dans quelques minutes.']);
+    }
+
+    public function test_the_renderer_falls_back_to_accept_language_when_the_user_lookup_fails(): void
+    {
+        // RES-R3-2: resolving the user (for its locale) can fail during an
+        // outage; the error must still be a localized JSON 500.
+        $this->french()->getJson('/api/__errors/user-lookup-fails')
+            ->assertInternalServerError()
+            ->assertExactJson(['message' => 'Un problème est survenu de notre côté. Réessayez dans un instant.']);
     }
 
     public function test_an_unauthenticated_api_call_is_localized(): void

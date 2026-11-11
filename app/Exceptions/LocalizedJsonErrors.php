@@ -40,7 +40,7 @@ class LocalizedJsonErrors
 
         // Authentication and route-model binding fail before the SetLocale
         // middleware has run.
-        App::setLocale(SetLocale::resolve($request));
+        App::setLocale(self::locale($request));
 
         if ($e instanceof AuthenticationException) {
             return response()->json(['message' => self::messageFor(401)], 401);
@@ -59,6 +59,21 @@ class LocalizedJsonErrors
             : self::messageFor($status);
 
         return response()->json(['message' => $message], $status, $e->getHeaders());
+    }
+
+    /**
+     * The request's locale, without ever throwing: the renderer must not
+     * fail itself (RES-R3-2). Resolving the user can hit the database — the
+     * very thing that may have failed — so on any error the user's
+     * preference is skipped and Accept-Language decides.
+     */
+    private static function locale(Request $request): string
+    {
+        try {
+            return SetLocale::resolve($request);
+        } catch (Throwable) {
+            return SetLocale::resolve($request, withUser: false);
+        }
     }
 
     public static function messageFor(int $status): string
