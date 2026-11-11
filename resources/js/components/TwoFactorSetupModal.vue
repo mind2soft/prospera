@@ -270,7 +270,7 @@ watch(
                                         />
                                     </InputOTPGroup>
                                 </InputOTP>
-                                <InputError :message="errors?.code" />
+                                <InputError for="otp" :message="errors?.code" />
                             </div>
 
                             <div class="flex w-full items-center space-x-5">

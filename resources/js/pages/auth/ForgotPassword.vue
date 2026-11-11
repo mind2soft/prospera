@@ -43,7 +43,7 @@ defineProps<{
                     v-focus
                     placeholder="email@example.com"
                 />
-                <InputError :message="errors.email" />
+                <InputError for="email" :message="errors.email" />
             </div>
 
             <div class="my-6 flex items-center justify-start">

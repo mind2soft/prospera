@@ -47,7 +47,7 @@ const inputEmail = ref(props.email);
                     class="mt-1 block w-full"
                     readonly
                 />
-                <InputError :message="errors.email" class="mt-2" />
+                <InputError for="email" :message="errors.email" class="mt-2" />
             </div>
 
             <div class="grid gap-2">
@@ -61,7 +61,7 @@ const inputEmail = ref(props.email);
                     :placeholder="$t('common.fields.password')"
                     :passwordrules="passwordRules"
                 />
-                <InputError :message="errors.password" />
+                <InputError for="password" :message="errors.password" />
             </div>
 
             <div class="grid gap-2">
@@ -76,7 +76,10 @@ const inputEmail = ref(props.email);
                     :placeholder="$t('auth.resetPassword.confirmPassword')"
                     :passwordrules="passwordRules"
                 />
-                <InputError :message="errors.password_confirmation" />
+                <InputError
+                    for="password_confirmation"
+                    :message="errors.password_confirmation"
+                />
             </div>
 
             <Button

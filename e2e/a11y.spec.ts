@@ -174,3 +174,23 @@ test('budget form controls have accessible names', async ({ page }) => {
     await expect(page.getByRole('dialog')).toBeVisible();
     await expectNamedControls(page, 'share drawer');
 });
+
+test('validation errors are linked to their field, announced and focused', async ({
+    page,
+}) => {
+    execSync('php artisan cache:clear --env=e2e', { cwd: '.' });
+    await page.goto('/login');
+    const email = page.getByRole('textbox', { name: 'Email address' });
+    await email.fill('playwright@example.com');
+    const password = page.getByRole('textbox', { name: 'Password' });
+    await password.fill('not-the-password');
+    await password.press('Enter');
+
+    const error = page.getByRole('alert').filter({ hasText: 'credentials' });
+    await expect(error).toBeVisible();
+    await expect(email).toHaveAttribute('aria-invalid', 'true');
+    await expect(email).toHaveAccessibleDescription(
+        (await error.textContent())?.trim() ?? '',
+    );
+    await expect(email).toBeFocused();
+});

@@ -56,7 +56,7 @@ defineProps<{
                     autocomplete="email"
                     placeholder="email@example.com"
                 />
-                <InputError :message="errors.email" />
+                <InputError for="email" :message="errors.email" />
             </div>
 
             <div class="grid gap-2">
@@ -79,7 +79,7 @@ defineProps<{
                     autocomplete="current-password"
                     :placeholder="$t('common.fields.password')"
                 />
-                <InputError :message="errors.password" />
+                <InputError for="password" :message="errors.password" />
             </div>
 
             <div class="flex items-center justify-between">

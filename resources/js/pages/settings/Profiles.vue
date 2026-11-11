@@ -731,6 +731,7 @@ const joinedLabel = (joinedAt: string): string =>
                                                 "
                                             />
                                             <InputError
+                                                :for="`invite-email-${profile.id}`"
                                                 :message="inviteError"
                                             />
                                         </div>
@@ -955,7 +956,7 @@ const joinedLabel = (joinedAt: string): string =>
                         :placeholder="$t('settings.profiles.namePlaceholder')"
                         @keydown.enter.prevent="onCreate"
                     />
-                    <InputError :message="newNameError" />
+                    <InputError for="profile-name" :message="newNameError" />
                 </div>
                 <DialogFooter>
                     <Button variant="ghost" @click="showCreate = false">{{

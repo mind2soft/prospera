@@ -81,7 +81,7 @@ const submittedLocale = computed(() =>
                     autocomplete="name"
                     :placeholder="$t('settings.profile.namePlaceholder')"
                 />
-                <InputError class="mt-2" :message="errors.name" />
+                <InputError class="mt-2" for="name" :message="errors.name" />
             </div>
 
             <div class="grid gap-2">
@@ -96,7 +96,7 @@ const submittedLocale = computed(() =>
                     autocomplete="username"
                     :placeholder="$t('settings.profile.emailPlaceholder')"
                 />
-                <InputError class="mt-2" :message="errors.email" />
+                <InputError class="mt-2" for="email" :message="errors.email" />
             </div>
 
             <div class="grid gap-2">
@@ -126,7 +126,11 @@ const submittedLocale = computed(() =>
                     {{ $t('settings.profile.localeDescription') }}
                 </p>
                 <input type="hidden" name="locale" :value="submittedLocale" />
-                <InputError class="mt-2" :message="errors.locale" />
+                <InputError
+                    class="mt-2"
+                    for="locale"
+                    :message="errors.locale"
+                />
             </div>
 
             <div v-if="page.props.mustVerifyEmail && !user.email_verified_at">

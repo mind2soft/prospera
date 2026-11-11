@@ -255,7 +255,7 @@ const onDecline = async () => {
                         name="name"
                         :placeholder="$t('auth.register.namePlaceholder')"
                     />
-                    <InputError :message="errors.name" />
+                    <InputError for="name" :message="errors.name" />
                 </div>
 
                 <div class="grid gap-2">
@@ -273,7 +273,7 @@ const onDecline = async () => {
                             invite ? 'bg-muted/50 text-muted-foreground' : ''
                         "
                     />
-                    <InputError :message="errors.email" />
+                    <InputError for="email" :message="errors.email" />
                 </div>
 
                 <div class="grid gap-2">
@@ -288,7 +288,7 @@ const onDecline = async () => {
                         :placeholder="$t('common.fields.password')"
                         :passwordrules="passwordRules"
                     />
-                    <InputError :message="errors.password" />
+                    <InputError for="password" :message="errors.password" />
                 </div>
 
                 <div class="grid gap-2">
@@ -303,7 +303,10 @@ const onDecline = async () => {
                         :placeholder="$t('auth.register.confirmPassword')"
                         :passwordrules="passwordRules"
                     />
-                    <InputError :message="errors.password_confirmation" />
+                    <InputError
+                        for="password_confirmation"
+                        :message="errors.password_confirmation"
+                    />
                 </div>
 
                 <Button

@@ -158,7 +158,10 @@ const messageBarClass = computed(() => {
                             :disabled="isLoading"
                             data-test="contact-email"
                         />
-                        <InputError :message="fieldErrors.email?.[0]" />
+                        <InputError
+                            for="contact-email"
+                            :message="fieldErrors.email?.[0]"
+                        />
                         <p
                             v-if="isSignedIn"
                             class="text-xs text-muted-foreground"
@@ -189,7 +192,10 @@ const messageBarClass = computed(() => {
                             :disabled="isLoading"
                             data-test="contact-subject"
                         />
-                        <InputError :message="fieldErrors.subject?.[0]" />
+                        <InputError
+                            for="contact-subject"
+                            :message="fieldErrors.subject?.[0]"
+                        />
                     </div>
 
                     <div class="grid gap-2">
@@ -230,7 +236,10 @@ const messageBarClass = computed(() => {
                                 }"
                             />
                         </div>
-                        <InputError :message="fieldErrors.message?.[0]" />
+                        <InputError
+                            for="contact-message"
+                            :message="fieldErrors.message?.[0]"
+                        />
                     </div>
 
                     <Button

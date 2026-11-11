@@ -515,7 +515,10 @@ const roleLabel: Record<string, string> = {
                             :placeholder="$t('envelopes.form.namePlaceholder')"
                             autocomplete="off"
                         />
-                        <InputError :message="form.errors.name" />
+                        <InputError
+                            for="envelope-name"
+                            :message="form.errors.name"
+                        />
                     </div>
 
                     <div class="grid gap-2">

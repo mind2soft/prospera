@@ -81,7 +81,10 @@ const passwordInput = useTemplateRef('passwordInput');
                                 ref="passwordInput"
                                 :placeholder="$t('common.fields.password')"
                             />
-                            <InputError :message="errors.password" />
+                            <InputError
+                                for="password"
+                                :message="errors.password"
+                            />
                         </div>
 
                         <DialogFooter class="gap-2">

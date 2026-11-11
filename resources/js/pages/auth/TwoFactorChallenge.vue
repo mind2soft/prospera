@@ -81,7 +81,7 @@ const toggleRecoveryMode = (clearErrors: () => void): void => {
                             </InputOTPGroup>
                         </InputOTP>
                     </div>
-                    <InputError :message="errors.code" />
+                    <InputError for="otp" :message="errors.code" />
                 </div>
                 <Button type="submit" class="w-full" :disabled="processing">{{
                     $t('auth.twoFactor.continue')
@@ -107,13 +107,18 @@ const toggleRecoveryMode = (clearErrors: () => void): void => {
                 #default="{ errors, processing, clearErrors }"
             >
                 <Input
+                    id="recovery_code"
                     name="recovery_code"
                     type="text"
                     :placeholder="$t('auth.twoFactor.recoveryCodePlaceholder')"
+                    :aria-label="$t('auth.twoFactor.recoveryCodePlaceholder')"
                     v-focus
                     required
                 />
-                <InputError :message="errors.recovery_code" />
+                <InputError
+                    for="recovery_code"
+                    :message="errors.recovery_code"
+                />
                 <Button type="submit" class="w-full" :disabled="processing">{{
                     $t('auth.twoFactor.continue')
                 }}</Button>
