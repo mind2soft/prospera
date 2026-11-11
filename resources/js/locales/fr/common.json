@@ -14,7 +14,7 @@
         },
         "fields": {
             "name": "Nom",
-            "email": "Adresse e-mail",
+            "email": "Adresse courriel",
             "password": "Mot de passe"
         },
         "loading": "Chargement…",

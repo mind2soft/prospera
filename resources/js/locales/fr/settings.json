@@ -12,14 +12,14 @@
         "account": "Paramètres du compte",
         "profile": {
             "title": "Compte",
-            "description": "Mettez à jour votre nom et votre adresse e-mail",
+            "description": "Mettez à jour votre nom et votre adresse courriel",
             "name": "Nom",
             "namePlaceholder": "Nom complet",
-            "email": "Adresse e-mail",
-            "emailPlaceholder": "Adresse e-mail",
-            "emailUnverified": "Votre adresse e-mail n'est pas vérifiée.",
-            "resendLink": "Cliquez ici pour renvoyer l'e-mail de vérification.",
-            "verificationSent": "Un nouveau lien de vérification a été envoyé à votre adresse e-mail.",
+            "email": "Adresse courriel",
+            "emailPlaceholder": "Adresse courriel",
+            "emailUnverified": "Votre adresse courriel n'est pas vérifiée.",
+            "resendLink": "Cliquez ici pour renvoyer le courriel de vérification.",
+            "verificationSent": "Un nouveau lien de vérification a été envoyé à votre adresse courriel.",
             "locale": "Langue préférée",
             "localeDescription": "Choisissez la langue utilisée dans toute l'application.",
             "localeAutomatic": "Automatique (langue du navigateur)",
@@ -35,8 +35,8 @@
         },
         "notifications": {
             "title": "Paramètres de notification",
-            "description": "Choisissez les notifications par e-mail que vous recevez",
-            "master": "Activer les notifications par e-mail",
+            "description": "Choisissez les notifications par courriel que vous recevez",
+            "master": "Activer les notifications par courriel",
             "masterDescription": "L'interrupteur général de tous les courriels système. Le désactiver coupe toutes les notifications ci-dessous.",
             "payment_reminders": "Rappels de paiement",
             "payment_remindersDescription": "Un rappel avant un paiement planifié à venir sur l'une de vos enveloppes.",
@@ -49,7 +49,7 @@
             "profile_invite": "Invitations de profil",
             "profile_inviteDescription": "Quelqu'un partage un profil financier avec vous (les invitations que vous envoyez sont toujours remises).",
             "comingSoon": "Bientôt disponible",
-            "allOff": "Toutes les notifications sont désactivées — activez « Activer les notifications par e-mail » pour en recevoir.",
+            "allOff": "Toutes les notifications sont désactivées — activez « Activer les notifications par courriel » pour en recevoir.",
             "saveFailed": "Impossible d'enregistrer vos paramètres de notification."
         },
         "profiles": {
@@ -71,7 +71,7 @@
             "inviteSomeone": "Inviter quelqu'un",
             "emailPlaceholder": "personne{'@'}exemple.com",
             "invite": "Inviter",
-            "inviteNote": "Le lien d'invitation expire après 48 heures et ne fonctionne que pour cette adresse e-mail.",
+            "inviteNote": "Le lien d'invitation expire après 48 heures et ne fonctionne que pour cette adresse courriel.",
             "expires": "Expire le {date}",
             "transferOwnership": "Transférer la propriété",
             "chooseCollaborator": "Choisir un collaborateur",
@@ -183,7 +183,7 @@
             "register": "Enregistrer la clé d'accès",
             "authenticating": "Authentification...",
             "signIn": "Se connecter avec une clé d'accès",
-            "orContinueWithEmail": "Ou continuer avec une adresse e-mail"
+            "orContinueWithEmail": "Ou continuer avec une adresse courriel"
         }
     }
 }

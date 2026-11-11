@@ -122,6 +122,10 @@ lang/
   `date.toLocaleDateString(locale.value, { ... })`.
 - Never change rendered English text while extracting a string: e2e specs
   assert on the visible text.
+- One term per concept in each language, in the interface and the server
+  messages alike (a server error shows next to client copy). French uses
+  **« courriel »** for email — « adresse courriel », « par courriel », « le
+  courriel de vérification » — never « e-mail » or « mail ».
 - Registering a new locale requires:
   - a sibling folder under `resources/js/locales/` with the same
     namespaces, and an entry in `messages` in
