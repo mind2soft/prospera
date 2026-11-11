@@ -2,12 +2,10 @@
 
 namespace App\Actions;
 
-use App\Models\BudgetEnvelope;
-use App\Models\Envelope;
 use App\Models\FinancialProfileInvite;
-use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -76,20 +74,29 @@ class DeleteAccount
     {
         $envelopes = $user->envelopes()
             ->where(fn (Builder $query) => $query->whereHas('budgetEnvelopes')->orWhereHas('transactions'))
-            ->with(['budgetEnvelopes.budget:id,profile_id', 'transactions.ledger:id,profile_id'])
             ->get();
 
         if ($envelopes->isEmpty()) {
             return;
         }
 
-        $profileIdsByEnvelope = $envelopes->mapWithKeys(fn (Envelope $envelope): array => [
-            $envelope->id => $envelope->budgetEnvelopes
-                ->map(fn (BudgetEnvelope $assignment) => $assignment->budget->profile_id)
-                ->merge($envelope->transactions->map(fn (Transaction $transaction) => $transaction->ledger->profile_id))
-                ->unique()
-                ->values(),
-        ]);
+        // Only the distinct (envelope, referencing profile) pairs are
+        // needed: no transaction or assignment is hydrated (or decrypted).
+        $references = DB::table('budget_envelopes')
+            ->join('budgets', 'budgets.id', '=', 'budget_envelopes.budget_id')
+            ->whereIn('budget_envelopes.envelope_id', $envelopes->modelKeys())
+            ->select('budget_envelopes.envelope_id', 'budgets.profile_id')
+            ->union(
+                DB::table('transactions')
+                    ->join('ledgers', 'ledgers.id', '=', 'transactions.ledger_id')
+                    ->whereIn('transactions.envelope_id', $envelopes->modelKeys())
+                    ->select('transactions.envelope_id', 'ledgers.profile_id'),
+            )
+            ->get();
+
+        $profileIdsByEnvelope = $references
+            ->groupBy('envelope_id')
+            ->map(fn (Collection $rows): Collection => $rows->pluck('profile_id')->map(fn ($id): int => (int) $id)->unique()->values());
 
         // One query for every candidate heir: per referencing profile, its
         // owner first, then the other members by join date.
@@ -106,7 +113,7 @@ class DeleteAccount
         $heirs = User::query()->whereIn('id', $candidates->pluck('user_id')->unique())->get()->keyBy('id');
 
         foreach ($envelopes as $envelope) {
-            $profileIds = $profileIdsByEnvelope->get($envelope->id);
+            $profileIds = $profileIdsByEnvelope->get($envelope->id, collect());
 
             $candidate = $candidates->first(fn (object $row): bool => $profileIds->contains($row->profile_id));
 
