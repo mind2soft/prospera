@@ -14,6 +14,7 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Lang;
+use Illuminate\Support\Str;
 
 /**
  * A financial profile share notification, sent when a profile owner invites
@@ -39,6 +40,9 @@ use Illuminate\Support\Facades\Lang;
 class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
 {
     use Queueable, RetriesDelivery, SerializesModels;
+
+    /** The longest inviter or profile name the subject line carries. */
+    public const SUBJECT_NAME_MAX = 40;
 
     /**
      * Create a new message instance.
@@ -69,12 +73,33 @@ class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
      */
     public function envelope(): Envelope
     {
+        $inviter = self::subjectText($this->inviterName);
+        $profile = self::subjectText($this->profileName);
+
         return new Envelope(
-            subject: __('mail.invite.subject', [
-                'inviter' => $this->inviterName,
-                'profile' => $this->profileName,
-            ]),
+            subject: $inviter === '' || $profile === ''
+                ? __('mail.invite.subject_generic')
+                : __('mail.invite.subject', ['inviter' => $inviter, 'profile' => $profile]),
         );
+    }
+
+    /**
+     * A user-chosen name made safe for the subject line, the part of the
+     * mail an inbox shows before it is opened (SEC-8): control characters
+     * and line breaks are flattened, anything that looks like a link or a
+     * domain is dropped (a name like "Claim your refund at evil.example"
+     * must not turn the invite into a phishing lure), and the result is
+     * capped at SUBJECT_NAME_MAX characters. The body states the full
+     * names as plain text.
+     */
+    public static function subjectText(string $name): string
+    {
+        $text = preg_replace('/[\p{C}\s]+/u', ' ', $name) ?? '';
+        $text = preg_replace('~(?:[a-z][a-z\d+.\-]*://|www\.)\S*~iu', ' ', $text) ?? '';
+        $text = preg_replace('~[\p{L}\p{N}\-_@]+(?:\.[\p{L}\p{N}\-_]+)+\S*~u', ' ', $text) ?? '';
+        $text = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+
+        return Str::limit($text, self::SUBJECT_NAME_MAX, '…', preserveWords: true);
     }
 
     /**

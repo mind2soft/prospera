@@ -146,6 +146,44 @@ class QueuedMailTest extends TestCase
         $this->assertStringNotContainsString('&amp;', $body);
     }
 
+    public function test_invite_subjects_drop_links_and_cap_user_chosen_names(): void
+    {
+        $subject = fn (string $inviter, string $profile): string => (new ProfileInvite(
+            inviterName: $inviter,
+            inviterEmail: 'owner@example.com',
+            profileName: $profile,
+            role: 'collaborator',
+            inviteUrl: 'https://prospera.test/invites/key',
+        ))->envelope()->subject;
+
+        $this->assertSame('[Prospera] Jo shared their financial profile "Family" with you', $subject('Jo', 'Family'));
+
+        // SEC-8: no link or domain reaches the subject line, nor a header
+        // line break; long names are capped.
+        $lure = $subject("Jo\r\nBcc: x@example.com", 'Refund waiting at https://evil.example/claim or www.evil.example now');
+        $this->assertSame('[Prospera] Jo Bcc: shared their financial profile "Refund waiting at or now" with you', $lure);
+        $this->assertStringNotContainsString('evil', $lure);
+
+        $long = $subject(str_repeat('a', 300), 'Family');
+        $this->assertLessThanOrEqual(ProfileInvite::SUBJECT_NAME_MAX + 1, mb_strlen(explode(' shared', substr($long, 11))[0]));
+
+        // Nothing left once the link is gone: the generic subject.
+        $this->assertSame('[Prospera] A financial profile was shared with you', $subject('Jo', 'evil.example'));
+    }
+
+    public function test_the_invite_body_keeps_the_full_names_as_plain_text(): void
+    {
+        $body = $this->deliver(new ProfileInvite(
+            inviterName: 'Jo',
+            inviterEmail: 'owner@example.com',
+            profileName: 'Family at home.example',
+            role: 'collaborator',
+            inviteUrl: 'https://prospera.test/invites/key',
+        ));
+
+        $this->assertStringContainsString('"Family at home.example"', $body);
+    }
+
     public function test_every_mail_key_is_translated_in_every_available_locale(): void
     {
         $english = Arr::dot(trans('mail', [], 'en'));

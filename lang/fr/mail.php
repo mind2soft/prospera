@@ -13,6 +13,7 @@ return [
 
     'invite' => [
         'subject' => '[Prospera] :inviter a partagé son profil financier « :profile » avec vous',
+        'subject_generic' => '[Prospera] Un profil financier a été partagé avec vous',
         'new_account' => [
             'intro' => ':inviter (:email) a partagé son profil financier « :profile » avec vous sur Prospera, en tant que :role.',
             'action' => 'Pour le rejoindre, créez votre compte avec le lien ci-dessous — votre adresse courriel est déjà renseignée, et le profil partagé vous est accessible dès que votre compte est vérifié.',
