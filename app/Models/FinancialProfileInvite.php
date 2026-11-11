@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
@@ -254,6 +255,33 @@ class FinancialProfileInvite extends Model
 
             $invite->consume();
         });
+    }
+
+    /**
+     * Before the given user's account is deleted: the pending invites they
+     * issued on profiles that survive them are re-attributed to each
+     * profile's current owner, so the `invited_by` cascade does not silently
+     * drop them (an invitee who already registered through the invite would
+     * otherwise end up outside the profile). Invites of profiles deleted
+     * with the account go away with the profile.
+     */
+    public static function reassignIssuedBy(User $user): void
+    {
+        self::query()
+            ->where('invited_by', $user->id)
+            ->get()
+            ->groupBy('profile_id')
+            ->each(function (Collection $invites, int $profileId) use ($user): void {
+                $owner = FinancialProfile::query()->find($profileId)?->ownerUser();
+
+                if ($owner === null || $owner->id === $user->id) {
+                    return;
+                }
+
+                self::query()
+                    ->whereKey($invites->modelKeys())
+                    ->update(['invited_by' => $owner->id, 'updated_at' => now()]);
+            });
     }
 
     /**

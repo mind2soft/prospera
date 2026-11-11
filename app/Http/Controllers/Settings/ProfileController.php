@@ -7,6 +7,7 @@ use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
 use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
+use App\Models\FinancialProfileInvite;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -93,6 +94,10 @@ class ProfileController extends Controller
             // earliest-created profile referencing them; unreferenced
             // envelopes are deleted with the account (cascade).
             $this->transferReferencedEnvelopes($user);
+
+            // Pending invites the user issued on surviving profiles stay
+            // valid, re-attributed to the profile's new owner.
+            FinancialProfileInvite::reassignIssuedBy($user);
 
             $user->delete();
         });

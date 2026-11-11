@@ -6,9 +6,11 @@ use App\Models\Budget;
 use App\Models\DashboardWidget;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
+use App\Models\FinancialProfileInvite;
 use App\Models\Ledger;
 use App\Models\User;
 use App\Services\ResourcePermissions;
+use Illuminate\Auth\Events\Verified;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -228,6 +230,62 @@ class SharingLifecycleTest extends TestCase
         $this->profile->transferOwnershipTo($this->bob);
 
         $this->assertSame(ResourcePermissions::OWNER, $published->fresh()->permissionFor($this->alice));
+    }
+
+    // ------------------------------------------------------------------
+    // WF-9 — pending invites survive the inviter's account deletion
+    // ------------------------------------------------------------------
+
+    public function test_pending_invites_survive_the_owners_account_deletion(): void
+    {
+        $newcomer = User::factory()->unverified()->create(['email' => 'newcomer@example.com']);
+        $reserved = FinancialProfileInvite::create([
+            'profile_id' => $this->profile->id,
+            'invite_key' => FinancialProfileInvite::keyHash('reserved-key'),
+            'email' => 'newcomer@example.com',
+            'invited_by' => $this->alice->id,
+            'pending_user_id' => $newcomer->id,
+            'expires_at' => now()->addHours(48),
+        ]);
+        $open = FinancialProfileInvite::create([
+            'profile_id' => $this->profile->id,
+            'invite_key' => FinancialProfileInvite::keyHash('open-key'),
+            'email' => 'later@example.com',
+            'invited_by' => $this->alice->id,
+            'expires_at' => now()->addHours(48),
+        ]);
+
+        $this->actingAs($this->alice)
+            ->delete('/settings/account', ['password' => 'password'])
+            ->assertRedirect('/');
+
+        // Re-attributed to the profile's new owner (the earliest joiner).
+        $this->assertSame($this->bob->id, $reserved->fresh()?->invited_by);
+        $this->assertSame($this->bob->id, $open->fresh()?->invited_by);
+
+        $newcomer->markEmailAsVerified();
+        event(new Verified($newcomer));
+
+        $this->assertTrue($this->profile->isMember($newcomer));
+        $this->assertTrue($this->profile->isDefaultFor($newcomer));
+    }
+
+    public function test_invites_of_a_profile_deleted_with_the_account_go_with_it(): void
+    {
+        $solo = FinancialProfile::createOwnedBy($this->alice, 'Solo');
+        $invite = FinancialProfileInvite::create([
+            'profile_id' => $solo->id,
+            'invite_key' => FinancialProfileInvite::keyHash('solo-key'),
+            'email' => 'friend@example.com',
+            'invited_by' => $this->alice->id,
+            'expires_at' => now()->addHours(48),
+        ]);
+
+        $this->actingAs($this->alice)
+            ->delete('/settings/account', ['password' => 'password'])
+            ->assertRedirect('/');
+
+        $this->assertModelMissing($invite);
     }
 
     // ------------------------------------------------------------------

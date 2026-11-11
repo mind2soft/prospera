@@ -136,6 +136,11 @@ communicates to users — keep the two in sync:
   ownership passes to the **earliest-joined remaining member** (lowest
   `financial_profile_user.created_at`, ties broken by the lowest `user_id`),
   matching the ownership-transfer rules above;
+- **pending invites** the user issued on a profile that survives them stay
+  valid: they are re-attributed (`invited_by`) to the profile's new owner, so
+  an invitee who already registered through one still joins the profile
+  when they verify their email. Invites of profiles deleted with the account
+  are deleted with them (the invitee then gets their own default profile);
 - **the user is responsible for revoking sharing permissions before deleting
   their account** if they do not want a financial profile to keep existing —
   and be transferred — without them.
