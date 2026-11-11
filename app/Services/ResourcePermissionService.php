@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\FinancialProfile;
 use App\Models\User;
 use Closure;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -55,16 +56,19 @@ final class ResourcePermissionService
      * resources have no implicit membership visibility). When the resource
      * owner is given, their row is listed first (labeled "owner" by the
      * Share drawer) — the drawer always shows a people-with-access list
-     * anchored by the owner.
+     * anchored by the owner. $visibleUserIds, when given, restricts the
+     * listed share rows to those users (the owner row always shows).
      *
+     * @param  Collection<int, int>|null  $visibleUserIds
      * @return array<int, array<string, int|string|bool>>
      */
-    public function explicitPermissions(string $shareTable, string $resourceColumn, int $resourceId, ?User $owner = null): array
+    public function explicitPermissions(string $shareTable, string $resourceColumn, int $resourceId, ?User $owner = null, ?Collection $visibleUserIds = null): array
     {
         $shares = DB::table($shareTable)
             ->join('users', 'users.id', '=', $shareTable.'.user_id')
             ->where($shareTable.'.'.$resourceColumn, $resourceId)
             ->when($owner !== null, fn ($query) => $query->where('users.id', '!=', $owner->id))
+            ->when($visibleUserIds !== null, fn ($query) => $query->whereIn('users.id', $visibleUserIds->all()))
             ->orderBy($shareTable.'.created_at')
             ->get(['users.id', 'users.name', 'users.email', $shareTable.'.permission'])
             ->map(fn ($member) => [

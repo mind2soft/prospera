@@ -173,6 +173,44 @@ class EnvelopePermissionsTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('permission');
     }
 
+    public function test_using_an_envelope_takes_contributor_access(): void
+    {
+        $this->assertTrue($this->owner->can('use', $this->envelope));
+        // Metadata-only co-member.
+        $this->assertFalse($this->member->can('use', $this->envelope));
+
+        $share = $this->envelope->permissions()->create(['user_id' => $this->member->id, 'permission' => EnvelopePermission::PERMISSION_VIEWER]);
+        $this->assertFalse($this->member->can('use', $this->envelope->fresh()));
+
+        $share->update(['permission' => EnvelopePermission::PERMISSION_CONTRIBUTOR]);
+        $this->assertTrue($this->member->can('use', $this->envelope->fresh()));
+        $this->assertFalse($this->stranger->can('use', $this->envelope));
+    }
+
+    public function test_co_members_only_see_shares_of_people_sharing_a_profile_with_them(): void
+    {
+        // SEC-R2-1: the owner shares the envelope with Carol, a member of
+        // another of their profiles the member does not belong to.
+        $carol = User::factory()->create();
+        $other = FinancialProfile::createOwnedBy($this->owner, 'Other');
+        $other->members()->attach($carol->id, ['is_owner' => false]);
+        $this->envelope->permissions()->create(['user_id' => $carol->id, 'permission' => EnvelopePermission::PERMISSION_CONTRIBUTOR]);
+        $this->envelope->permissions()->create(['user_id' => $this->member->id, 'permission' => EnvelopePermission::PERMISSION_VIEWER]);
+
+        $listed = fn (User $user): array => collect($this->actingAs($user)->getJson("/api/envelopes/{$this->envelope->id}/shares")
+            ->assertOk()->json('shares'))->pluck('user_id')->all();
+
+        $this->assertSame([$this->owner->id, $this->member->id], $listed($this->member));
+        $this->assertStringNotContainsString($carol->email, (string) $this->actingAs($this->member)->getJson("/api/envelopes/{$this->envelope->id}/shares")->getContent());
+
+        // The owner sees every grant.
+        $this->assertEqualsCanonicalizing([$this->owner->id, $this->member->id, $carol->id], $listed($this->owner));
+
+        // Once the member shares a profile with Carol, Carol is listed.
+        FinancialProfile::createOwnedBy($carol, 'Carol')->members()->attach($this->member->id, ['is_owner' => false]);
+        $this->assertEqualsCanonicalizing([$this->owner->id, $this->member->id, $carol->id], $listed($this->member));
+    }
+
     public function test_share_management_is_owner_only(): void
     {
         $this->envelope->permissions()->create([

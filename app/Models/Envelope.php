@@ -113,6 +113,38 @@ class Envelope extends Model
     }
 
     /**
+     * What references the envelope and so blocks its deletion and a
+     * direction change (docs/envelope.md): "budget" (a budget assignment),
+     * "transactions", or null when nothing does.
+     *
+     * @return 'budget'|'transactions'|null
+     */
+    public function referencedBy(): ?string
+    {
+        return match (true) {
+            $this->budgetEnvelopes()->exists() => 'budget',
+            $this->transactions()->exists() => 'transactions',
+            default => null,
+        };
+    }
+
+    public function isReferenced(): bool
+    {
+        return $this->referencedBy() !== null;
+    }
+
+    /**
+     * Scope envelopes referenced by a budget assignment or a transaction.
+     *
+     * @param  Builder<Envelope>  $query
+     */
+    #[Scope]
+    protected function referenced(Builder $query): void
+    {
+        $query->where(fn (Builder $query) => $query->whereHas('budgetEnvelopes')->orWhereHas('transactions'));
+    }
+
+    /**
      * Whether the envelope is owned by the given user.
      */
     public function isOwner(User $user): bool
@@ -199,30 +231,5 @@ class Envelope extends Model
     public function signedAmount(int $amount): int
     {
         return $this->type === self::DIRECTION_EXPENSE ? -$amount : $amount;
-    }
-
-    /**
-     * The given user's effective permission on each of the given envelopes
-     * in three queries (instead of one per envelope), keyed by envelope id.
-     * Unknown ids are omitted.
-     *
-     * @param  array<int, int>  $envelopeIds
-     * @return Collection<int, string>
-     */
-    public static function permissionsFor(User $user, array $envelopeIds): Collection
-    {
-        if ($envelopeIds === []) {
-            return collect();
-        }
-
-        $coMemberIds = FinancialProfile::coMemberIdsOf($user->id);
-
-        return self::query()
-            ->whereIn('id', $envelopeIds)
-            ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
-            ->get()
-            ->mapWithKeys(fn (Envelope $envelope): array => [
-                $envelope->id => $envelope->permissionFor($user, $coMemberIds),
-            ]);
     }
 }

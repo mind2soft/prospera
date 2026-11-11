@@ -130,6 +130,14 @@ becomes `contributor`. Otherwise nobody could publish it (publishing needs
 both ownerships) and the single draft slot would block new drafts. Published
 budgets keep their owner.
 
+For the same reason a **draft is only ever owned by the profile owner**: an
+explicit transfer of a draft (Share drawer) to anyone else is refused with a
+validation error on `user_id` — only published budgets can be handed to a
+collaborator. A draft that was handed to a collaborator before this rule
+was handed back to the profile owner by a data migration (the collaborator
+became `contributor`); the profile owner can then publish, delete or keep
+editing it as usual.
+
 ### Referential integrity
 
 - Deleting a budget cascades its shares and envelope assignments. Transactions
@@ -175,7 +183,7 @@ All endpoints require authentication (session + CSRF). The frontend consumes the
 | `POST`   | `/api/budgets/{budget}/shares`                 | Assign a permission to a **profile member** (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                  |
 | `PATCH`  | `/api/budgets/{budget}/shares/{userId}`        | Change a member's permission (owner only; `owner` is rejected — use transfer-ownership)                                                                      |
 | `DELETE` | `/api/budgets/{budget}/shares/{userId}`        | Revoke a share                                                                                                                                               |
-| `POST`   | `/api/budgets/{budget}/transfer-ownership`     | Transfer ownership to a member (`user_id`); the previous owner becomes `contributor`                                                                         |
+| `POST`   | `/api/budgets/{budget}/transfer-ownership`     | Transfer ownership to a member (`user_id`); the previous owner becomes `contributor`. A draft can only go to the profile owner (`422` on `user_id` otherwise) |
 
 ## User Interface
 

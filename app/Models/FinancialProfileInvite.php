@@ -224,6 +224,14 @@ class FinancialProfileInvite extends Model
     public static function completePendingFor(User $user): void
     {
         DB::transaction(function () use ($user): void {
+            // Serialize concurrent completions for the same account (two
+            // tabs, the Verified listener racing the middleware): without a
+            // reservation the invite lock below locks nothing, and both
+            // would seed a default profile. The callers' "has no profile"
+            // check ran unlocked, so the default is re-checked under this
+            // lock by ensureDefaultFor.
+            User::query()->whereKey($user->id)->lockForUpdate()->first();
+
             /** @var self|null $invite */
             $invite = self::query()
                 ->where('pending_user_id', $user->id)
@@ -254,7 +262,24 @@ class FinancialProfileInvite extends Model
             }
 
             $invite->consume();
+
+            if ($invite->profile->isMember($user)) {
+                self::deleteRedundantFor($invite->profile, $user);
+            }
         });
+    }
+
+    /**
+     * Once the user is a member of the profile, the profile's other invites
+     * for their email are moot (accepting them would only answer "already a
+     * member"): they leave the owner's pending list.
+     */
+    public static function deleteRedundantFor(FinancialProfile $profile, User $user): void
+    {
+        self::query()
+            ->where('profile_id', $profile->id)
+            ->whereRaw('lower(email) = ?', [mb_strtolower($user->email)])
+            ->delete();
     }
 
     /**

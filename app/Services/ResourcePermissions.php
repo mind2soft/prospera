@@ -40,7 +40,7 @@ final class ResourcePermissions
     /**
      * Whether the effective permission satisfies the required minimum.
      */
-    public function isAtLeast(string $permission, string $minimum): bool
+    public static function isAtLeast(string $permission, string $minimum): bool
     {
         return self::HIERARCHY[$permission] >= self::HIERARCHY[$minimum];
     }
@@ -59,14 +59,5 @@ final class ResourcePermissions
         return self::HIERARCHY[$permission] >= self::HIERARCHY[$minimum]
             ? Response::allow()
             : Response::denyWithStatus(403);
-    }
-
-    /**
-     * Whether the given permission row value is a grantable permission
-     * ("owner" is reserved for transfer-ownership).
-     */
-    public static function isGrantable(string $permission): bool
-    {
-        return in_array($permission, self::GRANTABLE, true);
     }
 }

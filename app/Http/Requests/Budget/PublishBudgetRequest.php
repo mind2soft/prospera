@@ -2,11 +2,14 @@
 
 namespace App\Http\Requests\Budget;
 
+use App\Http\Requests\Concerns\ResolvesLocalCalendar;
 use App\Models\Budget;
 use Illuminate\Validation\ValidationException;
 
 class PublishBudgetRequest extends BudgetRequest
 {
+    use ResolvesLocalCalendar;
+
     protected function ability(): string
     {
         return 'publish';
@@ -27,6 +30,7 @@ class PublishBudgetRequest extends BudgetRequest
     public function rules(): array
     {
         return [
+            ...$this->timezoneRules(),
             'month' => ['sometimes', 'nullable', 'date_format:Y-m'],
         ];
     }

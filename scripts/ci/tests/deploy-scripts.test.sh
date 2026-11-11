@@ -57,6 +57,7 @@ case "$2" in
     db:backup)
         printf 'dump of %s\n' "$(cat "$WORK/ran")" > "$3"
         [ "${BACKUP_EXIT:-0}" = 0 ] || exit "$BACKUP_EXIT" ;;
+    config:cache) mkdir -p "$rel/bootstrap/cache" && printf '<?php return [];\n' > "$rel/bootstrap/cache/config.php" ;;
     list) [ -e "$rel/.has-verify" ] && echo 'amounts:verify   Check that every encrypted amount decrypts' ;;
     down) mkdir -p "$rel/storage/framework" && : > "$rel/storage/framework/down" ;;
     up) rm -f "$rel/storage/framework/down" ;;
@@ -159,6 +160,11 @@ at() {
 # Whether log line $1 comes before (lower, non-zero) log line $2.
 before() {
     if [ "$1" -gt 0 ] && [ "$1" -lt "$2" ]; then echo yes; else echo no; fi
+}
+
+# The permission bits of $1, e.g. -rw------- (none when missing).
+mode() {
+    if [ -e "$1" ]; then ls -lL "$1" | cut -c1-10; else echo none; fi
 }
 
 marker() {
@@ -438,6 +444,15 @@ _rc=0
     > "$WORK/out" 2>&1 || _rc=$?
 expect 'deploy: KEEP_BACKUPS=0 is refused on the host' "$_rc $(live) $(grep -c 'KEEP_BACKUPS must be' "$WORK/out")" '1 old 1'
 printf 'APP_KEY=x\n' > "$WORK/env"
+
+# --- secrets on the host ---------------------------------------------------
+
+# The cached configuration holds APP_KEY like the .env: owner-only, whatever
+# the host's umask.
+setup
+rc=$(umask 022 && deploy)
+expect 'deploy: the cached configuration and the .env are owner-only' \
+    "$rc $(mode "$APP/current/bootstrap/cache/config.php") $(mode "$APP/shared/.env")" '0 -rw------- -rw-------'
 
 # --- queue workers ----------------------------------------------------------
 
@@ -731,6 +746,13 @@ rm "$APP/releases/new/database/migrations/b.php"
 printf 'a\n' > "$WORK/ran"
 rc=$(rollback)
 expect 'rollback: a target matching the schema goes live' "$rc $(live) $(ran 'config:cache') $(consistent)" '0 old yes yes'
+
+setup_rollback
+rm "$APP/releases/new/database/migrations/b.php"
+printf 'a\n' > "$WORK/ran"
+rc=$(umask 022 && rollback)
+expect 'rollback: the rebuilt cached configuration is owner-only' \
+    "$rc $(live) $(mode "$APP/releases/old/bootstrap/cache/config.php")" '0 old -rw-------'
 
 setup_rollback
 printf 'a\nb\nx\n' > "$WORK/ran"

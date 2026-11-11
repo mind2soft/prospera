@@ -85,6 +85,22 @@ class FinancialProfileInviteController extends Controller
             ]);
         }
 
+        // A live reservation means the invitee already registered through
+        // an invite and joins on verification: a second invite would
+        // outlive the grant in the pending list.
+        $awaitingVerification = FinancialProfileInvite::query()
+            ->where('profile_id', $profile->id)
+            ->whereRaw('lower(email) = ?', [mb_strtolower($validated['email'])])
+            ->whereNotNull('pending_user_id')
+            ->notExpired()
+            ->exists();
+
+        if ($awaitingVerification) {
+            throw ValidationException::withMessages([
+                'email' => __('This person already registered through an invite and joins the profile once they verify their email.'),
+            ]);
+        }
+
         $rawKey = FinancialProfileInvite::generateKey();
 
         $invite = DB::transaction(function () use ($profile, $validated, $rawKey, $request): FinancialProfileInvite {
@@ -227,7 +243,8 @@ class FinancialProfileInviteController extends Controller
     /**
      * Grant the membership carried by the invite to the given user inside a
      * locked transaction, consuming the invite. Shared by the JSON accept
-     * endpoint and the one-click accept link.
+     * accept endpoint (the email's accept link only leads to the
+     * confirmation page that calls it).
      */
     private function grantMembership(string $inviteKey, User $user): FinancialProfile
     {
@@ -257,6 +274,7 @@ class FinancialProfileInviteController extends Controller
 
                 $profile->members()->attach($user->id, $invite->membershipPivotAttributes());
                 $invite->consume();
+                FinancialProfileInvite::deleteRedundantFor($profile, $user);
 
                 return $profile;
             });
@@ -287,7 +305,8 @@ class FinancialProfileInviteController extends Controller
      * Queue the invitation email for the invitee (one per share event,
      * docs/notifications.md conventions: queued, localized per recipient
      * with an `en` fallback). A registered account gets the informational
-     * variant with the one-click accept link; any other address gets the
+     * variant with the accept link (it opens the invite confirmation page,
+     * where the user confirms); any other address gets the
      * account-creation invite. Registered recipients are gated by their
      * `profile_invite` notification toggle (re-checked at send time inside
      * the mailable).

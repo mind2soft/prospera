@@ -135,8 +135,12 @@ Expired invites are pruned daily (`php artisan invites:prune`), the
 contact-form submission log is pruned daily (`php artisan contact:prune`,
 retention configurable via `CONTACT_LOG_RETENTION_DAYS`), amount encryption
 keys are rotated monthly (`php artisan amounts:rotate-keys --all`),
-retired keys pruned daily (`php artisan amounts:prune-keys`) and a daily
-`php artisan amounts:verify` re-checks that every amount still decrypts.
+retired keys pruned daily (`php artisan amounts:prune-keys`), a daily
+`php artisan amounts:verify` re-checks that every amount still decrypts, and
+unverified accounts left untouched that hold no data are deleted daily
+(`php artisan users:prune-unverified`, retention configurable via
+`UNVERIFIED_ACCOUNT_RETENTION_DAYS`, default 30 days — see
+[docs/shared-finances.md](docs/shared-finances.md)).
 
 Emails (profile invitations, contact messages) are queued on the `database`
 queue. In production there is no long-lived worker (shared hosting): the

@@ -15,8 +15,8 @@ default.
 
 Each user has **their own default profile** — a per-user `is_default` flag on
 the `financial_profile_user` membership pivot (issue #41). Users can select
-their default profile from **Settings → Profiles** or the user-menu profile
-switcher; on login the server-side default is the fallback when the locally
+their default profile from **Settings → Profiles** (the user-menu profile
+switcher only marks it); on login the server-side default is the fallback when the locally
 stored current profile is gone. When a user's default membership disappears
 (the profile is deleted, or they leave / are removed), their default falls
 back to the **earliest-created owned profile** they still have, else the
@@ -74,7 +74,12 @@ invite for an email and gets a link containing a hash key (`invite_key`).
 - Re-inviting the same email (case-insensitive) **replaces** the previous
   unreserved invite for that profile — the raw link key is never stored, so
   this is how a lost link is re-issued. Inviting an email that already belongs
-  to a member is rejected with a validation error on `email`.
+  to a member is rejected with a validation error on `email`, and so is an
+  email with a live **reservation** (the invitee already registered through
+  an invite and joins on verification — shown as "awaiting verification" in
+  the pending list); once the reservation expired, the email can be invited
+  again. When a user joins a profile (accept or verification), the profile's
+  other invites for their email are deleted.
 - Invites expire after **48 hours** (`expires_at` = creation time + 48h);
   expired invites are rejected with a validation error.
 - Invites can be revoked by the owner before acceptance; accepted invites are
@@ -155,7 +160,11 @@ communicates to users — keep the two in sync:
   `UNVERIFIED_ACCOUNT_RETENTION_DAYS` (default 30) are deleted by the daily
   `php artisan users:prune-unverified` — only when they hold **no data**
   (no envelope, and only solo profiles without budgets or ledgers), so an
-  account that changed its email (which resets verification) keeps its data;
+  account that changed its email (which resets verification) keeps its data.
+  Each account is re-checked under a lock on its row right before it is
+  deleted (one that verified or created data meanwhile is kept) and deleted
+  in its own transaction: a failure is reported, skipped and retried by the
+  next run;
 - **the user is responsible for revoking sharing permissions before deleting
   their account** if they do not want a financial profile to keep existing —
   and be transferred — without them.
@@ -277,14 +286,14 @@ access to its decrypted amounts through the API only (see
 In the user menu, above "Settings", a menu "Profiles" with a sub-menu listing
 the available profiles. There _must_ be a visual distinction between owned
 profiles and shared profiles. There must be a checkmark besides the currently
-selected profile, and a "Default" marker with a "Set as default" action
-(issue #41).
+selected profile, and a "Default" marker on the user's default profile
+(issue #41) — the default itself is set in **Settings → Profiles**.
 
 The selected profile is tracked client-side in `localStorage`. Next login
 checks `localStorage` for the profile to use and falls back to the user's
 **server-side default profile** (per-user `financial_profile_user.is_default`
 — previously this fallback was the owned profile), else the first profile.
-The default is selectable in the Profiles settings page and the switcher.
+The default is selectable in the Profiles settings page.
 
 ## Profile management UI
 
@@ -357,6 +366,7 @@ data fetching.
 | Method   | Path                                         | Description                                                                                                                                                                                                                                                                                                                            |
 | -------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET`    | `/api/profiles`                              | List all the user's profiles (owned + shared), each with the caller's `is_owner` and `is_default` membership flags; the currently selected profile is tracked client-side (`localStorage`), not server-flagged                                                                                                                          |
+| `GET`    | `/api/profiles/{profile}`                    | One of the caller's profiles (`id`, `name`, the caller's `is_owner` and `is_default` membership flags); `404` for non-members |
 | `POST`   | `/api/profiles`                              | Create a profile (`name`) — the creator becomes owner                                                                                                                                                                                                                                                                                  |
 | `PATCH`  | `/api/profiles/{profile}`                    | Rename a profile (owner only)                                                                                                                                                                                                                                                                                                          |
 | `DELETE` | `/api/profiles/{profile}`                    | Delete a profile (owner only; blocked while it has budgets or ledgers). The former "Default profile cannot be deleted" rule is gone: deletion reassigns affected users' defaults (earliest-created owned profile, else earliest remaining membership, else a seeded default profile)                                                   |
@@ -365,7 +375,7 @@ data fetching.
 | `POST`   | `/api/profiles/{profile}/transfer-ownership` | Transfer ownership to a member (`user_id`); the previous owner becomes a collaborator                                                                                                                                                                                                                                                  |
 | `POST`   | `/api/profiles/{profile}/set-default`        | Set the caller's default profile (any member; one default per user, always exactly one)                                                                                                                                                                                                                                                |
 | `GET`    | `/api/profiles/{profile}/invites`            | List pending invites (`id`, `email`, `role`, `awaiting_verification`, `expires_at`)                                                                                                                                                                                                                                                    |
-| `POST`   | `/api/profiles/{profile}/invites`            | Create an invite (`email`, optional `role` — `collaborator` by default, only `collaborator` is grantable) → returns the invite link and queues the invitation email; replaces a previous unreserved invite for the same email (case-insensitive); `422` on `email` if already a member; rate-limited per IP and per user (the endpoint triggers outbound email) |
+| `POST`   | `/api/profiles/{profile}/invites`            | Create an invite (`email`, optional `role` — `collaborator` by default, only `collaborator` is grantable) → returns the invite link and queues the invitation email; replaces a previous unreserved invite for the same email (case-insensitive); `422` on `email` if already a member or awaiting verification through a live reservation; rate-limited per IP and per user (the endpoint triggers outbound email) |
 | `DELETE` | `/api/profiles/{profile}/invites/{invite}`   | Revoke a pending invite                                                                                                                                                                                                                                                                                                                |
 | `GET`    | `/api/invites/{inviteKey}`                   | Public invite validation (rate-limited); `404` when invalid or reserved, `410` expired                                                                                                                                                                                                                                                 |
 | `POST`   | `/api/invites/{inviteKey}/accept`            | Accept an invite (signed-in user; the invite email must match the account email; rate-limited)                                                                                                                                                                                                                                         |

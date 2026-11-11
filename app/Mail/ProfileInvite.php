@@ -14,6 +14,7 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Lang;
+use Illuminate\Support\Str;
 
 /**
  * A financial profile share notification, sent when a profile owner invites
@@ -23,9 +24,10 @@ use Illuminate\Support\Facades\Lang;
  * - The email is not linked to an account: the mail invites the recipient to
  *   create an account through the invite link (registration carries the
  *   invite, so the shared profile becomes their only profile).
- * - The email matches a registered account: the mail carries a **one-click
- *   accept link** that pre-authorizes the matching signed-in user; the mail
- *   states that ignoring the request declines the share.
+ * - The email matches a registered account: the mail carries an **accept
+ *   link** to the invite confirmation page (the GET never changes state;
+ *   the signed-in user confirms with "Accept invite"); the mail states that
+ *   ignoring the request declines the share.
  *
  * Queued, localized per recipient (`users.locale`, fallback `en`), and
  * gated through the `profile_invite` notification toggle — checked at
@@ -40,11 +42,14 @@ class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
 {
     use Queueable, RetriesDelivery, SerializesModels;
 
+    /** The longest inviter or profile name the subject line carries. */
+    public const SUBJECT_NAME_MAX = 40;
+
     /**
      * Create a new message instance.
      *
      * @param  CarbonInterface  $expiresAt  when the invite stops working (now + 48h)
-     * @param  string|null  $acceptUrl  the one-click accept link — null for
+     * @param  string|null  $acceptUrl  the accept link (to the confirmation page) — null for
      *                                  recipients without an account
      * @param  int|null  $recipientUserId  the registered recipient, for the
      *                                     send-time notification gate — null
@@ -69,12 +74,33 @@ class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
      */
     public function envelope(): Envelope
     {
+        $inviter = self::subjectText($this->inviterName);
+        $profile = self::subjectText($this->profileName);
+
         return new Envelope(
-            subject: __('mail.invite.subject', [
-                'inviter' => $this->inviterName,
-                'profile' => $this->profileName,
-            ]),
+            subject: $inviter === '' || $profile === ''
+                ? __('mail.invite.subject_generic')
+                : __('mail.invite.subject', ['inviter' => $inviter, 'profile' => $profile]),
         );
+    }
+
+    /**
+     * A user-chosen name made safe for the subject line, the part of the
+     * mail an inbox shows before it is opened (SEC-8): control characters
+     * and line breaks are flattened, anything that looks like a link or a
+     * domain is dropped (a name like "Claim your refund at evil.example"
+     * must not turn the invite into a phishing lure), and the result is
+     * capped at SUBJECT_NAME_MAX characters. The body states the full
+     * names as plain text.
+     */
+    public static function subjectText(string $name): string
+    {
+        $text = preg_replace('/[\p{C}\s]+/u', ' ', $name) ?? '';
+        $text = preg_replace('~(?:[a-z][a-z\d+.\-]*://|www\.)\S*~iu', ' ', $text) ?? '';
+        $text = preg_replace('~[\p{L}\p{N}\-_@]+(?:\.[\p{L}\p{N}\-_]+)+\S*~u', ' ', $text) ?? '';
+        $text = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+
+        return Str::limit($text, self::SUBJECT_NAME_MAX, '…', preserveWords: true);
     }
 
     /**

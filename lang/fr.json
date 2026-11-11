@@ -1,4 +1,5 @@
 {
+    "A draft budget can only be owned by the profile owner.": "Un budget brouillon ne peut appartenir qu'au propriétaire du profil.",
     "A group needs a name.": "Un groupe doit avoir un nom.",
     "A group needs at least one envelope.": "Un groupe doit contenir au moins une enveloppe.",
     "A widget can reference at most :max envelopes.": "Un widget peut référencer au plus :max enveloppes.",
@@ -61,6 +62,7 @@
     "This ledger is already shared with this user.": "Ce grand livre est déjà partagé avec cet utilisateur.",
     "This ledger is closed and read-only.": "Ce grand livre est clôturé et en lecture seule.",
     "This password reset link will expire in :count minutes.": "Ce lien de réinitialisation expirera dans :count minutes.",
+    "This person already registered through an invite and joins the profile once they verify their email.": "Cette personne s'est déjà inscrite avec une invitation et rejoindra le profil dès qu'elle aura vérifié son adresse e-mail.",
     "This profile already has a draft budget. Publish it before creating a new one.": "Ce profil a déjà un budget en brouillon. Publiez-le avant d'en créer un nouveau.",
     "This profile still has budgets or ledgers.": "Ce profil a encore des budgets ou des grands livres.",
     "This user already owns this envelope.": "Cet utilisateur est déjà propriétaire de cette enveloppe.",

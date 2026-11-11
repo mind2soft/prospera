@@ -8,8 +8,13 @@ use App\Http\Controllers\FinancialProfileController;
 use App\Http\Controllers\FinancialProfileInviteController;
 use App\Http\Controllers\LedgerController;
 use App\Http\Middleware\EnsureAccountHasProfile;
+use App\Models\Budget;
+use App\Models\Envelope;
+use App\Models\Ledger;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
+use Laravel\Fortify\Http\Controllers\ConfirmablePasswordController;
+use Laravel\Fortify\Http\Controllers\PasswordResetLinkController;
 use Laravel\Fortify\Http\Controllers\RegisteredUserController;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -35,6 +40,19 @@ if (Features::enabled(Features::registration())) {
         ->name('register.store');
 }
 
+// Same for the password-reset request (an email to the account's address)
+// and the password confirmation (a password guess on a signed-in session):
+// Fortify declares both without a throttle.
+if (Features::enabled(Features::resetPasswords())) {
+    Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
+        ->middleware(['guest:'.config('fortify.guard'), 'throttle:password-reset'])
+        ->name('password.email');
+}
+
+Route::post('user/confirm-password', [ConfirmablePasswordController::class, 'store'])
+    ->middleware([config('fortify.auth_middleware', 'auth').':'.config('fortify.guard'), 'throttle:password-confirm'])
+    ->name('password.confirm.store');
+
 // Public invite validation (used by the invite landing page and the
 // registration flow); accepting requires authentication below.
 Route::get('api/invites/{inviteKey}', [FinancialProfileInviteController::class, 'show'])
@@ -47,6 +65,12 @@ Route::get('api/invites/{inviteKey}', [FinancialProfileInviteController::class, 
 Route::get('invites/{inviteKey}', [FinancialProfileInviteController::class, 'landing'])
     ->name('invites.landing')
     ->middleware('throttle:invites');
+
+// The Share-drawer endpoints (ManagesShares) receive their resource as a
+// plain Model, so these parameters are bound explicitly.
+Route::model('budget', Budget::class);
+Route::model('ledger', Ledger::class);
+Route::model('envelope', Envelope::class);
 
 // EnsureAccountHasProfile completes an invite grant whose verification
 // listener failed (no verified account is left without a profile).

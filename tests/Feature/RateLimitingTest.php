@@ -49,6 +49,39 @@ class RateLimitingTest extends TestCase
         $this->post('/register', ['email' => 'one-more@example.com'])->assertTooManyRequests();
     }
 
+    public function test_password_reset_requests_are_throttled_per_ip(): void
+    {
+        for ($i = 0; $i < FortifyServiceProvider::PASSWORD_RESETS_PER_MINUTE; $i++) {
+            $this->post('/forgot-password', ['email' => "user{$i}@example.com"])->assertStatus(302);
+        }
+
+        $this->post('/forgot-password', ['email' => 'victim@example.com'])->assertTooManyRequests();
+    }
+
+    public function test_password_reset_requests_are_throttled_per_address(): void
+    {
+        for ($i = 0; $i < FortifyServiceProvider::PASSWORD_RESETS_PER_MINUTE; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => "10.0.0.{$i}"])
+                ->post('/forgot-password', ['email' => 'Victim@example.com'])
+                ->assertStatus(302);
+        }
+
+        $this->withServerVariables(['REMOTE_ADDR' => '10.0.1.1'])
+            ->post('/forgot-password', ['email' => 'victim@example.com'])
+            ->assertTooManyRequests();
+    }
+
+    public function test_password_confirmation_is_throttled(): void
+    {
+        $user = User::factory()->create();
+
+        for ($i = 0; $i < FortifyServiceProvider::PASSWORD_CONFIRMATIONS_PER_MINUTE; $i++) {
+            $this->actingAs($user)->post('/user/confirm-password', ['password' => 'wrong'])->assertStatus(302);
+        }
+
+        $this->actingAs($user)->post('/user/confirm-password', ['password' => 'password'])->assertTooManyRequests();
+    }
+
     public function test_invite_creation_is_throttled_per_user_per_minute(): void
     {
         Mail::fake();

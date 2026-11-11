@@ -114,6 +114,27 @@ class LedgerTest extends TestCase
         $this->getJson('/api/ledgers')->assertUnauthorized();
     }
 
+    public function test_index_loads_only_the_callers_share_rows(): void
+    {
+        $shared = $this->createLedger($this->user, ['name' => 'Shared']);
+        $shared->permissions()->create(['user_id' => $this->member->id, 'permission' => ResourcePermissions::CONTRIBUTOR]);
+        $this->createLedger($this->user, ['name' => 'Implicit']);
+
+        $queries = $this->queriesDuring(function (): void {
+            $ledgers = collect($this->actingAs($this->member)->getJson('/api/ledgers?profile_id='.$this->profile->id)
+                ->assertOk()
+                ->json('ledgers'))
+                ->keyBy('name');
+
+            $this->assertSame(ResourcePermissions::CONTRIBUTOR, $ledgers['Shared']['permission']);
+            $this->assertSame(ResourcePermissions::VIEWER, $ledgers['Implicit']['permission']);
+        });
+
+        $permissionQueries = array_values(array_filter($queries, fn (string $sql): bool => str_contains($sql, 'from "ledger_permissions"')));
+        $this->assertCount(1, $permissionQueries);
+        $this->assertStringContainsString('"user_id" = ?', $permissionQueries[0]);
+    }
+
     public function test_index_returns_only_the_profile_ledgers(): void
     {
         $this->createLedger($this->user);
@@ -203,6 +224,22 @@ class LedgerTest extends TestCase
         ])->assertCreated();
 
         $this->assertEncryptedAmount(Ledger::class, ['profile_id' => $this->profile->id], 'starting_balance', 0);
+    }
+
+    public function test_store_authorizes_the_profile_before_validating_the_payload(): void
+    {
+        // CQ-R2-3: collaborators get a 403, outsiders a 404 — even with an
+        // invalid payload; a missing profile is a validation error.
+        $this->actingAs($this->member)->postJson('/api/ledgers', ['profile_id' => $this->profile->id])
+            ->assertForbidden();
+        $this->actingAs($this->stranger)->postJson('/api/ledgers', ['profile_id' => $this->profile->id])
+            ->assertNotFound();
+        $this->actingAs($this->user)->postJson('/api/ledgers', ['profile_id' => 999999])
+            ->assertNotFound();
+        $this->actingAs($this->user)->postJson('/api/ledgers', ['name' => '2026'])
+            ->assertUnprocessable()->assertJsonValidationErrors('profile_id');
+        $this->actingAs($this->user)->postJson('/api/ledgers', ['profile_id' => 'abc'])
+            ->assertUnprocessable()->assertJsonValidationErrors('profile_id');
     }
 
     public function test_store_requires_valid_input(): void
@@ -391,6 +428,21 @@ class LedgerTest extends TestCase
             'amount' => 10,
             'event_at' => '2026-06-15',
         ])->assertUnprocessable()->assertJsonValidationErrors('ledger');
+    }
+
+    public function test_recording_is_authorized_before_the_ledger_state_and_the_payload(): void
+    {
+        // CQ-R2-3: a viewer learns nothing about the ledger's state.
+        $ledger = $this->createLedger($this->user, ['closed_at' => now()]);
+
+        $this->actingAs($this->member)->postJson("/api/ledgers/{$ledger->id}/transactions", [
+            'envelope_id' => 1,
+            'amount' => 10,
+            'event_at' => '2026-06-15',
+        ])->assertForbidden();
+
+        $this->actingAs($this->member)->postJson("/api/ledgers/{$ledger->id}/transactions", [])->assertForbidden();
+        $this->actingAs($this->stranger)->postJson("/api/ledgers/{$ledger->id}/transactions", [])->assertNotFound();
     }
 
     public function test_transactions_cannot_be_deleted_from_a_closed_ledger(): void

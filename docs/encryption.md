@@ -340,7 +340,10 @@ scripts compare releases with the migrations the database actually ran
   failing later (e.g. `amounts:verify` after an `APP_PREVIOUS_KEYS` change)
   has already replaced it: the live release keeps its cached configuration,
   but fix the secrets and deploy again before any rollback (which rebuilds
-  the configuration from it, then refuses if `amounts:verify` fails).
+  the configuration from it, then refuses if `amounts:verify` fails). The
+  cached configuration (`bootstrap/cache/config.php`) holds the same secrets
+  in plain PHP: deploys and rollbacks write it under `umask 077` and then
+  `chmod 600` it, like the `.env` (PHP runs as the deploy account).
 - Both scripts connect only to a host whose key is pinned in the
   `SSH_KNOWN_HOSTS` variable of the `Production` environment (known_hosts
   lines, e.g. from `ssh-keyscan -H <host>` run once and checked against the

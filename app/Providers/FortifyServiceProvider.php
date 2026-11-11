@@ -25,6 +25,10 @@ class FortifyServiceProvider extends ServiceProvider
 
     public const REGISTRATIONS_PER_HOUR = 20;
 
+    public const PASSWORD_RESETS_PER_MINUTE = 6;
+
+    public const PASSWORD_CONFIRMATIONS_PER_MINUTE = 6;
+
     /**
      * Register any application services.
      */
@@ -133,6 +137,22 @@ class FortifyServiceProvider extends ServiceProvider
                 Limit::perMinute(self::REGISTRATIONS_PER_MINUTE)->by('minute:'.$request->ip()),
                 Limit::perHour(self::REGISTRATIONS_PER_HOUR)->by('hour:'.$request->ip()),
             ];
+        });
+
+        // Password-reset requests email the account: per IP, and per
+        // submitted address so rotating IPs cannot flood one inbox (the
+        // broker's own 60-second throttle only covers existing accounts).
+        RateLimiter::for('password-reset', function (Request $request) {
+            return [
+                Limit::perMinute(self::PASSWORD_RESETS_PER_MINUTE)->by('ip:'.$request->ip()),
+                Limit::perMinute(self::PASSWORD_RESETS_PER_MINUTE)->by('email:'.Str::lower((string) $request->input(Fortify::email()))),
+            ];
+        });
+
+        // Password confirmation is a password guess on a signed-in session.
+        RateLimiter::for('password-confirm', function (Request $request) {
+            return Limit::perMinute(self::PASSWORD_CONFIRMATIONS_PER_MINUTE)
+                ->by('user:'.$request->user()?->getAuthIdentifier().'|'.$request->ip());
         });
 
         // Public contact form (issue #17): first-line guard in front of the

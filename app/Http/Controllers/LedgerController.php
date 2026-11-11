@@ -2,12 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ManagesShares;
 use App\Http\Requests\Ledger\LedgerTransactionsRequest;
 use App\Http\Requests\Ledger\StoreLedgerRequest;
 use App\Http\Requests\Ledger\StoreTransactionRequest;
-use App\Http\Requests\Sharing\StoreShareRequest;
-use App\Http\Requests\Sharing\TransferOwnershipRequest;
-use App\Http\Requests\Sharing\UpdateShareRequest;
 use App\Models\Budget;
 use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
@@ -18,15 +16,20 @@ use App\Models\User;
 use App\Security\Amounts\AmountKeyRing;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use LogicException;
 
 class LedgerController extends Controller
 {
+    /** @use ManagesShares<Ledger> */
+    use ManagesShares;
+
     /**
      * The longest from_date..to_date span (inclusive, in days) the
      * transactions endpoint serves.
@@ -34,7 +37,6 @@ class LedgerController extends Controller
     public const MAX_RANGE_DAYS = 366;
 
     public function __construct(
-        private readonly ResourcePermissions $permissions,
         private readonly ResourcePermissionService $permissionService,
     ) {}
 
@@ -53,12 +55,18 @@ class LedgerController extends Controller
             $query = Ledger::query()->visibleTo($request->user());
         }
 
-        $ledgers = $query->with('permissions')->orderByDesc('created_at')->get();
+        $user = $request->user();
+
+        // Only the caller's share row resolves their permission.
+        $ledgers = $query
+            ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
+            ->orderByDesc('created_at')
+            ->get();
 
         return response()->json([
             'ledgers' => $ledgers
                 // Both branches are scoped to the caller's profiles.
-                ->map(fn (Ledger $ledger) => $this->serializeLedger($ledger, $request->user(), isMember: true))
+                ->map(fn (Ledger $ledger) => $this->serializeLedger($ledger, $user, isMember: true))
                 ->values(),
         ]);
     }
@@ -72,8 +80,7 @@ class LedgerController extends Controller
     public function store(StoreLedgerRequest $request): JsonResponse
     {
         $validated = $request->validated();
-
-        $profile = $this->authorizeProfileId((int) $validated['profile_id'], 'manage');
+        $profile = $request->profile();
 
         $ledger = DB::transaction(function () use ($request, $profile, $validated): Ledger {
             $ledger = Ledger::create([
@@ -150,14 +157,6 @@ class LedgerController extends Controller
 
         $from = Carbon::parse($validated['from_date'])->startOfDay();
         $to = Carbon::parse($validated['to_date'])->endOfDay();
-
-        // Every row read is hydrated and decrypted: the range is bounded to
-        // a ledger's yearly span (the UI asks for one month at a time).
-        if ($from->diffInDays($to->copy()->startOfDay()) >= self::MAX_RANGE_DAYS) {
-            throw ValidationException::withMessages([
-                'to_date' => __('The date range cannot exceed :days days.', ['days' => self::MAX_RANGE_DAYS]),
-            ]);
-        }
 
         $user = $request->user();
 
@@ -259,14 +258,10 @@ class LedgerController extends Controller
             ]);
         }
 
-        $this->authorize('record', $ledger);
-
         /** @var Envelope|null $envelope */
         $envelope = Envelope::query()->find($validated['envelope_id']);
 
-        $envelopePermission = $envelope?->permissionFor($request->user()) ?? ResourcePermissions::NONE;
-
-        if ($envelope === null || ! $this->permissions->isAtLeast($envelopePermission, ResourcePermissions::CONTRIBUTOR)) {
+        if ($envelope === null || $request->user()->cannot('use', $envelope)) {
             throw ValidationException::withMessages([
                 'envelope_id' => __('You need contributor access to this envelope to record transactions.'),
             ]);
@@ -300,7 +295,8 @@ class LedgerController extends Controller
         return response()->json([
             'transaction' => $this->serializeTransaction(
                 $transaction,
-                $envelopePermission,
+                // Contributor+ (checked above): the amount is never masked.
+                $envelope->permissionFor($request->user()),
                 null,
                 withRemaining: false,
             ),
@@ -330,71 +326,70 @@ class LedgerController extends Controller
         return response()->json(status: 204);
     }
 
-    /**
-     * List the profile's members with their permission on the ledger.
-     */
-    public function permissionsIndex(Ledger $ledger): JsonResponse
+    protected function sharedResource(Model $resource): Ledger
     {
-        $this->authorize('view', $ledger);
+        if (! $resource instanceof Ledger) {
+            throw new LogicException('The share routes of this controller must bind a ledger.');
+        }
 
-        return response()->json([
-            'shares' => $this->permissionService->profilePermissions($ledger->profile, 'ledger_permissions', 'ledger_id', $ledger->id),
-        ]);
+        return $resource;
     }
 
     /**
-     * Assign a permission to a profile member ("owner" is rejected — use
-     * transfer-ownership).
+     * @return array{string, string}
      */
-    public function addPermission(StoreShareRequest $request, Ledger $ledger): JsonResponse
+    protected function shareTable(): array
     {
-        $target = $this->permissionService->profileMember($ledger->profile, $request->targetId());
+        return ['ledger_permissions', 'ledger_id'];
+    }
 
-        $this->permissionService->createPermission('ledger_permissions', 'ledger_id', $ledger->id, $target->id, $request->permission(), __('This ledger is already shared with this user.'));
-
-        return response()->json(status: 201);
+    protected function viewSharesAbility(): string
+    {
+        return 'view';
     }
 
     /**
-     * Change a member's permission ("owner" is rejected — use
-     * transfer-ownership).
+     * The profile's members with their permission on the ledger.
+     *
+     * @param  Ledger  $resource
+     * @return array<int, array<string, int|string|bool>>
      */
-    public function updatePermission(UpdateShareRequest $request, Ledger $ledger, int $userId): JsonResponse
+    protected function shareList(Model $resource, User $caller): array
     {
-        $this->permissionService->updatePermission('ledger_permissions', 'ledger_id', $ledger->id, $userId, $request->permission());
-
-        return response()->json([
-            'shares' => $this->permissionService->profilePermissions($ledger->profile, 'ledger_permissions', 'ledger_id', $ledger->id),
-        ]);
+        return $this->permissionService->profilePermissions($resource->profile, 'ledger_permissions', 'ledger_id', $resource->id);
     }
 
     /**
-     * Revoke a share.
+     * @param  Ledger  $resource
      */
-    public function removePermission(Ledger $ledger, int $userId): JsonResponse
+    protected function shareTarget(Model $resource, int $userId): User
     {
-        $this->authorize('share', $ledger);
+        return $this->permissionService->profileMember($resource->profile, $userId);
+    }
 
-        $this->permissionService->deletePermission('ledger_permissions', 'ledger_id', $ledger->id, $userId);
-
-        return response()->json(status: 204);
+    protected function alreadySharedMessage(): string
+    {
+        return __('This ledger is already shared with this user.');
     }
 
     /**
      * Transfer ownership to a member; the previous owner becomes a
      * contributor.
+     *
+     * @param  Ledger  $resource
+     * @return array<string, mixed>
      */
-    public function transferOwnership(TransferOwnershipRequest $request, Ledger $ledger): JsonResponse
+    protected function transferOwnershipOf(Model $resource, User $caller, int $userId): array
     {
         $target = $this->permissionService->ensureNotOwner(
-            $this->permissionService->profileMember($ledger->profile, $request->targetId()),
-            $request->user(),
+            $this->permissionService->profileMember($resource->profile, $userId),
+            $caller,
             __('You already own this ledger.'),
         );
 
-        $ledger->transferOwnershipTo($target);
+        $resource->transferOwnershipTo($target);
 
-        return response()->json(['ledger' => $this->serializeLedger($ledger->refresh(), $request->user())]);
+        return ['ledger' => $this->serializeLedger($resource->refresh(), $caller)];
     }
 
     /**

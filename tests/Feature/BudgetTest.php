@@ -12,10 +12,12 @@ use App\Services\ResourcePermissions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\CountsQueries;
 use Tests\TestCase;
 
 class BudgetTest extends TestCase
 {
+    use CountsQueries;
     use RefreshDatabase;
 
     private User $user;
@@ -105,6 +107,31 @@ class BudgetTest extends TestCase
         $this->assertNotEquals($budget->id, $data[0]['id']);
     }
 
+    public function test_index_loads_only_the_callers_share_rows(): void
+    {
+        $shared = $this->createBudget($this->user, [
+            'published_at' => now()->subMonth(),
+            'effective_year' => now()->subMonth()->year,
+            'effective_month' => now()->subMonth()->month,
+        ]);
+        $shared->permissions()->create(['user_id' => $this->member->id, 'permission' => ResourcePermissions::CONTRIBUTOR]);
+        $this->createBudget($this->user);
+
+        $queries = $this->queriesDuring(function () use ($shared): void {
+            $budgets = collect($this->actingAs($this->member)->getJson('/api/budgets?profile_id='.$this->profile->id)
+                ->assertOk()
+                ->json('budgets'))
+                ->keyBy('id');
+
+            $this->assertSame(ResourcePermissions::CONTRIBUTOR, $budgets[$shared->id]['permission']);
+            $this->assertSame(ResourcePermissions::VIEWER, $budgets->except($shared->id)->first()['permission']);
+        });
+
+        $permissionQueries = array_values(array_filter($queries, fn (string $sql): bool => str_contains($sql, 'from "budget_permissions"')));
+        $this->assertCount(1, $permissionQueries);
+        $this->assertStringContainsString('"user_id" = ?', $permissionQueries[0]);
+    }
+
     public function test_guests_cannot_access_the_api(): void
     {
         $this->getJson('/api/budgets')->assertUnauthorized();
@@ -155,6 +182,19 @@ class BudgetTest extends TestCase
 
         $this->actingAs($this->user)->postJson('/api/budgets', ['currency' => 'CAD'])
             ->assertUnprocessable()->assertJsonValidationErrors('profile_id');
+    }
+
+    public function test_store_authorizes_the_profile_before_validating_the_payload(): void
+    {
+        // CQ-R2-3: collaborators get a 403, outsiders a 404 — even with an
+        // invalid payload; a missing profile is a validation error.
+        $this->actingAs($this->member)->postJson('/api/budgets', ['profile_id' => $this->profile->id, 'currency' => 'x'])
+            ->assertForbidden();
+        $this->actingAs($this->stranger)->postJson('/api/budgets', ['profile_id' => $this->profile->id])
+            ->assertNotFound();
+        $this->actingAs($this->user)->postJson('/api/budgets', ['currency' => 'CAD'])
+            ->assertUnprocessable()->assertJsonValidationErrors('profile_id');
+        $this->assertSame(0, Budget::query()->count());
     }
 
     public function test_store_rejects_a_second_draft_per_profile(): void
@@ -854,7 +894,12 @@ class BudgetTest extends TestCase
 
     public function test_ownership_can_be_transferred_to_a_member(): void
     {
-        $budget = $this->createBudget($this->user);
+        // A published budget: drafts stay with the profile owner (below).
+        $budget = $this->createBudget($this->user, [
+            'published_at' => now(),
+            'effective_year' => now()->year,
+            'effective_month' => now()->month,
+        ]);
 
         $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/transfer-ownership", [
             'user_id' => $this->member->id,
@@ -869,6 +914,58 @@ class BudgetTest extends TestCase
             'user_id' => $this->user->id,
             'permission' => 'contributor',
         ]);
+    }
+
+    public function test_a_draft_cannot_be_handed_to_a_collaborator(): void
+    {
+        // WF-R2-1: the collaborator could not publish it (profile ownership
+        // is required) and the profile owner could neither publish, delete
+        // nor replace it (single draft slot).
+        $draft = $this->createBudget($this->user);
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/transfer-ownership", [
+            'user_id' => $this->member->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['user_id' => 'A draft budget can only be owned by the profile owner.']);
+
+        $this->assertSame(ResourcePermissions::OWNER, $draft->fresh()->permissionFor($this->user));
+        $this->assertSame(ResourcePermissions::VIEWER, $draft->fresh()->permissionFor($this->member));
+        $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish")->assertOk();
+    }
+
+    public function test_a_draft_held_by_a_collaborator_can_be_handed_back_to_the_profile_owner(): void
+    {
+        // A draft stranded with a collaborator before the rule above.
+        $draft = $this->createBudget($this->member);
+
+        $this->actingAs($this->member)->postJson("/api/budgets/{$draft->id}/transfer-ownership", [
+            'user_id' => $this->user->id,
+        ])->assertOk();
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish")->assertOk();
+    }
+
+    public function test_the_migration_hands_stranded_drafts_back_to_the_profile_owner(): void
+    {
+        $stranded = $this->createBudget($this->member);
+        $published = $this->createBudget($this->member, [
+            'published_at' => now(),
+            'effective_year' => now()->year,
+            'effective_month' => now()->month,
+        ]);
+        $otherProfile = FinancialProfile::createOwnedBy($this->stranger, 'Stranger');
+        $healthy = Budget::create(['profile_id' => $otherProfile->id, 'currency' => 'CAD', 'effective_year' => 0, 'effective_month' => 0]);
+        $healthy->permissions()->create(['user_id' => $this->stranger->id, 'permission' => ResourcePermissions::OWNER]);
+
+        $migration = require database_path('migrations/2026_11_12_000001_hand_stranded_drafts_to_profile_owners.php');
+        $migration->up();
+
+        $this->assertSame(ResourcePermissions::OWNER, $stranded->fresh()->permissionFor($this->user));
+        $this->assertSame(ResourcePermissions::CONTRIBUTOR, $stranded->fresh()->permissionFor($this->member));
+        $this->assertSame(1, $stranded->permissions()->where('permission', ResourcePermissions::OWNER)->count());
+        // Published budgets keep their owner; healthy drafts are untouched.
+        $this->assertSame(ResourcePermissions::OWNER, $published->fresh()->permissionFor($this->member));
+        $this->assertSame(ResourcePermissions::OWNER, $healthy->fresh()->permissionFor($this->stranger));
+        $this->assertSame(1, $healthy->permissions()->count());
     }
 
     public function test_transfer_ownership_requires_a_member_target(): void

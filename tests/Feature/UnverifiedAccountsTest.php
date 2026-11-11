@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\DeleteAccount;
 use App\Models\Budget;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileInvite;
@@ -9,6 +10,9 @@ use App\Models\User;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Exceptions;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -108,6 +112,88 @@ class UnverifiedAccountsTest extends TestCase
         $this->assertModelExists($withData);
         $this->assertModelExists($withEnvelope);
         $this->assertModelExists($member);
+    }
+
+    public function test_the_prune_re_checks_each_account_right_before_deleting_it(): void
+    {
+        config(['prospera.unverified_account_retention_days' => 30]);
+
+        $verifiesMeanwhile = User::factory()->unverified()->create();
+        $addsAnEnvelopeMeanwhile = User::factory()->unverified()->create();
+        $stale = User::factory()->unverified()->create();
+        $this->travel(31)->days();
+
+        // RES-R2-4: both accounts act between the selection of the
+        // candidates and their deletion.
+        $touched = [];
+        User::retrieved(function (User $user) use (&$touched, $verifiesMeanwhile, $addsAnEnvelopeMeanwhile): void {
+            if (isset($touched[$user->id])) {
+                return;
+            }
+
+            $touched[$user->id] = true;
+
+            if ($user->id === $verifiesMeanwhile->id) {
+                DB::table('users')->where('id', $user->id)->update(['email_verified_at' => now()]);
+            } elseif ($user->id === $addsAnEnvelopeMeanwhile->id) {
+                DB::table('envelopes')->insert([
+                    'user_id' => $user->id,
+                    'name' => 'Rent',
+                    'type' => 'expense',
+                    'color' => '#000000',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        });
+
+        $this->artisan('users:prune-unverified')
+            ->expectsOutput('1 unverified account(s) deleted.')
+            ->assertSuccessful();
+
+        $this->assertModelExists($verifiesMeanwhile);
+        $this->assertModelExists($addsAnEnvelopeMeanwhile);
+        $this->assertModelMissing($stale);
+    }
+
+    public function test_a_failing_account_does_not_abort_the_prune(): void
+    {
+        Exceptions::fake();
+        config(['prospera.unverified_account_retention_days' => 30]);
+
+        $failing = User::factory()->unverified()->create();
+        FinancialProfile::createDefaultFor($failing);
+        $other = User::factory()->unverified()->create();
+        FinancialProfile::createDefaultFor($other);
+        $this->travel(31)->days();
+
+        $real = app(DeleteAccount::class);
+        $this->app->instance(DeleteAccount::class, new class($real, $failing->id) extends DeleteAccount
+        {
+            public function __construct(private readonly DeleteAccount $real, private readonly int $failingId) {}
+
+            public function handle(User $user): void
+            {
+                if ($user->id === $this->failingId) {
+                    // Part of the deletion ran before the failure: it must
+                    // be rolled back with the account's own transaction.
+                    $user->profiles()->sole()->delete();
+
+                    throw new RuntimeException('Transient database error');
+                }
+
+                $this->real->handle($user);
+            }
+        });
+
+        $this->artisan('users:prune-unverified')
+            ->expectsOutput('1 unverified account(s) deleted.')
+            ->assertSuccessful();
+
+        Exceptions::assertReported(fn (RuntimeException $e): bool => $e->getMessage() === 'Transient database error');
+        $this->assertModelExists($failing);
+        $this->assertSame(1, $failing->profiles()->count());
+        $this->assertModelMissing($other);
     }
 
     public function test_the_retention_window_is_configurable(): void

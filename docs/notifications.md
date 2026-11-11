@@ -36,6 +36,13 @@ cannot opt out of an account they don't have). Once the address belongs to
 an account, the toggle (and the master switch) gates the email, re-checked
 at send time.
 
+**User-chosen names in the subject**: the invite subject carries the
+inviter's and the profile's names, which anyone can choose. There they are
+flattened to one line, stripped of anything that looks like a link or a
+domain, and capped at 40 characters (`ProfileInvite::subjectText`); when
+nothing is left, a generic subject is used. The plain-text body states the
+full names.
+
 ## Storage
 
 The settings live in the `users.notification_settings` JSON column, cast to
