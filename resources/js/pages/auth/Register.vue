@@ -1,10 +1,10 @@
 <!-- biome-ignore-all lint/a11y/noHeaderScope: vue-i18n `scope` prop, not the HTML attribute -->
 <!-- biome-ignore-all lint/a11y/noPositiveTabindex: deliberate tab order for the invite page form -->
 <script setup lang="ts">
-import { Form, Head, router, usePage } from '@inertiajs/vue3';
+import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
+import { useQueryClient } from '@tanstack/vue-query';
 import { computed, ref } from 'vue';
 import { I18nT, useI18n } from 'vue-i18n';
-import { useQueryClient } from 'vue-query';
 import { toast } from 'vue-sonner';
 import Icon from '@/components/Icon.vue';
 import InputError from '@/components/InputError.vue';

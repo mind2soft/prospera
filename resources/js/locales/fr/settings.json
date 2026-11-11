@@ -47,6 +47,7 @@
             "envelope_limit_exceededDescription": "Les dépenses d'une enveloppe dépassent son allocation sur le budget publié du mois.",
             "profile_invite": "Invitations de profil",
             "profile_inviteDescription": "Quelqu'un partage un profil financier avec vous (les invitations que vous envoyez sont toujours remises).",
+            "comingSoon": "Bientôt disponible",
             "allOff": "Toutes les notifications sont désactivées — activez « Activer les notifications par e-mail » pour en recevoir.",
             "saveFailed": "Impossible d'enregistrer vos paramètres de notification."
         },

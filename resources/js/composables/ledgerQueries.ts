@@ -1,5 +1,5 @@
+import { useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
-import { useQueryClient } from 'vue-query';
 import { invalidateDashboardData } from '@/composables/dashboardQueries';
 import { type QueryKey, useMutation, useQuery } from '@/composables/query';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
@@ -72,29 +72,30 @@ export function useCreateLedger() {
     const queryClient = useQueryClient();
     const { profileId } = useCurrentProfile();
 
-    return useMutation(
-        (input: Omit<CreateLedgerInput, 'profile_id'>) =>
+    return useMutation({
+        mutationFn: (input: Omit<CreateLedgerInput, 'profile_id'>) =>
             ledgerApi.create({ ...input, profile_id: toValue(profileId) ?? 0 }),
-        {
-            onSuccess: (data) => {
-                queryClient.setQueryData(ledgerKey(data.ledger.id), {
-                    ledger: data.ledger,
-                });
-                void queryClient.invalidateQueries({ queryKey: ['ledgers'] });
-                invalidateDashboardData(queryClient);
-            },
+        onSuccess: (data) => {
+            queryClient.setQueryData(ledgerKey(data.ledger.id), {
+                ledger: data.ledger,
+            });
+            void queryClient.invalidateQueries({ queryKey: ['ledgers'] });
+            invalidateDashboardData(queryClient);
         },
-    );
+    });
 }
 
 export function useDeleteLedger() {
     const queryClient = useQueryClient();
 
-    return useMutation((id: number) => ledgerApi.destroy(id), {
+    return useMutation({
+        mutationFn: (id: number) => ledgerApi.destroy(id),
         onSuccess: (_data, id) => {
-            queryClient.removeQueries(ledgerKey(id));
-            queryClient.removeQueries(ledgerKeys.transactions(id));
-            queryClient.removeQueries(ledgerKeys.shares(id));
+            queryClient.removeQueries({ queryKey: ledgerKey(id) });
+            queryClient.removeQueries({
+                queryKey: ledgerKeys.transactions(id),
+            });
+            queryClient.removeQueries({ queryKey: ledgerKeys.shares(id) });
             void queryClient.invalidateQueries({ queryKey: ['ledgers'] });
             invalidateDashboardData(queryClient);
         },
@@ -104,7 +105,8 @@ export function useDeleteLedger() {
 export function useCloseLedger() {
     const queryClient = useQueryClient();
 
-    return useMutation((id: number) => ledgerApi.close(id), {
+    return useMutation({
+        mutationFn: (id: number) => ledgerApi.close(id),
         onSuccess: (data) => {
             queryClient.setQueryData(ledgerKey(data.ledger.id), {
                 ledger: data.ledger,
@@ -117,7 +119,8 @@ export function useCloseLedger() {
 export function useReopenLedger() {
     const queryClient = useQueryClient();
 
-    return useMutation((id: number) => ledgerApi.reopen(id), {
+    return useMutation({
+        mutationFn: (id: number) => ledgerApi.reopen(id),
         onSuccess: (data) => {
             queryClient.setQueryData(ledgerKey(data.ledger.id), {
                 ledger: data.ledger,
@@ -130,18 +133,16 @@ export function useReopenLedger() {
 export function useAddTransaction(ledgerId: MaybeRefOrGetter<number | null>) {
     const queryClient = useQueryClient();
 
-    return useMutation(
-        ({ input }: { input: AddTransactionInput }) =>
+    return useMutation({
+        mutationFn: ({ input }: { input: AddTransactionInput }) =>
             ledgerApi.addTransaction(toValue(ledgerId) ?? 0, input),
-        {
-            onSuccess: () => {
-                void queryClient.invalidateQueries({
-                    queryKey: ledgerKeys.transactions(toValue(ledgerId) ?? 0),
-                });
-                invalidateDashboardData(queryClient);
-            },
+        onSuccess: () => {
+            void queryClient.invalidateQueries({
+                queryKey: ledgerKeys.transactions(toValue(ledgerId) ?? 0),
+            });
+            invalidateDashboardData(queryClient);
         },
-    );
+    });
 }
 
 export function useDeleteTransaction(
@@ -149,18 +150,16 @@ export function useDeleteTransaction(
 ) {
     const queryClient = useQueryClient();
 
-    return useMutation(
-        ({ transactionId }: { transactionId: number }) =>
+    return useMutation({
+        mutationFn: ({ transactionId }: { transactionId: number }) =>
             ledgerApi.destroyTransaction(transactionId),
-        {
-            onSuccess: () => {
-                void queryClient.invalidateQueries({
-                    queryKey: ledgerKeys.transactions(toValue(ledgerId) ?? 0),
-                });
-                invalidateDashboardData(queryClient);
-            },
+        onSuccess: () => {
+            void queryClient.invalidateQueries({
+                queryKey: ledgerKeys.transactions(toValue(ledgerId) ?? 0),
+            });
+            invalidateDashboardData(queryClient);
         },
-    );
+    });
 }
 
 // --- sharing (profile members only) -----------------------------------------
@@ -168,8 +167,8 @@ export function useDeleteTransaction(
 export function useSetLedgerShare() {
     const queryClient = useQueryClient();
 
-    return useMutation(
-        ({
+    return useMutation({
+        mutationFn: ({
             ledgerId,
             userId,
             permission,
@@ -178,45 +177,53 @@ export function useSetLedgerShare() {
             userId: number;
             permission: string;
         }) => ledgerApi.setShare(ledgerId, userId, permission),
-        {
-            onSuccess: (_data, { ledgerId }) => {
-                void queryClient.invalidateQueries(ledgerKeys.shares(ledgerId));
-            },
+        onSuccess: (_data, { ledgerId }) => {
+            void queryClient.invalidateQueries({
+                queryKey: ledgerKeys.shares(ledgerId),
+            });
         },
-    );
+    });
 }
 
 export function useRemoveLedgerShare() {
     const queryClient = useQueryClient();
 
-    return useMutation(
-        ({ ledgerId, userId }: { ledgerId: number; userId: number }) =>
-            ledgerApi.removeShare(ledgerId, userId),
-        {
-            onSuccess: (_data, { ledgerId }) => {
-                void queryClient.invalidateQueries(ledgerKeys.shares(ledgerId));
-            },
+    return useMutation({
+        mutationFn: ({
+            ledgerId,
+            userId,
+        }: {
+            ledgerId: number;
+            userId: number;
+        }) => ledgerApi.removeShare(ledgerId, userId),
+        onSuccess: (_data, { ledgerId }) => {
+            void queryClient.invalidateQueries({
+                queryKey: ledgerKeys.shares(ledgerId),
+            });
         },
-    );
+    });
 }
 
 export function useTransferLedgerOwnership() {
     const queryClient = useQueryClient();
 
-    return useMutation(
-        ({ ledgerId, userId }: { ledgerId: number; userId: number }) =>
-            ledgerApi.transferOwnership(ledgerId, userId),
-        {
-            onSuccess: (data) => {
-                const ledger: Ledger = data.ledger;
-                void queryClient.setQueryData(ledgerKey(ledger.id), {
-                    ledger,
-                });
-                void queryClient.invalidateQueries({
-                    queryKey: ledgerKeys.shares(ledger.id),
-                });
-                void queryClient.invalidateQueries({ queryKey: ['ledgers'] });
-            },
+    return useMutation({
+        mutationFn: ({
+            ledgerId,
+            userId,
+        }: {
+            ledgerId: number;
+            userId: number;
+        }) => ledgerApi.transferOwnership(ledgerId, userId),
+        onSuccess: (data) => {
+            const ledger: Ledger = data.ledger;
+            void queryClient.setQueryData(ledgerKey(ledger.id), {
+                ledger,
+            });
+            void queryClient.invalidateQueries({
+                queryKey: ledgerKeys.shares(ledger.id),
+            });
+            void queryClient.invalidateQueries({ queryKey: ['ledgers'] });
         },
-    );
+    });
 }

@@ -2,6 +2,7 @@
     "dashboard": {
         "title": "Tableau de bord",
         "add": "Ajouter un widget",
+        "loadError": "Votre tableau de bord n'a pas pu être chargé. Vos widgets enregistrés sont conservés.",
         "catalog": {
             "envelope_spending": {
                 "name": "Dépenses par enveloppe",
@@ -71,10 +72,8 @@
             "addGroup": "Ajouter un groupe",
             "groupName": "Nom du groupe",
             "groupNamePlaceholder": "p. ex. Revenus combinés",
-            "groupMember": "Membre",
             "noEnvelopesLeft": "Toutes les enveloppes visibles sont déjà sélectionnées.",
             "removeItem": "Retirer de la sélection",
-            "renameGroup": "Renommer le groupe",
             "done": "Terminé"
         },
         "empty": {
@@ -96,13 +95,6 @@
         "history": {
             "revenue": "Revenus",
             "expenses": "Dépenses"
-        },
-        "spending": {
-            "envelope": "Enveloppe",
-            "spent": "Dépensé"
-        },
-        "radial": {
-            "legendTitle": "Sélection"
         }
     }
 }

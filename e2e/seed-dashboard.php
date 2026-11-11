@@ -15,6 +15,7 @@
 
 use App\Models\Budget;
 use App\Models\BudgetPermission;
+use App\Models\DashboardWidget;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
 use App\Models\LedgerPermission;
@@ -37,6 +38,8 @@ Transaction::whereIn('ledger_id', Ledger::query()->where('profile_id', $profile-
 Ledger::query()->where('profile_id', $profile->id)->get()->each(fn (Ledger $l) => $l->delete());
 Budget::query()->where('profile_id', $profile->id)->get()->each(fn (Budget $b) => $b->delete());
 $u->envelopes()->delete();
+// The dashboard starts empty, whatever an earlier spec left behind.
+DashboardWidget::query()->where('user_id', $u->id)->delete();
 
 $today = Carbon::today();
 

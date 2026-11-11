@@ -11,6 +11,7 @@ import LedgerSelector from '@/components/Ledger/LedgerSelector.vue';
 import MonthCalendar from '@/components/Ledger/MonthCalendar.vue';
 import TransactionTable from '@/components/Ledger/TransactionTable.vue';
 import LedgerLoadingScreen from '@/components/Loading/LedgerLoadingScreen.vue';
+import QueryErrorState from '@/components/QueryErrorState.vue';
 import ShareDrawer from '@/components/share/ShareDrawer.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -224,6 +225,7 @@ const {
     currentProfile,
     isPending: isPendingCurrentProfile,
     isError: isErrorCurrentProfile,
+    refetch: refetchProfiles,
 } = useCurrentProfile();
 const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
 
@@ -232,9 +234,22 @@ const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
 // and content branches cannot diverge (see composables/query.ts).
 const waitingForData = computed(
     () =>
-        (isPendingCurrentProfile.value && !isErrorCurrentProfile.value) ||
-        (ledgersQuery.isPending.value && !ledgersQuery.isError.value),
+        !ledgersLoadFailed.value &&
+        (isPendingCurrentProfile.value || ledgersQuery.isPending.value),
 );
+
+/** The ledger list failed to load (directly, or through the profile list). */
+const ledgersLoadFailed = computed(
+    () =>
+        ledgersQuery.data.value === undefined &&
+        (isErrorCurrentProfile.value || ledgersQuery.isError.value),
+);
+
+const retryLedgers = (): void => {
+    void (isErrorCurrentProfile.value
+        ? refetchProfiles()
+        : ledgersQuery.refetch());
+};
 
 const createLedger = useCreateLedger();
 const closeLedger = useCloseLedger();
@@ -391,6 +406,13 @@ const onRemoveTransaction = (transactionId: number) => {
         />
 
         <LedgerLoadingScreen v-if="waitingForData" />
+
+        <QueryErrorState
+            v-else-if="ledgersLoadFailed"
+            :message="$t('ledger.loadError')"
+            :retrying="ledgersQuery.isFetching.value"
+            @retry="retryLedgers"
+        />
 
         <!-- No ledgers yet -->
         <Card
@@ -557,7 +579,13 @@ const onRemoveTransaction = (transactionId: number) => {
                         :permission="ledgerPermission"
                         :open="!isClosed"
                         :pending-id="pendingTransactionId"
+                        :loading="transactionsQuery.isPending.value"
+                        :error="
+                            transactionsQuery.isError.value &&
+                            transactionsQuery.data.value === undefined
+                        "
                         @remove="onRemoveTransaction"
+                        @retry="transactionsQuery.refetch()"
                     />
                 </div>
             </div>
@@ -594,7 +622,7 @@ const onRemoveTransaction = (transactionId: number) => {
                     }}</Button>
                     <Button
                         variant="destructive"
-                        :disabled="deleteLedger.isLoading.value"
+                        :disabled="deleteLedger.isPending.value"
                         @click="onDelete"
                         >{{
                             $t('ledger.delete.confirm')

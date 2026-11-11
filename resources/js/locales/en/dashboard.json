@@ -2,6 +2,7 @@
     "dashboard": {
         "title": "Dashboard",
         "add": "Add widget",
+        "loadError": "Your dashboard could not be loaded. Your saved widgets are safe.",
         "catalog": {
             "envelope_spending": {
                 "name": "Envelope spending",
@@ -71,10 +72,8 @@
             "addGroup": "Add group",
             "groupName": "Group name",
             "groupNamePlaceholder": "e.g. Combine income",
-            "groupMember": "Member",
             "noEnvelopesLeft": "Every visible envelope is already selected.",
             "removeItem": "Remove from selection",
-            "renameGroup": "Rename group",
             "done": "Done"
         },
         "empty": {
@@ -96,13 +95,6 @@
         "history": {
             "revenue": "Revenue",
             "expenses": "Expenses"
-        },
-        "spending": {
-            "envelope": "Envelope",
-            "spent": "Spent"
-        },
-        "radial": {
-            "legendTitle": "Selection"
         }
     }
 }

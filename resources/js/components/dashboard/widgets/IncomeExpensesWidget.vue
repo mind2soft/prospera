@@ -1,18 +1,19 @@
 <script setup lang="ts">
 import { CurveType } from '@unovis/ts';
-import {
-    VisArea,
-    VisAxis,
-    VisCrosshair,
-    VisLine,
-    VisStackedBar,
-    VisTooltip,
-    VisXYContainer,
-} from '@unovis/vue';
+// Per-component entry points: the @unovis/vue barrel is flagged as having
+// side effects, so importing from it bundles every chart, map and graph.
+import VisArea from '@unovis/vue/components/area';
+import VisAxis from '@unovis/vue/components/axis';
+import VisCrosshair from '@unovis/vue/components/crosshair';
+import VisLine from '@unovis/vue/components/line';
+import VisStackedBar from '@unovis/vue/components/stacked-bar';
+import VisTooltip from '@unovis/vue/components/tooltip';
+import VisXYContainer from '@unovis/vue/containers/xy-container';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useLocale } from '@/composables/useLocale';
 import { formatMoney } from '@/lib/budget';
+import { escapeHtml } from '@/lib/html';
 import { isClient } from '@/lib/ssr';
 import type { DashboardHistoryBucket, DashboardWidgetData } from '@/types';
 
@@ -114,16 +115,16 @@ const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
     const row = (label: string, color: string, amount: number | null): string =>
         `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;">
             <span style="display:flex;align-items:center;gap:6px;">
-                <span style="width:6px;height:6px;border-radius:9999px;background:${color};flex:none;"></span>
-                <span style="color:var(--muted-foreground);">${label}</span>
+                <span style="width:6px;height:6px;border-radius:9999px;background:${escapeHtml(color)};flex:none;"></span>
+                <span style="color:var(--muted-foreground);">${escapeHtml(label)}</span>
             </span>
-            <strong style="font-variant-numeric:tabular-nums;">${
-                amount === null ? '•••' : formatMoney(amount, props.currency)
-            }</strong>
+            <strong style="font-variant-numeric:tabular-nums;">${escapeHtml(
+                amount === null ? '•••' : formatMoney(amount, props.currency),
+            )}</strong>
         </div>`;
 
     return `<div style="font-size:12px;min-width:160px;">
-        <div style="font-weight:600;margin-bottom:6px;">${formatBucket(datum.bucket)}</div>
+        <div style="font-weight:600;margin-bottom:6px;">${escapeHtml(formatBucket(datum.bucket))}</div>
         ${row(t('dashboard.history.revenue'), REVENUE_COLOR, datum.revenue)}
         ${row(t('dashboard.history.expenses'), EXPENSE_COLOR, datum.expenses)}
     </div>`;

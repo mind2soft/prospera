@@ -153,7 +153,7 @@ the Share drawer):
   the income/expenses series is masked entirely when any selected envelope
   is masked.
 
-## API (auth + CSRF; vue-query everywhere)
+## API (auth + CSRF; TanStack Query everywhere)
 
 | Method   | Path                                                 | Description                                                                                                     |
 | -------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |

@@ -1,4 +1,8 @@
 import { api, setResourceShare } from '@/lib/api';
+import * as ledgers from '@/routes/api/ledgers';
+import * as ledgerShares from '@/routes/api/ledgers/shares';
+import * as ledgerTransactions from '@/routes/api/ledgers/transactions';
+import * as transactions from '@/routes/api/transactions';
 import type { Ledger, ResourceMember, Transaction } from '@/types';
 
 export type CreateLedgerInput = {
@@ -26,19 +30,17 @@ export type PickerEnvelope = {
 
 export const ledgerApi = {
     list: (profileId: number): Promise<{ ledgers: Ledger[] }> =>
-        api(`/api/ledgers?profile_id=${profileId}`),
+        api(ledgers.index({ query: { profile_id: profileId } })),
 
     create: (input: CreateLedgerInput): Promise<{ ledger: Ledger }> =>
-        api('/api/ledgers', { method: 'POST', body: input }),
+        api(ledgers.store(), { body: input }),
 
-    destroy: (id: number): Promise<void> =>
-        api(`/api/ledgers/${id}`, { method: 'DELETE' }),
+    destroy: (id: number): Promise<void> => api(ledgers.destroy(id)),
 
-    close: (id: number): Promise<{ ledger: Ledger }> =>
-        api(`/api/ledgers/${id}/close`, { method: 'POST' }),
+    close: (id: number): Promise<{ ledger: Ledger }> => api(ledgers.close(id)),
 
     reopen: (id: number): Promise<{ ledger: Ledger }> =>
-        api(`/api/ledgers/${id}/reopen`, { method: 'POST' }),
+        api(ledgers.reopen(id)),
 
     transactions: (
         id: number,
@@ -46,33 +48,39 @@ export const ledgerApi = {
         toDate: string,
     ): Promise<{ transactions: Transaction[] }> =>
         api(
-            `/api/ledgers/${id}/transactions?from_date=${fromDate}&to_date=${toDate}`,
+            ledgerTransactions.index(id, {
+                query: { from_date: fromDate, to_date: toDate },
+            }),
         ),
 
     addTransaction: (
         id: number,
         input: AddTransactionInput,
     ): Promise<{ transaction: Transaction }> =>
-        api(`/api/ledgers/${id}/transactions`, { method: 'POST', body: input }),
+        api(ledgerTransactions.store(id), { body: input }),
 
     destroyTransaction: (transactionId: number): Promise<void> =>
-        api(`/api/transactions/${transactionId}`, { method: 'DELETE' }),
+        api(transactions.destroy(transactionId)),
 
     shares: (id: number): Promise<{ shares: ResourceMember[] }> =>
-        api(`/api/ledgers/${id}/shares`),
+        api(ledgerShares.index(id)),
 
     setShare: (id: number, userId: number, permission: string): Promise<void> =>
-        setResourceShare(`/api/ledgers/${id}/shares`, userId, permission),
+        setResourceShare(
+            {
+                update: ledgerShares.update({ ledger: id, userId }),
+                store: ledgerShares.store(id),
+            },
+            userId,
+            permission,
+        ),
 
     removeShare: (id: number, userId: number): Promise<void> =>
-        api(`/api/ledgers/${id}/shares/${userId}`, { method: 'DELETE' }),
+        api(ledgerShares.destroy({ ledger: id, userId })),
 
     transferOwnership: (
         id: number,
         userId: number,
     ): Promise<{ ledger: Ledger }> =>
-        api(`/api/ledgers/${id}/transfer-ownership`, {
-            method: 'POST',
-            body: { user_id: userId },
-        }),
+        api(ledgers.transferOwnership(id), { body: { user_id: userId } }),
 };

@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { update } from '@/routes/notifications';
 
 /**
  * The user's email notification preferences — mirrors the storage shape of
@@ -18,8 +19,5 @@ export const notificationApi = {
     update: (
         settings: NotificationSettings,
     ): Promise<{ settings: NotificationSettings }> =>
-        api('/settings/notifications', {
-            method: 'PATCH',
-            body: settings,
-        }),
+        api(update(), { body: settings }),
 };

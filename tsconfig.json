@@ -118,6 +118,11 @@
         // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
         "skipLibCheck": true /* Skip type checking all .d.ts files. */
     },
+    "vueCompilerOptions": {
+        // Unresolved components (a missing import) fail the type check
+        // instead of rendering as unknown native elements.
+        "checkUnknownComponents": true
+    },
     "include": [
         "resources/js/**/*.ts",
         "resources/js/**/*.d.ts",

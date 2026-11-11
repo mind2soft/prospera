@@ -13,6 +13,8 @@
             "envelopeAdded": "Envelope added.",
             "envelopeRemoved": "Envelope removed."
         },
+        "loadError": "Your budgets could not be loaded.",
+        "detailLoadError": "This budget could not be loaded.",
         "empty": {
             "title": "Create your first budget",
             "description": "Start with a draft: pick your currency, add your envelopes, then publish when it feels right.",
@@ -79,7 +81,6 @@
             "publishTitle": "Publish this budget?",
             "publishDescription": "Publishing stamps this budget for the current month and puts it in read-only mode. This cannot be undone.",
             "publishDescriptionWithReplace": "Publishing stamps this budget for the current month and puts it in read-only mode. This cannot be undone. An existing published budget for this month will be replaced.",
-            "replaceWarning": "An existing published budget for this month will be replaced.",
             "deleteTitle": "Delete this budget?",
             "deleteDescription": "This permanently removes the budget with all of its envelope assignments and shares.",
             "publishButton": "Publish",
