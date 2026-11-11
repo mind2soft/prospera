@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Validation\ValidationException;
 
 /**
  * @property int $id
@@ -87,5 +88,19 @@ class Budget extends Model implements HasImmutableColumns
     public function isDraft(): bool
     {
         return $this->published_at === null;
+    }
+
+    /**
+     * Guard draft-only edits (published budgets are read-only).
+     *
+     * @throws ValidationException
+     */
+    public function ensureDraft(): void
+    {
+        if (! $this->isDraft()) {
+            throw ValidationException::withMessages([
+                'budget' => __('Only draft budgets can be modified.'),
+            ]);
+        }
     }
 }

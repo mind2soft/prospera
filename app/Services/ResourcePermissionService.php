@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\FinancialProfile;
 use App\Models\User;
-use Illuminate\Http\Request;
+use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -91,79 +91,54 @@ final class ResourcePermissionService
     }
 
     /**
-     * Validate a grant payload {user_id, permission} for a profile-scoped
-     * resource: the target must be a member of the profile and the permission
-     * grantable ("owner" is reserved for transfer-ownership).
+     * The target of a grant or transfer on a profile-scoped resource
+     * (budgets, ledgers): a member of the resource's profile.
      *
-     * @return array{user_id: int, permission: string}
+     * @throws ValidationException
      */
-    public function validateProfilePermission(Request $request, FinancialProfile $profile): array
+    public function profileMember(FinancialProfile $profile, int $userId): User
     {
-        $validated = $this->validatePayload($request);
-
-        /** @var User|null $target */
-        $target = User::query()->find($validated['user_id']);
-
-        if ($target === null || ! $profile->isMember($target)) {
-            throw ValidationException::withMessages([
-                'user_id' => __('The target user must be a member of the profile.'),
-            ]);
-        }
-
-        return [
-            'user_id' => (int) $validated['user_id'],
-            'permission' => $validated['permission'],
-        ];
+        return $this->eligibleTarget(
+            $userId,
+            fn (User $target): bool => $profile->isMember($target),
+            __('The target user must be a member of the profile.'),
+        );
     }
 
     /**
-     * Validate a grant payload for a user-owned resource: the target must be
-     * a member of the owner's profiles.
+     * The target of a grant or transfer on a user-owned resource
+     * (envelopes): a member of the owner's profiles.
      *
-     * @return array{user_id: int, permission: string}
+     * @throws ValidationException
      */
-    public function validateOwnedPermission(Request $request, User $owner): array
+    public function ownerCoMember(User $owner, int $userId): User
     {
-        $validated = $this->validatePayload($request);
-
-        /** @var User|null $target */
-        $target = User::query()->find($validated['user_id']);
-
-        if ($target === null || ! FinancialProfile::membersShareAProfile($owner, $target)) {
-            throw ValidationException::withMessages([
-                'user_id' => __('The target user must share a profile with the envelope owner.'),
-            ]);
-        }
-
-        return [
-            'user_id' => (int) $validated['user_id'],
-            'permission' => $validated['permission'],
-        ];
+        return $this->eligibleTarget(
+            $userId,
+            fn (User $target): bool => FinancialProfile::membersShareAProfile($owner, $target),
+            __('The target user must share a profile with the envelope owner.'),
+        );
     }
 
     /**
-     * Validate a permission-only payload ("owner" is rejected — use
-     * transfer-ownership).
+     * An ownership-transfer target must not be the current owner.
+     *
+     * @throws ValidationException
      */
-    public function validatePermission(Request $request): string
+    public function ensureNotOwner(User $target, User $currentOwner, string $message): User
     {
-        $validated = $request->validate([
-            'permission' => ['required', 'string'],
-        ]);
-
-        if (! ResourcePermissions::isGrantable($validated['permission'])) {
-            throw ValidationException::withMessages([
-                'permission' => __('The "owner" permission cannot be granted — use transfer-ownership.'),
-            ]);
+        if ($target->id === $currentOwner->id) {
+            throw ValidationException::withMessages(['user_id' => $message]);
         }
 
-        return $validated['permission'];
+        return $target;
     }
 
     /**
-     * Grant a share row after validation (no duplicates).
+     * Grant a share row after validation (no duplicates: $duplicateMessage
+     * is reported on `user_id`).
      */
-    public function createPermission(string $shareTable, string $resourceColumn, int $resourceId, int $userId, string $permission, string $resourceLabel): void
+    public function createPermission(string $shareTable, string $resourceColumn, int $resourceId, int $userId, string $permission, string $duplicateMessage): void
     {
         $exists = DB::table($shareTable)
             ->where($resourceColumn, $resourceId)
@@ -172,7 +147,7 @@ final class ResourcePermissionService
 
         if ($exists) {
             throw ValidationException::withMessages([
-                'user_id' => __('This :resource is already shared with this user.', ['resource' => $resourceLabel]),
+                'user_id' => $duplicateMessage,
             ]);
         }
 
@@ -239,77 +214,19 @@ final class ResourcePermissionService
     }
 
     /**
-     * Validate a {user_id} ownership-transfer target for a profile-scoped
-     * resource: an existing member other than the current owner.
+     * @param  Closure(User): bool  $eligible
+     *
+     * @throws ValidationException
      */
-    public function validateProfileTransferTarget(Request $request, FinancialProfile $profile, User $currentOwner, string $resourceLabel): User
+    private function eligibleTarget(int $userId, Closure $eligible, string $message): User
     {
-        $validated = $request->validate([
-            'user_id' => ['required', 'integer'],
-        ]);
-
         /** @var User|null $target */
-        $target = User::query()->find($validated['user_id']);
+        $target = User::query()->find($userId);
 
-        if ($target === null || ! $profile->isMember($target)) {
-            throw ValidationException::withMessages([
-                'user_id' => __('The target user must be a member of the profile.'),
-            ]);
-        }
-
-        if ($target->id === $currentOwner->id) {
-            throw ValidationException::withMessages([
-                'user_id' => __('You already own this :resource.', ['resource' => $resourceLabel]),
-            ]);
+        if ($target === null || ! $eligible($target)) {
+            throw ValidationException::withMessages(['user_id' => $message]);
         }
 
         return $target;
-    }
-
-    /**
-     * Validate a {user_id} ownership-transfer target for a user-owned
-     * resource: a member of the owner's profiles other than the owner.
-     */
-    public function validateOwnedTransferTarget(Request $request, User $owner): User
-    {
-        $validated = $request->validate([
-            'user_id' => ['required', 'integer'],
-        ]);
-
-        /** @var User|null $target */
-        $target = User::query()->find($validated['user_id']);
-
-        if ($target === null || ! FinancialProfile::membersShareAProfile($owner, $target)) {
-            throw ValidationException::withMessages([
-                'user_id' => __('The target user must share a profile with the envelope owner.'),
-            ]);
-        }
-
-        if ($target->id === $owner->id) {
-            throw ValidationException::withMessages([
-                'user_id' => __('This user already owns this envelope.'),
-            ]);
-        }
-
-        return $target;
-    }
-
-    /**
-     * @return array{user_id: mixed, permission: string}
-     */
-    private function validatePayload(Request $request): array
-    {
-        $validated = $request->validate([
-            'user_id' => ['required', 'integer'],
-            'permission' => ['required', 'string'],
-        ]);
-
-        if (! ResourcePermissions::isGrantable($validated['permission'])) {
-            throw ValidationException::withMessages([
-                'permission' => __('The "owner" permission cannot be granted — use transfer-ownership.'),
-            ]);
-        }
-
-        return $validated;
     }
 }

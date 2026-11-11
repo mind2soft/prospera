@@ -2,6 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Budget\CloneBudgetRequest;
+use App\Http\Requests\Budget\PublishBudgetRequest;
+use App\Http\Requests\Budget\StoreBudgetEnvelopeRequest;
+use App\Http\Requests\Budget\StoreBudgetRequest;
+use App\Http\Requests\Budget\UpdateBudgetEnvelopeRequest;
+use App\Http\Requests\Sharing\StoreShareRequest;
+use App\Http\Requests\Sharing\TransferOwnershipRequest;
+use App\Http\Requests\Sharing\UpdateShareRequest;
 use App\Models\Budget;
 use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
@@ -14,7 +22,6 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class BudgetController extends Controller
@@ -32,7 +39,7 @@ class BudgetController extends Controller
     public function index(Request $request): JsonResponse
     {
         if ($request->filled('profile_id')) {
-            $this->authorizeProfile($request, (int) $request->query('profile_id'));
+            $this->authorizeProfileId((int) $request->query('profile_id'));
 
             $query = Budget::query()->where('profile_id', (int) $request->query('profile_id'));
         } else {
@@ -56,14 +63,11 @@ class BudgetController extends Controller
      * the creator becomes the budget owner). The profile row is locked so
      * the one-draft-per-profile rule cannot race.
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreBudgetRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'profile_id' => ['required', 'integer'],
-            'currency' => ['required', 'string', 'size:3', 'alpha'],
-        ]);
+        $validated = $request->validated();
 
-        $profile = $this->authorizeProfile($request, (int) $validated['profile_id'], ownerOnly: true);
+        $profile = $this->authorizeProfileId((int) $validated['profile_id'], 'manage');
 
         $budget = DB::transaction(function () use ($request, $profile, $validated): Budget {
             FinancialProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
@@ -95,7 +99,7 @@ class BudgetController extends Controller
      */
     public function show(Request $request, Budget $budget): JsonResponse
     {
-        $this->authorize($request, $budget, ResourcePermissions::VIEWER);
+        $this->authorize('view', $budget);
 
         return response()->json([
             'budget' => $this->serializeDetail($budget, $request->user()),
@@ -110,25 +114,14 @@ class BudgetController extends Controller
      * replaces profile-wide data, so it requires both budget ownership and
      * profile ownership.
      */
-    public function publish(Request $request, Budget $budget): JsonResponse
+    public function publish(PublishBudgetRequest $request, Budget $budget): JsonResponse
     {
-        $this->authorize($request, $budget, ResourcePermissions::OWNER);
-        $this->authorizeProfile($request, $budget->profile, ownerOnly: true);
-
-        if (! $budget->isDraft()) {
-            throw ValidationException::withMessages([
-                'budget' => __('This budget is already published.'),
-            ]);
-        }
-
         // The current month is the user's, not the server's (UTC): near a
         // month boundary they differ, and publishing replaces — deletes —
         // the published budget of the stamped month.
         $today = LocalCalendar::fromRequest($request)->today();
 
-        $validated = $request->validate([
-            'month' => ['sometimes', 'nullable', 'date_format:Y-m'],
-        ]);
+        $validated = $request->validated();
 
         // The client may state the month it means to publish for: a
         // mismatch (e.g. a dialog left open across midnight) is refused
@@ -179,20 +172,9 @@ class BudgetController extends Controller
      * Clone a published budget into a new draft (profile owner only — the
      * draft occupies the profile's single draft slot).
      */
-    public function clone(Request $request, Budget $budget): JsonResponse
+    public function clone(CloneBudgetRequest $request, Budget $budget): JsonResponse
     {
-        $this->authorize($request, $budget, ResourcePermissions::VIEWER);
-        $this->authorizeProfile($request, $budget->profile, ownerOnly: true);
-
-        if ($budget->isDraft()) {
-            throw ValidationException::withMessages([
-                'budget' => __('Only published budgets can be cloned.'),
-            ]);
-        }
-
-        $validated = $request->validate([
-            'currency' => ['sometimes', 'string', 'size:3', 'alpha'],
-        ]);
+        $validated = $request->validated();
 
         $draft = DB::transaction(function () use ($request, $budget, $validated): Budget {
             FinancialProfile::query()->whereKey($budget->profile_id)->lockForUpdate()->firstOrFail();
@@ -234,9 +216,9 @@ class BudgetController extends Controller
     /**
      * Delete a budget (cascades its shares and envelope assignments).
      */
-    public function destroy(Request $request, Budget $budget): JsonResponse
+    public function destroy(Budget $budget): JsonResponse
     {
-        $this->authorize($request, $budget, ResourcePermissions::OWNER);
+        $this->authorize('delete', $budget);
 
         $budget->delete();
 
@@ -248,16 +230,9 @@ class BudgetController extends Controller
      * permission on the envelope (their own, or shared with them as
      * contributor); metadata-only envelopes cannot be assigned.
      */
-    public function addEnvelope(Request $request, Budget $budget): JsonResponse
+    public function addEnvelope(StoreBudgetEnvelopeRequest $request, Budget $budget): JsonResponse
     {
-        $this->authorize($request, $budget, ResourcePermissions::OWNER);
-        $this->abortUnlessDraft($budget);
-
-        $validated = $request->validate([
-            'envelope_id' => ['required', 'integer'],
-            'type' => ['required', 'string', Rule::in(BudgetEnvelope::TYPES)],
-            'amount' => ['required', 'integer', 'min:1', 'max:999999999'],
-        ]);
+        $validated = $request->validated();
 
         /** @var Envelope|null $envelope */
         $envelope = Envelope::query()->find($validated['envelope_id']);
@@ -303,15 +278,9 @@ class BudgetController extends Controller
     /**
      * Update the amount (and type) of an assigned envelope.
      */
-    public function updateEnvelope(Request $request, Budget $budget, int $envelopeId): JsonResponse
+    public function updateEnvelope(UpdateBudgetEnvelopeRequest $request, Budget $budget, int $envelopeId): JsonResponse
     {
-        $this->authorize($request, $budget, ResourcePermissions::OWNER);
-        $this->abortUnlessDraft($budget);
-
-        $validated = $request->validate([
-            'amount' => ['required', 'integer', 'min:1', 'max:999999999'],
-            'type' => ['sometimes', 'string', Rule::in(BudgetEnvelope::TYPES)],
-        ]);
+        $validated = $request->validated();
 
         $assignment = DB::transaction(function () use ($budget, $envelopeId, $validated): BudgetEnvelope {
             $this->lockDraft($budget);
@@ -337,10 +306,10 @@ class BudgetController extends Controller
     /**
      * Remove an envelope assignment from a draft budget.
      */
-    public function removeEnvelope(Request $request, Budget $budget, int $envelopeId): JsonResponse
+    public function removeEnvelope(Budget $budget, int $envelopeId): JsonResponse
     {
-        $this->authorize($request, $budget, ResourcePermissions::OWNER);
-        $this->abortUnlessDraft($budget);
+        $this->authorize('update', $budget);
+        $budget->ensureDraft();
 
         DB::transaction(function () use ($budget, $envelopeId): void {
             $this->lockDraft($budget);
@@ -357,9 +326,9 @@ class BudgetController extends Controller
     /**
      * List the profile's members with their permission on the budget.
      */
-    public function permissionsIndex(Request $request, Budget $budget): JsonResponse
+    public function permissionsIndex(Budget $budget): JsonResponse
     {
-        $this->authorize($request, $budget, ResourcePermissions::VIEWER);
+        $this->authorize('view', $budget);
 
         return response()->json([
             'shares' => $this->permissionService->profilePermissions($budget->profile, 'budget_permissions', 'budget_id', $budget->id),
@@ -370,13 +339,11 @@ class BudgetController extends Controller
      * Assign a permission to a profile member ("owner" is rejected — use
      * transfer-ownership).
      */
-    public function addPermission(Request $request, Budget $budget): JsonResponse
+    public function addPermission(StoreShareRequest $request, Budget $budget): JsonResponse
     {
-        $this->authorize($request, $budget, ResourcePermissions::OWNER);
+        $target = $this->permissionService->profileMember($budget->profile, $request->targetId());
 
-        $validated = $this->permissionService->validateProfilePermission($request, $budget->profile);
-
-        $this->permissionService->createPermission('budget_permissions', 'budget_id', $budget->id, $validated['user_id'], $validated['permission'], 'budget');
+        $this->permissionService->createPermission('budget_permissions', 'budget_id', $budget->id, $target->id, $request->permission(), __('This budget is already shared with this user.'));
 
         return response()->json(status: 201);
     }
@@ -385,13 +352,9 @@ class BudgetController extends Controller
      * Change a member's permission ("owner" is rejected — use
      * transfer-ownership).
      */
-    public function updatePermission(Request $request, Budget $budget, int $userId): JsonResponse
+    public function updatePermission(UpdateShareRequest $request, Budget $budget, int $userId): JsonResponse
     {
-        $this->authorize($request, $budget, ResourcePermissions::OWNER);
-
-        $permission = $this->permissionService->validatePermission($request);
-
-        $this->permissionService->updatePermission('budget_permissions', 'budget_id', $budget->id, $userId, $permission);
+        $this->permissionService->updatePermission('budget_permissions', 'budget_id', $budget->id, $userId, $request->permission());
 
         return response()->json([
             'shares' => $this->permissionService->profilePermissions($budget->profile, 'budget_permissions', 'budget_id', $budget->id),
@@ -401,9 +364,9 @@ class BudgetController extends Controller
     /**
      * Revoke a share.
      */
-    public function removePermission(Request $request, Budget $budget, int $userId): JsonResponse
+    public function removePermission(Budget $budget, int $userId): JsonResponse
     {
-        $this->authorize($request, $budget, ResourcePermissions::OWNER);
+        $this->authorize('share', $budget);
 
         $this->permissionService->deletePermission('budget_permissions', 'budget_id', $budget->id, $userId);
 
@@ -414,36 +377,17 @@ class BudgetController extends Controller
      * Transfer ownership to a member; the previous owner becomes a
      * contributor.
      */
-    public function transferOwnership(Request $request, Budget $budget): JsonResponse
+    public function transferOwnership(TransferOwnershipRequest $request, Budget $budget): JsonResponse
     {
-        $this->authorize($request, $budget, ResourcePermissions::OWNER);
-
-        $target = $this->permissionService->validateProfileTransferTarget($request, $budget->profile, $request->user(), 'budget');
+        $target = $this->permissionService->ensureNotOwner(
+            $this->permissionService->profileMember($budget->profile, $request->targetId()),
+            $request->user(),
+            __('You already own this budget.'),
+        );
 
         $budget->transferOwnershipTo($target);
 
         return response()->json(['budget' => $this->serializeBudget($budget->refresh(), $request->user())]);
-    }
-
-    /**
-     * Ensure the current user has at least the required permission on the
-     * budget.
-     */
-    private function authorize(Request $request, Budget $budget, string $minimum): string
-    {
-        return $this->permissions->authorize(
-            $budget->permissionFor($request->user()),
-            $minimum,
-        );
-    }
-
-    private function abortUnlessDraft(Budget $budget): void
-    {
-        if (! $budget->isDraft()) {
-            throw ValidationException::withMessages([
-                'budget' => __('Only draft budgets can be modified.'),
-            ]);
-        }
     }
 
     /**
@@ -454,9 +398,7 @@ class BudgetController extends Controller
      */
     private function lockDraft(Budget $budget): void
     {
-        $this->abortUnlessDraft(
-            Budget::query()->whereKey($budget->id)->lockForUpdate()->firstOrFail(),
-        );
+        Budget::query()->whereKey($budget->id)->lockForUpdate()->firstOrFail()->ensureDraft();
     }
 
     private function abortIfDraftExists(int $profileId): void

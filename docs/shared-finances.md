@@ -224,6 +224,15 @@ type ResourcePermission = 'owner' | 'contributor' | 'viewer';
 - **Contributor** semantics are per resource type — see
   [Budget](budget.md), [Ledger](ledger.md) and [Envelope](envelope.md).
 
+The rules are enforced by the model policies in `app/Policies/`
+(`FinancialProfilePolicy`, `BudgetPolicy`, `LedgerPolicy`,
+`TransactionPolicy`, `EnvelopePolicy`, `DashboardWidgetPolicy`,
+`FinancialProfileInvitePolicy`), built on the models' `permissionFor()` and
+`ResourcePermissions::inspect()`. A resource the caller cannot see at all is
+a **404** (it stays invisible); one they can see but not act on is a
+**403**. Endpoints with a payload authorize in their Form Request
+(`app/Http/Requests/`), before the payload is validated.
+
 The **Share drawer** (Google Drive-like, `resources/js/components/share/ShareDrawer.vue`)
 is shared by the Budget, Ledger and Envelopes pages. It no longer invites
 users — it assigns permissions to existing **profile members** and allows

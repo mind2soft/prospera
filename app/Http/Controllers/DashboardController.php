@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Dashboard\SaveDashboardLayoutRequest;
 use App\Models\DashboardWidget;
 use App\Models\FinancialProfile;
 use App\Services\Dashboard\DashboardAggregator;
@@ -33,7 +34,7 @@ class DashboardController extends Controller
      */
     public function index(Request $request, FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile);
+        $this->authorize('view', $profile);
 
         $widgets = DashboardWidget::forUserAndProfile(
             (int) $request->user()->id,
@@ -68,11 +69,9 @@ class DashboardController extends Controller
      * requests keep resolving); widgets without an id are created; ids
      * missing from the payload are removed.
      */
-    public function save(Request $request, FinancialProfile $profile): JsonResponse
+    public function save(SaveDashboardLayoutRequest $request, FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile);
-
-        $widgets = $this->layoutValidator->validate($request, $request->user());
+        $widgets = $request->widgets($this->layoutValidator);
 
         DB::transaction(function () use ($request, $profile, $widgets): void {
             $existing = DashboardWidget::query()
@@ -121,13 +120,9 @@ class DashboardController extends Controller
      * Remove one of the caller's widgets (destructive — the client asks for
      * confirmation).
      */
-    public function destroy(Request $request, FinancialProfile $profile, DashboardWidget $widget): JsonResponse
+    public function destroy(FinancialProfile $profile, DashboardWidget $widget): JsonResponse
     {
-        $this->authorizeProfile($request, $profile);
-
-        if (! $widget->isOwnedBy((int) $request->user()->id, $profile->id)) {
-            abort(404);
-        }
+        $this->authorize('delete', [$widget, $profile]);
 
         $widget->delete();
 
@@ -142,11 +137,7 @@ class DashboardController extends Controller
      */
     public function data(Request $request, FinancialProfile $profile, DashboardWidget $widget): JsonResponse
     {
-        $this->authorizeProfile($request, $profile);
-
-        if (! $widget->isOwnedBy((int) $request->user()->id, $profile->id)) {
-            abort(404);
-        }
+        $this->authorize('view', [$widget, $profile]);
 
         return response()->json(
             $this->aggregator->data(

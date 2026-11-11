@@ -5,7 +5,6 @@ namespace App\Services\Dashboard;
 use App\Models\DashboardWidget;
 use App\Models\Envelope;
 use App\Models\User;
-use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -35,19 +34,15 @@ final class DashboardLayoutValidator
      * in payload order. Widgets may carry their existing `id` — the save is
      * an in-place update for known ids (so server-side ids stay stable and
      * in-flight widget-data requests never 404 mid-flight), an insert for
-     * new ones.
+     * new ones. The payload shape itself (a bounded `widgets` array) is
+     * validated by SaveDashboardLayoutRequest.
      *
+     * @param  array<mixed>  $widgets
      * @return list<array{id?: int, type: string, title: string|null, view_type: string, column_width: int, period: array{type: string, range: int}, selection: list<array<string, mixed>>}>
      */
-    public function validate(Request $request, User $user): array
+    public function validate(array $widgets, User $user): array
     {
-        $validated = $request->validate([
-            'widgets' => ['required', 'array', 'max:'.self::MAX_WIDGETS],
-        ]);
-
-        $widgets = $validated['widgets'];
-
-        $visibleIds = $this->visibleEnvelopeIds($request, $user);
+        $visibleIds = $this->visibleEnvelopeIds($widgets, $user);
 
         $normalized = [];
         $seenWidgetIds = [];
@@ -75,11 +70,12 @@ final class DashboardLayoutValidator
      * The ids of the envelopes the requester can see (metadata visibility —
      * see the Envelope::visibleTo scope), keyed by id.
      *
+     * @param  array<mixed>  $widgets
      * @return array<int, int>
      */
-    private function visibleEnvelopeIds(Request $request, User $user): array
+    private function visibleEnvelopeIds(array $widgets, User $user): array
     {
-        $ids = $this->selectedEnvelopeIds($request);
+        $ids = $this->selectedEnvelopeIds($widgets);
 
         if ($ids === []) {
             return [];
@@ -97,13 +93,14 @@ final class DashboardLayoutValidator
      * Every envelope id referenced anywhere in the payload (envelope rows
      * and group members), for the single visibility query.
      *
+     * @param  array<mixed>  $widgets
      * @return list<int>
      */
-    private function selectedEnvelopeIds(Request $request): array
+    private function selectedEnvelopeIds(array $widgets): array
     {
         $ids = [];
 
-        foreach ((array) $request->input('widgets', []) as $widget) {
+        foreach ($widgets as $widget) {
             $selection = is_array($widget) ? ($widget['selection'] ?? null) : null;
 
             foreach (is_array($selection) ? $selection : [] as $item) {

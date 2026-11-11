@@ -3,27 +3,24 @@
 namespace App\Http\Controllers;
 
 use App\Models\FinancialProfile;
-use Illuminate\Http\Request;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 abstract class Controller
 {
+    use AuthorizesRequests;
+
     /**
-     * Resolve a profile the caller belongs to. Unknown profiles and
-     * non-members get a 404 (profiles are invisible to outsiders); members
-     * lacking ownership get a 403 when $ownerOnly is set.
+     * Resolve a profile passed by id (e.g. `profile_id` in a payload) and
+     * authorize the FinancialProfilePolicy ability on it. Unknown profiles
+     * and non-members get a 404 (profiles are invisible to outsiders).
      */
-    protected function authorizeProfile(Request $request, int|FinancialProfile $profile, bool $ownerOnly = false): FinancialProfile
+    protected function authorizeProfileId(int $profileId, string $ability = 'view'): FinancialProfile
     {
-        if (! $profile instanceof FinancialProfile) {
-            $profile = FinancialProfile::find($profile);
-        }
+        $profile = FinancialProfile::find($profileId);
 
         abort_if($profile === null, 404);
-        abort_unless($profile->isMember($request->user()), 404);
 
-        if ($ownerOnly) {
-            abort_unless($profile->isOwner($request->user()), 403);
-        }
+        $this->authorize($ability, $profile);
 
         return $profile;
     }

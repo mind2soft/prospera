@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Profile\StoreInviteRequest;
 use App\Mail\ProfileInvite;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileInvite;
@@ -13,7 +14,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -49,9 +49,9 @@ class FinancialProfileInviteController extends Controller
     /**
      * List the profile's pending (non-expired) invites (owner only).
      */
-    public function index(Request $request, FinancialProfile $profile): JsonResponse
+    public function index(FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile, ownerOnly: true);
+        $this->authorize('manage', $profile);
 
         $invites = FinancialProfileInvite::query()
             ->where('profile_id', $profile->id)
@@ -71,14 +71,9 @@ class FinancialProfileInviteController extends Controller
      * is re-issued; each share event sends a fresh email); existing members
      * cannot be invited.
      */
-    public function store(Request $request, FinancialProfile $profile): JsonResponse
+    public function store(StoreInviteRequest $request, FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile, ownerOnly: true);
-
-        $validated = $request->validate([
-            'email' => ['required', 'email', 'max:255'],
-            'role' => ['sometimes', 'string', Rule::in(FinancialProfileInvite::GRANTABLE_ROLES)],
-        ]);
+        $validated = $request->validated();
 
         $alreadyMember = $profile->members()
             ->whereRaw('lower(users.email) = ?', [mb_strtolower($validated['email'])])
@@ -121,10 +116,9 @@ class FinancialProfileInviteController extends Controller
     /**
      * Revoke a pending invite (owner only).
      */
-    public function destroy(Request $request, FinancialProfile $profile, FinancialProfileInvite $invite): JsonResponse
+    public function destroy(FinancialProfile $profile, FinancialProfileInvite $invite): JsonResponse
     {
-        $this->authorizeProfile($request, $profile, ownerOnly: true);
-        abort_unless($invite->profile_id === $profile->id, 404);
+        $this->authorize('delete', [$invite, $profile]);
 
         $invite->delete();
 
