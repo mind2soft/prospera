@@ -180,4 +180,8 @@ test('an expired invite link renders the explicit error state', async ({
     await expect(
         page.getByText('The invite link is invalid or has expired.'),
     ).toBeVisible();
+
+    // The way out actually works (it was a dead native <link> element).
+    await page.getByRole('link', { name: 'Go to dashboard' }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
 });
