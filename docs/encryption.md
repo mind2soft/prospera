@@ -124,7 +124,8 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
 ### Scheduler
 
 Data keys are rotated monthly and retired versions pruned daily. The
-production host must run the scheduler:
+production host must run the scheduler (it also runs the queue worker that
+sends the emails — see [Scheduled tasks](../README.md#scheduled-tasks)):
 
 ```cron
 * * * * * cd /path/to/current && php artisan schedule:run >> /dev/null 2>&1
@@ -348,6 +349,11 @@ scripts compare releases with the migrations the database actually ran
   8.4), checked on 2026-11-02: the docroot is `current/public`,
   `realpath_cache_ttl` is 120 and OPcache is not loaded; the web handler's
   process model could not be inspected, so the default wait applies.
+- After switching `current` (and after reverting it), the deploy and the
+  rollback run `php artisan queue:restart` from the live release, so
+  long-lived queue workers exit after their current job instead of running
+  the replaced release's code on the new schema. A failure only warns: the
+  switch is done; restart the workers by hand.
 - After migrating (or failing to), the deploy records the migrations the
   database ran in `shared/schema-migrations`.
 - `scripts/ci/rollback-production.sh` only switches to a release shipping

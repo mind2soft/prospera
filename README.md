@@ -132,9 +132,29 @@ contact-form submission log is pruned daily (`php artisan contact:prune`,
 retention configurable via `CONTACT_LOG_RETENTION_DAYS`), amount encryption
 keys are rotated monthly (`php artisan amounts:rotate-keys --all`),
 retired keys pruned daily (`php artisan amounts:prune-keys`) and a daily
-`php artisan amounts:verify` re-checks that every amount still decrypts. In
-production, run the scheduler (`php artisan schedule:run` every minute via
-cron).
+`php artisan amounts:verify` re-checks that every amount still decrypts.
+
+Emails (profile invitations, contact messages) are queued on the `database`
+queue. In production there is no long-lived worker (shared hosting): the
+scheduler runs `php artisan queue:work --stop-when-empty --max-time=50` every
+minute, in the background and without overlapping, and failed jobs are pruned
+after 30 days (`queue:prune-failed --hours=720`). Mails retry 5 times with a
+backoff, then land in `failed_jobs` and the log (`php artisan queue:failed`,
+`php artisan queue:retry all`).
+
+**In production, the scheduler is mandatory** — without it no email is ever
+sent and no key rotates. Install this crontab entry for the deploy user once
+(it follows the `current` release link, so it survives deploys):
+
+```cron
+* * * * * cd /path/to/app/current && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Deploys and rollbacks run `php artisan queue:restart` after switching
+releases, so a long-lived worker — if a host runs one instead, e.g. under
+systemd or supervisor with `php artisan queue:work --tries=3 --max-time=3600`
+— never keeps serving the replaced release's code. Remove the scheduled
+`queue:work` from `routes/console.php` on such a host.
 
 ### Encryption at rest
 

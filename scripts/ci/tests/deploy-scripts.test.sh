@@ -363,6 +363,28 @@ rm -f "$APP/previous"
 rc=$(deploy HEALTH_EXIT=22)
 expect "deploy: a failed deploy's maintenance is kept when the fix fails too" "$rc $(live) $(maintenance)" '1 new on'
 
+# --- queue workers ----------------------------------------------------------
+
+setup
+rc=$(deploy)
+expect 'deploy: queue workers are restarted from the new release, after the switch and before the health check' \
+    "$rc $(grep -c '^new artisan queue:restart$' "$WORK/log") $(before "$(at ' artisan view:cache')" "$(at ' queue:restart')") $(before "$(at ' queue:restart')" "$(at '^curl new')")" '0 1 yes yes'
+
+setup
+rc=$(deploy FAIL=queue:restart)
+expect 'deploy: a failing queue:restart only warns' \
+    "$rc $(live) $(maintenance) $(grep -c 'restart the queue workers by hand' "$WORK/out")" '0 new off 1'
+
+setup
+rc=$(deploy DB_DOWN=1)
+expect 'deploy: a refused deploy restarts no queue worker' "$rc $(ran 'queue:restart')" '1 no'
+
+setup
+rm "$WORK/pkg/database/migrations/b.php"
+rc=$(deploy HEALTH_EXIT=22)
+expect 'deploy: a reverted deploy restarts the queue workers on the restored release' \
+    "$rc $(live) $(grep -c '^old artisan queue:restart$' "$WORK/log")" '1 old 1'
+
 # --- PHP's realpath cache: wait before lifting maintenance or probing ------
 
 setup
@@ -607,6 +629,22 @@ setup_rollback() {
     ln -sfn "$APP/releases/old" "$APP/previous"
     printf 'a\nb\n' > "$WORK/ran"
 }
+
+setup_rollback
+release "$APP/releases/old" '' a b
+rc=$(rollback)
+expect 'rollback: queue workers are restarted from the target release, before the health check' \
+    "$rc $(live) $(grep -c '^old artisan queue:restart$' "$WORK/log") $(before "$(at ' queue:restart')" "$(at '^curl old')")" '0 old 1 yes'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+rc=$(rollback HEALTH_EXIT=22)
+expect 'rollback: a failed health check restarts the queue workers on the restored release' \
+    "$rc $(live) $(grep -c '^new artisan queue:restart$' "$WORK/log")" '1 new 1'
+
+setup_rollback
+rc=$(rollback)
+expect 'rollback: a refused rollback restarts no queue worker' "$rc $(ran 'queue:restart')" '1 no'
 
 setup_rollback
 rc=$(rollback)
