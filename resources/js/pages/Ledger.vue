@@ -481,7 +481,7 @@ const onRemoveTransaction = (transactionId: number) => {
             />
 
             <div class="grid items-start gap-6 lg:grid-cols-[auto_1fr]">
-                <div class="sticky top-4 lg:top-8">
+                <div class="lg:sticky lg:top-8">
                     <MonthCalendar
                         :selected-date="selectedDate"
                         :view-month="viewMonth"
