@@ -127,10 +127,11 @@ test('the appearance switch exposes the selected theme', async ({ page }) => {
     await expect(system).not.toBeChecked();
     await expect(page.locator('html')).toHaveClass(/dark/);
 
-    // Arrow keys move the selection (radio group behavior).
+    // Keyboard: arrow keys move between the options, Space selects.
     await dark.press('ArrowLeft');
-    await expect(light).toBeChecked();
     await expect(light).toBeFocused();
+    await page.keyboard.press('Space');
+    await expect(light).toBeChecked();
     await expect(page.locator('html')).not.toHaveClass(/dark/);
 
     const results = await new AxeBuilder({ page })
