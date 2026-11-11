@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Budget;
 use App\Models\DashboardWidget;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
@@ -174,6 +175,59 @@ class SharingLifecycleTest extends TestCase
             'amount' => 10,
             'event_at' => now()->toDateString(),
         ])->assertCreated();
+    }
+
+    // ------------------------------------------------------------------
+    // WF-7 — the draft budget follows profile ownership
+    // ------------------------------------------------------------------
+
+    public function test_the_draft_budget_follows_an_explicit_profile_transfer(): void
+    {
+        $draftId = $this->actingAs($this->alice)
+            ->postJson('/api/budgets', ['profile_id' => $this->profile->id, 'currency' => 'CAD'])
+            ->assertCreated()
+            ->json('budget.id');
+
+        $this->actingAs($this->alice)
+            ->postJson("/api/profiles/{$this->profile->id}/transfer-ownership", ['user_id' => $this->bob->id])
+            ->assertOk();
+
+        $draft = Budget::query()->findOrFail($draftId);
+        $this->assertSame(ResourcePermissions::OWNER, $draft->permissionFor($this->bob));
+        $this->assertSame(ResourcePermissions::CONTRIBUTOR, $draft->permissionFor($this->alice));
+
+        // The new profile owner is no longer deadlocked on the draft slot.
+        $this->actingAs($this->bob)->postJson("/api/budgets/{$draftId}/publish")->assertOk();
+    }
+
+    public function test_the_draft_budget_follows_the_ownership_hand_off_on_account_deletion(): void
+    {
+        $draftId = $this->actingAs($this->alice)
+            ->postJson('/api/budgets', ['profile_id' => $this->profile->id, 'currency' => 'CAD'])
+            ->assertCreated()
+            ->json('budget.id');
+
+        $this->actingAs($this->alice)
+            ->delete('/settings/account', ['password' => 'password'])
+            ->assertRedirect('/');
+
+        $this->actingAs($this->bob)->postJson("/api/budgets/{$draftId}/publish")->assertOk();
+    }
+
+    public function test_published_budgets_keep_their_owner_on_profile_transfer(): void
+    {
+        $published = Budget::create([
+            'profile_id' => $this->profile->id,
+            'currency' => 'CAD',
+            'effective_year' => now()->year,
+            'effective_month' => now()->month,
+            'published_at' => now(),
+        ]);
+        $published->permissions()->create(['user_id' => $this->alice->id, 'permission' => ResourcePermissions::OWNER]);
+
+        $this->profile->transferOwnershipTo($this->bob);
+
+        $this->assertSame(ResourcePermissions::OWNER, $published->fresh()->permissionFor($this->alice));
     }
 
     // ------------------------------------------------------------------

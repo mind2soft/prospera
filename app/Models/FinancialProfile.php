@@ -303,6 +303,12 @@ class FinancialProfile extends Model
     /**
      * Transfer ownership to the given member; every other owner row is
      * demoted so the profile always has exactly one owner.
+     *
+     * The profile's draft budget follows the profile ownership (the
+     * previous budget owner becomes contributor): publishing requires both
+     * budget and profile ownership and there is one draft slot per profile,
+     * so a draft left with the previous owner would block everyone
+     * (docs/budget.md — Ownership).
      */
     public function transferOwnershipTo(User $target): void
     {
@@ -314,6 +320,15 @@ class FinancialProfile extends Model
                 ->where('is_owner', true)
                 ->where('user_id', '!=', $target->id)
                 ->update(['is_owner' => false, 'updated_at' => now()]);
+
+            Budget::query()
+                ->where('profile_id', $this->id)
+                ->whereNull('published_at')
+                ->whereDoesntHave('permissions', fn (Builder $query) => $query
+                    ->where('user_id', $target->id)
+                    ->where('permission', ResourcePermissions::OWNER))
+                ->get()
+                ->each(fn (Budget $draft) => $draft->transferOwnershipTo($target));
         });
     }
 

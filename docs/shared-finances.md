@@ -165,7 +165,9 @@ voluntarily) or when their account is deleted. Auto-transfer edge cases:
 Ownership can also be transferred **explicitly** — by the owner, via the Share
 drawer (resources) or the Profiles page (profile) — to another member; the
 previous owner becomes `contributor` on a resource, or a **collaborator** on a
-profile (profiles only have an owner and collaborators). On an envelope
+profile (profiles only have an owner and collaborators). A profile ownership
+transfer also hands the profile's **draft budget** to the new profile owner
+(see [Budget](budget.md) — Ownership). On an envelope
 transfer, any permission row the new owner had on it is dropped. See [Budget](budget.md),
 [Ledger](ledger.md) and [Envelope](envelope.md).
 

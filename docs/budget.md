@@ -110,6 +110,13 @@ previous owner becomes `contributor`. When the owner is removed from the
 profile or their account is deleted, the budget auto-transfers to the profile
 owner (see [Shared Finances](shared-finances.md)).
 
+The **draft budget follows profile ownership**: when the profile changes owner
+(explicit transfer, or the hand-off on the owner's account deletion), the
+profile's draft is transferred to the new profile owner and its previous owner
+becomes `contributor`. Otherwise nobody could publish it (publishing needs
+both ownerships) and the single draft slot would block new drafts. Published
+budgets keep their owner.
+
 ### Referential integrity
 
 - Deleting a budget cascades its shares and envelope assignments. Transactions
