@@ -113,7 +113,7 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', onWindowMouseUp));
         <header class="flex items-center gap-1 px-3 pt-2.5">
             <button
                 type="button"
-                class="-ml-1 cursor-grab touch-none rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-muted/70 hover:text-foreground active:cursor-grabbing active:bg-muted active:text-foreground"
+                class="-ml-1 cursor-grab touch-none rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground active:cursor-grabbing active:bg-muted active:text-foreground"
                 :aria-label="t('dashboard.widget.reorder', { title })"
                 :aria-describedby="hintId"
                 :title="t('dashboard.widget.reorderHint')"
@@ -136,7 +136,7 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', onWindowMouseUp));
             <Button
                 variant="ghost"
                 size="icon-sm"
-                class="text-muted-foreground/70 opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100 hover:text-foreground focus-visible:opacity-100 pointer-coarse:opacity-100"
+                class="text-muted-foreground opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100 hover:text-foreground focus-visible:opacity-100 pointer-coarse:opacity-100"
                 :aria-label="t('dashboard.widget.settings')"
                 @click="emit('settings')"
             >
