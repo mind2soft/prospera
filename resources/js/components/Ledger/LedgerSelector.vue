@@ -76,7 +76,7 @@ const label = (ledger: Ledger): string => {
                             :class="
                                 isClosed
                                     ? 'bg-muted text-muted-foreground'
-                                    : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                    : 'bg-success/10 text-success'
                             "
                         >
                             <Icon

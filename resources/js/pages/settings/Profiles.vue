@@ -505,7 +505,7 @@ const joinedLabel = (joinedAt: string): string =>
                                     <Tooltip v-if="profile.is_default">
                                         <TooltipTrigger as-child>
                                             <span
-                                                class="grid shrink-0 place-items-center text-amber-500"
+                                                class="grid shrink-0 place-items-center text-warning"
                                                 data-test="default-profile-badge"
                                             >
                                                 <Icon

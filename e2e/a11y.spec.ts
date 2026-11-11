@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
 
 const LOGIN = {
@@ -104,4 +105,24 @@ test('empty-state headlines are solid text, not gradient-clipped', async ({
     await expect(headline).toBeVisible();
     await expect(headline).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
     await expect(headline).toHaveCSS('background-image', 'none');
+});
+
+test('budget status text meets contrast in both themes', async ({ page }) => {
+    await login(page);
+    for (const appearance of ['light', 'dark'] as const) {
+        // The default "system" appearance follows the color scheme.
+        await page.emulateMedia({ colorScheme: appearance });
+        await page.goto('/budget');
+        expect(
+            await page
+                .locator('html')
+                .evaluate((html) => html.classList.contains('dark')),
+        ).toBe(appearance === 'dark');
+        await expect(page.getByText('Left over')).toBeVisible();
+        const results = await new AxeBuilder({ page })
+            .include('tfoot')
+            .withRules(['color-contrast'])
+            .analyze();
+        expect(results.violations, appearance).toEqual([]);
+    }
 });

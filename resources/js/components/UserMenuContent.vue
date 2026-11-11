@@ -112,7 +112,7 @@ const menuProfiles = computed(() =>
                             <Icon
                                 v-if="profile.is_default"
                                 name="star"
-                                class="size-3.5 shrink-0 text-amber-500"
+                                class="size-3.5 shrink-0 text-warning"
                                 aria-hidden="true"
                                 data-test="default-profile-star"
                             />

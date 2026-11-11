@@ -32,6 +32,8 @@ isolated page. Keep all foreground/background pairs legible in both themes.
 | Secondary / on-secondary | `--secondary` / `--secondary-foreground`; `bg-secondary text-secondary-foreground` | Lower-emphasis contained surfaces and controls. |
 | Tertiary brand accent | `--brand` / `--brand-foreground`; `bg-brand text-brand-foreground` | Prospera's green accent where the brand itself is the message; do not use as a generic replacement for `primary`. |
 | Error / on-error | `--destructive` / `--destructive-foreground`; `bg-destructive text-destructive-foreground` | Errors and destructive actions only. |
+| Success (custom) | `--success` / `--success-foreground`; `text-success`, `bg-success/10` | Positive status only: a left-over budget, an open ledger, a sent confirmation. Pair with an icon or text. |
+| Warning (custom) | `--warning` / `--warning-foreground`; `text-warning`, `border-warning/40` | Cautionary notices (closed ledger, missing envelopes) and the default-profile marker. Pair with an icon or text. |
 | Surface / on-surface | `--background` / `--foreground`; `bg-background text-foreground` | Main page surface and default content. |
 | Surface container | `--card` / `--card-foreground`; `bg-card text-card-foreground` | Grouped content that needs a distinct container. |
 | Elevated surface | `--popover` / `--popover-foreground`; `bg-popover text-popover-foreground` | Menus, popovers, and floating dialog surfaces. |
@@ -47,6 +49,12 @@ container pair or the surface-container tonal ladder). If a component needs a
 missing semantic role, first decide whether it is genuinely needed; then add a
 named light/dark token pair in `app.css`, map it into Tailwind, and document its
 purpose here. Do not substitute an unrelated role just to avoid defining one.
+
+`--success`, `--warning`, `--destructive` and `--muted-foreground` are tuned
+to reach 4.5:1 as text on both `background` and `muted` in each theme; check
+again when changing them. Don't use raw palette classes (`text-emerald-600`,
+`text-amber-500`, `text-red-600`…) for status — they skip this layer and most
+of them fail contrast on white.
 
 ### Color behavior
 

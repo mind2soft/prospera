@@ -437,7 +437,8 @@ const roleLabel: Record<string, string> = {
                                         {{ $t('envelopes.menu.share') }}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
-                                        class="gap-2 text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
+                                        variant="destructive"
+                                        class="gap-2"
                                         @select="confirmDelete(envelope)"
                                     >
                                         <Icon

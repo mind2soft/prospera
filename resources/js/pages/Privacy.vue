@@ -101,7 +101,7 @@ const html = computed(() => {
                 </div>
 
                 <div
-                    class="mt-4 flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-muted-foreground"
+                    class="mt-4 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-muted-foreground"
                     data-test="privacy-wip"
                 >
                     {{ $t('privacy.wip') }}

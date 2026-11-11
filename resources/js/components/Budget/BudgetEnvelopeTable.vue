@@ -247,7 +247,7 @@ const runningLeft = computed(() => {
                                 :class="
                                     remaining < 0
                                         ? 'text-destructive'
-                                        : 'text-emerald-600 dark:text-emerald-400'
+                                        : 'text-success'
                                 "
                             >
                                 <Icon

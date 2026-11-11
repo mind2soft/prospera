@@ -484,13 +484,13 @@ const onRemoveTransaction = (transactionId: number) => {
                 </div>
 
                 <div class="flex flex-col gap-4">
-                    <Card v-if="isClosed" class="border-amber-500/30">
+                    <Card v-if="isClosed" class="border-warning/40">
                         <CardContent
                             class="flex items-center gap-3 px-4 py-3 text-sm"
                         >
                             <Icon
                                 name="lock"
-                                class="size-5 shrink-0 text-amber-500"
+                                class="size-5 shrink-0 text-warning"
                                 aria-hidden="true"
                             />
                             {{ $t('ledger.closedNotice') }}
@@ -502,14 +502,14 @@ const onRemoveTransaction = (transactionId: number) => {
                             !envelopesQuery.isPending.value &&
                             pickerEnvelopes.length === 0
                         "
-                        class="border-amber-500/30"
+                        class="border-warning/40"
                     >
                         <CardContent
                             class="flex items-center gap-3 px-4 py-3 text-sm"
                         >
                             <Icon
                                 name="info"
-                                class="size-5 shrink-0 text-amber-500"
+                                class="size-5 shrink-0 text-warning"
                                 aria-hidden="true"
                             />
                             <span>
@@ -530,14 +530,14 @@ const onRemoveTransaction = (transactionId: number) => {
                             !envelopesQuery.isPending.value &&
                             !canAddTransaction
                         "
-                        class="border-amber-500/30"
+                        class="border-warning/40"
                     >
                         <CardContent
                             class="flex items-center gap-3 px-4 py-3 text-sm"
                         >
                             <Icon
                                 name="info"
-                                class="size-5 shrink-0 text-amber-500"
+                                class="size-5 shrink-0 text-warning"
                                 aria-hidden="true"
                             />
                             {{ $t('ledger.permissionNotice') }}

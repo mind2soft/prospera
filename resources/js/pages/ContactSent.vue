@@ -48,7 +48,7 @@ const githubRepoUrl = computed(() => page.props.githubRepoUrl);
         <main class="flex flex-1 items-center justify-center px-6 py-12">
             <div class="w-full max-w-md text-center">
                 <span
-                    class="mx-auto flex size-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-600"
+                    class="mx-auto flex size-14 items-center justify-center rounded-full bg-success/10 text-success"
                 >
                     <svg
                         aria-hidden="true"
