@@ -117,3 +117,33 @@ export async function setResourceShare(
         throw error;
     }
 }
+
+/** Retries after the first failed attempt for idempotent reads (queries). */
+const MAX_QUERY_RETRIES = 2;
+
+/**
+ * Query retry policy: transient failures (network errors, 5xx, 408/429) are
+ * retried up to twice; other 4xx responses (authorization, validation, not
+ * found, CSRF expiry) are final — retrying cannot change the answer.
+ * Mutations are never retried (they are not idempotent).
+ */
+export function shouldRetryQuery(
+    failureCount: number,
+    error: unknown,
+): boolean {
+    if (failureCount >= MAX_QUERY_RETRIES) {
+        return false;
+    }
+
+    if (error instanceof ApiError) {
+        if (error.status === 0) {
+            return false;
+        }
+
+        if (error.status >= 400 && error.status < 500) {
+            return error.status === 408 || error.status === 429;
+        }
+    }
+
+    return true;
+}

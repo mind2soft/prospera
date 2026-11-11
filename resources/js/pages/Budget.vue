@@ -13,6 +13,7 @@ import CreateBudgetDialog from '@/components/Budget/CreateBudgetDialog.vue';
 import Heading from '@/components/Heading.vue';
 import Icon from '@/components/Icon.vue';
 import BudgetLoadingScreen from '@/components/Loading/BudgetLoadingScreen.vue';
+import QueryErrorState from '@/components/QueryErrorState.vue';
 import ShareDrawer from '@/components/share/ShareDrawer.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -120,6 +121,7 @@ const {
     currentProfile,
     isPending: isPendingCurrentProfile,
     isError: isErrorCurrentProfile,
+    refetch: refetchProfiles,
 } = useCurrentProfile();
 const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
 
@@ -128,9 +130,22 @@ const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
 // and content branches cannot diverge (see composables/query.ts).
 const waitingForData = computed(
     () =>
-        (isPendingCurrentProfile.value && !isErrorCurrentProfile.value) ||
-        (budgetsQuery.isPending.value && !budgetsQuery.isError.value),
+        !budgetsLoadFailed.value &&
+        (isPendingCurrentProfile.value || budgetsQuery.isPending.value),
 );
+
+/** The budget list failed to load (directly, or through the profile list). */
+const budgetsLoadFailed = computed(
+    () =>
+        budgetsQuery.data.value === undefined &&
+        (isErrorCurrentProfile.value || budgetsQuery.isError.value),
+);
+
+const retryBudgets = (): void => {
+    void (isErrorCurrentProfile.value
+        ? refetchProfiles()
+        : budgetsQuery.refetch());
+};
 
 const createBudget = useCreateBudget();
 const publishBudget = usePublishBudget();
@@ -409,6 +424,13 @@ const onRemoveEnvelope = (envelopeId: number) => {
 
         <BudgetLoadingScreen v-if="waitingForData" />
 
+        <QueryErrorState
+            v-else-if="budgetsLoadFailed"
+            :message="$t('budget.loadError')"
+            :retrying="budgetsQuery.isFetching.value"
+            @retry="retryBudgets"
+        />
+
         <!-- No budgets yet -->
         <Card
             v-else-if="budgets.length === 0"
@@ -477,12 +499,15 @@ const onRemoveEnvelope = (envelopeId: number) => {
             />
 
             <BudgetLoadingScreen
-                v-if="
-                    budgetQuery.isPending.value &&
-                    !budgetQuery.isError.value &&
-                    budget === null
-                "
+                v-if="budgetQuery.isPending.value && budget === null"
                 :selector="false"
+            />
+
+            <QueryErrorState
+                v-else-if="budgetQuery.isError.value && budget === null"
+                :message="$t('budget.detailLoadError')"
+                :retrying="budgetQuery.isFetching.value"
+                @retry="budgetQuery.refetch()"
             />
 
             <template v-else-if="budget">

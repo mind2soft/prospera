@@ -36,7 +36,14 @@ defineProps<Props>();
 
 const { t } = useI18n();
 
-const { profiles, profileId, select } = useCurrentProfile();
+const {
+    profiles,
+    profileId,
+    select,
+    isPending: profilesPending,
+    isError: profilesError,
+    refetch: refetchProfiles,
+} = useCurrentProfile();
 const setDefaultProfile = useSetDefaultProfile();
 
 const setDefault = (profile: FinancialProfile) => {
@@ -72,11 +79,23 @@ const menuProfiles = computed(() =>
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent class="w-64">
                 <p
-                    v-if="profiles.length === 0"
+                    v-if="profilesPending"
                     class="px-2 py-1.5 text-sm text-muted-foreground"
+                    role="status"
                 >
                     {{ $t('common.loading') }}
                 </p>
+                <template v-else-if="profilesError && profiles.length === 0">
+                    <p
+                        class="px-2 py-1.5 text-sm text-muted-foreground"
+                        role="alert"
+                    >
+                        {{ $t('common.error') }}
+                    </p>
+                    <DropdownMenuItem @select.prevent="refetchProfiles()">
+                        {{ $t('common.actions.retry') }}
+                    </DropdownMenuItem>
+                </template>
                 <template v-else>
                     <DropdownMenuItem
                         v-for="profile in menuProfiles"

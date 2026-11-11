@@ -10,6 +10,7 @@ import WidgetCatalog from '@/components/dashboard/WidgetCatalog.vue';
 import WidgetSettingsSheet from '@/components/dashboard/WidgetSettingsSheet.vue';
 import Heading from '@/components/Heading.vue';
 import Icon from '@/components/Icon.vue';
+import QueryErrorState from '@/components/QueryErrorState.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -43,12 +44,33 @@ defineOptions({
 });
 
 const { t } = useI18n();
-const { profileId } = useCurrentProfile();
+const {
+    profileId,
+    isError: profilesError,
+    refetch: refetchProfiles,
+} = useCurrentProfile();
 
 const widgetsQuery = useDashboardWidgets();
 // Destructured for the template — refs nested in plain objects do not
 // auto-unwrap in templates.
-const { isPending: widgetsPending, isError: widgetsError } = widgetsQuery;
+const {
+    isPending: widgetsPending,
+    isFetching: widgetsFetching,
+    refetch: refetchWidgets,
+} = widgetsQuery;
+
+/**
+ * Whether the canonical layout has loaded. Until it has (still loading, or
+ * the load failed), the local list is NOT the user's layout: the full-layout
+ * save would delete every saved widget missing from it, so adding widgets
+ * and autosaving are both blocked.
+ */
+const layoutLoaded = computed(() => widgetsQuery.data.value !== undefined);
+
+/** The widget list waits on the profile list: a failed profile load fails it too. */
+const retryLoad = (): void => {
+    void (profilesError.value ? refetchProfiles() : refetchWidgets());
+};
 const saveLayout = useSaveDashboardLayout();
 const removeWidget = useRemoveDashboardWidget();
 
@@ -203,7 +225,7 @@ const scheduleSave = useDebounceFn(saveNow, 600);
 watch(
     widgets,
     () => {
-        if (suppressSave.value || widgetsQuery.isPending.value) {
+        if (suppressSave.value || !layoutLoaded.value) {
             return;
         }
 
@@ -215,6 +237,10 @@ watch(
 // ---- Adding widgets --------------------------------------------------------
 
 const onAdd = (type: DashboardWidgetType): void => {
+    if (!layoutLoaded.value) {
+        return;
+    }
+
     widgets.value.push({
         id: --tempId,
         type,
@@ -310,16 +336,24 @@ const onDestroy = (): void => {
         <header class="flex items-start justify-between gap-4">
             <Heading :title="$t('dashboard.title')" />
 
-            <WidgetCatalog @add="onAdd" />
+            <WidgetCatalog :disabled="!layoutLoaded" @add="onAdd" />
         </header>
 
         <!-- Loading -->
         <div
-            v-if="widgetsPending && !widgetsError"
+            v-if="widgetsPending && !profilesError"
             class="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5"
         >
             <Skeleton v-for="i in 3" :key="i" class="h-56 rounded-xl" />
         </div>
+
+        <!-- Load failed: never the empty state (it would invite re-creating the layout). -->
+        <QueryErrorState
+            v-else-if="!layoutLoaded"
+            :message="$t('dashboard.loadError')"
+            :retrying="widgetsFetching"
+            @retry="retryLoad"
+        />
 
         <!-- Empty dashboard: no seeded widgets — the user composes their own. -->
         <Card

@@ -2,6 +2,7 @@
     "dashboard": {
         "title": "Dashboard",
         "add": "Add widget",
+        "loadError": "Your dashboard could not be loaded. Your saved widgets are safe.",
         "catalog": {
             "envelope_spending": {
                 "name": "Envelope spending",

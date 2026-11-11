@@ -2,6 +2,7 @@
     "dashboard": {
         "title": "Tableau de bord",
         "add": "Ajouter un widget",
+        "loadError": "Votre tableau de bord n'a pas pu être chargé. Vos widgets enregistrés sont conservés.",
         "catalog": {
             "envelope_spending": {
                 "name": "Dépenses par enveloppe",

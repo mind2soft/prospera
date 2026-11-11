@@ -15,6 +15,7 @@
         "error": {
             "generic": "Une erreur est survenue."
         },
+        "loadError": "Vos grands livres n'ont pas pu être chargés.",
         "empty": {
             "title": "Créez votre premier grand livre",
             "description": "Un grand livre consigne vos transactions sur une année. Créez-en un pour commencer à enregistrer vos dépenses et vos revenus.",
@@ -91,7 +92,9 @@
             "recorded": "Enregistré",
             "formerMember": "Ancien membre",
             "removeTransaction": "Retirer la transaction",
-            "empty": "Aucune transaction ce mois-ci."
+            "empty": "Aucune transaction ce mois-ci.",
+            "loading": "Chargement des transactions…",
+            "error": "Les transactions n'ont pas pu être chargées."
         }
     }
 }

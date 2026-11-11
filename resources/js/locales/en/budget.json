@@ -13,6 +13,8 @@
             "envelopeAdded": "Envelope added.",
             "envelopeRemoved": "Envelope removed."
         },
+        "loadError": "Your budgets could not be loaded.",
+        "detailLoadError": "This budget could not be loaded.",
         "empty": {
             "title": "Create your first budget",
             "description": "Start with a draft: pick your currency, add your envelopes, then publish when it feels right.",

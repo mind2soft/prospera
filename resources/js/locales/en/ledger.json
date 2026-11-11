@@ -15,6 +15,7 @@
         "error": {
             "generic": "Something went wrong."
         },
+        "loadError": "Your ledgers could not be loaded.",
         "empty": {
             "title": "Create your first ledger",
             "description": "A ledger keeps a yearly financial record of your transactions. Create one to start logging expenses and revenues.",
@@ -91,7 +92,9 @@
             "recorded": "Recorded",
             "formerMember": "Former member",
             "removeTransaction": "Remove transaction",
-            "empty": "No transactions this month."
+            "empty": "No transactions this month.",
+            "loading": "Loading transactions…",
+            "error": "Transactions could not be loaded."
         }
     }
 }

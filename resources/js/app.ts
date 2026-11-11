@@ -6,6 +6,7 @@ import { i18n } from '@/i18n';
 import AppLayout from '@/layouts/AppLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
+import { shouldRetryQuery } from '@/lib/api';
 import { initializeFlashToast } from '@/lib/flashToast';
 import { loadIconCollections } from '@/lib/icons';
 
@@ -36,7 +37,7 @@ void createInertiaApp({
             queryClientConfig: {
                 defaultOptions: {
                     queries: {
-                        retry: false,
+                        retry: shouldRetryQuery,
                         staleTime: 30_000,
                         refetchOnWindowFocus: false,
                     },

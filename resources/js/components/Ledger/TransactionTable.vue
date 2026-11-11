@@ -29,9 +29,16 @@ const props = defineProps<{
     /** True while the ledger is open (deletion is impossible when closed). */
     open?: boolean;
     pendingId?: number | null;
+    /** The month's transactions are still loading (no data yet). */
+    loading?: boolean;
+    /** The month's transactions failed to load — never shown as "no transactions". */
+    error?: boolean;
 }>();
 
-const emit = defineEmits<(e: 'remove', transactionId: number) => void>();
+const emit = defineEmits<{
+    remove: [transactionId: number];
+    retry: [];
+}>();
 
 const canDelete = computed(
     () => (props.open ?? true) && props.permission !== null,
@@ -215,7 +222,35 @@ const stampLabel = (createdAt: string): string =>
                         </Button>
                     </td>
                 </tr>
-                <tr v-if="transactions.length === 0">
+                <tr v-if="error">
+                    <td
+                        :colspan="canDelete ? 6 : 5"
+                        class="px-4 py-8 text-center"
+                        role="alert"
+                    >
+                        <span class="block text-muted-foreground">
+                            {{ $t('ledger.table.error') }}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            class="mt-3"
+                            @click="emit('retry')"
+                        >
+                            {{ $t('common.actions.retry') }}
+                        </Button>
+                    </td>
+                </tr>
+                <tr v-else-if="loading">
+                    <td
+                        :colspan="canDelete ? 6 : 5"
+                        class="px-4 py-8 text-center text-muted-foreground"
+                        role="status"
+                    >
+                        {{ $t('ledger.table.loading') }}
+                    </td>
+                </tr>
+                <tr v-else-if="transactions.length === 0">
                     <td
                         :colspan="canDelete ? 6 : 5"
                         class="px-4 py-8 text-center text-muted-foreground"

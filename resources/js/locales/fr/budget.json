@@ -13,6 +13,8 @@
             "envelopeAdded": "Enveloppe ajoutée.",
             "envelopeRemoved": "Enveloppe retirée."
         },
+        "loadError": "Vos budgets n'ont pas pu être chargés.",
+        "detailLoadError": "Ce budget n'a pas pu être chargé.",
         "empty": {
             "title": "Créez votre premier budget",
             "description": "Commencez par un brouillon : choisissez votre devise, ajoutez vos enveloppes, puis publiez quand tout vous convient.",
