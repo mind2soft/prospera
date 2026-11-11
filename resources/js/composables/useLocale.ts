@@ -82,7 +82,13 @@ export function initializeLocale(): void {
     watchEffect(() => {
         const user = page.props?.auth?.user;
 
-        i18n.global.locale.value = resolveLocale(user?.locale ?? null);
+        const locale = resolveLocale(user?.locale ?? null);
+        i18n.global.locale.value = locale;
+
+        // Screen readers and hyphenation follow the document language.
+        if (typeof document !== 'undefined') {
+            document.documentElement.lang = locale;
+        }
     });
 }
 
