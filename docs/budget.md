@@ -90,6 +90,11 @@ number; the server negates expense amounts on write.
   that month is deleted immediately (with its shares and assignments). Transactions
   are independent of budgets and are never blocked by (or blocking) this replacement.
   The publish confirmation dialog must warn about this replacement.
+- **Concurrency** — publishing and every assignment edit (add, update,
+  remove) lock the budget row and re-check the draft state inside their
+  transaction, so an edit racing a publish never modifies a published
+  budget, and a double-submitted publish runs once. Two concurrent adds of
+  the same envelope resolve to one assignment and a validation error.
 - **"New Budget"** on a published budget creates a **clone** of it in draft mode
   (same currency and same envelope assignments). The clone dialog asks for
   confirmation (and the currency, pre-filled from the source budget).

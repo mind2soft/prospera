@@ -380,6 +380,90 @@ class BudgetTest extends TestCase
             ->assertUnprocessable();
     }
 
+    /**
+     * Simulate a publish committing right after the request's route binding
+     * read the budget as a draft (RES-8): the first retrieval of the budget
+     * marks it published in the database behind the loaded model's back.
+     */
+    private function publishConcurrentlyAfterRouteBinding(Budget $budget): void
+    {
+        $fired = false;
+
+        Budget::retrieved(function (Budget $retrieved) use ($budget, &$fired): void {
+            if ($fired || $retrieved->id !== $budget->id) {
+                return;
+            }
+
+            $fired = true;
+
+            DB::table('budgets')->where('id', $budget->id)->update([
+                'published_at' => now(),
+                'effective_year' => now()->year,
+                'effective_month' => now()->month,
+            ]);
+        });
+    }
+
+    public function test_assignment_edits_re_check_the_draft_state_under_a_lock(): void
+    {
+        $budget = $this->createBudget($this->user);
+        $rent = $this->user->envelopes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e']);
+        $food = $this->user->envelopes()->create(['name' => 'Food', 'type' => 'expense', 'color' => '#f43f5e']);
+        $budget->envelopes()->create(['envelope_id' => $rent->id, 'amount' => -100, 'type' => 'fixed']);
+
+        $this->publishConcurrentlyAfterRouteBinding($budget);
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $food->id, 'type' => 'fixed', 'amount' => 100,
+        ])->assertUnprocessable()->assertJsonValidationErrors('budget');
+        $this->assertDatabaseMissing('budget_envelopes', ['envelope_id' => $food->id]);
+
+        DB::table('budgets')->where('id', $budget->id)->update(['published_at' => null, 'effective_year' => 0, 'effective_month' => 0]);
+        Budget::flushEventListeners();
+        $this->publishConcurrentlyAfterRouteBinding($budget);
+        $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$rent->id}", [
+            'amount' => 999,
+        ])->assertUnprocessable()->assertJsonValidationErrors('budget');
+        $this->assertEncryptedAmount(BudgetEnvelope::class, ['envelope_id' => $rent->id], 'amount', -100);
+
+        DB::table('budgets')->where('id', $budget->id)->update(['published_at' => null, 'effective_year' => 0, 'effective_month' => 0]);
+        Budget::flushEventListeners();
+        $this->publishConcurrentlyAfterRouteBinding($budget);
+        $this->actingAs($this->user)->deleteJson("/api/budgets/{$budget->id}/envelopes/{$rent->id}")
+            ->assertUnprocessable()->assertJsonValidationErrors('budget');
+        $this->assertDatabaseHas('budget_envelopes', ['envelope_id' => $rent->id]);
+    }
+
+    public function test_a_concurrent_publish_is_not_run_twice(): void
+    {
+        $budget = $this->createBudget($this->user);
+
+        $this->publishConcurrentlyAfterRouteBinding($budget);
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/publish")
+            ->assertUnprocessable()->assertJsonValidationErrors('budget');
+    }
+
+    public function test_a_duplicate_add_losing_the_race_is_a_validation_error(): void
+    {
+        $budget = $this->createBudget($this->user);
+        $envelope = $this->user->envelopes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e']);
+
+        // A concurrent request inserts the same assignment between the
+        // duplicate check and the insert.
+        BudgetEnvelope::creating(function (BudgetEnvelope $assignment) use ($budget, $envelope): void {
+            DB::table('budget_envelopes')->insert([
+                'budget_id' => $budget->id,
+                'envelope_id' => $envelope->id,
+                'amount' => 'concurrent',
+                'type' => 'fixed',
+            ]);
+        });
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $envelope->id, 'type' => 'fixed', 'amount' => 100,
+        ])->assertUnprocessable()->assertJsonValidationErrors('envelope_id');
+    }
+
     public function test_update_envelope_amount(): void
     {
         $budget = $this->createBudget($this->user);

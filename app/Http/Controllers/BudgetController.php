@@ -9,6 +9,7 @@ use App\Models\FinancialProfile;
 use App\Models\User;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -125,6 +126,14 @@ class BudgetController extends Controller
         DB::transaction(function () use ($budget, $year, $month): void {
             FinancialProfile::query()->whereKey($budget->profile_id)->lockForUpdate()->firstOrFail();
 
+            // Re-checked under the lock: a concurrent publish (double click)
+            // must not run twice.
+            if (! Budget::query()->whereKey($budget->id)->lockForUpdate()->firstOrFail()->isDraft()) {
+                throw ValidationException::withMessages([
+                    'budget' => __('This budget is already published.'),
+                ]);
+            }
+
             Budget::query()
                 ->where('profile_id', $budget->profile_id)
                 ->where('effective_year', $year)
@@ -238,22 +247,31 @@ class BudgetController extends Controller
             ]);
         }
 
-        if ($budget->envelopes()->where('envelope_id', $envelope->id)->exists()) {
-            throw ValidationException::withMessages([
-                'envelope_id' => __('This envelope is already assigned to the budget.'),
-            ]);
-        }
+        $duplicate = fn (): ValidationException => ValidationException::withMessages([
+            'envelope_id' => __('This envelope is already assigned to the budget.'),
+        ]);
 
-        $assignment = DB::transaction(function () use ($budget, $envelope, $validated): BudgetEnvelope {
+        $assignment = DB::transaction(function () use ($budget, $envelope, $validated, $duplicate): BudgetEnvelope {
+            $this->lockDraft($budget);
+
+            if ($budget->envelopes()->where('envelope_id', $envelope->id)->exists()) {
+                throw $duplicate();
+            }
+
             // Sign from the direction read under a shared lock: a concurrent
             // direction change cannot slip in between (docs/envelope.md).
             $direction = Envelope::query()->whereKey($envelope->id)->sharedLock()->firstOrFail();
 
-            return $budget->envelopes()->create([
-                'envelope_id' => $envelope->id,
-                'amount' => $direction->signedAmount($validated['amount']),
-                'type' => $validated['type'],
-            ]);
+            try {
+                return $budget->envelopes()->create([
+                    'envelope_id' => $envelope->id,
+                    'amount' => $direction->signedAmount($validated['amount']),
+                    'type' => $validated['type'],
+                ]);
+            } catch (UniqueConstraintViolationException) {
+                // A concurrent add won the race past the check above.
+                throw $duplicate();
+            }
         });
 
         return response()->json([
@@ -274,15 +292,21 @@ class BudgetController extends Controller
             'type' => ['sometimes', 'string', Rule::in(BudgetEnvelope::TYPES)],
         ]);
 
-        $assignment = $budget->envelopes()
-            ->with('envelope')
-            ->where('envelope_id', $envelopeId)
-            ->firstOrFail();
+        $assignment = DB::transaction(function () use ($budget, $envelopeId, $validated): BudgetEnvelope {
+            $this->lockDraft($budget);
 
-        $assignment->update([
-            'amount' => $assignment->envelope->signedAmount($validated['amount']),
-            'type' => $validated['type'] ?? $assignment->type,
-        ]);
+            $assignment = $budget->envelopes()
+                ->with('envelope')
+                ->where('envelope_id', $envelopeId)
+                ->firstOrFail();
+
+            $assignment->update([
+                'amount' => $assignment->envelope->signedAmount($validated['amount']),
+                'type' => $validated['type'] ?? $assignment->type,
+            ]);
+
+            return $assignment;
+        });
 
         return response()->json([
             'envelope' => $this->serializeEnvelope($assignment->fresh('envelope')),
@@ -297,11 +321,14 @@ class BudgetController extends Controller
         $this->authorize($request, $budget, ResourcePermissions::OWNER);
         $this->abortUnlessDraft($budget);
 
-        $assignment = $budget->envelopes()
-            ->where('envelope_id', $envelopeId)
-            ->firstOrFail();
+        DB::transaction(function () use ($budget, $envelopeId): void {
+            $this->lockDraft($budget);
 
-        $assignment->delete();
+            $budget->envelopes()
+                ->where('envelope_id', $envelopeId)
+                ->firstOrFail()
+                ->delete();
+        });
 
         return response()->json(status: 204);
     }
@@ -396,6 +423,19 @@ class BudgetController extends Controller
                 'budget' => __('Only draft budgets can be modified.'),
             ]);
         }
+    }
+
+    /**
+     * Lock the budget row and re-check it is still a draft, inside the
+     * caller's transaction: the route-bound model was read without a lock,
+     * so a concurrent publish may have committed since (publishing locks
+     * the same row).
+     */
+    private function lockDraft(Budget $budget): void
+    {
+        $this->abortUnlessDraft(
+            Budget::query()->whereKey($budget->id)->lockForUpdate()->firstOrFail(),
+        );
     }
 
     private function abortIfDraftExists(int $profileId): void
