@@ -285,6 +285,18 @@ class FinancialProfileInvite extends Model
     }
 
     /**
+     * Before the given (unverified) account is deleted: the invite it
+     * reserved is released instead of cascading away, so the owner's invite
+     * stays pending and usable (e.g. to re-register with the same email).
+     */
+    public static function releaseReservationOf(User $user): void
+    {
+        self::query()
+            ->where('pending_user_id', $user->id)
+            ->update(['pending_user_id' => null, 'updated_at' => now()]);
+    }
+
+    /**
      * Delete stale invites: expired unreserved ones, and reservations whose
      * account never verified within a week of the invite's expiry.
      */

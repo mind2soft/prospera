@@ -18,7 +18,8 @@ use Illuminate\Support\Facades\DB;
  * are deleted along with the owner's resources in it. Resources owned by the
  * deleted user auto-transfer to the profile owners; the dependency order
  * (transactions → ledgers → budgets → envelopes) is guaranteed by the
- * cascade rules on the foreign keys.
+ * cascade rules on the foreign keys. Shared by the self-service deletion
+ * (verified or not) and the scheduled prune of unverified accounts.
  */
 class DeleteAccount
 {
@@ -56,6 +57,10 @@ class DeleteAccount
             // Pending invites the user issued on surviving profiles stay
             // valid, re-attributed to the profile's new owner.
             FinancialProfileInvite::reassignIssuedBy($user);
+
+            // An invite reserved by this (unverified) account is released
+            // instead of cascading away: the owner's invite stays usable.
+            FinancialProfileInvite::releaseReservationOf($user);
 
             $user->delete();
         });

@@ -141,6 +141,15 @@ communicates to users — keep the two in sync:
   an invitee who already registered through one still joins the profile
   when they verify their email. Invites of profiles deleted with the account
   are deleted with them (the invitee then gets their own default profile);
+- an invite **reserved** by a deleted (not yet verified) account is released,
+  not deleted: it is pending and usable again until it expires;
+- **unverified accounts** can delete themselves too (Settings → Account,
+  password required) — e.g. after a mistyped email or an unwanted invite
+  registration. Accounts left unverified and untouched for
+  `UNVERIFIED_ACCOUNT_RETENTION_DAYS` (default 30) are deleted by the daily
+  `php artisan users:prune-unverified` — only when they hold **no data**
+  (no envelope, and only solo profiles without budgets or ledgers), so an
+  account that changed its email (which resets verification) keeps its data;
 - **the user is responsible for revoking sharing permissions before deleting
   their account** if they do not want a financial profile to keep existing —
   and be transferred — without them.

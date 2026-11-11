@@ -11,10 +11,13 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('settings/account', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('settings/account', [ProfileController::class, 'update'])->name('profile.update');
+
+    // Unverified accounts may delete themselves too (a mistyped email, an
+    // unwanted invite registration).
+    Route::delete('settings/account', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::delete('settings/account', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::inertia('settings/profiles', 'settings/Profiles')->name('profiles.edit');
 

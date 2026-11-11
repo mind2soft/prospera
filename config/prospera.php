@@ -27,4 +27,17 @@ return [
 
     'contact_retention_days' => (int) env('CONTACT_LOG_RETENTION_DAYS', 90),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Unverified Accounts
+    |--------------------------------------------------------------------------
+    |
+    | Days an account may stay unverified before `users:prune-unverified`
+    | (scheduled daily) deletes it — only accounts holding no data are
+    | pruned (docs/shared-finances.md — Account termination).
+    |
+    */
+
+    'unverified_account_retention_days' => (int) env('UNVERIFIED_ACCOUNT_RETENTION_DAYS', 30),
+
 ];
