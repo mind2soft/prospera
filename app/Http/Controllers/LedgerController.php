@@ -53,12 +53,18 @@ class LedgerController extends Controller
             $query = Ledger::query()->visibleTo($request->user());
         }
 
-        $ledgers = $query->with('permissions')->orderByDesc('created_at')->get();
+        $user = $request->user();
+
+        // Only the caller's share row resolves their permission.
+        $ledgers = $query
+            ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
+            ->orderByDesc('created_at')
+            ->get();
 
         return response()->json([
             'ledgers' => $ledgers
                 // Both branches are scoped to the caller's profiles.
-                ->map(fn (Ledger $ledger) => $this->serializeLedger($ledger, $request->user(), isMember: true))
+                ->map(fn (Ledger $ledger) => $this->serializeLedger($ledger, $user, isMember: true))
                 ->values(),
         ]);
     }

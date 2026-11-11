@@ -12,10 +12,12 @@ use App\Services\ResourcePermissions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\CountsQueries;
 use Tests\TestCase;
 
 class BudgetTest extends TestCase
 {
+    use CountsQueries;
     use RefreshDatabase;
 
     private User $user;
@@ -103,6 +105,31 @@ class BudgetTest extends TestCase
         $this->assertCount(1, $data);
         $this->assertNotNull($data[0]['id']);
         $this->assertNotEquals($budget->id, $data[0]['id']);
+    }
+
+    public function test_index_loads_only_the_callers_share_rows(): void
+    {
+        $shared = $this->createBudget($this->user, [
+            'published_at' => now()->subMonth(),
+            'effective_year' => now()->subMonth()->year,
+            'effective_month' => now()->subMonth()->month,
+        ]);
+        $shared->permissions()->create(['user_id' => $this->member->id, 'permission' => ResourcePermissions::CONTRIBUTOR]);
+        $this->createBudget($this->user);
+
+        $queries = $this->queriesDuring(function () use ($shared): void {
+            $budgets = collect($this->actingAs($this->member)->getJson('/api/budgets?profile_id='.$this->profile->id)
+                ->assertOk()
+                ->json('budgets'))
+                ->keyBy('id');
+
+            $this->assertSame(ResourcePermissions::CONTRIBUTOR, $budgets[$shared->id]['permission']);
+            $this->assertSame(ResourcePermissions::VIEWER, $budgets->except($shared->id)->first()['permission']);
+        });
+
+        $permissionQueries = array_values(array_filter($queries, fn (string $sql): bool => str_contains($sql, 'from "budget_permissions"')));
+        $this->assertCount(1, $permissionQueries);
+        $this->assertStringContainsString('"user_id" = ?', $permissionQueries[0]);
     }
 
     public function test_guests_cannot_access_the_api(): void

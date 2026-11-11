@@ -114,6 +114,27 @@ class LedgerTest extends TestCase
         $this->getJson('/api/ledgers')->assertUnauthorized();
     }
 
+    public function test_index_loads_only_the_callers_share_rows(): void
+    {
+        $shared = $this->createLedger($this->user, ['name' => 'Shared']);
+        $shared->permissions()->create(['user_id' => $this->member->id, 'permission' => ResourcePermissions::CONTRIBUTOR]);
+        $this->createLedger($this->user, ['name' => 'Implicit']);
+
+        $queries = $this->queriesDuring(function (): void {
+            $ledgers = collect($this->actingAs($this->member)->getJson('/api/ledgers?profile_id='.$this->profile->id)
+                ->assertOk()
+                ->json('ledgers'))
+                ->keyBy('name');
+
+            $this->assertSame(ResourcePermissions::CONTRIBUTOR, $ledgers['Shared']['permission']);
+            $this->assertSame(ResourcePermissions::VIEWER, $ledgers['Implicit']['permission']);
+        });
+
+        $permissionQueries = array_values(array_filter($queries, fn (string $sql): bool => str_contains($sql, 'from "ledger_permissions"')));
+        $this->assertCount(1, $permissionQueries);
+        $this->assertStringContainsString('"user_id" = ?', $permissionQueries[0]);
+    }
+
     public function test_index_returns_only_the_profile_ledgers(): void
     {
         $this->createLedger($this->user);

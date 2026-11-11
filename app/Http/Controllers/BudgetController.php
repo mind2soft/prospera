@@ -46,13 +46,16 @@ class BudgetController extends Controller
             $query = Budget::query()->visibleTo($request->user());
         }
 
+        $user = $request->user();
+
         $budgets = $query
-            ->with('permissions')
+            // Only the caller's share row resolves their permission.
+            ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
             ->orderByDesc('created_at')
             ->get()
             // Both branches only return budgets of profiles the caller is a
             // member of, so membership needn't be re-queried per row.
-            ->map(fn (Budget $budget) => $this->serializeBudget($budget, $request->user(), isMember: true))
+            ->map(fn (Budget $budget) => $this->serializeBudget($budget, $user, isMember: true))
             ->values();
 
         return response()->json(['budgets' => $budgets]);
