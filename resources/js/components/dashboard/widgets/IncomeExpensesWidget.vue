@@ -107,6 +107,12 @@ const yDomain = computed<[number | undefined, number | undefined]>(() => {
     return [min < 0 ? min - pad : 0, max > 0 ? max + pad : 0];
 });
 
+/** A bucket amount for the data table (masked buckets are never shown). */
+const amountText = (amount: number | null): string =>
+    amount === null
+        ? t('dashboard.widget.amountHidden')
+        : formatMoney(amount, props.currency, locale.value);
+
 const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
     if (!datum) {
         return '';
@@ -144,7 +150,13 @@ const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
         </p>
 
         <!-- Unovis needs a DOM to measure — client-side only. -->
-        <div v-else-if="isClient" class="chart-surface min-h-0 flex-1">
+        <!-- The chart is visual only: the data table below is its text
+             equivalent (keyboard, touch and screen readers). -->
+        <div
+            v-else-if="isClient"
+            class="chart-surface min-h-0 flex-1"
+            aria-hidden="true"
+        >
             <VisXYContainer :data="series" :height="220" :y-domain="yDomain">
                 <VisStackedBar
                     v-if="viewType === 'stacked_bars'"
@@ -209,7 +221,56 @@ const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
 
         <div v-else class="min-h-0 flex-1 animate-pulse rounded-md bg-muted" />
 
-        <div class="mt-1.5 flex items-center justify-center gap-1.5 text-xs">
+        <details
+            v-if="!masked && series.length > 0"
+            class="mt-1.5 text-xs"
+            data-testid="history-data"
+        >
+            <summary
+                class="cursor-pointer rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+                {{ $t('dashboard.history.showData') }}
+            </summary>
+            <div class="mt-1.5 max-h-48 overflow-y-auto">
+                <table class="w-full tabular-nums">
+                    <thead class="text-muted-foreground">
+                        <tr>
+                            <th scope="col" class="py-1 text-start font-medium">
+                                {{ $t('dashboard.history.period') }}
+                            </th>
+                            <th scope="col" class="py-1 text-end font-medium">
+                                {{ $t('dashboard.history.revenue') }}
+                            </th>
+                            <th scope="col" class="py-1 text-end font-medium">
+                                {{ $t('dashboard.history.expenses') }}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr
+                            v-for="(bucket, index) in series"
+                            :key="bucket.bucket"
+                            class="border-t"
+                        >
+                            <th scope="row" class="py-1 text-start font-normal">
+                                {{ labels[index] }}
+                            </th>
+                            <td class="py-1 text-end">
+                                {{ amountText(bucket.revenue) }}
+                            </td>
+                            <td class="py-1 text-end">
+                                {{ amountText(bucket.expenses) }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </details>
+
+        <div
+            class="mt-1.5 flex items-center justify-center gap-1.5 text-xs"
+            aria-hidden="true"
+        >
             <span
                 class="flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-2.5 py-0.5 font-medium text-muted-foreground"
             >

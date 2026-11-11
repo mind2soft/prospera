@@ -33,7 +33,8 @@
             "noBudget": "Aucun budget ne couvre cette période",
             "reorder": "Réordonner {title}",
             "reorderHint": "Faites glisser, ou utilisez les flèches, pour déplacer ce widget plus tôt ou plus tard.",
-            "moved": "{title} déplacé en position {position} sur {count}."
+            "moved": "{title} déplacé en position {position} sur {count}.",
+            "amountHidden": "Montant masqué"
         },
         "settings": {
             "title": "Titre",
@@ -102,7 +103,9 @@
         },
         "history": {
             "revenue": "Revenus",
-            "expenses": "Dépenses"
+            "expenses": "Dépenses",
+            "showData": "Afficher les données",
+            "period": "Période"
         }
     }
 }

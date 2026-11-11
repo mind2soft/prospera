@@ -33,7 +33,8 @@
             "noBudget": "No budget covers this period",
             "reorder": "Reorder {title}",
             "reorderHint": "Drag, or use the arrow keys, to move this widget earlier or later.",
-            "moved": "{title} moved to position {position} of {count}."
+            "moved": "{title} moved to position {position} of {count}.",
+            "amountHidden": "Amount hidden"
         },
         "settings": {
             "title": "Title",
@@ -102,7 +103,9 @@
         },
         "history": {
             "revenue": "Revenue",
-            "expenses": "Expenses"
+            "expenses": "Expenses",
+            "showData": "Show data",
+            "period": "Period"
         }
     }
 }

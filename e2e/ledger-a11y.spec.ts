@@ -1,10 +1,31 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { login, seed } from './support';
 
 test.beforeAll(() => {
     seed('seed-ledger.php');
 });
+
+/** Shows October 2026, the seeded month with transactions. */
+async function showSeededMonth(page: Page): Promise<void> {
+    const label = page.getByTestId('month-calendar').locator('[aria-live]');
+    for (let i = 0; i < 12; i += 1) {
+        const text = (await label.textContent())?.trim() ?? '';
+        if (text === 'October 2026') {
+            break;
+        }
+        await page
+            .getByRole('button', {
+                name:
+                    text.endsWith('2026') && !text.startsWith('September')
+                        ? 'Previous month'
+                        : 'Next month',
+            })
+            .click();
+    }
+    await expect(label).toHaveText('October 2026');
+    await expect(page.locator('tbody tr')).toHaveCount(3);
+}
 
 test('the calendar only sticks in the two-column layout', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });
@@ -24,8 +45,7 @@ test('envelope names in the transaction table meet contrast', async ({
 }) => {
     await login(page);
     await page.goto('/ledger');
-    await expect(page.getByRole('table')).toBeVisible();
-    await expect(page.getByRole('row').nth(1)).toBeVisible();
+    await showSeededMonth(page);
 
     const results = await new AxeBuilder({ page })
         .include('table')
@@ -135,4 +155,17 @@ test('ledger actions say what they act on', async ({ page }) => {
     await expect(
         page.getByRole('menuitem', { name: 'Delete ledger', exact: true }),
     ).toBeVisible();
+});
+
+test('who recorded a transaction is reachable from the keyboard', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/ledger');
+    await showSeededMonth(page);
+    const recorder = page
+        .getByRole('button', { name: /^Playwright Tester, recorded / })
+        .first();
+    await recorder.focus();
+    await expect(page.getByRole('tooltip')).toContainText('Playwright Tester');
 });

@@ -105,7 +105,9 @@
             "empty": "No transactions this month.",
             "loading": "Loading transactions…",
             "error": "Transactions could not be loaded.",
-            "label": "Transactions"
+            "label": "Transactions",
+            "recordedBy": "{name}, recorded {date}",
+            "amountHidden": "Amount hidden"
         }
     }
 }

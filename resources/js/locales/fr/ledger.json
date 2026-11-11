@@ -105,7 +105,9 @@
             "empty": "Aucune transaction ce mois-ci.",
             "loading": "Chargement des transactions…",
             "error": "Les transactions n'ont pas pu être chargées.",
-            "label": "Transactions"
+            "label": "Transactions",
+            "recordedBy": "{name}, enregistré le {date}",
+            "amountHidden": "Montant masqué"
         }
     }
 }

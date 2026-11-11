@@ -119,3 +119,60 @@ test('widget data requests carry the browser time zone', async ({
     );
     await context.close();
 });
+
+test('charts have a text equivalent with their amounts', async ({ page }) => {
+    await login(page);
+    await page.goto('/dashboard');
+    let saved = layoutSaved(page);
+    await addWidget(page, 'Income & expenses history', 1);
+    await saved;
+
+    const card = cards(page).first();
+    await card.getByRole('button', { name: 'Widget settings' }).click();
+    const sheet = page.getByRole('dialog');
+    saved = layoutSaved(page);
+    await sheet.getByRole('combobox', { name: 'Add envelope' }).first().click();
+    await page.getByRole('option', { name: 'Paychecks' }).click();
+    await saved;
+    await sheet.getByRole('button', { name: 'Done' }).click();
+    await expect(sheet).toBeHidden();
+
+    // The data table behind "Show data" lists each bucket's amounts.
+    const data = card.getByTestId('history-data');
+    await data.getByText('Show data').click();
+    const table = data.getByRole('table');
+    await expect(
+        table.getByRole('columnheader', { name: 'Revenue' }),
+    ).toBeVisible();
+    await expect(table.getByRole('row')).not.toHaveCount(1);
+    await expect(table).toContainText('$');
+});
+
+test('the radial legend lists each amount next to its share', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/dashboard');
+    let saved = layoutSaved(page);
+    await addWidget(page, 'Radial', 1);
+    await saved;
+
+    const card = cards(page).first();
+    await card.getByRole('button', { name: 'Widget settings' }).click();
+    const sheet = page.getByRole('dialog');
+    for (const name of ['Paychecks', 'Food']) {
+        saved = layoutSaved(page);
+        await sheet
+            .getByRole('combobox', { name: 'Add envelope' })
+            .first()
+            .click();
+        await page.getByRole('option', { name }).click();
+        await saved;
+    }
+    await sheet.getByRole('button', { name: 'Done' }).click();
+    await expect(sheet).toBeHidden();
+
+    await expect(
+        card.getByRole('listitem').filter({ hasText: 'Food' }),
+    ).toHaveText(/Food\s*\$[\d,]+\s*·\s*[\d.]+%/, { timeout: 15_000 });
+});

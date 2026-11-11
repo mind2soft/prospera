@@ -140,7 +140,12 @@ function barColors(row: DashboardSpendingRow): {
                                       : 'text-foreground'
                             "
                         >
-                            {{ spentLabel(row) }}
+                            <span :aria-hidden="row.masked || undefined">{{
+                                spentLabel(row)
+                            }}</span>
+                            <span v-if="row.masked" class="sr-only">{{
+                                $t('dashboard.widget.amountHidden')
+                            }}</span>
                         </span>
                         <template v-if="allocatedLabel(row) !== null">
                             <span class="text-muted-foreground/50"> / </span>

@@ -146,7 +146,10 @@ const stampLabel = (createdAt: string): string =>
                         <span
                             v-if="transaction.masked"
                             class="text-muted-foreground"
-                            >—</span
+                            ><span aria-hidden="true">—</span
+                            ><span class="sr-only">{{
+                                $t('ledger.table.amountHidden')
+                            }}</span></span
                         >
                         <Currency
                             v-else
@@ -169,8 +172,18 @@ const stampLabel = (createdAt: string): string =>
                     <td class="px-4 py-2.5">
                         <TooltipProvider :delay-duration="0">
                             <Tooltip v-if="transaction.user.id !== null">
-                                <TooltipTrigger as-child>
-                                    <Avatar class="size-7">
+                                <TooltipTrigger
+                                    class="rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+                                    :aria-label="
+                                        $t('ledger.table.recordedBy', {
+                                            name: transaction.user.name,
+                                            date: stampLabel(
+                                                transaction.created_at,
+                                            ),
+                                        })
+                                    "
+                                >
+                                    <Avatar class="size-7" aria-hidden="true">
                                         <AvatarFallback class="text-xs">
                                             {{
                                                 getInitials(
