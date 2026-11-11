@@ -121,9 +121,12 @@ defineExpose({ reset });
         </div>
 
         <div class="grid gap-1.5">
-            <Label for="transaction-amount">{{
-                $t('ledger.form.amount')
-            }}</Label>
+            <Label for="transaction-amount">
+                {{ $t('ledger.form.amount') }}
+                <span class="font-normal text-muted-foreground">{{
+                    $t('ledger.form.inCurrency', { currency })
+                }}</span>
+            </Label>
             <Input
                 id="transaction-amount"
                 v-model="amount"
@@ -136,9 +139,14 @@ defineExpose({ reset });
         </div>
 
         <div class="grid gap-1.5">
-            <Label>{{ $t('ledger.form.eventDate') }}</Label>
-            <div
+            <Label id="transaction-date-label" as="span">{{
+                $t('ledger.form.eventDate')
+            }}</Label>
+            <!-- Read-only: the date is picked on the calendar. -->
+            <output
                 class="flex h-9 w-36 items-center gap-1.5 rounded-md border bg-muted/40 px-3 text-sm tabular-nums"
+                aria-labelledby="transaction-date-label"
+                aria-describedby="transaction-date-hint"
                 data-testid="event-date"
             >
                 <Icon
@@ -147,17 +155,29 @@ defineExpose({ reset });
                     aria-hidden="true"
                 />
                 {{ dateLabel }}
-            </div>
+            </output>
+            <span id="transaction-date-hint" class="sr-only">{{
+                $t('ledger.form.eventDateHint')
+            }}</span>
         </div>
 
         <Button
             type="submit"
             class="gap-1.5"
             :disabled="disabled || !valid || pending"
+            :aria-describedby="!valid ? 'transaction-form-hint' : undefined"
         >
             <Spinner v-if="pending" />
             <Icon v-else name="add" class="size-4" aria-hidden="true" />
             {{ $t('ledger.form.add') }}
         </Button>
+
+        <p
+            v-if="!valid && !disabled"
+            id="transaction-form-hint"
+            class="basis-full text-xs text-muted-foreground"
+        >
+            {{ $t('ledger.form.hint') }}
+        </p>
     </form>
 </template>

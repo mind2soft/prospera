@@ -169,3 +169,29 @@ test('who recorded a transaction is reachable from the keyboard', async ({
     await recorder.focus();
     await expect(page.getByRole('tooltip')).toContainText('Playwright Tester');
 });
+
+test('the entry form shows the currency, labels the date and explains the disabled add', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/ledger');
+
+    await expect(
+        page.getByRole('spinbutton', { name: 'Amount (CAD)' }),
+    ).toBeVisible();
+    const date = page.getByTestId('event-date');
+    await expect(date).toHaveAccessibleName('Event date');
+    await expect(date).toHaveAccessibleDescription(
+        'Pick the day on the calendar.',
+    );
+
+    const add = page.getByRole('button', { name: 'Add' });
+    await expect(add).toBeDisabled();
+    await expect(add).toHaveAccessibleDescription(/Choose an envelope/);
+
+    await page.getByRole('combobox', { name: 'Envelope' }).click();
+    await page.getByRole('option', { name: /Food/ }).click();
+    await page.getByRole('spinbutton', { name: 'Amount (CAD)' }).fill('12');
+    await expect(add).toBeEnabled();
+    await expect(page.getByText(/Choose an envelope and enter/)).toHaveCount(0);
+});

@@ -75,7 +75,10 @@
             "amount": "Montant",
             "amountPlaceholder": "p. ex. 42",
             "eventDate": "Date de l'opération",
-            "add": "Ajouter"
+            "add": "Ajouter",
+            "inCurrency": "({currency})",
+            "eventDateHint": "Choisissez le jour dans le calendrier.",
+            "hint": "Choisissez une enveloppe et saisissez un montant entier d’au moins 1 pour ajouter la transaction."
         },
         "direction": {
             "revenue": "revenu",
