@@ -110,6 +110,31 @@ final class AmountKeyRing
         return $this->budgetProfiles[$budgetId] ??= $this->profileIdOf('budgets', $budgetId);
     }
 
+    /**
+     * Record the profile of ledgers the caller already read (e.g. a
+     * profile's ledgers), saving one lookup query per ledger.
+     *
+     * @param  iterable<int>  $ledgerIds
+     */
+    public function rememberLedgerProfiles(iterable $ledgerIds, int $profileId): void
+    {
+        foreach ($ledgerIds as $ledgerId) {
+            $this->ledgerProfiles[(int) $ledgerId] = $profileId;
+        }
+    }
+
+    /**
+     * Record the profile of budgets the caller already read.
+     *
+     * @param  iterable<int>  $budgetIds
+     */
+    public function rememberBudgetProfiles(iterable $budgetIds, int $profileId): void
+    {
+        foreach ($budgetIds as $budgetId) {
+            $this->budgetProfiles[(int) $budgetId] = $profileId;
+        }
+    }
+
     public function encrypt(#[\SensitiveParameter] int $amount, AmountContext $context): string
     {
         return $this->cipher->encrypt($amount, $this->activeKey($context->profileId), $context);

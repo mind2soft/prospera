@@ -10,9 +10,11 @@ use App\Models\FinancialProfile;
 use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Security\Amounts\AmountKeyRing;
 use App\Services\ResourcePermissions;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 /**
@@ -40,18 +42,11 @@ final class DashboardAggregator
 
         $selection = WidgetSelection::fromConfig($widget->selection);
 
-        $envelopeIds = $selection->envelopeIds();
-
-        // Prune deleted envelopes before computing (no orphan rows).
-        if ($envelopeIds !== []) {
-            $existing = Envelope::query()
-                ->whereIn('id', $envelopeIds)
-                ->pluck('id')
-                ->map(fn (mixed $id): int => (int) $id)
-                ->values()
-                ->all();
-            $selection = $selection->pruned($existing);
-        }
+        // One query: the selected envelopes with the requester's share rows.
+        // Its keys prune deleted envelopes (no orphan rows); the loaded
+        // share rows resolve the masking without further queries.
+        $envelopes = SelectionEnvelopes::loadFor($user, $selection->envelopeIds());
+        $selection = $selection->pruned($envelopes->keys()->all());
 
         $envelopeIds = $selection->envelopeIds();
         $period = WidgetPeriod::fromConfig($widget->periodConfig());
@@ -60,14 +55,8 @@ final class DashboardAggregator
             return $this->emptyPayload($widget, $period, $today);
         }
 
-        $envelopes = Envelope::query()->whereIn('id', $envelopeIds)->get()->keyBy('id');
-
-        $permissions = Envelope::permissionsFor($user, $envelopeIds);
-
-        $amountVisible = $permissions->mapWithKeys(
-            fn (string $permission, int $envelopeId): array => [
-                $envelopeId => $permission !== ResourcePermissions::NONE,
-            ],
+        $amountVisible = $envelopes->map(
+            fn (Envelope $envelope): bool => $envelope->permissionFor($user) !== ResourcePermissions::NONE,
         );
 
         $transactions = $this->transactions($profile, $period, $envelopeIds, $today);
@@ -338,6 +327,9 @@ final class DashboardAggregator
             return collect();
         }
 
+        // Decryption binds each row's profile: known here, no lookup per ledger.
+        app(AmountKeyRing::class)->rememberLedgerProfiles($ledgerIds, $profile->id);
+
         ['from' => $from, 'to' => $to] = $period->window($today);
 
         return Transaction::query()
@@ -383,23 +375,32 @@ final class DashboardAggregator
         $cursor = $from->startOfMonth();
 
         while ($cursor->lte($to)) {
-            $months[$cursor->year.'-'.$cursor->month] = true;
+            $months[] = [$cursor->year, $cursor->month];
 
             $cursor = $cursor->addMonth();
         }
 
-        $budgets = Budget::query()
+        // Months are plaintext (only amounts are encrypted): filtered in SQL.
+        $budgetIds = Budget::query()
             ->where('profile_id', $profile->id)
             ->whereNotNull('published_at')
-            ->get()
-            ->filter(fn (Budget $budget): bool => isset($months[$budget->effective_year.'-'.$budget->effective_month]));
+            ->where(function (Builder $query) use ($months): void {
+                foreach ($months as [$year, $month]) {
+                    $query->orWhere(fn (Builder $query) => $query
+                        ->where('effective_year', $year)
+                        ->where('effective_month', $month));
+                }
+            })
+            ->pluck('id');
 
-        if ($budgets->isEmpty()) {
+        if ($budgetIds->isEmpty()) {
             return collect();
         }
 
+        app(AmountKeyRing::class)->rememberBudgetProfiles($budgetIds, $profile->id);
+
         return BudgetEnvelope::query()
-            ->whereIn('budget_id', $budgets->pluck('id'))
+            ->whereIn('budget_id', $budgetIds)
             ->whereIn('envelope_id', $envelopeIds)
             ->get()
             ->groupBy(fn (BudgetEnvelope $allocation): int => $allocation->envelope_id)
