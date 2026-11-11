@@ -155,7 +155,11 @@ communicates to users — keep the two in sync:
   `UNVERIFIED_ACCOUNT_RETENTION_DAYS` (default 30) are deleted by the daily
   `php artisan users:prune-unverified` — only when they hold **no data**
   (no envelope, and only solo profiles without budgets or ledgers), so an
-  account that changed its email (which resets verification) keeps its data;
+  account that changed its email (which resets verification) keeps its data.
+  Each account is re-checked under a lock on its row right before it is
+  deleted (one that verified or created data meanwhile is kept) and deleted
+  in its own transaction: a failure is reported, skipped and retried by the
+  next run;
 - **the user is responsible for revoking sharing permissions before deleting
   their account** if they do not want a financial profile to keep existing —
   and be transferred — without them.
