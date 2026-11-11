@@ -102,13 +102,15 @@ test('an invite issued to another address says so instead of offering Accept', a
     await page.goto(`/invites/${OTHER_KEY}/accept`);
     await page.waitForURL((url) => url.pathname === `/invites/${OTHER_KEY}`);
 
-    await expect(
-        page.getByText('This invite was issued to another email address.'),
-    ).toBeVisible();
+    // The page states the reason inline (the lasting signal)…
     const mismatch = page.locator('[data-test="invite-mismatch"]');
     await expect(mismatch).toContainText(
         'It was sent to someone-else@example.com, but you are signed in as returning@example.com.',
     );
+    // …and the flashed reason reaches the toaster.
+    await expect(
+        page.getByText('This invite was issued to another email address.'),
+    ).toBeVisible();
     await expect(
         page.getByRole('button', { name: 'Accept invite' }),
     ).toHaveCount(0);
