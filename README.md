@@ -172,7 +172,9 @@ Failing tests abort the release.
 Required production environment variables:
 
 - `MAIL_CONTACT_ADDRESS` — recipient of the contact-form submissions; the app
-  **fails fast at boot** without it (issue #17).
+  **fails fast at boot** without it (issue #17). Set it as a variable of the
+  GitHub `Production` environment: the deploy renders it into the `.env` and
+  refuses to deploy when it is missing or not a single email address.
 - `GITHUB_REPO_URL` — public repository shown on the landing page (defaults
   to the canonical repo; self-hosted deployments can point it elsewhere).
 - `CONTACT_LOG_RETENTION_DAYS` — retention of the contact-submission log

@@ -205,7 +205,7 @@ deploy_wrapper() {
     mkdir -p "$WORK/cwd/dist"
     _rc=0
     (cd "$WORK/cwd" && wrapper_env RELEASE_ARCHIVE="$WORK/release.tgz" APP_KEY=x DB_HOST=db DB_PORT=5432 \
-        DB_DATABASE=app DB_USERNAME=u DB_PASSWORD=p MAIL_HOST=mail MAIL_PORT=465 MAIL_USERNAME=m MAIL_PASSWORD=mp "$@" \
+        DB_DATABASE=app DB_USERNAME=u DB_PASSWORD=p MAIL_HOST=mail MAIL_PORT=465 MAIL_USERNAME=m MAIL_PASSWORD=mp MAIL_CONTACT_ADDRESS=contact@example.test "$@" \
         $SHELL_UNDER_TEST "$SCRIPTS_DIR/deploy-production.sh") > "$WORK/out" 2>&1 || _rc=$?
     echo "$_rc"
 }
@@ -864,6 +864,37 @@ setup
 rc=$(deploy_wrapper RELEASE_ID=e2e-$$ SSH_KNOWN_HOSTS='example.test ssh-ed25519 PINNED')
 expect 'deploy wrapper: SSH_KNOWN_HOSTS is the only trusted host key' \
     "$rc $(cat "$WORK/home/.ssh/known_hosts") $(ls -l "$WORK/home/.ssh/known_hosts" | cut -c1-10)" '0 example.test ssh-ed25519 PINNED -rw-------'
+
+# --- render-production-env.sh ----------------------------------------------
+
+render_env() {
+    _rc=0
+    env -i PATH="$PATH" HOME="$WORK/home" APP_KEY=x APP_URL=http://localhost DB_HOST=db DB_PORT=5432 DB_DATABASE=app \
+        DB_USERNAME=u DB_PASSWORD=p MAIL_HOST=mail MAIL_PORT=465 MAIL_USERNAME=m MAIL_PASSWORD=mp \
+        MAIL_CONTACT_ADDRESS=contact@example.test "$@" \
+        $SHELL_UNDER_TEST "$SCRIPTS_DIR/render-production-env.sh" > "$WORK/rendered" 2> "$WORK/out" || _rc=$?
+    echo "$_rc"
+}
+
+rc=$(render_env)
+expect 'render: the contact-form recipient is rendered' \
+    "$rc $(grep -c '^MAIL_CONTACT_ADDRESS=contact@example.test$' "$WORK/rendered")" '0 1'
+
+rc=$(render_env MAIL_CONTACT_ADDRESS=)
+expect 'render: a missing MAIL_CONTACT_ADDRESS is refused' \
+    "$rc $(grep -c 'MAIL_CONTACT_ADDRESS' "$WORK/out")" '1 1'
+
+for _address in 'no-at-sign' '@example.test' 'contact@' 'a@b@c' 'contact@example.test
+APP_DEBUG=true' 'contact@example.test APP_DEBUG=true' 'x$(id)@example.test'; do
+    rc=$(render_env MAIL_CONTACT_ADDRESS="$_address")
+    expect "render: an invalid MAIL_CONTACT_ADDRESS [$_address] is refused" \
+        "$rc $(grep -c 'Invalid MAIL_CONTACT_ADDRESS' "$WORK/out")" '1 1'
+done
+
+setup
+rc=$(deploy_wrapper RELEASE_ID=e2e-$$ MAIL_CONTACT_ADDRESS=)
+expect 'deploy wrapper: a missing MAIL_CONTACT_ADDRESS is refused before scp and ssh' \
+    "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" '1 old no-ssh'
 
 setup
 DEPLOY_E2E_ID=e2e-$$
