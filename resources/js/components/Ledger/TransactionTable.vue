@@ -198,7 +198,12 @@ const stampLabel = (createdAt: string): string =>
                             variant="ghost"
                             size="icon-sm"
                             class="text-destructive hover:bg-destructive hover:text-destructive"
-                            :aria-label="$t('ledger.table.removeTransaction')"
+                            :aria-label="
+                                $t('ledger.table.deleteTransactionFor', {
+                                    envelope: transaction.name,
+                                    date: dayLabel(transaction.event_at),
+                                })
+                            "
                             :disabled="pendingId === transaction.id"
                             @click="emit('remove', transaction.id)"
                         >

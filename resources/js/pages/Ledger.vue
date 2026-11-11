@@ -29,6 +29,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Spinner } from '@/components/ui/spinner';
 import { useBudgets } from '@/composables/budgetQueries';
 import { useEnvelopeOptions } from '@/composables/envelopeQueries';
 import {
@@ -46,14 +47,16 @@ import {
     useTransferLedgerOwnership,
 } from '@/composables/ledgerQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
+import { useLocale } from '@/composables/useLocale';
 import { ApiError } from '@/lib/api';
+import { formatMoney } from '@/lib/budget';
 import type {
     AddTransactionInput,
     CreateLedgerInput,
     PickerEnvelope,
 } from '@/lib/ledgerApi';
 import { envelopes as envelopesRoute, ledger as ledgerRoute } from '@/routes';
-import type { ResourcePermission } from '@/types';
+import type { ResourcePermission, Transaction } from '@/types';
 
 defineOptions({
     layout: {
@@ -62,6 +65,7 @@ defineOptions({
 });
 
 const { t } = useI18n();
+const { locale } = useLocale();
 
 // --- state -----------------------------------------------------------------
 const isoToday = (): string => {
@@ -382,11 +386,52 @@ const onAddTransaction = (input: AddTransactionInput) => {
 
 const pendingTransactionId = ref<number | null>(null);
 
+// Deleting a transaction cannot be undone: confirm it, naming the entry.
+const transactionToDelete = ref<Transaction | null>(null);
+const confirmingTransactionDelete = ref(false);
+
 const onRemoveTransaction = (transactionId: number) => {
-    pendingTransactionId.value = transactionId;
+    transactionToDelete.value =
+        transactions.value.find((tx) => tx.id === transactionId) ?? null;
+    confirmingTransactionDelete.value = transactionToDelete.value !== null;
+};
+
+const transactionSummary = computed(() => {
+    const tx = transactionToDelete.value;
+    if (tx === null) {
+        return '';
+    }
+    const [year, month, day] = tx.event_at.split('-').map(Number);
+    const date = new Date(year, month - 1, day).toLocaleDateString(
+        locale.value,
+        { day: 'numeric', month: 'long', year: 'numeric' },
+    );
+    // A masked amount is never revealed, not even in the confirmation.
+    return tx.masked || tx.amount === null
+        ? t('ledger.deleteTransaction.summaryMasked', {
+              envelope: tx.name,
+              date,
+          })
+        : t('ledger.deleteTransaction.summary', {
+              envelope: tx.name,
+              date,
+              amount: formatMoney(tx.amount, currency.value, locale.value),
+          });
+});
+
+const confirmRemoveTransaction = () => {
+    const tx = transactionToDelete.value;
+    if (tx === null) {
+        return;
+    }
+    pendingTransactionId.value = tx.id;
     deleteTransaction.mutate(
-        { transactionId },
+        { transactionId: tx.id },
         {
+            onSuccess: () => {
+                confirmingTransactionDelete.value = false;
+                toast.success(t('ledger.toast.transactionDeleted'));
+            },
             onSettled: () => {
                 pendingTransactionId.value = null;
             },
@@ -598,6 +643,40 @@ const onRemoveTransaction = (transactionId: number) => {
             @revoke="onRevokeShare"
             @transfer="onTransferOwnership"
         />
+
+        <Dialog
+            :open="confirmingTransactionDelete"
+            @update:open="confirmingTransactionDelete = $event"
+        >
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{{
+                        $t('ledger.deleteTransaction.title')
+                    }}</DialogTitle>
+                    <DialogDescription>
+                        {{ transactionSummary }}
+                        {{ $t('ledger.deleteTransaction.description') }}
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button
+                        variant="ghost"
+                        @click="confirmingTransactionDelete = false"
+                        >{{
+                            $t('common.actions.cancel')
+                        }}</Button
+                    >
+                    <Button
+                        variant="destructive"
+                        :disabled="deleteTransaction.isPending.value"
+                        @click="confirmRemoveTransaction"
+                    >
+                        <Spinner v-if="deleteTransaction.isPending.value" />
+                        {{ $t('ledger.deleteTransaction.confirm') }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
         <Dialog :open="showDelete" @update:open="showDelete = false">
             <DialogContent class="sm:max-w-md">

@@ -10,7 +10,8 @@
             "ledgerClosed": "Grand livre clôturé.",
             "ledgerReopened": "Grand livre rouvert.",
             "ledgerDeleted": "Grand livre supprimé.",
-            "transactionAdded": "Transaction ajoutée."
+            "transactionAdded": "Transaction ajoutée.",
+            "transactionDeleted": "Transaction supprimée."
         },
         "error": {
             "generic": "Une erreur est survenue."
@@ -42,6 +43,13 @@
             "title": "Supprimer ce grand livre ?",
             "description": "Cette action supprime définitivement le grand livre et TOUTES ses transactions. Cette action est irréversible.",
             "confirm": "Supprimer le grand livre"
+        },
+        "deleteTransaction": {
+            "title": "Supprimer cette transaction ?",
+            "summary": "{envelope} · {date} · {amount}.",
+            "summaryMasked": "{envelope} · {date}.",
+            "description": "La transaction sera définitivement supprimée. Cette action est irréversible.",
+            "confirm": "Supprimer la transaction"
         },
         "status": {
             "open": "Ouvert",
@@ -91,7 +99,7 @@
             "actions": "Actions",
             "recorded": "Enregistré",
             "formerMember": "Ancien membre",
-            "removeTransaction": "Retirer la transaction",
+            "deleteTransactionFor": "Supprimer la transaction : {envelope}, {date}",
             "empty": "Aucune transaction ce mois-ci.",
             "loading": "Chargement des transactions…",
             "error": "Les transactions n'ont pas pu être chargées."

@@ -10,7 +10,8 @@
             "ledgerClosed": "Ledger closed.",
             "ledgerReopened": "Ledger reopened.",
             "ledgerDeleted": "Ledger deleted.",
-            "transactionAdded": "Transaction added."
+            "transactionAdded": "Transaction added.",
+            "transactionDeleted": "Transaction deleted."
         },
         "error": {
             "generic": "Something went wrong."
@@ -42,6 +43,13 @@
             "title": "Delete this ledger?",
             "description": "This permanently removes the ledger and ALL of its transactions. This cannot be undone.",
             "confirm": "Delete ledger"
+        },
+        "deleteTransaction": {
+            "title": "Delete this transaction?",
+            "summary": "{envelope} · {date} · {amount}.",
+            "summaryMasked": "{envelope} · {date}.",
+            "description": "The transaction will be permanently removed. This cannot be undone.",
+            "confirm": "Delete transaction"
         },
         "status": {
             "open": "Open",
@@ -91,7 +99,7 @@
             "actions": "Actions",
             "recorded": "Recorded",
             "formerMember": "Former member",
-            "removeTransaction": "Remove transaction",
+            "deleteTransactionFor": "Delete transaction: {envelope}, {date}",
             "empty": "No transactions this month.",
             "loading": "Loading transactions…",
             "error": "Transactions could not be loaded."
