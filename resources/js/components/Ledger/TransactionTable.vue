@@ -1,6 +1,6 @@
 <!-- biome-ignore-all lint/a11y/noNoninteractiveTabindex: the table scroll region must be keyboard-focusable to scroll (WCAG 2.1.1) -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 import Currency from '@/components/Currency.vue';
 import EnvelopeChip from '@/components/EnvelopeChip.vue';
 import Icon from '@/components/Icon.vue';
@@ -88,12 +88,21 @@ const stampLabel = (createdAt: string): string =>
         hour: 'numeric',
         minute: '2-digit',
     });
+
+const region = useTemplateRef<HTMLElement>('region');
+
+/**
+ * Focuses the table region — the stable target once a row's delete action
+ * disappears with its row (focus would otherwise drop to the page body).
+ */
+defineExpose({ focus: () => region.value?.focus() });
 </script>
 
 <template>
     <!-- A labelled, focusable scroll region: on narrow screens the columns
          (including the delete action) scroll instead of being clipped. -->
     <section
+        ref="region"
         class="overflow-x-auto rounded-lg border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         :aria-label="$t('ledger.table.label')"
         tabindex="0"

@@ -431,6 +431,19 @@ const transactionSummary = computed(() => {
           });
 });
 
+const transactionTable =
+    useTemplateRef<InstanceType<typeof TransactionTable>>('transactionTable');
+/** The deleted row's trash button is gone: focus returns to the table. */
+let refocusTable = false;
+
+const onDeleteDialogCloseFocus = (event: Event) => {
+    if (refocusTable) {
+        refocusTable = false;
+        event.preventDefault();
+        transactionTable.value?.focus();
+    }
+};
+
 const confirmRemoveTransaction = () => {
     const tx = transactionToDelete.value;
     if (tx === null) {
@@ -441,6 +454,7 @@ const confirmRemoveTransaction = () => {
         { transactionId: tx.id },
         {
             onSuccess: () => {
+                refocusTable = true;
                 confirmingTransactionDelete.value = false;
                 toast.success(t('ledger.toast.transactionDeleted'));
             },
@@ -625,6 +639,7 @@ const confirmRemoveTransaction = () => {
                     </Card>
 
                     <TransactionTable
+                        ref="transactionTable"
                         :transactions="transactions"
                         :currency="currency"
                         :current-user-id="meId"
@@ -671,7 +686,10 @@ const confirmRemoveTransaction = () => {
             :open="confirmingTransactionDelete"
             @update:open="confirmingTransactionDelete = $event"
         >
-            <DialogContent class="sm:max-w-md">
+            <DialogContent
+                class="sm:max-w-md"
+                @close-auto-focus="onDeleteDialogCloseFocus"
+            >
                 <DialogHeader>
                     <DialogTitle>{{
                         $t('ledger.deleteTransaction.title')
