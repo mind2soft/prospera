@@ -582,7 +582,11 @@ php artisan amounts:verify
 php artisan optimize:clear
 rm -rf public/storage
 php artisan storage:link
-php artisan config:cache
+# The cached configuration holds APP_KEY (it unwraps every amount key) and
+# the database and mail passwords, like the .env: owner-only from its
+# creation. PHP runs as the deploy account (it reads the 0600 .env).
+(umask 077 && php artisan config:cache)
+chmod 600 bootstrap/cache/config.php
 php artisan route:cache
 php artisan view:cache
 

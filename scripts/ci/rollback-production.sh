@@ -263,7 +263,8 @@ fi
 # that every amount decrypts with it.
 cd "$TARGET_RELEASE"
 
-if ! php artisan config:cache; then
+# Owner-only like the .env: it holds APP_KEY and the service passwords.
+if ! (umask 077 && php artisan config:cache) || ! chmod 600 bootstrap/cache/config.php; then
     printf 'Refusing to roll back: caching the configuration of %s failed\n' "$(basename "$TARGET_RELEASE")" >&2
     exit 1
 fi
