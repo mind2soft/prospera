@@ -5,6 +5,7 @@ namespace App\Models;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
@@ -216,9 +217,9 @@ class FinancialProfileInvite extends Model
      *
      * Accounts that register through an invite skip the personal default
      * profile seeding (docs/shared-finances.md — invites), so whenever the
-     * pending grant does not happen — the invite was revoked, pruned, or the
-     * account's email changed before verification — the account is seeded
-     * with its own default profile here to keep it usable.
+     * pending grant does not happen — the invite was revoked, pruned or has
+     * expired, or the account's email changed before verification — the
+     * account is seeded with its own default profile here to keep it usable.
      */
     public static function completePendingFor(User $user): void
     {
@@ -235,7 +236,12 @@ class FinancialProfileInvite extends Model
                 return;
             }
 
-            if (mb_strtolower($invite->email) === mb_strtolower($user->email)
+            // An expired reservation no longer grants anything: the owner's
+            // pending list stops showing (and offering to revoke) invites
+            // once they expire, so a grant past expiry would be invisible
+            // to them.
+            if (! $invite->isExpired()
+                && mb_strtolower($invite->email) === mb_strtolower($user->email)
                 && ! $invite->profile->isMember($user)) {
                 $invite->profile->members()->attach($user->id, $invite->membershipPivotAttributes());
 
@@ -249,6 +255,45 @@ class FinancialProfileInvite extends Model
 
             $invite->consume();
         });
+    }
+
+    /**
+     * Before the given user's account is deleted: the pending invites they
+     * issued on profiles that survive them are re-attributed to each
+     * profile's current owner, so the `invited_by` cascade does not silently
+     * drop them (an invitee who already registered through the invite would
+     * otherwise end up outside the profile). Invites of profiles deleted
+     * with the account go away with the profile.
+     */
+    public static function reassignIssuedBy(User $user): void
+    {
+        self::query()
+            ->where('invited_by', $user->id)
+            ->get()
+            ->groupBy('profile_id')
+            ->each(function (Collection $invites, int $profileId) use ($user): void {
+                $owner = FinancialProfile::query()->find($profileId)?->ownerUser();
+
+                if ($owner === null || $owner->id === $user->id) {
+                    return;
+                }
+
+                self::query()
+                    ->whereKey($invites->modelKeys())
+                    ->update(['invited_by' => $owner->id, 'updated_at' => now()]);
+            });
+    }
+
+    /**
+     * Before the given (unverified) account is deleted: the invite it
+     * reserved is released instead of cascading away, so the owner's invite
+     * stays pending and usable (e.g. to re-register with the same email).
+     */
+    public static function releaseReservationOf(User $user): void
+    {
+        self::query()
+            ->where('pending_user_id', $user->id)
+            ->update(['pending_user_id' => null, 'updated_at' => now()]);
     }
 
     /**

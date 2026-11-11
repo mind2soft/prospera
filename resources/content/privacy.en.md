@@ -97,7 +97,9 @@ retention policy the service commits to:
   and a budget draft **7 years after its creation**;
 - removal is performed at the application level — the amounts can only be
   interpreted in-app — so a record is either fully present or fully gone,
-  never partially deleted.
+  never partially deleted;
+- an account whose email address is **never verified** and that holds no
+  financial data is deleted **30 days** after its last change.
 
 Envelopes and scheduled transactions are not bound to a period and are not
 auto-deleted; they are removed with their owner's account, as described

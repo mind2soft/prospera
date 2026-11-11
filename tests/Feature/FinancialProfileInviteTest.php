@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Mail\ProfileInvite;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileInvite;
+use App\Models\FinancialProfileUser;
 use App\Models\User;
 use App\Settings\NotificationSettings;
 use Carbon\CarbonImmutable;
@@ -13,6 +14,8 @@ use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
+use RuntimeException;
 use Tests\TestCase;
 
 class FinancialProfileInviteTest extends TestCase
@@ -441,36 +444,113 @@ class FinancialProfileInviteTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // Declining
+    // ------------------------------------------------------------------
+
+    public function test_declining_deletes_the_invite_and_removes_it_from_the_owners_list(): void
+    {
+        $invitee = User::factory()->create(['email' => 'invitee@example.com']);
+        $invite = $this->createInvite(email: 'Invitee@Example.com');
+
+        $this->actingAs($invitee)->postJson("/api/invites/{$this->key}/decline")->assertNoContent();
+
+        $this->assertModelMissing($invite);
+        $this->assertFalse($this->profile->isMember($invitee));
+        $this->actingAs($this->owner)->getJson("/api/profiles/{$this->profile->id}/invites")
+            ->assertOk()->assertJsonCount(0, 'invites');
+
+        // A declined invite cannot be accepted afterwards.
+        $this->actingAs($invitee)->postJson("/api/invites/{$this->key}/accept")->assertNotFound();
+    }
+
+    public function test_only_the_invited_account_can_decline(): void
+    {
+        $invite = $this->createInvite(email: 'invitee@example.com');
+
+        $this->actingAs($this->member)->postJson("/api/invites/{$this->key}/decline")
+            ->assertUnprocessable()->assertJsonValidationErrors('invite_key');
+
+        $this->assertModelExists($invite);
+    }
+
+    public function test_reserved_and_unknown_invites_cannot_be_declined(): void
+    {
+        $invitee = User::factory()->create(['email' => 'invitee@example.com']);
+        $invite = $this->createInvite(email: 'invitee@example.com');
+        $invite->forceFill(['pending_user_id' => User::factory()->unverified()->create()->id])->save();
+
+        $this->actingAs($invitee)->postJson("/api/invites/{$this->key}/decline")->assertNotFound();
+        $this->actingAs($invitee)->postJson('/api/invites/not-a-key/decline')->assertNotFound();
+
+        $this->assertModelExists($invite);
+    }
+
+    public function test_declining_requires_a_verified_account(): void
+    {
+        $unverified = User::factory()->unverified()->create(['email' => 'invitee@example.com']);
+        $invite = $this->createInvite(email: 'invitee@example.com');
+
+        $this->postJson("/api/invites/{$this->key}/decline")->assertUnauthorized();
+        $this->actingAs($unverified)->postJson("/api/invites/{$this->key}/decline")->assertForbidden();
+
+        $this->assertModelExists($invite);
+    }
+
+    // ------------------------------------------------------------------
     // One-click accept link (issue #39)
     // ------------------------------------------------------------------
 
-    public function test_the_one_click_accept_link_accepts_the_matching_signed_in_user(): void
+    public function test_the_accept_link_lands_on_the_confirmation_without_granting_membership(): void
     {
         $invite = $this->createInvite(email: $this->member->email);
         $this->profile->members()->detach($this->member->id);
 
-        $response = $this->actingAs($this->member)->get("/invites/{$this->key}/accept");
+        // SEC-3: a GET never changes state, even for the matching signed-in
+        // user — the confirmation page's button POSTs the accept.
+        $this->actingAs($this->member)->get("/invites/{$this->key}/accept")
+            ->assertRedirect(route('invites.landing', ['inviteKey' => $this->key]));
 
-        $response->assertRedirect(route('dashboard', absolute: false));
-        $this->assertDatabaseHas('financial_profile_user', [
+        $this->assertDatabaseMissing('financial_profile_user', [
             'profile_id' => $this->profile->id,
             'user_id' => $this->member->id,
-            'is_owner' => false,
         ]);
-        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
-    }
-
-    public function test_the_one_click_accept_link_flashes_a_success_toast(): void
-    {
-        $this->createInvite(email: $this->member->email);
-        $this->profile->members()->detach($this->member->id);
+        $this->assertDatabaseHas('financial_profile_invites', ['id' => $invite->id]);
 
         $response = $this->actingAs($this->member)
             ->followingRedirects()
             ->get("/invites/{$this->key}/accept");
 
-        $page = $response->viewData('page');
-        $this->assertSame('success', $page['flash']['toast']['type'] ?? null);
+        $response->assertOk()->assertInertia(fn ($page) => $page
+            ->component('auth/Register')
+            ->where('invite.profile', 'Family'));
+        $this->assertArrayNotHasKey('toast', $response->viewData('page')['flash'] ?? []);
+    }
+
+    public function test_a_cross_site_accept_link_navigation_does_not_join_the_profile(): void
+    {
+        $this->createInvite(email: $this->member->email);
+        $this->profile->members()->detach($this->member->id);
+
+        $this->actingAs($this->member)
+            ->withHeaders(['Sec-Fetch-Site' => 'cross-site'])
+            ->get("/invites/{$this->key}/accept");
+
+        $this->assertDatabaseMissing('financial_profile_user', [
+            'profile_id' => $this->profile->id,
+            'user_id' => $this->member->id,
+        ]);
+    }
+
+    public function test_the_confirmation_post_completes_the_accept_link_flow(): void
+    {
+        $invite = $this->createInvite(email: $this->member->email);
+        $this->profile->members()->detach($this->member->id);
+
+        $this->actingAs($this->member)->get("/invites/{$this->key}/accept");
+        $this->actingAs($this->member)->postJson("/api/invites/{$this->key}/accept")->assertOk();
+
+        $this->assertTrue($this->profile->isMember($this->member));
+        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
     }
 
     public function test_the_one_click_accept_link_rejects_other_users(): void
@@ -692,6 +772,94 @@ class FinancialProfileInviteTest extends TestCase
             'user_id' => $user->id,
             'is_owner' => true,
         ]);
+    }
+
+    public function test_a_failed_grant_on_verification_is_completed_on_the_next_request(): void
+    {
+        $invite = $this->createInvite(email: 'newbie@example.com');
+
+        $this->post('/register', [
+            'name' => 'New User',
+            'email' => 'newbie@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'invite_key' => self::RAW_KEY,
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $user = User::where('email', 'newbie@example.com')->firstOrFail();
+
+        // RES-7: the grant fails once (a transient DB error) while the
+        // account is already marked verified.
+        $failed = false;
+        FinancialProfileUser::creating(function () use (&$failed): void {
+            if (! $failed) {
+                $failed = true;
+
+                throw new RuntimeException('Deadlock found when trying to get lock');
+            }
+        });
+
+        $verificationUrl = URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addMinutes(60),
+            ['id' => $user->id, 'hash' => sha1($user->email)],
+        );
+
+        // The verification itself still succeeds…
+        $this->actingAs($user)->get($verificationUrl)
+            ->assertRedirect(route('dashboard', absolute: false).'?verified=1');
+        $this->assertTrue($user->fresh()->hasVerifiedEmail());
+        $this->assertSame(0, $user->profiles()->count());
+        $this->assertDatabaseHas('financial_profile_invites', ['id' => $invite->id, 'pending_user_id' => $user->id]);
+
+        // …and the next authenticated request completes the grant.
+        $this->actingAs($user->fresh())->getJson('/api/profiles')
+            ->assertOk()
+            ->assertJsonPath('profiles.0.id', $this->profile->id);
+
+        $this->assertTrue($this->profile->isMember($user));
+        $this->assertTrue($this->profile->isDefaultFor($user));
+        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
+    }
+
+    public function test_a_verified_account_without_any_profile_gets_a_default_one_on_the_next_request(): void
+    {
+        // E.g. the listener failed and the reservation was pruned since.
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get('/dashboard')->assertOk();
+
+        $this->assertSame(1, $user->profiles()->count());
+        $this->assertTrue($user->profiles()->sole()->isDefaultFor($user));
+    }
+
+    public function test_an_expired_reservation_does_not_grant_membership_on_verification(): void
+    {
+        $invite = $this->createInvite(email: 'newbie@example.com');
+
+        $this->post('/register', [
+            'name' => 'New User',
+            'email' => 'newbie@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'invite_key' => self::RAW_KEY,
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $user = User::where('email', 'newbie@example.com')->firstOrFail();
+
+        // WF-2: past its expiry the reservation disappears from the owner's
+        // pending list (nothing left to revoke) — so it must not grant.
+        $this->travel(49)->hours();
+        $this->actingAs($this->owner)->getJson("/api/profiles/{$this->profile->id}/invites")
+            ->assertOk()->assertJsonCount(0, 'invites');
+
+        $user->markEmailAsVerified();
+        event(new Verified($user));
+
+        $this->assertFalse($this->profile->isMember($user));
+        $this->assertSame(1, $user->profiles()->count());
+        $this->assertTrue($user->profiles()->sole()->isOwner($user));
+        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
     }
 
     public function test_registration_without_an_invite_still_creates_a_default_profile(): void

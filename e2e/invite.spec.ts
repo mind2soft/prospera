@@ -168,6 +168,15 @@ test('declining an invite does not grant membership', async ({ page }) => {
         (m: { email: string }) => m.email,
     );
     expect(memberEmails).not.toContain('waverer@example.com');
+
+    // Declining deletes the invite: it leaves the owner's pending list.
+    const invites = await page.request.get(
+        `/api/profiles/${profileId}/invites`,
+    );
+    const pendingEmails: string[] = (await invites.json()).invites.map(
+        (i: { email: string }) => i.email,
+    );
+    expect(pendingEmails).not.toContain('waverer@example.com');
 });
 
 test('an expired invite link renders the explicit error state', async ({

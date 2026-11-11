@@ -7,7 +7,10 @@ use App\Http\Controllers\EnvelopeController;
 use App\Http\Controllers\FinancialProfileController;
 use App\Http\Controllers\FinancialProfileInviteController;
 use App\Http\Controllers\LedgerController;
+use App\Http\Middleware\EnsureAccountHasProfile;
 use Illuminate\Support\Facades\Route;
+use Laravel\Fortify\Features;
+use Laravel\Fortify\Http\Controllers\RegisteredUserController;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -23,6 +26,15 @@ Route::post('contact', [ContactController::class, 'store'])
     ->middleware('throttle:contact');
 Route::get('contact/sent', [ContactController::class, 'sent'])->name('contact.sent');
 
+// Registration (Fortify's own route has no throttle): redeclared here — app
+// routes load after Fortify's, so this one replaces it — to rate-limit the
+// verification emails it sends to arbitrary addresses.
+if (Features::enabled(Features::registration())) {
+    Route::post('register', [RegisteredUserController::class, 'store'])
+        ->middleware(['guest:'.config('fortify.guard'), 'throttle:register'])
+        ->name('register.store');
+}
+
 // Public invite validation (used by the invite landing page and the
 // registration flow); accepting requires authentication below.
 Route::get('api/invites/{inviteKey}', [FinancialProfileInviteController::class, 'show'])
@@ -36,12 +48,13 @@ Route::get('invites/{inviteKey}', [FinancialProfileInviteController::class, 'lan
     ->name('invites.landing')
     ->middleware('throttle:invites');
 
-Route::middleware(['auth', 'verified'])->group(function () {
-    // One-click accept from the invitation email: the signed-in user whose
-    // account email matches the invite is accepted straight through; guests
+// EnsureAccountHasProfile completes an invite grant whose verification
+// listener failed (no verified account is left without a profile).
+Route::middleware(['auth', 'verified', EnsureAccountHasProfile::class])->group(function () {
+    // Accept link from the invitation email: never changes state — it lands
+    // on the invite confirmation page, whose button POSTs the accept. Guests
     // are redirected to the sign-in page (the auth middleware preserves the
-    // intended URL), unverified users to the verification notice, and every
-    // other case falls back to the invite landing page.
+    // intended URL) and unverified users to the verification notice.
     Route::get('invites/{inviteKey}/accept', [FinancialProfileInviteController::class, 'acceptViaLink'])
         ->name('invites.accept-link')
         ->middleware('throttle:invites');
@@ -58,6 +71,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('invites/{inviteKey}/accept', [FinancialProfileInviteController::class, 'accept'])
             ->name('invites.accept')
             ->middleware('throttle:invites');
+        Route::post('invites/{inviteKey}/decline', [FinancialProfileInviteController::class, 'decline'])
+            ->name('invites.decline')
+            ->middleware('throttle:invites');
 
         Route::prefix('profiles')->name('profiles.')->group(function () {
             Route::get('/', [FinancialProfileController::class, 'index'])->name('index');
@@ -71,7 +87,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('{profile}/set-default', [FinancialProfileController::class, 'setDefault'])->name('set-default');
 
             Route::post('{profile}/invites', [FinancialProfileInviteController::class, 'store'])->name('invites.store')
-                ->middleware('throttle:invites');
+                ->middleware('throttle:invite-creation');
             Route::get('{profile}/invites', [FinancialProfileInviteController::class, 'index'])->name('invites.index');
             Route::delete('{profile}/invites/{invite}', [FinancialProfileInviteController::class, 'destroy'])->name('invites.destroy');
         })->whereNumber('profile');

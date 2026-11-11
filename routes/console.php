@@ -14,6 +14,10 @@ Schedule::command('invites:prune')->daily();
 // CONTACT_LOG_RETENTION_DAYS (default 90 days).
 Schedule::command('contact:prune')->daily();
 
+// Accounts never verified within UNVERIFIED_ACCOUNT_RETENTION_DAYS (default
+// 30) that hold no data are deleted (mistyped emails, abandoned sign-ups).
+Schedule::command('users:prune-unverified')->daily()->withoutOverlapping()->onOneServer();
+
 // Encryption at rest (docs/encryption.md): monthly data-key rotation; retired
 // key versions are deleted after their grace period. The daily verify catches
 // a broken APP_KEY in the logs even when no request touches amounts — the
