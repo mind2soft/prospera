@@ -1,0 +1,108 @@
+{
+    "dashboard": {
+        "title": "Dashboard",
+        "add": "Add widget",
+        "catalog": {
+            "envelope_spending": {
+                "name": "Envelope spending",
+                "description": "Spent totals per envelope with budget progress."
+            },
+            "income_expenses": {
+                "name": "Income & expenses history",
+                "description": "Revenues and expenses over the selected period."
+            },
+            "radial": {
+                "name": "Radial",
+                "description": "The ratio of the selected envelopes' amounts."
+            }
+        },
+        "widget": {
+            "defaultTitle": {
+                "envelope_spending": "Envelope spending",
+                "income_expenses": "Income & expenses",
+                "radial": "Radial"
+            },
+            "settings": "Widget settings",
+            "remove": "Remove widget",
+            "drag": "Drag to reorder",
+            "emptySelection": "Select envelopes in the widget settings to see data.",
+            "masked": "Amounts hidden — you don't have access to this envelope's amounts.",
+            "error": "This widget could not be loaded.",
+            "retry": "Retry",
+            "overBudget": "Over budget",
+            "noBudget": "No budget covers this period"
+        },
+        "settings": {
+            "title": "Title",
+            "titlePlaceholder": "Default title",
+            "viewType": "View type",
+            "viewTypes": {
+                "single": "Table",
+                "stacked_bars": "Stacked bars",
+                "line": "Line graph",
+                "pie": "Pie chart",
+                "donut": "Donut chart"
+            },
+            "columnWidth": "Column width",
+            "periodType": "Period type",
+            "periodTypes": {
+                "days": "Days",
+                "months": "Months"
+            },
+            "periodRange": "Period range",
+            "ranges": {
+                "days": {
+                    "1": "Today",
+                    "2": "Past 2 days",
+                    "3": "Past 3 days",
+                    "7": "Past week",
+                    "14": "Past 2 weeks"
+                },
+                "months": {
+                    "1": "Current month",
+                    "2": "Past 2 months",
+                    "3": "Past 3 months",
+                    "6": "Past 6 months",
+                    "12": "Past 12 months"
+                }
+            },
+            "selection": "Envelope selection",
+            "addEnvelope": "Add envelope",
+            "addGroup": "Add group",
+            "groupName": "Group name",
+            "groupNamePlaceholder": "e.g. Combine income",
+            "groupMember": "Member",
+            "noEnvelopesLeft": "Every visible envelope is already selected.",
+            "removeItem": "Remove from selection",
+            "renameGroup": "Rename group",
+            "done": "Done"
+        },
+        "empty": {
+            "title": "Make it yours",
+            "description": "Add widgets to see envelope spending, income trends and ratios at a glance.",
+            "add": "Add a widget"
+        },
+        "removeConfirm": {
+            "title": "Remove widget?",
+            "description": "The widget and its settings will be removed from your dashboard. Your financial data is not affected.",
+            "cancel": "Cancel",
+            "confirm": "Remove"
+        },
+        "toast": {
+            "failed": "Something went wrong.",
+            "saveFailed": "Could not save your dashboard.",
+            "added": "Widget added to the dashboard."
+        },
+        "history": {
+            "revenue": "Revenue",
+            "expenses": "Expenses"
+        },
+        "spending": {
+            "envelope": "Envelope",
+            "spent": "Spent"
+        },
+        "radial": {
+            "legendTitle": "Selection"
+        }
+    }
+}

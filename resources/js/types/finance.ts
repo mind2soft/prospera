@@ -124,3 +124,83 @@ export type Transaction = {
     /** id is null for deleted users ("Former member"). */
     user: { id: number | null; name: string };
 };
+
+// ---- Dashboard (docs/dashboard.md) ------------------------------------------
+
+export type DashboardWidgetType =
+    | 'envelope_spending'
+    | 'income_expenses'
+    | 'radial';
+
+export type DashboardWidgetViewType =
+    | 'single'
+    | 'stacked_bars'
+    | 'line'
+    | 'pie'
+    | 'donut';
+
+export type DashboardPeriodType = 'days' | 'months';
+
+/** Ordered envelope selection: envelope rows and flat, single-level groups. */
+export type DashboardSelectionItem =
+    | { kind: 'envelope'; envelope_id: number }
+    | { kind: 'group'; name: string; envelope_ids: number[] };
+
+export type DashboardWidget = {
+    id: number;
+    type: DashboardWidgetType;
+    /** null → the client renders the localized default title. */
+    title: string | null;
+    view_type: DashboardWidgetViewType;
+    /** 1..5 columns of the xl grid; clamped to the viewport's column count. */
+    column_width: number;
+    period: { type: DashboardPeriodType; range: number };
+    selection: DashboardSelectionItem[];
+    /** Display order (drag & drop). */
+    order: number;
+};
+
+/** A widget configuration being edited / saved; `id` present for saved widgets (in-place updates). */
+export type DashboardWidgetConfig = Omit<DashboardWidget, 'id' | 'order'> & {
+    id?: number;
+};
+
+export type DashboardSpendingRow = {
+    key: string;
+    kind: 'envelope' | 'group';
+    envelope_id?: number;
+    name: string;
+    color?: string;
+    direction?: 'expense' | 'revenue';
+    masked: boolean;
+    /** Signed sum of recorded transactions (null when masked). */
+    spent: number | null;
+    /** Summed allocations on the published budgets covering the period (null = no progress). */
+    allocated: number | null;
+};
+
+export type DashboardHistoryBucket = {
+    bucket: string; // "2026-11-10" for days periods, "2026-11" for months
+    masked: boolean;
+    revenue: number | null;
+    expenses: number | null;
+};
+
+export type DashboardRadialRow = {
+    key: string;
+    kind: 'envelope' | 'group';
+    envelope_id?: number;
+    name: string;
+    color?: string;
+    masked: boolean;
+    value: number | null; // |a|
+};
+
+export type DashboardWidgetData =
+    | { type: 'envelope_spending'; rows: DashboardSpendingRow[] }
+    | {
+          type: 'income_expenses';
+          masked: boolean;
+          series: DashboardHistoryBucket[];
+      }
+    | { type: 'radial'; rows: DashboardRadialRow[] };

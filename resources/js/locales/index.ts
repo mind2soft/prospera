@@ -9,6 +9,7 @@ import auth from './en/auth.json';
 import budget from './en/budget.json';
 import common from './en/common.json';
 import contact from './en/contact.json';
+import dashboard from './en/dashboard.json';
 import envelopes from './en/envelopes.json';
 import layout from './en/layout.json';
 import ledger from './en/ledger.json';
@@ -20,6 +21,7 @@ import authFr from './fr/auth.json';
 import budgetFr from './fr/budget.json';
 import commonFr from './fr/common.json';
 import contactFr from './fr/contact.json';
+import dashboardFr from './fr/dashboard.json';
 import envelopesFr from './fr/envelopes.json';
 import layoutFr from './fr/layout.json';
 import ledgerFr from './fr/ledger.json';
@@ -33,6 +35,7 @@ const en = {
     ...auth,
     ...budget,
     ...contact,
+    ...dashboard,
     ...envelopes,
     ...layout,
     ...ledger,
@@ -47,6 +50,7 @@ const fr = {
     ...authFr,
     ...budgetFr,
     ...contactFr,
+    ...dashboardFr,
     ...envelopesFr,
     ...layoutFr,
     ...ledgerFr,

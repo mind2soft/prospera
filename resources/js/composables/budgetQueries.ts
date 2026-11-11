@@ -1,5 +1,6 @@
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { useQueryClient } from 'vue-query';
+import { invalidateDashboardData } from '@/composables/dashboardQueries';
 import { type QueryKey, useMutation, useQuery } from '@/composables/query';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { type AddEnvelopeInput, budgetApi } from '@/lib/budgetApi';
@@ -48,6 +49,7 @@ export function useCreateBudget() {
                 void queryClient.invalidateQueries({
                     queryKey: ['budgets'],
                 });
+                invalidateDashboardData(queryClient);
             },
         },
     );
@@ -62,6 +64,7 @@ export function usePublishBudget() {
                 budget: data.budget,
             });
             void queryClient.invalidateQueries({ queryKey: ['budgets'] });
+            invalidateDashboardData(queryClient);
         },
     });
 }
@@ -90,6 +93,7 @@ export function useDeleteBudget() {
         onSuccess: (_data, id) => {
             queryClient.removeQueries(budgetKeys.detail(id));
             void queryClient.invalidateQueries({ queryKey: ['budgets'] });
+            invalidateDashboardData(queryClient);
         },
     });
 }
@@ -103,6 +107,7 @@ export function useAddEnvelope() {
         {
             onSuccess: (_data, { budgetId }) => {
                 void queryClient.invalidateQueries(budgetKeys.detail(budgetId));
+                invalidateDashboardData(queryClient);
             },
         },
     );
@@ -124,6 +129,7 @@ export function useUpdateEnvelope() {
         {
             onSuccess: (_data, { budgetId }) => {
                 void queryClient.invalidateQueries(budgetKeys.detail(budgetId));
+                invalidateDashboardData(queryClient);
             },
         },
     );
@@ -138,6 +144,7 @@ export function useRemoveEnvelope() {
         {
             onSuccess: (_data, { budgetId }) => {
                 void queryClient.invalidateQueries(budgetKeys.detail(budgetId));
+                invalidateDashboardData(queryClient);
             },
         },
     );
