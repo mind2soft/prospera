@@ -620,11 +620,7 @@ const joinedLabel = (joinedAt: string): string =>
                                         name: profile.name,
                                     })
                                 "
-                                :title="
-                                    $t('settings.profiles.setDefaultNamed', {
-                                        name: profile.name,
-                                    })
-                                "
+                                :title="$t('settings.profiles.setDefault')"
                                 :disabled="setDefaultProfile.isPending.value"
                                 data-test="set-default-button"
                                 @click="setDefault(profile)"
@@ -741,6 +737,11 @@ const joinedLabel = (joinedAt: string): string =>
                                                 $t(
                                                     'settings.profiles.removeMemberNamed',
                                                     { name: member.name },
+                                                )
+                                            "
+                                            :title="
+                                                $t(
+                                                    'settings.profiles.removeMember',
                                                 )
                                             "
                                             @click="removeTarget = member"
@@ -878,6 +879,11 @@ const joinedLabel = (joinedAt: string): string =>
                                                     { email: invite.email },
                                                 )
                                             "
+                                            :title="
+                                                $t(
+                                                    'settings.profiles.copyInviteLink',
+                                                )
+                                            "
                                             @click="copyInvite(invite)"
                                         >
                                             <Icon
@@ -898,6 +904,11 @@ const joinedLabel = (joinedAt: string): string =>
                                                 $t(
                                                     'settings.profiles.revokeInviteFor',
                                                     { email: invite.email },
+                                                )
+                                            "
+                                            :title="
+                                                $t(
+                                                    'settings.profiles.revokeInvite',
                                                 )
                                             "
                                             :disabled="

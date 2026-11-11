@@ -109,7 +109,11 @@
             "loadError": "Your profiles could not be loaded.",
             "membersLoadError": "The members of this profile could not be loaded.",
             "invitesLoadError": "The pending invites could not be loaded.",
-            "removeMemberNamed": "Remove {name} from the profile"
+            "removeMemberNamed": "Remove member {name}",
+            "removeMember": "Remove member",
+            "copyInviteLink": "Copy invite link",
+            "revokeInvite": "Revoke invite",
+            "setDefault": "Set as default"
         },
         "security": {
             "title": "Security settings",

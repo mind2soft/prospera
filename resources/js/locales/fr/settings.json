@@ -109,7 +109,11 @@
             "loadError": "Vos profils n’ont pas pu être chargés.",
             "membersLoadError": "Les membres de ce profil n’ont pas pu être chargés.",
             "invitesLoadError": "Les invitations en attente n’ont pas pu être chargées.",
-            "removeMemberNamed": "Retirer {name} du profil"
+            "removeMemberNamed": "Retirer le membre {name}",
+            "removeMember": "Retirer le membre",
+            "copyInviteLink": "Copier le lien d'invitation",
+            "revokeInvite": "Révoquer l'invitation",
+            "setDefault": "Définir par défaut"
         },
         "security": {
             "title": "Paramètres de sécurité",
