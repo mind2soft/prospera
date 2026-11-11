@@ -17,6 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import { useLocale } from '@/composables/useLocale';
 import { CURRENCIES, currencyName } from '@/lib/budget';
 
@@ -26,6 +27,8 @@ const props = defineProps<{
     open: boolean;
     /** Currency pre-filled from the published budget being cloned. */
     currency?: string;
+    /** The clone request is in flight: the parent closes on success. */
+    pending?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -45,8 +48,10 @@ watch(
 );
 
 const confirm = () => {
+    if (props.pending) {
+        return;
+    }
     emit('confirm', currency.value);
-    emit('update:open', false);
 };
 </script>
 
@@ -86,9 +91,10 @@ const confirm = () => {
                 <Button variant="ghost" @click="emit('update:open', false)">{{
                     $t('common.actions.cancel')
                 }}</Button>
-                <Button @click="confirm">{{
-                    $t('budget.clone.createDraft')
-                }}</Button>
+                <Button :disabled="pending" @click="confirm">
+                    <Spinner v-if="pending" />
+                    {{ $t('budget.clone.createDraft') }}
+                </Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>

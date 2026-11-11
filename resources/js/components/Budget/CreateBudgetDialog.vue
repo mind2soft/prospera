@@ -17,12 +17,17 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import { useLocale } from '@/composables/useLocale';
 import { CURRENCIES, currencyName } from '@/lib/budget';
 
 const { locale } = useLocale();
 
-const props = defineProps<{ open: boolean }>();
+const props = defineProps<{
+    open: boolean;
+    /** The create request is in flight: the parent closes on success. */
+    pending?: boolean;
+}>();
 
 const emit = defineEmits<{
     (e: 'update:open', value: boolean): void;
@@ -41,8 +46,10 @@ watch(
 );
 
 const confirm = () => {
+    if (props.pending) {
+        return;
+    }
     emit('confirm', currency.value);
-    emit('update:open', false);
 };
 </script>
 
@@ -82,9 +89,10 @@ const confirm = () => {
                 <Button variant="ghost" @click="emit('update:open', false)">{{
                     $t('common.actions.cancel')
                 }}</Button>
-                <Button @click="confirm">{{
-                    $t('budget.create.createDraft')
-                }}</Button>
+                <Button :disabled="pending" @click="confirm">
+                    <Spinner v-if="pending" />
+                    {{ $t('budget.create.createDraft') }}
+                </Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>

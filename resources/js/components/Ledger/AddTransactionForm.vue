@@ -11,6 +11,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import { useLocale } from '@/composables/useLocale';
 import type { AddTransactionInput, PickerEnvelope } from '@/lib/ledgerApi';
 
@@ -21,6 +22,8 @@ const props = defineProps<{
     currency: string;
     selectedDate: string; // "YYYY-MM-DD"
     disabled?: boolean;
+    /** The add request is in flight: the entered amount is kept until it succeeds. */
+    pending?: boolean;
 }>();
 
 const emit = defineEmits<(e: 'confirm', input: AddTransactionInput) => void>();
@@ -58,7 +61,7 @@ const valid = computed(
 );
 
 const confirm = () => {
-    if (!valid.value || selected.value === null) {
+    if (!valid.value || selected.value === null || props.pending) {
         return;
     }
     emit('confirm', {
@@ -66,8 +69,14 @@ const confirm = () => {
         amount: Number(amount.value),
         event_at: props.selectedDate,
     });
+};
+
+/** Clears the amount once the parent confirms the transaction was saved. */
+const reset = () => {
     amount.value = '';
 };
+
+defineExpose({ reset });
 </script>
 
 <template>
@@ -141,8 +150,13 @@ const confirm = () => {
             </div>
         </div>
 
-        <Button type="submit" class="gap-1.5" :disabled="disabled || !valid">
-            <Icon name="add" class="size-4" aria-hidden="true" />
+        <Button
+            type="submit"
+            class="gap-1.5"
+            :disabled="disabled || !valid || pending"
+        >
+            <Spinner v-if="pending" />
+            <Icon v-else name="add" class="size-4" aria-hidden="true" />
             {{ $t('ledger.form.add') }}
         </Button>
     </form>

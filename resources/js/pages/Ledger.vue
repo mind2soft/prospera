@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, ref, useTemplateRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import Heading from '@/components/Heading.vue';
@@ -332,6 +332,7 @@ const showDelete = ref(false);
 const onCreate = (input: Omit<CreateLedgerInput, 'profile_id'>) => {
     createLedger.mutate(input, {
         onSuccess: (data) => {
+            showCreate.value = false;
             selectedLedgerId.value = data.ledger.id;
             toast.success(t('ledger.toast.ledgerCreated'));
         },
@@ -364,12 +365,19 @@ const onDelete = () => {
         return;
     }
     const id = ledgerId.value;
-    showDelete.value = false;
     deleteLedger.mutate(id, {
-        onSuccess: () => toast.success(t('ledger.toast.ledgerDeleted')),
+        onSuccess: () => {
+            showDelete.value = false;
+            toast.success(t('ledger.toast.ledgerDeleted'));
+        },
         onError: fail,
     });
 };
+
+const addTransactionForm =
+    useTemplateRef<InstanceType<typeof AddTransactionForm>>(
+        'addTransactionForm',
+    );
 
 const onAddTransaction = (input: AddTransactionInput) => {
     if (ledgerId.value === null) {
@@ -378,7 +386,10 @@ const onAddTransaction = (input: AddTransactionInput) => {
     addTransaction.mutate(
         { input },
         {
-            onSuccess: () => toast.success(t('ledger.toast.transactionAdded')),
+            onSuccess: () => {
+                addTransactionForm.value?.reset();
+                toast.success(t('ledger.toast.transactionAdded'));
+            },
             onError: fail,
         },
     );
@@ -600,7 +611,9 @@ const confirmRemoveTransaction = () => {
                         </CardHeader>
                         <CardContent>
                             <AddTransactionForm
+                                ref="addTransactionForm"
                                 :envelopes="pickerEnvelopes"
+                                :pending="addTransaction.isPending.value"
                                 :currency="currency"
                                 :selected-date="selectedDate"
                                 @confirm="onAddTransaction"
@@ -627,7 +640,11 @@ const confirmRemoveTransaction = () => {
             </div>
         </template>
 
-        <CreateLedgerDialog v-model:open="showCreate" @confirm="onCreate" />
+        <CreateLedgerDialog
+            v-model:open="showCreate"
+            :pending="createLedger.isPending.value"
+            @confirm="onCreate"
+        />
 
         <ShareDrawer
             v-if="ledgerId !== null"

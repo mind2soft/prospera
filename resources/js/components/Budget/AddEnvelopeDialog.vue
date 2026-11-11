@@ -19,12 +19,15 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import { useEnvelopeOptions } from '@/composables/envelopeQueries';
 import type { AddEnvelopeInput } from '@/lib/budgetApi';
 
 const props = defineProps<{
     open: boolean;
     excludedIds?: number[];
+    /** The add request is in flight: the parent closes on success. */
+    pending?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -78,12 +81,14 @@ const confirm = () => {
     if (!valid.value || selected.value === null) {
         return;
     }
+    if (props.pending) {
+        return;
+    }
     emit('confirm', {
         envelope_id: selected.value.id,
         type: type.value,
         amount: Number(amount.value),
     });
-    emit('update:open', false);
 };
 </script>
 
@@ -208,9 +213,10 @@ const confirm = () => {
                 <Button variant="ghost" @click="emit('update:open', false)">{{
                     $t('common.actions.cancel')
                 }}</Button>
-                <Button :disabled="!valid" @click="confirm">{{
-                    $t('budget.addEnvelope.add')
-                }}</Button>
+                <Button :disabled="!valid || pending" @click="confirm">
+                    <Spinner v-if="pending" />
+                    {{ $t('budget.addEnvelope.add') }}
+                </Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>

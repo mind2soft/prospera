@@ -18,9 +18,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import type { CreateLedgerInput } from '@/lib/ledgerApi';
 
-const props = defineProps<{ open: boolean }>();
+const props = defineProps<{
+    open: boolean;
+    /** The create request is in flight: the parent closes on success. */
+    pending?: boolean;
+}>();
 
 const emit = defineEmits<{
     (e: 'update:open', value: boolean): void;
@@ -72,7 +77,7 @@ const valid = computed(
 );
 
 const confirm = () => {
-    if (!valid.value) {
+    if (!valid.value || props.pending) {
         return;
     }
     emit('confirm', {
@@ -82,7 +87,6 @@ const confirm = () => {
         starting_balance: Number(balance.value),
         starting_balance_type: balanceType.value,
     });
-    emit('update:open', false);
 };
 </script>
 
@@ -167,9 +171,10 @@ const confirm = () => {
                 <Button variant="ghost" @click="emit('update:open', false)">{{
                     $t('common.actions.cancel')
                 }}</Button>
-                <Button :disabled="!valid" @click="confirm">{{
-                    $t('ledger.actions.createLedger')
-                }}</Button>
+                <Button :disabled="!valid || pending" @click="confirm">
+                    <Spinner v-if="pending" />
+                    {{ $t('ledger.actions.createLedger') }}
+                </Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>

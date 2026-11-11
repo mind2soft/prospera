@@ -279,6 +279,7 @@ const onConfirm = () => {
 const onCreate = (currency: string) => {
     createBudget.mutate(currency, {
         onSuccess: (data) => {
+            showCreate.value = false;
             selectedId.value = data.budget.id;
             toast.success(t('budget.toast.draftCreated'));
         },
@@ -295,6 +296,7 @@ const onClone = (currency: string) => {
         { id, currency },
         {
             onSuccess: (data) => {
+                showClone.value = false;
                 selectedId.value = data.budget.id;
                 toast.success(t('budget.toast.draftCreated'));
             },
@@ -527,17 +529,23 @@ const onRemoveEnvelope = (envelopeId: number) => {
             </template>
         </template>
 
-        <CreateBudgetDialog v-model:open="showCreate" @confirm="onCreate" />
+        <CreateBudgetDialog
+            v-model:open="showCreate"
+            :pending="createBudget.isPending.value"
+            @confirm="onCreate"
+        />
 
         <CloneBudgetDialog
             v-model:open="showClone"
             :currency="budget?.currency"
+            :pending="cloneBudget.isPending.value"
             @confirm="onClone"
         />
 
         <AddEnvelopeDialog
             v-model:open="showAddEnvelope"
             :excluded-ids="budget?.envelopes.map((e) => e.envelope_id) ?? []"
+            :pending="addEnvelope.isPending.value"
             @confirm="onAddEnvelope"
         />
 

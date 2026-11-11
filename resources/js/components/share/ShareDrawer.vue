@@ -89,9 +89,22 @@ const grant = (): void => {
         return;
     }
     emit('grant', newUserId.value, newPermission.value);
-    newUserId.value = null;
-    newPermission.value = 'contributor';
 };
+
+// The choice is kept until the grant shows up in the list, so a failed
+// request doesn't lose it.
+watch(
+    () => props.members,
+    (members) => {
+        if (
+            newUserId.value !== null &&
+            members.some((m) => m.user_id === newUserId.value)
+        ) {
+            newUserId.value = null;
+            newPermission.value = 'contributor';
+        }
+    },
+);
 
 // --- change / revoke --------------------------------------------------------
 const onPermissionChange = (
