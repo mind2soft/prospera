@@ -6,6 +6,7 @@ import { toast } from 'vue-sonner';
 import Heading from '@/components/Heading.vue';
 import Icon from '@/components/Icon.vue';
 import InputError from '@/components/InputError.vue';
+import QueryErrorState from '@/components/QueryErrorState.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -71,6 +72,8 @@ const {
     select,
     isPending,
     isError,
+    isFetching,
+    refetch: refetchProfiles,
 } = useCurrentProfile();
 
 const createProfile = useCreateProfile();
@@ -342,6 +345,8 @@ const copyInvite = async (invite: ProfileInvite) => {
         await navigator.clipboard.writeText(`${window.location.origin}${url}`);
         copiedInviteId.value = invite.id;
         setTimeout(() => (copiedInviteId.value = null), 2000);
+        // The icon swap alone is not announced.
+        toast.success(t('settings.profiles.linkCopiedToast'));
     } catch {
         toast.error(t('settings.profiles.copyFailedToast'));
     }
@@ -404,6 +409,14 @@ const joinedLabel = (joinedAt: string): string =>
                 <Skeleton class="h-16 w-full" />
                 <Skeleton class="h-16 w-full" />
             </div>
+
+            <!-- Never an empty list on error: it would read as "no profiles". -->
+            <QueryErrorState
+                v-else-if="isError && profiles.length === 0"
+                :message="$t('settings.profiles.loadError')"
+                :retrying="isFetching"
+                @retry="refetchProfiles()"
+            />
 
             <div v-else class="space-y-3">
                 <Card
@@ -575,7 +588,11 @@ const joinedLabel = (joinedAt: string): string =>
                                 variant="ghost"
                                 size="icon-sm"
                                 class="shrink-0"
-                                :aria-label="$t('settings.profiles.rename')"
+                                :aria-label="
+                                    $t('settings.profiles.renameNamed', {
+                                        name: profile.name,
+                                    })
+                                "
                                 @click="startRename(profile)"
                             >
                                 <Icon
@@ -598,8 +615,16 @@ const joinedLabel = (joinedAt: string): string =>
                                 variant="ghost"
                                 size="icon-sm"
                                 class="shrink-0"
-                                :aria-label="$t('settings.profiles.setDefault')"
-                                :title="$t('settings.profiles.setDefault')"
+                                :aria-label="
+                                    $t('settings.profiles.setDefaultNamed', {
+                                        name: profile.name,
+                                    })
+                                "
+                                :title="
+                                    $t('settings.profiles.setDefaultNamed', {
+                                        name: profile.name,
+                                    })
+                                "
                                 :disabled="setDefaultProfile.isPending.value"
                                 data-test="set-default-button"
                                 @click="setDefault(profile)"
@@ -633,6 +658,17 @@ const joinedLabel = (joinedAt: string): string =>
                                 >
                                     {{ $t('common.loading') }}
                                 </p>
+                                <QueryErrorState
+                                    v-else-if="
+                                        membersQuery.isError.value &&
+                                        members.length === 0
+                                    "
+                                    :message="
+                                        $t('settings.profiles.membersLoadError')
+                                    "
+                                    :retrying="membersQuery.isFetching.value"
+                                    @retry="membersQuery.refetch()"
+                                />
                                 <div v-else class="space-y-1">
                                     <div
                                         v-for="member in members"
@@ -703,7 +739,8 @@ const joinedLabel = (joinedAt: string): string =>
                                             class="shrink-0 text-muted-foreground hover:text-destructive"
                                             :aria-label="
                                                 $t(
-                                                    'settings.profiles.removeMember',
+                                                    'settings.profiles.removeMemberNamed',
+                                                    { name: member.name },
                                                 )
                                             "
                                             @click="removeTarget = member"
@@ -784,6 +821,22 @@ const joinedLabel = (joinedAt: string): string =>
                                         {{ $t('settings.profiles.inviteNote') }}
                                     </p>
 
+                                    <QueryErrorState
+                                        v-if="
+                                            invitesQuery.isError.value &&
+                                            pendingInvites.length === 0
+                                        "
+                                        :message="
+                                            $t(
+                                                'settings.profiles.invitesLoadError',
+                                            )
+                                        "
+                                        :retrying="
+                                            invitesQuery.isFetching.value
+                                        "
+                                        @retry="invitesQuery.refetch()"
+                                    />
+
                                     <div
                                         v-for="invite in pendingInvites"
                                         :key="invite.id"
@@ -821,7 +874,8 @@ const joinedLabel = (joinedAt: string): string =>
                                             class="shrink-0"
                                             :aria-label="
                                                 $t(
-                                                    'settings.profiles.copyInviteLink',
+                                                    'settings.profiles.copyInviteLinkFor',
+                                                    { email: invite.email },
                                                 )
                                             "
                                             @click="copyInvite(invite)"
@@ -842,7 +896,8 @@ const joinedLabel = (joinedAt: string): string =>
                                             class="shrink-0 text-muted-foreground hover:text-destructive"
                                             :aria-label="
                                                 $t(
-                                                    'settings.profiles.revokeInvite',
+                                                    'settings.profiles.revokeInviteFor',
+                                                    { email: invite.email },
                                                 )
                                             "
                                             :disabled="
