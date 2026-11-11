@@ -169,6 +169,14 @@ class QueuedMailTest extends TestCase
 
         // Nothing left once the link is gone: the generic subject.
         $this->assertSame('[Prospera] A financial profile was shared with you', $subject('Jo', 'evil.example'));
+
+        // SEC-R3-1: ideographic, full-width and half-width dots count as
+        // dots (IDNA maps them to "."), and full-width letters fold to ASCII.
+        $this->assertSame('[Prospera] Jo shared their financial profile "refund" with you', $subject('Jo', 'evil。com refund'));
+        $this->assertSame('[Prospera] Jo shared their financial profile "Refund at" with you', $subject('Jo', 'Refund at evil．com'));
+        $this->assertSame('[Prospera] Jo shared their financial profile "Refund at" with you', $subject('Jo', 'Refund at evil｡com'));
+        $this->assertSame('[Prospera] A financial profile was shared with you', $subject('Jo', 'ＷＷＷ．evil．com'));
+        $this->assertSame('[Prospera] A financial profile was shared with you', $subject('Jo', 'ｗｗｗ。evil'));
     }
 
     public function test_the_invite_body_keeps_the_full_names_as_plain_text(): void
