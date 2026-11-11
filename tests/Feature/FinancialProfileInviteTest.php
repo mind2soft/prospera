@@ -264,6 +264,25 @@ class FinancialProfileInviteTest extends TestCase
         Mail::assertNothingQueued();
     }
 
+    public function test_a_reservation_made_while_re_inviting_is_caught_inside_the_transaction(): void
+    {
+        // CQ-R3-5: a registration reserving the invite just before the
+        // replacement runs is seen by the (locked) check.
+        $newbie = User::factory()->unverified()->create(['email' => 'newbie@example.com']);
+        $invite = $this->createInvite(email: 'newbie@example.com');
+
+        Event::listen(TransactionBeginning::class, function () use ($invite, $newbie): void {
+            $invite->update(['pending_user_id' => $newbie->id]);
+        });
+
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'newbie@example.com',
+        ])->assertUnprocessable()->assertJsonValidationErrors('email');
+
+        $this->assertSame([$invite->id], FinancialProfileInvite::query()->pluck('id')->all());
+        Mail::assertNothingQueued();
+    }
+
     public function test_an_email_whose_reservation_expired_can_be_re_invited(): void
     {
         // An expired reservation no longer grants: re-inviting is the way in.
