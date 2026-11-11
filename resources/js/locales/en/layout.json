@@ -6,11 +6,6 @@
             "ledger": "Ledger",
             "envelopes": "Envelopes"
         },
-        "header": {
-            "navigationMenu": "Navigation menu",
-            "repository": "Repository",
-            "documentation": "Documentation"
-        },
         "user": {
             "profiles": "Profiles",
             "owned": "Owned",
@@ -22,10 +17,6 @@
             "settings": "Settings",
             "contact": "Contact us",
             "logOut": "Log out"
-        },
-        "dashboard": {
-            "title": "Dashboard",
-            "welcome": "Welcome to Prospera"
         },
         "loading": {
             "budgets": "Loading budgets",

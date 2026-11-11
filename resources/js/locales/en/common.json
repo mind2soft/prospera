@@ -6,13 +6,10 @@
             "close": "Close",
             "delete": "Delete",
             "edit": "Edit",
-            "create": "Create",
             "confirm": "Confirm",
             "back": "Back",
             "retry": "Retry",
-            "remove": "Remove",
-            "copy": "Copy",
-            "copied": "Copied!"
+            "remove": "Remove"
         },
         "fields": {
             "name": "Name",
