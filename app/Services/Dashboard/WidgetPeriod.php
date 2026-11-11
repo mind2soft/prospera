@@ -2,8 +2,8 @@
 
 namespace App\Services\Dashboard;
 
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
-use Illuminate\Support\Carbon;
 
 /**
  * The time window of a dashboard widget, resolved from its canonical period
@@ -47,32 +47,23 @@ final class WidgetPeriod
         return new self('months', $range);
     }
 
-    public function type(): string
-    {
-        return $this->type;
-    }
-
-    public function range(): int
-    {
-        return $this->range;
-    }
-
     /**
-     * The inclusive [from, to] date window ending today. Transactions are
-     * stored at 00:00:00, so `from` starts at 00:00:00 and `to` ends the
-     * day.
+     * The inclusive [from, to] date window ending today — the requester's
+     * calendar day (see LocalCalendar), the server's by default.
+     * Transactions are stored at 00:00:00, so `from` starts at 00:00:00 and
+     * `to` ends the day.
      *
-     * @return array{from: Carbon, to: Carbon}
+     * @return array{from: CarbonImmutable, to: CarbonImmutable}
      */
-    public function window(?Carbon $today = null): array
+    public function window(?CarbonInterface $today = null): array
     {
-        $today ??= Carbon::today();
+        $today = $today === null ? CarbonImmutable::today() : CarbonImmutable::instance($today);
 
-        $to = $today->copy()->endOfDay();
+        $to = $today->endOfDay();
 
         $from = $this->type === 'days'
-            ? $today->copy()->subDays($this->range - 1)->startOfDay()
-            : $today->copy()->startOfMonth()->subMonths($this->range - 1)->startOfDay();
+            ? $today->subDays($this->range - 1)->startOfDay()
+            : $today->startOfMonth()->subMonths($this->range - 1)->startOfDay();
 
         return ['from' => $from, 'to' => $to];
     }
@@ -83,12 +74,12 @@ final class WidgetPeriod
      *
      * @return list<string>
      */
-    public function buckets(?Carbon $today = null): array
+    public function buckets(?CarbonInterface $today = null): array
     {
         ['from' => $from, 'to' => $to] = $this->window($today);
 
         $buckets = [];
-        $cursor = $from->copy();
+        $cursor = $from;
 
         while ($cursor->lte($to)) {
             $buckets[] = $this->bucketKey($cursor);
@@ -96,8 +87,8 @@ final class WidgetPeriod
             // Days step one day at a time; months jump to the first day of
             // the next month.
             $cursor = $this->type === 'days'
-                ? $cursor->copy()->addDay()
-                : $cursor->copy()->startOfMonth()->addMonth();
+                ? $cursor->addDay()
+                : $cursor->startOfMonth()->addMonth();
         }
 
         return $buckets;

@@ -1,11 +1,13 @@
 import { createInertiaApp } from '@inertiajs/vue3';
-import { VueQueryPlugin } from 'vue-query';
+import { VueQueryPlugin } from '@tanstack/vue-query';
 import { initializeTheme } from '@/composables/useAppearance';
 import { initializeLocale } from '@/composables/useLocale';
 import { i18n } from '@/i18n';
 import AppLayout from '@/layouts/AppLayout.vue';
 import AuthLayout from '@/layouts/AuthLayout.vue';
+import RootLayout from '@/layouts/RootLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
+import { shouldRetryQuery } from '@/lib/api';
 import { initializeFlashToast } from '@/lib/flashToast';
 import { loadIconCollections } from '@/lib/icons';
 
@@ -15,6 +17,7 @@ loadIconCollections();
 
 void createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
+    // Every page sits in the persistent RootLayout (the toaster).
     layout: (name) => {
         switch (true) {
             // Public, self-contained pages (no app shell).
@@ -22,13 +25,13 @@ void createInertiaApp({
             case name === 'Contact':
             case name === 'ContactSent':
             case name === 'Privacy':
-                return null;
+                return RootLayout;
             case name.startsWith('auth/'):
-                return AuthLayout;
+                return [RootLayout, AuthLayout];
             case name.startsWith('settings/'):
-                return [AppLayout, SettingsLayout];
+                return [RootLayout, AppLayout, SettingsLayout];
             default:
-                return AppLayout;
+                return [RootLayout, AppLayout];
         }
     },
     withApp: (app) => {
@@ -36,7 +39,7 @@ void createInertiaApp({
             queryClientConfig: {
                 defaultOptions: {
                     queries: {
-                        retry: false,
+                        retry: shouldRetryQuery,
                         staleTime: 30_000,
                         refetchOnWindowFocus: false,
                     },

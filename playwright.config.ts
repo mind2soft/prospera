@@ -26,7 +26,9 @@ export default defineConfig({
         command: 'bash e2e/serve.sh',
         url: 'http://127.0.0.1:8000',
         reuseExistingServer: false,
-        timeout: 60_000,
+        // e2e/serve.sh rebuilds the frontend (npm run build) and migrates
+        // a fresh database before serving: the boot covers both.
+        timeout: 300_000,
     },
     use: {
         baseURL: 'http://localhost:8000',

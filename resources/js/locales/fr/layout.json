@@ -6,30 +6,24 @@
             "ledger": "Grand livre",
             "envelopes": "Enveloppes"
         },
-        "header": {
-            "navigationMenu": "Menu de navigation",
-            "repository": "Dépôt",
-            "documentation": "Documentation"
-        },
         "user": {
             "profiles": "Profils",
             "owned": "Possédés",
             "shared": "Partagés",
-            "default": "Par défaut",
-            "setDefault": "Définir par défaut",
-            "defaultToast": "« {name} » est maintenant votre profil par défaut.",
+            "defaultSuffix": "(par défaut)",
             "manageProfiles": "Gérer les profils",
             "settings": "Paramètres",
             "contact": "Nous contacter",
             "logOut": "Se déconnecter"
         },
-        "dashboard": {
-            "title": "Tableau de bord",
-            "welcome": "Bienvenue dans Prospera"
-        },
         "loading": {
             "budgets": "Chargement des budgets",
             "ledgers": "Chargement des grands livres"
+        },
+        "notifications": "Notifications",
+        "sidebar": {
+            "title": "Navigation",
+            "description": "La navigation principale de l'application."
         }
     }
 }

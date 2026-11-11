@@ -4,22 +4,32 @@
             "save": "Enregistrer",
             "cancel": "Annuler",
             "close": "Fermer",
-            "delete": "Supprimer",
             "edit": "Modifier",
-            "create": "Créer",
             "confirm": "Confirmer",
             "back": "Retour",
             "retry": "Réessayer",
             "remove": "Retirer",
-            "copy": "Copier",
-            "copied": "Copié !"
+            "toggleSidebar": "Afficher ou masquer la barre latérale",
+            "more": "Plus"
         },
         "fields": {
             "name": "Nom",
-            "email": "Adresse e-mail",
+            "email": "Adresse courriel",
             "password": "Mot de passe"
         },
         "loading": "Chargement…",
-        "error": "Une erreur est survenue. Veuillez réessayer."
+        "error": "Une erreur est survenue. Veuillez réessayer.",
+        "breadcrumb": "Fil d’Ariane",
+        "errors": {
+            "unauthenticated": "Votre session a pris fin. Reconnectez-vous pour continuer.",
+            "forbidden": "Vous n'avez pas l'autorisation d'effectuer cette action.",
+            "notFound": "Cet élément est introuvable. Il a peut-être été supprimé, ou vous n'y avez plus accès.",
+            "sessionExpired": "Votre session a expiré. Rechargez la page et réessayez.",
+            "tooMany": "Trop de tentatives. Patientez un moment, puis réessayez.",
+            "server": "Un problème est survenu de notre côté. Réessayez dans un instant.",
+            "unavailable": "Prospera est momentanément indisponible pour maintenance. Réessayez dans quelques minutes.",
+            "generic": "Cette requête n'a pas pu aboutir. Rechargez la page et réessayez.",
+            "network": "Impossible de joindre Prospera. Vérifiez votre connexion et réessayez."
+        }
     }
 }

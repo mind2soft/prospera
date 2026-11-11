@@ -2,6 +2,7 @@
     "dashboard": {
         "title": "Tableau de bord",
         "add": "Ajouter un widget",
+        "loadError": "Votre tableau de bord n'a pas pu être chargé. Vos widgets enregistrés sont conservés.",
         "catalog": {
             "envelope_spending": {
                 "name": "Dépenses par enveloppe",
@@ -24,13 +25,16 @@
             },
             "settings": "Paramètres du widget",
             "remove": "Supprimer le widget",
-            "drag": "Glisser pour réorganiser",
             "emptySelection": "Choisissez des enveloppes dans les paramètres du widget pour voir des données.",
             "masked": "Montants masqués — vous n'avez pas accès aux montants de cette enveloppe.",
             "error": "Ce widget n'a pas pu être chargé.",
             "retry": "Réessayer",
             "overBudget": "Hors budget",
-            "noBudget": "Aucun budget ne couvre cette période"
+            "noBudget": "Aucun budget ne couvre cette période",
+            "reorder": "Réordonner {title}",
+            "reorderHint": "Faites glisser, ou utilisez les flèches, pour déplacer ce widget plus tôt ou plus tard.",
+            "moved": "{title} déplacé en position {position} sur {count}.",
+            "amountHidden": "Montant masqué"
         },
         "settings": {
             "title": "Titre",
@@ -71,11 +75,15 @@
             "addGroup": "Ajouter un groupe",
             "groupName": "Nom du groupe",
             "groupNamePlaceholder": "p. ex. Revenus combinés",
-            "groupMember": "Membre",
             "noEnvelopesLeft": "Toutes les enveloppes visibles sont déjà sélectionnées.",
-            "removeItem": "Retirer de la sélection",
-            "renameGroup": "Renommer le groupe",
-            "done": "Terminé"
+            "done": "Terminé",
+            "removeItemNamed": "Retirer {name} de la sélection",
+            "cancelGroup": "Annuler",
+            "removeFromGroup": "Retirer {name} de {group}",
+            "position": "Position",
+            "positionOf": "Position {position} sur {count}",
+            "moveEarlier": "Déplacer plus tôt",
+            "moveLater": "Déplacer plus tard"
         },
         "empty": {
             "title": "Personnalisez-le",
@@ -95,14 +103,9 @@
         },
         "history": {
             "revenue": "Revenus",
-            "expenses": "Dépenses"
-        },
-        "spending": {
-            "envelope": "Enveloppe",
-            "spent": "Dépensé"
-        },
-        "radial": {
-            "legendTitle": "Sélection"
+            "expenses": "Dépenses",
+            "showData": "Afficher les données",
+            "period": "Période"
         }
     }
 }

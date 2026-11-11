@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { Donut } from '@unovis/ts';
-import { VisDonut, VisSingleContainer, VisTooltip } from '@unovis/vue';
+import { Donut } from '@unovis/ts/components/donut';
+// Per-component entry points (see IncomeExpensesWidget.vue).
+import VisDonut from '@unovis/vue/components/donut';
+import VisTooltip from '@unovis/vue/components/tooltip';
+import VisSingleContainer from '@unovis/vue/containers/single-container';
 import { computed } from 'vue';
+import { useChartDuration } from '@/composables/useChartDuration';
 import { useLocale } from '@/composables/useLocale';
-import { formatMoney } from '@/lib/budget';
+import { formatCompactMoney, formatMoney } from '@/lib/budget';
+import { escapeHtml } from '@/lib/html';
 import { isClient } from '@/lib/ssr';
 import type { DashboardRadialRow, DashboardWidgetData } from '@/types';
 
@@ -14,6 +19,7 @@ const props = defineProps<{
 }>();
 
 const { locale } = useLocale();
+const chartDuration = useChartDuration();
 
 const rows = computed(() =>
     props.data.type === 'radial' ? props.data.rows : [],
@@ -49,19 +55,8 @@ function colorOf(row: DashboardRadialRow, index: number): string {
 const value = (d: DashboardRadialRow): number => d.value ?? 0;
 
 /** Compact currency for the donut's central total ("$2.5K"). */
-const compactMoney = (amount: number): string => {
-    try {
-        return new Intl.NumberFormat(locale.value, {
-            style: 'currency',
-            currency: props.currency,
-            currencyDisplay: 'narrowSymbol',
-            notation: 'compact',
-            maximumFractionDigits: 1,
-        }).format(amount);
-    } catch {
-        return formatMoney(amount, props.currency);
-    }
-};
+const compactMoney = (amount: number): string =>
+    formatCompactMoney(amount, props.currency, locale.value);
 
 /** Segment colors keyed by row key (masked rows fall back to muted). */
 const colorByKey = computed(() => {
@@ -80,23 +75,32 @@ const color = (d: DashboardRadialRow): string =>
 // arcWidth is in pixels; 0 renders a full pie.
 const arcWidth = computed(() => (props.viewType === 'donut' ? 24 : 0));
 
-const tooltipTemplate = (datum?: DashboardRadialRow): string => {
+/** The d3 pie arc Unovis hands to segment triggers (its `DonutArcDatum`). */
+type SegmentArc = { data?: DashboardRadialRow };
+
+/**
+ * Segment tooltip. Unovis passes the d3 pie arc, whose `data` is the row. The
+ * returned string is written with `innerHTML`, so every interpolated value is
+ * escaped (row names are user-provided).
+ */
+const tooltipTemplate = (arc?: SegmentArc): string => {
+    const datum = arc?.data;
+
     if (!datum) {
         return '';
     }
 
-    const share =
-        total.value > 0 && datum.value !== null
-            ? ` (${((datum.value / total.value) * 100).toFixed(1)}%)`
-            : '';
+    // Same locale-formatted share as the legend ("12,5 %" in French).
+    const percentage = legendShare(datum);
+    const share = percentage === null ? '' : ` (${percentage})`;
 
     return `<div style="font-size:12px">
-        <strong>${datum.name}</strong><br/>
-        <span style="font-variant-numeric:tabular-nums">${
+        <strong>${escapeHtml(datum.name)}</strong><br/>
+        <span style="font-variant-numeric:tabular-nums">${escapeHtml(
             datum.value === null
                 ? '•••'
-                : formatMoney(datum.value, props.currency)
-        }${share}</span>
+                : formatMoney(datum.value, props.currency, locale.value),
+        )}${escapeHtml(share)}</span>
     </div>`;
 };
 
@@ -128,7 +132,12 @@ function legendShare(row: DashboardRadialRow): string | null {
                 v-if="isClient && chartRows.length > 0"
                 class="flex min-h-0 flex-1 items-center justify-center"
             >
+                <!-- Visual only: the legend lists every row with its amount
+                     and share (the text equivalent). -->
                 <VisSingleContainer
+                    :duration="chartDuration"
+                    aria-hidden="true"
+                    data-testid="radial-chart"
                     :data="chartRows"
                     :height="200"
                     class="chart-surface"
@@ -186,12 +195,23 @@ function legendShare(row: DashboardRadialRow): string | null {
                     />
                     <span class="font-medium">{{ row.name }}</span>
                     <span
+                        v-if="!row.masked && row.value !== null"
+                        class="text-foreground tabular-nums"
+                    >
+                        {{ formatMoney(row.value, currency, locale) }}
+                    </span>
+                    <span
                         v-if="legendShare(row) !== null"
                         class="text-muted-foreground tabular-nums"
                     >
-                        {{ legendShare(row) }}
+                        · {{ legendShare(row) }}
                     </span>
-                    <span v-else-if="row.masked">•••</span>
+                    <template v-else-if="row.masked">
+                        <span aria-hidden="true">•••</span>
+                        <span class="sr-only">{{
+                            $t('dashboard.widget.amountHidden')
+                        }}</span>
+                    </template>
                 </li>
             </ul>
         </template>

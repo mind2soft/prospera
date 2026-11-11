@@ -60,6 +60,10 @@ Configuration only — **no money amounts are stored** in
 - **Drag & drop** through the drag handle (`drag_indicator`); the widget
   moves together with its settings. The order is an ordered list
   (`sort_order`), saved by the same autosave as every other setting.
+  Dragging always has alternatives (WCAG 2.5.7): the focused handle moves
+  its widget with the arrow keys (Home/End: first/last; the new position
+  is announced), and the settings sheet offers **Move earlier / Move
+  later**.
   Implementation note: `vue-grid-layout` (and its Vue 3 port) and GridStack
   were evaluated; both impose fixed row heights, which conflicts with the
   intrinsic-height requirement below — the grid is therefore a native CSS
@@ -98,6 +102,10 @@ the Share drawer):
 
 ### Period semantics
 
+- "Today" is the **requester's calendar day**: the widget data request
+  carries the browser's IANA time zone as `timezone` (unknown zones →
+  `422`); without it the application time zone (UTC) applies. Transaction
+  dates are calendar dates, compared as such.
 - `days`, range *n* — the past *n* days **including today**
   (`[today − (n−1), today]`).
 - `months`, range *n* — the current month back *n* months inclusive,
@@ -149,14 +157,14 @@ the Share drawer):
   the income/expenses series is masked entirely when any selected envelope
   is masked.
 
-## API (auth + CSRF; vue-query everywhere)
+## API (auth + CSRF; TanStack Query everywhere)
 
 | Method   | Path                                                 | Description                                                                                                     |
 | -------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | `GET`    | `/api/dashboard/{profileId}/widgets`                 | Ordered widgets for (user, profile) — `404` for non-members; selections pruned of deleted envelopes             |
 | `PUT`    | `/api/dashboard/{profileId}/widgets`                 | Full layout save (ordered list; each member manages **their own** dashboard for that profile; validates types, ranges, widths, one-occurrence-per-envelope selection, flat groups). Widgets carrying their id are updated **in place** (ids stay stable, so in-flight widget-data requests keep resolving); entries without an id are created; ids missing from the payload are removed |
 | `DELETE` | `/api/dashboard/{profileId}/widgets/{widget}`        | Remove one widget (own only; `404` otherwise)                                                                    |
-| `GET`    | `/api/dashboard/{profileId}/widgets/{widget}/data`   | Server-computed aggregate payload for the widget (masked per permissions), with `period`/`selection` applied server-side |
+| `GET`    | `/api/dashboard/{profileId}/widgets/{widget}/data`   | Server-computed aggregate payload for the widget (masked per permissions), with `period`/`selection` applied server-side; optional `timezone` query param (IANA) for "today" |
 
 The widget data endpoint returns, per type:
 
@@ -189,7 +197,11 @@ type RadialData = {
 
 - Saved with **debounced autosave** (~600 ms) on every change (project
   convention: no save buttons); the layout is sent in full and the server
-  assigns ids and order. Removing widgets is destructive → confirmation.
+  assigns ids and order. Saves are serialized (one in flight, at most one
+  queued per profile) by `composables/useLayoutAutosave.ts`; leaving the
+  page — another page, a reload or closing the tab — sends a pending edit
+  right away (`useFlushOnLeave`, `keepalive` requests), and a failed save
+  shows an error toast. Removing widgets is destructive → confirmation.
 - Widget data auto-refreshes **every 15 minutes** via vue Query
   `refetchInterval`, **paused when the tab is hidden**
   (`document.visibilityState`) so background tabs don't burn requests.

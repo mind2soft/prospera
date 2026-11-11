@@ -54,7 +54,9 @@ test('transactions on non-permitted envelopes render masked amounts', async ({
 
     // …but the amount and remaining allocated are masked with an em dash.
     const cells = row.locator('td');
-    await expect(cells.nth(2)).toHaveText('—'); // Amount
+    // Amount: a dash, announced as hidden (never as a value).
+    await expect(cells.nth(2).locator('[aria-hidden="true"]')).toHaveText('—');
+    await expect(cells.nth(2)).toHaveText('—Amount hidden');
     await expect(cells.nth(3)).toHaveText('—'); // Remaining
 
     // The raw amount never leaks into the row.

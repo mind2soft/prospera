@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Dashboard\SaveDashboardLayoutRequest;
+use App\Http\Requests\Dashboard\WidgetDataRequest;
 use App\Models\DashboardWidget;
-use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Services\Dashboard\DashboardAggregator;
 use App\Services\Dashboard\DashboardLayoutValidator;
+use App\Services\Dashboard\SelectionEnvelopes;
 use App\Services\Dashboard\WidgetSelection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,16 +34,29 @@ class DashboardController extends Controller
      */
     public function index(Request $request, FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile);
+        $this->authorize('view', $profile);
 
-        $widgets = DashboardWidget::scopeFor(
+        $widgets = DashboardWidget::forUserAndProfile(
             (int) $request->user()->id,
             $profile->id,
         )->get();
 
+        $selections = $widgets->mapWithKeys(fn (DashboardWidget $widget): array => [
+            $widget->id => WidgetSelection::fromConfig($widget->selection),
+        ]);
+
+        // Deleted envelopes are pruned from every widget's selection with a
+        // single existence query.
+        $existing = SelectionEnvelopes::existingIds(
+            $selections->flatMap(fn (WidgetSelection $selection): array => $selection->envelopeIds())->all(),
+        );
+
         return response()->json([
             'widgets' => $widgets
-                ->map(fn (DashboardWidget $widget) => $this->serializeWidget($widget))
+                ->map(fn (DashboardWidget $widget) => $this->serializeWidget(
+                    $widget,
+                    $selections->get($widget->id)->pruned($existing),
+                ))
                 ->values(),
         ]);
     }
@@ -54,11 +69,9 @@ class DashboardController extends Controller
      * requests keep resolving); widgets without an id are created; ids
      * missing from the payload are removed.
      */
-    public function save(Request $request, FinancialProfile $profile): JsonResponse
+    public function save(SaveDashboardLayoutRequest $request, FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile);
-
-        $widgets = $this->layoutValidator->validate($request, $request->user());
+        $widgets = $request->widgets($this->layoutValidator);
 
         DB::transaction(function () use ($request, $profile, $widgets): void {
             $existing = DashboardWidget::query()
@@ -107,13 +120,9 @@ class DashboardController extends Controller
      * Remove one of the caller's widgets (destructive — the client asks for
      * confirmation).
      */
-    public function destroy(Request $request, FinancialProfile $profile, DashboardWidget $widget): JsonResponse
+    public function destroy(FinancialProfile $profile, DashboardWidget $widget): JsonResponse
     {
-        $this->authorizeProfile($request, $profile);
-
-        if (! $widget->isOwnedBy((int) $request->user()->id, $profile->id)) {
-            abort(404);
-        }
+        $this->authorize('delete', [$widget, $profile]);
 
         $widget->delete();
 
@@ -126,40 +135,23 @@ class DashboardController extends Controller
      * envelope permissions — raw amounts never reach clients that cannot
      * see them (docs/dashboard.md).
      */
-    public function data(Request $request, FinancialProfile $profile, DashboardWidget $widget): JsonResponse
+    public function data(WidgetDataRequest $request, FinancialProfile $profile, DashboardWidget $widget): JsonResponse
     {
-        $this->authorizeProfile($request, $profile);
-
-        if (! $widget->isOwnedBy((int) $request->user()->id, $profile->id)) {
-            abort(404);
-        }
-
         return response()->json(
-            $this->aggregator->data($widget, $profile, $request->user()),
+            $this->aggregator->data(
+                $widget,
+                $profile,
+                $request->user(),
+                $request->calendar()->today(),
+            ),
         );
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function serializeWidget(DashboardWidget $widget): array
+    private function serializeWidget(DashboardWidget $widget, WidgetSelection $selection): array
     {
-        $selection = WidgetSelection::fromConfig($widget->selection);
-
-        $envelopeIds = $selection->envelopeIds();
-
-        // Prune deleted envelopes (and shrink groups) server-side — one
-        // query for every widget's selection.
-        if ($envelopeIds !== []) {
-            $existing = Envelope::query()
-                ->whereIn('id', $envelopeIds)
-                ->pluck('id')
-                ->map(fn (mixed $id): int => (int) $id)
-                ->values()
-                ->all();
-            $selection = $selection->pruned($existing);
-        }
-
         return [
             'id' => $widget->id,
             'type' => $widget->type,

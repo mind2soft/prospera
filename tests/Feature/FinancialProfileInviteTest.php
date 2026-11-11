@@ -5,14 +5,19 @@ namespace Tests\Feature;
 use App\Mail\ProfileInvite;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileInvite;
+use App\Models\FinancialProfileUser;
 use App\Models\User;
 use App\Settings\NotificationSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Verified;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
+use RuntimeException;
 use Tests\TestCase;
 
 class FinancialProfileInviteTest extends TestCase
@@ -241,6 +246,94 @@ class FinancialProfileInviteTest extends TestCase
         Mail::assertQueued(ProfileInvite::class, 2);
     }
 
+    public function test_re_inviting_an_email_awaiting_verification_is_rejected(): void
+    {
+        // WF-R2-2: the invitee registered through the first invite; a
+        // second one would stay pending after they join.
+        $newbie = User::factory()->unverified()->create(['email' => 'newbie@example.com']);
+        $reserved = $this->createInvite(email: 'newbie@example.com');
+        $reserved->update(['pending_user_id' => $newbie->id]);
+
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'NEWBIE@example.com',
+        ])->assertUnprocessable()->assertJsonValidationErrors([
+            'email' => 'This person already registered through an invite and joins the profile once they verify their email.',
+        ]);
+
+        $this->assertSame(1, FinancialProfileInvite::query()->count());
+        Mail::assertNothingQueued();
+    }
+
+    public function test_a_reservation_made_while_re_inviting_is_caught_inside_the_transaction(): void
+    {
+        // CQ-R3-5: a registration reserving the invite just before the
+        // replacement runs is seen by the (locked) check.
+        $newbie = User::factory()->unverified()->create(['email' => 'newbie@example.com']);
+        $invite = $this->createInvite(email: 'newbie@example.com');
+
+        Event::listen(TransactionBeginning::class, function () use ($invite, $newbie): void {
+            $invite->update(['pending_user_id' => $newbie->id]);
+        });
+
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'newbie@example.com',
+        ])->assertUnprocessable()->assertJsonValidationErrors('email');
+
+        $this->assertSame([$invite->id], FinancialProfileInvite::query()->pluck('id')->all());
+        Mail::assertNothingQueued();
+    }
+
+    public function test_an_email_whose_reservation_expired_can_be_re_invited(): void
+    {
+        // An expired reservation no longer grants: re-inviting is the way in.
+        $newbie = User::factory()->unverified()->create(['email' => 'newbie@example.com']);
+        $this->createInvite(email: 'newbie@example.com', expiresAt: CarbonImmutable::now()->subHour())
+            ->update(['pending_user_id' => $newbie->id]);
+
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'newbie@example.com',
+        ])->assertCreated();
+    }
+
+    public function test_joining_through_a_reservation_deletes_the_profiles_other_invites_for_the_email(): void
+    {
+        // E.g. a re-invite issued before the rule above.
+        $newbie = User::factory()->unverified()->create(['email' => 'newbie@example.com']);
+        $reserved = $this->createInvite(email: 'newbie@example.com');
+        $reserved->update(['pending_user_id' => $newbie->id]);
+        $duplicate = $this->createInvite(email: 'Newbie@example.com', key: 'other-key');
+        $otherProfile = FinancialProfile::createOwnedBy($this->member, 'Other');
+        $elsewhere = FinancialProfileInvite::create([
+            'profile_id' => $otherProfile->id,
+            'invite_key' => FinancialProfileInvite::keyHash('elsewhere-key'),
+            'email' => 'newbie@example.com',
+            'invited_by' => $this->member->id,
+            'expires_at' => now()->addHours(48),
+        ]);
+
+        $newbie->markEmailAsVerified();
+        event(new Verified($newbie));
+
+        $this->assertTrue($this->profile->isMember($newbie));
+        $this->assertModelMissing($reserved);
+        $this->assertModelMissing($duplicate);
+        $this->assertModelExists($elsewhere);
+        $this->actingAs($this->owner)->getJson("/api/profiles/{$this->profile->id}/invites")
+            ->assertOk()->assertJsonCount(0, 'invites');
+    }
+
+    public function test_accepting_deletes_the_profiles_other_invites_for_the_email(): void
+    {
+        $invitee = User::factory()->create(['email' => 'invitee@example.com']);
+        $this->createInvite(email: 'invitee@example.com');
+        $duplicate = $this->createInvite(email: 'INVITEE@example.com', key: 'other-key');
+
+        $this->actingAs($invitee)->postJson('/api/invites/'.self::RAW_KEY.'/accept')->assertOk();
+
+        $this->assertTrue($this->profile->isMember($invitee));
+        $this->assertModelMissing($duplicate);
+    }
+
     public function test_invite_emails_respect_the_notification_toggle(): void
     {
         $this->profile->members()->detach($this->member->id);
@@ -441,36 +534,113 @@ class FinancialProfileInviteTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // Declining
+    // ------------------------------------------------------------------
+
+    public function test_declining_deletes_the_invite_and_removes_it_from_the_owners_list(): void
+    {
+        $invitee = User::factory()->create(['email' => 'invitee@example.com']);
+        $invite = $this->createInvite(email: 'Invitee@Example.com');
+
+        $this->actingAs($invitee)->postJson("/api/invites/{$this->key}/decline")->assertNoContent();
+
+        $this->assertModelMissing($invite);
+        $this->assertFalse($this->profile->isMember($invitee));
+        $this->actingAs($this->owner)->getJson("/api/profiles/{$this->profile->id}/invites")
+            ->assertOk()->assertJsonCount(0, 'invites');
+
+        // A declined invite cannot be accepted afterwards.
+        $this->actingAs($invitee)->postJson("/api/invites/{$this->key}/accept")->assertNotFound();
+    }
+
+    public function test_only_the_invited_account_can_decline(): void
+    {
+        $invite = $this->createInvite(email: 'invitee@example.com');
+
+        $this->actingAs($this->member)->postJson("/api/invites/{$this->key}/decline")
+            ->assertUnprocessable()->assertJsonValidationErrors('invite_key');
+
+        $this->assertModelExists($invite);
+    }
+
+    public function test_reserved_and_unknown_invites_cannot_be_declined(): void
+    {
+        $invitee = User::factory()->create(['email' => 'invitee@example.com']);
+        $invite = $this->createInvite(email: 'invitee@example.com');
+        $invite->forceFill(['pending_user_id' => User::factory()->unverified()->create()->id])->save();
+
+        $this->actingAs($invitee)->postJson("/api/invites/{$this->key}/decline")->assertNotFound();
+        $this->actingAs($invitee)->postJson('/api/invites/not-a-key/decline')->assertNotFound();
+
+        $this->assertModelExists($invite);
+    }
+
+    public function test_declining_requires_a_verified_account(): void
+    {
+        $unverified = User::factory()->unverified()->create(['email' => 'invitee@example.com']);
+        $invite = $this->createInvite(email: 'invitee@example.com');
+
+        $this->postJson("/api/invites/{$this->key}/decline")->assertUnauthorized();
+        $this->actingAs($unverified)->postJson("/api/invites/{$this->key}/decline")->assertForbidden();
+
+        $this->assertModelExists($invite);
+    }
+
+    // ------------------------------------------------------------------
     // One-click accept link (issue #39)
     // ------------------------------------------------------------------
 
-    public function test_the_one_click_accept_link_accepts_the_matching_signed_in_user(): void
+    public function test_the_accept_link_lands_on_the_confirmation_without_granting_membership(): void
     {
         $invite = $this->createInvite(email: $this->member->email);
         $this->profile->members()->detach($this->member->id);
 
-        $response = $this->actingAs($this->member)->get("/invites/{$this->key}/accept");
+        // SEC-3: a GET never changes state, even for the matching signed-in
+        // user — the confirmation page's button POSTs the accept.
+        $this->actingAs($this->member)->get("/invites/{$this->key}/accept")
+            ->assertRedirect(route('invites.landing', ['inviteKey' => $this->key]));
 
-        $response->assertRedirect(route('dashboard', absolute: false));
-        $this->assertDatabaseHas('financial_profile_user', [
+        $this->assertDatabaseMissing('financial_profile_user', [
             'profile_id' => $this->profile->id,
             'user_id' => $this->member->id,
-            'is_owner' => false,
         ]);
-        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
-    }
-
-    public function test_the_one_click_accept_link_flashes_a_success_toast(): void
-    {
-        $this->createInvite(email: $this->member->email);
-        $this->profile->members()->detach($this->member->id);
+        $this->assertDatabaseHas('financial_profile_invites', ['id' => $invite->id]);
 
         $response = $this->actingAs($this->member)
             ->followingRedirects()
             ->get("/invites/{$this->key}/accept");
 
-        $page = $response->viewData('page');
-        $this->assertSame('success', $page['flash']['toast']['type'] ?? null);
+        $response->assertOk()->assertInertia(fn ($page) => $page
+            ->component('auth/Register')
+            ->where('invite.profile', 'Family'));
+        $this->assertArrayNotHasKey('toast', $response->viewData('page')['flash'] ?? []);
+    }
+
+    public function test_a_cross_site_accept_link_navigation_does_not_join_the_profile(): void
+    {
+        $this->createInvite(email: $this->member->email);
+        $this->profile->members()->detach($this->member->id);
+
+        $this->actingAs($this->member)
+            ->withHeaders(['Sec-Fetch-Site' => 'cross-site'])
+            ->get("/invites/{$this->key}/accept");
+
+        $this->assertDatabaseMissing('financial_profile_user', [
+            'profile_id' => $this->profile->id,
+            'user_id' => $this->member->id,
+        ]);
+    }
+
+    public function test_the_confirmation_post_completes_the_accept_link_flow(): void
+    {
+        $invite = $this->createInvite(email: $this->member->email);
+        $this->profile->members()->detach($this->member->id);
+
+        $this->actingAs($this->member)->get("/invites/{$this->key}/accept");
+        $this->actingAs($this->member)->postJson("/api/invites/{$this->key}/accept")->assertOk();
+
+        $this->assertTrue($this->profile->isMember($this->member));
+        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
     }
 
     public function test_the_one_click_accept_link_rejects_other_users(): void
@@ -664,6 +834,69 @@ class FinancialProfileInviteTest extends TestCase
         $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
     }
 
+    public function test_moving_the_account_to_another_email_releases_its_reservation(): void
+    {
+        // WF-R3-2: the reservation could no longer grant anything, so it
+        // must not keep blocking a re-invite of the original address.
+        $invite = $this->createInvite(email: 'newbie@example.com');
+
+        $this->post('/register', [
+            'name' => 'New User',
+            'email' => 'newbie@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'invite_key' => self::RAW_KEY,
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $user = User::where('email', 'newbie@example.com')->firstOrFail();
+        $this->assertSame($user->id, $invite->fresh()->pending_user_id);
+
+        $this->actingAs($user)->patch(route('profile.update'), [
+            'name' => 'New User',
+            'email' => 'changed@example.com',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertNull($invite->fresh()->pending_user_id);
+        $this->actingAs($this->owner)->getJson("/api/profiles/{$this->profile->id}/invites")
+            ->assertOk()->assertJsonPath('invites.0.awaiting_verification', false);
+
+        // The original address can be re-invited; the released invite is
+        // replaced like any unreserved one.
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'newbie@example.com',
+        ])->assertCreated();
+        $this->assertModelMissing($invite);
+        $this->assertSame(1, FinancialProfileInvite::query()->count());
+
+        // The moved account verifies its new address: no grant, its own
+        // default profile instead.
+        $user->refresh()->markEmailAsVerified();
+        event(new Verified($user));
+
+        $this->assertFalse($this->profile->isMember($user));
+        $this->assertTrue(FinancialProfile::query()->where('name', FinancialProfile::DEFAULT_NAME)->firstOrFail()->isMember($user));
+        $this->assertSame(1, FinancialProfileInvite::query()->count());
+    }
+
+    public function test_changing_only_the_case_of_the_email_keeps_the_reservation(): void
+    {
+        $newbie = User::factory()->unverified()->create(['email' => 'newbie@example.com']);
+        $reserved = $this->createInvite(email: 'newbie@example.com');
+        $reserved->update(['pending_user_id' => $newbie->id]);
+
+        $this->actingAs($newbie)->patch(route('profile.update'), [
+            'name' => $newbie->name,
+            'email' => 'Newbie@Example.com',
+        ])->assertSessionHasNoErrors();
+
+        // Still the invited address: the reservation still grants, and the
+        // re-invite is still refused.
+        $this->assertSame($newbie->id, $reserved->fresh()->pending_user_id);
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'newbie@example.com',
+        ])->assertUnprocessable()->assertJsonValidationErrors('email');
+    }
+
     public function test_a_revoked_reservation_still_seeds_a_default_profile(): void
     {
         $invite = $this->createInvite(email: 'newbie@example.com');
@@ -692,6 +925,123 @@ class FinancialProfileInviteTest extends TestCase
             'user_id' => $user->id,
             'is_owner' => true,
         ]);
+    }
+
+    public function test_a_failed_grant_on_verification_is_completed_on_the_next_request(): void
+    {
+        $invite = $this->createInvite(email: 'newbie@example.com');
+
+        $this->post('/register', [
+            'name' => 'New User',
+            'email' => 'newbie@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'invite_key' => self::RAW_KEY,
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $user = User::where('email', 'newbie@example.com')->firstOrFail();
+
+        // RES-7: the grant fails once (a transient DB error) while the
+        // account is already marked verified.
+        $failed = false;
+        FinancialProfileUser::creating(function () use (&$failed): void {
+            if (! $failed) {
+                $failed = true;
+
+                throw new RuntimeException('Deadlock found when trying to get lock');
+            }
+        });
+
+        $verificationUrl = URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addMinutes(60),
+            ['id' => $user->id, 'hash' => sha1($user->email)],
+        );
+
+        // The verification itself still succeeds…
+        $this->actingAs($user)->get($verificationUrl)
+            ->assertRedirect(route('dashboard', absolute: false).'?verified=1');
+        $this->assertTrue($user->fresh()->hasVerifiedEmail());
+        $this->assertSame(0, $user->profiles()->count());
+        $this->assertDatabaseHas('financial_profile_invites', ['id' => $invite->id, 'pending_user_id' => $user->id]);
+
+        // …and the next authenticated request completes the grant.
+        $this->actingAs($user->fresh())->getJson('/api/profiles')
+            ->assertOk()
+            ->assertJsonPath('profiles.0.id', $this->profile->id);
+
+        $this->assertTrue($this->profile->isMember($user));
+        $this->assertTrue($this->profile->isDefaultFor($user));
+        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
+    }
+
+    public function test_a_verified_account_without_any_profile_gets_a_default_one_on_the_next_request(): void
+    {
+        // E.g. the listener failed and the reservation was pruned since.
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get('/dashboard')->assertOk();
+
+        $this->assertSame(1, $user->profiles()->count());
+        $this->assertTrue($user->profiles()->sole()->isDefaultFor($user));
+    }
+
+    public function test_concurrent_self_healing_requests_seed_a_single_default_profile(): void
+    {
+        // RES-R2-3: a verified account without a profile and without a
+        // reservation. Another request wins the race and seeds the default
+        // right before this one gets the account lock: under the lock, the
+        // default must be re-checked instead of seeding a second one.
+        $user = User::factory()->create();
+        $outerLevel = DB::transactionLevel();
+        $raced = false;
+
+        DB::listen(function (QueryExecuted $query) use ($user, $outerLevel, &$raced): void {
+            if ($raced
+                || DB::transactionLevel() <= $outerLevel
+                || ! str_starts_with($query->sql, 'select * from "users" where "users"."id" = ?')
+                || $query->bindings !== [$user->id]) {
+                return;
+            }
+
+            $raced = true;
+            FinancialProfile::createDefaultFor($user);
+        });
+
+        $this->actingAs($user)->getJson('/api/profiles')->assertOk();
+
+        $this->assertTrue($raced, 'The account row must be locked before the default profile is checked.');
+        $this->assertSame(1, $user->profiles()->count());
+        $this->assertTrue($user->profiles()->sole()->isDefaultFor($user));
+    }
+
+    public function test_an_expired_reservation_does_not_grant_membership_on_verification(): void
+    {
+        $invite = $this->createInvite(email: 'newbie@example.com');
+
+        $this->post('/register', [
+            'name' => 'New User',
+            'email' => 'newbie@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'invite_key' => self::RAW_KEY,
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $user = User::where('email', 'newbie@example.com')->firstOrFail();
+
+        // WF-2: past its expiry the reservation disappears from the owner's
+        // pending list (nothing left to revoke) — so it must not grant.
+        $this->travel(49)->hours();
+        $this->actingAs($this->owner)->getJson("/api/profiles/{$this->profile->id}/invites")
+            ->assertOk()->assertJsonCount(0, 'invites');
+
+        $user->markEmailAsVerified();
+        event(new Verified($user));
+
+        $this->assertFalse($this->profile->isMember($user));
+        $this->assertSame(1, $user->profiles()->count());
+        $this->assertTrue($user->profiles()->sole()->isOwner($user));
+        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
     }
 
     public function test_registration_without_an_invite_still_creates_a_default_profile(): void

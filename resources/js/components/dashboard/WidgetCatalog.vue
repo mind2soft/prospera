@@ -7,6 +7,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import type { MaterialSymbol } from '@/lib/materialSymbols';
 import type { DashboardWidgetType } from '@/types';
 
 const props = withDefaults(
@@ -30,10 +31,10 @@ const CATALOG: DashboardWidgetType[] = [
     'radial',
 ];
 
-const CATALOG_ICONS: Record<DashboardWidgetType, string> = {
-    envelope_spending: 'table_chart',
-    income_expenses: 'bar_chart',
-    radial: 'donut_large',
+const CATALOG_ICONS: Record<DashboardWidgetType, MaterialSymbol> = {
+    envelope_spending: 'table-chart',
+    income_expenses: 'bar-chart',
+    radial: 'donut-large',
 };
 </script>
 

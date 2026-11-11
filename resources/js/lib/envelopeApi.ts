@@ -1,27 +1,33 @@
 import { api, setResourceShare } from '@/lib/api';
+import * as envelopes from '@/routes/api/envelopes';
+import * as envelopeShares from '@/routes/api/envelopes/shares';
 import type { Envelope, ResourceMember } from '@/types';
 
 export type TransferEnvelopeOwnershipInput = { user_id: number };
 export type EnvelopeShareInput = { user_id: number; permission: string };
 
 export const envelopeApi = {
-    list: (): Promise<{ envelopes: Envelope[] }> => api('/api/envelopes'),
+    list: (): Promise<{ envelopes: Envelope[] }> => api(envelopes.index()),
 
     shares: (id: number): Promise<{ shares: ResourceMember[] }> =>
-        api(`/api/envelopes/${id}/shares`),
+        api(envelopeShares.index(id)),
 
     setShare: (id: number, userId: number, permission: string): Promise<void> =>
-        setResourceShare(`/api/envelopes/${id}/shares`, userId, permission),
+        setResourceShare(
+            {
+                update: envelopeShares.update({ envelope: id, userId }),
+                store: envelopeShares.store(id),
+            },
+            userId,
+            permission,
+        ),
 
     removeShare: (id: number, userId: number): Promise<void> =>
-        api(`/api/envelopes/${id}/shares/${userId}`, { method: 'DELETE' }),
+        api(envelopeShares.destroy({ envelope: id, userId })),
 
     transferOwnership: (
         id: number,
         input: TransferEnvelopeOwnershipInput,
     ): Promise<{ envelope: Envelope }> =>
-        api(`/api/envelopes/${id}/transfer-ownership`, {
-            method: 'POST',
-            body: input,
-        }),
+        api(envelopes.transferOwnership(id), { body: input }),
 };

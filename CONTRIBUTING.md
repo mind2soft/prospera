@@ -56,6 +56,13 @@ In addition:
     assets (`npm run build`) first — the suite always runs against the
     current source, never a stale `public/build`.
 
+- **Mind the Content-Security-Policy** (`app/Http/Middleware/SecurityHeaders.php`).
+  Scripts only load from the app's origin or with the per-request nonce:
+  give any inline `<script>` in a Blade view `nonce="{{ Vite::cspNonce() }}"`
+  (Vite's own tags get it automatically). A new external origin (fonts,
+  APIs, images) must be added to the policy, with a test — otherwise the
+  browser blocks it (check the console for "Content Security Policy"
+  errors). While `npm run dev` runs, the dev server is allowed.
 - Refactors may not change behaviour; if tests need to change, the PR
   description must explain why.
 - Do not disable, skip or weaken existing tests to make a PR pass. If you

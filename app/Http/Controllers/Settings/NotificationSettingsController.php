@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
-use App\Settings\NotificationSettings;
+use App\Http\Requests\Settings\NotificationSettingsUpdateRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -26,16 +26,9 @@ class NotificationSettingsController extends Controller
      * the full catalog, the master switch included, so the stored object is
      * always complete).
      */
-    public function update(Request $request): JsonResponse
+    public function update(NotificationSettingsUpdateRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            NotificationSettings::MASTER => ['required', 'boolean'],
-            NotificationSettings::PAYMENT_REMINDERS => ['required', 'boolean'],
-            NotificationSettings::LEDGER_EXPIRED => ['required', 'boolean'],
-            NotificationSettings::CONTRIBUTOR_TRANSACTIONS => ['required', 'boolean'],
-            NotificationSettings::ENVELOPE_LIMIT_EXCEEDED => ['required', 'boolean'],
-            NotificationSettings::PROFILE_INVITE => ['required', 'boolean'],
-        ]);
+        $validated = $request->validated();
 
         $settings = $request->user()->notification_settings->with($validated);
 

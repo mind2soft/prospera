@@ -124,7 +124,8 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
 ### Scheduler
 
 Data keys are rotated monthly and retired versions pruned daily. The
-production host must run the scheduler:
+production host must run the scheduler (it also runs the queue worker that
+sends the emails — see [Scheduled tasks](../README.md#scheduled-tasks)):
 
 ```cron
 * * * * * cd /path/to/current && php artisan schedule:run >> /dev/null 2>&1
@@ -161,15 +162,22 @@ key at once (e.g. `composer setup`, which runs `key:generate`
 unconditionally). Instead of scattered `AmountDecryptionException` 500s, two
 safeguards report it explicitly (issue #36):
 
-- **Boot-time smoke check** — on every production HTTP request, one active
-  amount key per profile is unwrapped; a failure aborts the request with an
+- **Boot-time smoke check** — on every production HTTP request, a single
+  amount key (the most recently created active one) is unwrapped — a
+  rotation breaks every wrapped key at once, so one is enough, at constant
+  cost whatever the number of profiles; a failure aborts the request with an
   explicit, actionable error in the logs: restore the previous `APP_KEY` from
   the backup, or, if the rotation was intentional, list the old key in
   `APP_PREVIOUS_KEYS` and run `amounts:rewrap-keys`. HTTP requests only:
   artisan must keep booting so the recovery itself stays runnable. A broken
   key also fails the deploy's `/up` health check, leaving the previous
   release live or the app in maintenance mode (the deploy's own pre-switch
-  `amounts:verify` catches it before the switch).
+  `amounts:verify` catches it before the switch). The check is skipped in
+  maintenance mode (the 503 page must keep rendering, e.g. during a
+  deploy's migrations) and when the key table cannot be read (database
+  down or not migrated yet — the request fails on its own terms). It is
+  not cached: with the default `database` cache store a cache lookup costs
+  the same single query.
 - **Daily scheduled `amounts:verify`** — so the failure surfaces in the logs
   even when no request touches amounts; the command logs a failure summary
   itself, since the scheduler's own output goes to `/dev/null`.
@@ -303,7 +311,17 @@ scripts compare releases with the migrations the database actually ran
   failing later (e.g. `amounts:verify` after an `APP_PREVIOUS_KEYS` change)
   has already replaced it: the live release keeps its cached configuration,
   but fix the secrets and deploy again before any rollback (which rebuilds
-  the configuration from it, then refuses if `amounts:verify` fails).
+  the configuration from it, then refuses if `amounts:verify` fails). The
+  cached configuration (`bootstrap/cache/config.php`) holds the same secrets
+  in plain PHP: deploys and rollbacks write it under `umask 077` and then
+  `chmod 600` it, like the `.env` (PHP runs as the deploy account).
+- Both scripts connect only to a host whose key is pinned in the
+  `SSH_KNOWN_HOSTS` variable of the `Production` environment (known_hosts
+  lines, e.g. from `ssh-keyscan -H <host>` run once and checked against the
+  host's fingerprint out of band). It is mandatory: a blank value fails the
+  deploy or rollback before connecting — there is no trust-on-first-use
+  fallback, since the deploy uploads the `.env` (with `APP_KEY`) over that
+  connection. After a host key change, update the variable.
 - It switches to maintenance mode before running pending migrations, so the
   previous release stops accepting requests (ones already in flight may still
   complete). `amounts:verify` must pass before the release goes live. Any
@@ -341,6 +359,11 @@ scripts compare releases with the migrations the database actually ran
   8.4), checked on 2026-11-02: the docroot is `current/public`,
   `realpath_cache_ttl` is 120 and OPcache is not loaded; the web handler's
   process model could not be inspected, so the default wait applies.
+- After switching `current` (and after reverting it), the deploy and the
+  rollback run `php artisan queue:restart` from the live release, so
+  long-lived queue workers exit after their current job instead of running
+  the replaced release's code on the new schema. A failure only warns: the
+  switch is done; restart the workers by hand.
 - After migrating (or failing to), the deploy records the migrations the
   database ran in `shared/schema-migrations`.
 - `scripts/ci/rollback-production.sh` only switches to a release shipping
@@ -380,9 +403,16 @@ cascade-delete child rows.
 ### Performance
 
 Decryption costs one AES-GCM operation per amount plus one key unwrap per
-profile and request; the boot-time smoke check adds one more unwrap per
-profile (its highest active key only) and one small query. Totals hydrate and
-decrypt the rows they sum; rotation and `amounts:verify` scan every amount.
+profile and request. Each model memoizes its decrypted amounts against the
+exact inputs of the decryption (payload, raw context attributes, original
+values), so repeated reads of `->amount` decrypt once while any change to
+those inputs decrypts afresh — the context-change rule above still applies.
+The memo is dropped when a model is serialized. (Laravel's `shouldCache()`
+accessor cache is deliberately not used: it writes the cached plaintext back
+into the attributes through the mutator.) The boot-time smoke check adds one
+unwrap and one small indexed query per request, independent of the number of
+profiles. Totals hydrate and decrypt the rows they sum; rotation and
+`amounts:verify` scan every amount.
 
 ## Why not the original proposal
 

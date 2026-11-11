@@ -2,10 +2,9 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * A single dashboard widget of a user's dashboard for one financial profile
@@ -23,8 +22,8 @@ use Illuminate\Support\Carbon;
  * @property int $period_range canonical enumeration, see PERIOD_RANGES
  * @property array<int, array<string, mixed>> $selection
  * @property int $sort_order
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 final class DashboardWidget extends Model
 {
@@ -90,32 +89,12 @@ final class DashboardWidget extends Model
     ];
 
     /**
-     * The owning user (each member has their own dashboard per profile).
-     *
-     * @return BelongsTo<User, $this>
-     */
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
-
-    /**
-     * The financial profile the widget is configured for.
-     *
-     * @return BelongsTo<FinancialProfile, $this>
-     */
-    public function profile(): BelongsTo
-    {
-        return $this->belongsTo(FinancialProfile::class, 'financial_profile_id');
-    }
-
-    /**
      * Widgets of the given user's dashboard for the given profile, in
      * display order.
      *
      * @return Builder<static>
      */
-    public static function scopeFor(int $userId, int $profileId): Builder
+    public static function forUserAndProfile(int $userId, int $profileId): Builder
     {
         $query = self::query();
 

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Actions\DeleteAccount;
 use App\Models\Budget;
 use App\Models\BudgetPermission;
 use App\Models\Envelope;
@@ -198,6 +199,43 @@ class AccountDeletionTest extends TestCase
             'user_id' => $otherOwner->id,
             'name' => 'Groceries',
         ]);
+    }
+
+    public function test_envelopes_referenced_by_transactions_transfer_without_hydrating_the_history(): void
+    {
+        $owner = User::factory()->create();
+        $entrant = User::factory()->create();
+        FinancialProfile::createOwnedBy($entrant);
+
+        // A profile the entrant is not a member of (any more) still
+        // references their envelope through its ledger.
+        $profile = FinancialProfile::createOwnedBy($owner);
+        $ledger = $this->createLedger($owner, $profile);
+
+        $envelope = Envelope::create(['name' => 'Fuel', 'type' => 'expense', 'user_id' => $entrant->id]);
+
+        foreach (range(1, 3) as $day) {
+            Transaction::create([
+                'ledger_id' => $ledger->id,
+                'user_id' => $entrant->id,
+                'envelope_id' => $envelope->id,
+                'amount' => -100 * $day,
+                'event_at' => "2026-03-0{$day} 00:00:00",
+            ]);
+        }
+
+        DB::enableQueryLog();
+        app(DeleteAccount::class)->handle($entrant);
+        $queries = collect(DB::getQueryLog())->pluck('query');
+        DB::disableQueryLog();
+
+        $this->assertDatabaseHas('envelopes', ['id' => $envelope->id, 'user_id' => $owner->id]);
+        $this->assertSame(3, Transaction::query()->where('envelope_id', $envelope->id)->count());
+        $this->assertFalse(
+            $queries->contains(fn (string $sql): bool => str_starts_with($sql, 'select * from "transactions"')
+                || str_starts_with($sql, 'select "transactions".* from')),
+            'The transaction history must not be hydrated.',
+        );
     }
 
     public function test_envelope_name_collisions_are_resolved_with_the_imported_suffix(): void

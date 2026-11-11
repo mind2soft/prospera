@@ -3,14 +3,24 @@
 namespace App\Http\Requests;
 
 use App\Models\Envelope;
+use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
+/**
+ * Envelope creation (any user — the creator owns it) and edition (owner
+ * only, authorized before the payload is validated).
+ */
 class EnvelopeRequest extends FormRequest
 {
-    public function authorize(): bool
+    public function authorize(): Response
     {
-        return true;
+        $envelope = $this->route('envelope');
+
+        return $envelope instanceof Envelope
+            ? Gate::inspect('update', $envelope)
+            : Response::allow();
     }
 
     /**

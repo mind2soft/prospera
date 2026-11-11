@@ -52,6 +52,7 @@ case "$2" in
             first) pending | head -n 1 >> "$WORK/ran" ;;
         esac
         [ "${MIGRATE_EXIT:-0}" = 0 ] || exit "$MIGRATE_EXIT" ;;
+    config:cache) mkdir -p "$rel/bootstrap/cache" && printf '<?php return [];\n' > "$rel/bootstrap/cache/config.php" ;;
     list) [ -e "$rel/.has-verify" ] && echo 'amounts:verify   Check that every encrypted amount decrypts' ;;
     down) mkdir -p "$rel/storage/framework" && : > "$rel/storage/framework/down" ;;
     up) rm -f "$rel/storage/framework/down" ;;
@@ -84,7 +85,8 @@ for _a in "$@"; do _src=$_dst; _dst=$_a; done
 echo "scp $_src" >> "$WORK/ssh-log"
 cp "$_src" "${_dst#*:}"
 EOF
-chmod +x "$WORK/bin/php" "$WORK/bin/composer" "$WORK/bin/curl" "$WORK/bin/sleep" "$WORK/bin/ssh" "$WORK/bin/scp"
+printf '#!/bin/sh\necho "ssh-keyscan $*" >> "$WORK/ssh-log"\necho "$2 ssh-ed25519 ATTACKER"\n' > "$WORK/bin/ssh-keyscan"
+chmod +x "$WORK/bin/php" "$WORK/bin/composer" "$WORK/bin/curl" "$WORK/bin/sleep" "$WORK/bin/ssh" "$WORK/bin/scp" "$WORK/bin/ssh-keyscan"
 
 extract_remote() {
     awk "/<<'REMOTE'/{f=1;next} /^REMOTE\$/{f=0} f" "$1"
@@ -155,6 +157,11 @@ before() {
     if [ "$1" -gt 0 ] && [ "$1" -lt "$2" ]; then echo yes; else echo no; fi
 }
 
+# The permission bits of $1, e.g. -rw------- (none when missing).
+mode() {
+    if [ -e "$1" ]; then ls -lL "$1" | cut -c1-10; else echo none; fi
+}
+
 marker() {
     if [ -e "$APP/shared/deploy-maintenance" ]; then echo marker; else echo none; fi
 }
@@ -204,7 +211,7 @@ deploy_wrapper() {
     mkdir -p "$WORK/cwd/dist"
     _rc=0
     (cd "$WORK/cwd" && wrapper_env RELEASE_ARCHIVE="$WORK/release.tgz" APP_KEY=x DB_HOST=db DB_PORT=5432 \
-        DB_DATABASE=app DB_USERNAME=u DB_PASSWORD=p MAIL_HOST=mail MAIL_PORT=465 MAIL_USERNAME=m MAIL_PASSWORD=mp "$@" \
+        DB_DATABASE=app DB_USERNAME=u DB_PASSWORD=p MAIL_HOST=mail MAIL_PORT=465 MAIL_USERNAME=m MAIL_PASSWORD=mp MAIL_CONTACT_ADDRESS=contact@example.test "$@" \
         $SHELL_UNDER_TEST "$SCRIPTS_DIR/deploy-production.sh") > "$WORK/out" 2>&1 || _rc=$?
     echo "$_rc"
 }
@@ -361,6 +368,37 @@ mv "$APP/releases/new" "$APP/releases/new2" && ln -sfn "$APP/releases/new2" "$AP
 rm -f "$APP/previous"
 rc=$(deploy HEALTH_EXIT=22)
 expect "deploy: a failed deploy's maintenance is kept when the fix fails too" "$rc $(live) $(maintenance)" '1 new on'
+
+# --- secrets on the host ---------------------------------------------------
+
+# The cached configuration holds APP_KEY like the .env: owner-only, whatever
+# the host's umask.
+setup
+rc=$(umask 022 && deploy)
+expect 'deploy: the cached configuration and the .env are owner-only' \
+    "$rc $(mode "$APP/current/bootstrap/cache/config.php") $(mode "$APP/shared/.env")" '0 -rw------- -rw-------'
+
+# --- queue workers ----------------------------------------------------------
+
+setup
+rc=$(deploy)
+expect 'deploy: queue workers are restarted from the new release, after the switch and before the health check' \
+    "$rc $(grep -c '^new artisan queue:restart$' "$WORK/log") $(before "$(at ' artisan view:cache')" "$(at ' queue:restart')") $(before "$(at ' queue:restart')" "$(at '^curl new')")" '0 1 yes yes'
+
+setup
+rc=$(deploy FAIL=queue:restart)
+expect 'deploy: a failing queue:restart only warns' \
+    "$rc $(live) $(maintenance) $(grep -c 'restart the queue workers by hand' "$WORK/out")" '0 new off 1'
+
+setup
+rc=$(deploy DB_DOWN=1)
+expect 'deploy: a refused deploy restarts no queue worker' "$rc $(ran 'queue:restart')" '1 no'
+
+setup
+rm "$WORK/pkg/database/migrations/b.php"
+rc=$(deploy HEALTH_EXIT=22)
+expect 'deploy: a reverted deploy restarts the queue workers on the restored release' \
+    "$rc $(live) $(grep -c '^old artisan queue:restart$' "$WORK/log")" '1 old 1'
 
 # --- PHP's realpath cache: wait before lifting maintenance or probing ------
 
@@ -608,6 +646,22 @@ setup_rollback() {
 }
 
 setup_rollback
+release "$APP/releases/old" '' a b
+rc=$(rollback)
+expect 'rollback: queue workers are restarted from the target release, before the health check' \
+    "$rc $(live) $(grep -c '^old artisan queue:restart$' "$WORK/log") $(before "$(at ' queue:restart')" "$(at '^curl old')")" '0 old 1 yes'
+
+setup_rollback
+release "$APP/releases/old" '' a b
+rc=$(rollback HEALTH_EXIT=22)
+expect 'rollback: a failed health check restarts the queue workers on the restored release' \
+    "$rc $(live) $(grep -c '^new artisan queue:restart$' "$WORK/log")" '1 new 1'
+
+setup_rollback
+rc=$(rollback)
+expect 'rollback: a refused rollback restarts no queue worker' "$rc $(ran 'queue:restart')" '1 no'
+
+setup_rollback
 rc=$(rollback)
 expect 'rollback: a target missing migrations the database ran is refused' "$rc $(live) $(consistent)" '1 new yes'
 
@@ -616,6 +670,13 @@ rm "$APP/releases/new/database/migrations/b.php"
 printf 'a\n' > "$WORK/ran"
 rc=$(rollback)
 expect 'rollback: a target matching the schema goes live' "$rc $(live) $(ran 'config:cache') $(consistent)" '0 old yes yes'
+
+setup_rollback
+rm "$APP/releases/new/database/migrations/b.php"
+printf 'a\n' > "$WORK/ran"
+rc=$(umask 022 && rollback)
+expect 'rollback: the rebuilt cached configuration is owner-only' \
+    "$rc $(live) $(mode "$APP/releases/old/bootstrap/cache/config.php")" '0 old -rw-------'
 
 setup_rollback
 printf 'a\nb\nx\n' > "$WORK/ran"
@@ -844,6 +905,56 @@ for _arg in "$WORK/app with space|0" "app|0" "$APP/|0" "$WORK//app|0" "$APP|1000
     expect "rollback: an invalid app path or wait [$_arg] is refused on the host too" \
         "$_rc $(live) $(grep -c 'invalid app path\|must be a number' "$WORK/out")" '1 new 1'
 done
+
+# No trust on first use: without pinned host keys nothing connects.
+for _hosts in '' ' ' "$(printf '\n\t')"; do
+    setup
+    rc=$(deploy_wrapper RELEASE_ID=e2e-$$ SSH_KNOWN_HOSTS="$_hosts")
+    expect "deploy wrapper: a blank SSH_KNOWN_HOSTS [$_hosts] is refused before ssh-keyscan, scp and ssh" \
+        "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh) $(grep -c 'SSH_KNOWN_HOSTS' "$WORK/out")" '1 old no-ssh 1'
+
+    setup_rollback
+    release "$APP/releases/old" '' a b
+    rc=$(rollback_wrapper SSH_KNOWN_HOSTS="$_hosts")
+    expect "rollback wrapper: a blank SSH_KNOWN_HOSTS [$_hosts] is refused before ssh-keyscan and ssh" \
+        "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh) $(grep -c 'SSH_KNOWN_HOSTS' "$WORK/out")" '1 new no-ssh 1'
+done
+
+setup
+rc=$(deploy_wrapper RELEASE_ID=e2e-$$ SSH_KNOWN_HOSTS='example.test ssh-ed25519 PINNED')
+expect 'deploy wrapper: SSH_KNOWN_HOSTS is the only trusted host key' \
+    "$rc $(cat "$WORK/home/.ssh/known_hosts") $(ls -l "$WORK/home/.ssh/known_hosts" | cut -c1-10)" '0 example.test ssh-ed25519 PINNED -rw-------'
+
+# --- render-production-env.sh ----------------------------------------------
+
+render_env() {
+    _rc=0
+    env -i PATH="$PATH" HOME="$WORK/home" APP_KEY=x APP_URL=http://localhost DB_HOST=db DB_PORT=5432 DB_DATABASE=app \
+        DB_USERNAME=u DB_PASSWORD=p MAIL_HOST=mail MAIL_PORT=465 MAIL_USERNAME=m MAIL_PASSWORD=mp \
+        MAIL_CONTACT_ADDRESS=contact@example.test "$@" \
+        $SHELL_UNDER_TEST "$SCRIPTS_DIR/render-production-env.sh" > "$WORK/rendered" 2> "$WORK/out" || _rc=$?
+    echo "$_rc"
+}
+
+rc=$(render_env)
+expect 'render: the contact-form recipient is rendered' \
+    "$rc $(grep -c '^MAIL_CONTACT_ADDRESS=contact@example.test$' "$WORK/rendered")" '0 1'
+
+rc=$(render_env MAIL_CONTACT_ADDRESS=)
+expect 'render: a missing MAIL_CONTACT_ADDRESS is refused' \
+    "$rc $(grep -c 'MAIL_CONTACT_ADDRESS' "$WORK/out")" '1 1'
+
+for _address in 'no-at-sign' '@example.test' 'contact@' 'a@b@c' 'contact@example.test
+APP_DEBUG=true' 'contact@example.test APP_DEBUG=true' 'x$(id)@example.test'; do
+    rc=$(render_env MAIL_CONTACT_ADDRESS="$_address")
+    expect "render: an invalid MAIL_CONTACT_ADDRESS [$_address] is refused" \
+        "$rc $(grep -c 'Invalid MAIL_CONTACT_ADDRESS' "$WORK/out")" '1 1'
+done
+
+setup
+rc=$(deploy_wrapper RELEASE_ID=e2e-$$ MAIL_CONTACT_ADDRESS=)
+expect 'deploy wrapper: a missing MAIL_CONTACT_ADDRESS is refused before scp and ssh' \
+    "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" '1 old no-ssh'
 
 setup
 DEPLOY_E2E_ID=e2e-$$

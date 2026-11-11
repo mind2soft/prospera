@@ -2,6 +2,7 @@
     "budget": {
         "title": "Budget",
         "description": "Plan where your money goes before it goes anywhere.",
+        "currency": "Currency",
         "toast": {
             "failed": "Something went wrong.",
             "accessUpdated": "Access updated.",
@@ -13,6 +14,8 @@
             "envelopeAdded": "Envelope added.",
             "envelopeRemoved": "Envelope removed."
         },
+        "loadError": "Your budgets could not be loaded.",
+        "detailLoadError": "This budget could not be loaded.",
         "empty": {
             "title": "Create your first budget",
             "description": "Start with a draft: pick your currency, add your envelopes, then publish when it feels right.",
@@ -24,25 +27,35 @@
             "expenses": "Expenses",
             "segmentTitle": "{name} — {amount}"
         },
+        "label": {
+            "draft": "New Budget (draft)"
+        },
         "selector": {
             "selectBudget": "Select budget",
             "actions": "Budget actions",
             "publish": "Publish",
             "newBudget": "New Budget",
-            "share": "Share"
+            "share": "Share",
+            "delete": "Delete budget"
         },
         "table": {
             "addEnvelope": "Add envelope",
             "envelope": "Envelope",
             "type": "Type",
             "amount": "Amount",
+            "amountFor": "{name} amount",
             "leftToSpend": "Left to spend",
             "actions": "Actions",
-            "removeEnvelope": "Remove envelope",
             "empty": "No envelopes assigned yet.",
             "overspending": "Overspending",
             "leftOver": "Left over",
-            "variableNote": "Variable amounts are expected values — re-adjust them any time with a budget revision."
+            "variableNote": "Variable amounts are expected values — re-adjust them any time with a budget revision.",
+            "saving": "Saving…",
+            "saved": "All changes saved",
+            "notSaved": "A change could not be saved.",
+            "invalidAmount": "Not saved: enter a whole amount of 1 or more.",
+            "label": "Budget envelopes",
+            "removeEnvelopeFor": "Remove {name} from the budget"
         },
         "addEnvelope": {
             "title": "Add an envelope",
@@ -73,13 +86,13 @@
         },
         "share": {
             "title": "Share budget",
-            "resource": "this budget"
+            "resource": "this budget",
+            "draftTransferNote": "A draft budget can only be handed to the profile owner. Publish it first to transfer it to someone else."
         },
         "confirm": {
             "publishTitle": "Publish this budget?",
-            "publishDescription": "Publishing stamps this budget for the current month and puts it in read-only mode. This cannot be undone.",
-            "publishDescriptionWithReplace": "Publishing stamps this budget for the current month and puts it in read-only mode. This cannot be undone. An existing published budget for this month will be replaced.",
-            "replaceWarning": "An existing published budget for this month will be replaced.",
+            "publishDescription": "Publishing stamps this budget for {month} and puts it in read-only mode. This cannot be undone.",
+            "replaceWarning": "The budget already published for {month} will be replaced: it is deleted with its envelope assignments and shares.",
             "deleteTitle": "Delete this budget?",
             "deleteDescription": "This permanently removes the budget with all of its envelope assignments and shares.",
             "publishButton": "Publish",

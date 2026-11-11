@@ -219,6 +219,15 @@ settle_switch() {
     fi
 }
 
+# Long-lived queue workers keep the code of the release they started from:
+# ask them to exit after their current job, so they come back on the live
+# one. Best effort: the release switch is already done.
+restart_queue() {
+    if ! (cd "$CURRENT_LINK" && php artisan queue:restart); then
+        printf 'Warning: "php artisan queue:restart" failed; restart the queue workers by hand\n' >&2
+    fi
+}
+
 restore_links() {
     safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
 
@@ -227,6 +236,8 @@ restore_links() {
     else
         rm -f "$PREVIOUS_LINK"
     fi
+
+    restart_queue
 }
 
 # A marker not matching the maintenance mode on is stale (lifted by hand).
@@ -252,7 +263,8 @@ fi
 # that every amount decrypts with it.
 cd "$TARGET_RELEASE"
 
-if ! php artisan config:cache; then
+# Owner-only like the .env: it holds APP_KEY and the service passwords.
+if ! (umask 077 && php artisan config:cache) || ! chmod 600 bootstrap/cache/config.php; then
     printf 'Refusing to roll back: caching the configuration of %s failed\n' "$(basename "$TARGET_RELEASE")" >&2
     exit 1
 fi
@@ -269,6 +281,7 @@ fi
 
 safe_symlink "$CURRENT_TARGET" "$PREVIOUS_LINK"
 safe_symlink "$TARGET_RELEASE" "$CURRENT_LINK"
+restart_queue
 
 # A deploy's maintenance mode (failed deploy) is lifted now that the live
 # release matches the schema; an operator's is left on.

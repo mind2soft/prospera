@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useId } from 'vue';
 import { useI18n } from 'vue-i18n';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
@@ -14,9 +14,12 @@ const emit = defineEmits<{
     /** Raised when a drag starts from the card's handle. */
     'drag-start': [];
     'drag-end': [];
+    /** Keyboard reordering from the handle: one step or to an end. */
+    move: [to: 'earlier' | 'later' | 'first' | 'last'];
 }>();
 
 const { t } = useI18n();
+const hintId = useId();
 
 /** Free-text title, else the localized default title for the type. */
 const title = computed(
@@ -49,7 +52,7 @@ const onDragStart = (event: DragEvent): void => {
 
     if (event.dataTransfer) {
         event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', String(props.widget.id ?? ''));
+        event.dataTransfer.setData('text/plain', String(props.widget.id));
     }
 
     emit('drag-start');
@@ -58,6 +61,31 @@ const onDragStart = (event: DragEvent): void => {
 const onDragEnd = (): void => {
     dragArmed.value = false;
     emit('drag-end');
+};
+
+/**
+ * Keyboard alternative to dragging (WCAG 2.5.7 / 2.1.1): the arrow keys move
+ * the widget one step in reading order (left/right follow the text
+ * direction), Home/End to the first/last position.
+ */
+const onHandleKeydown = (event: KeyboardEvent): void => {
+    const rtl =
+        event.currentTarget instanceof HTMLElement &&
+        getComputedStyle(event.currentTarget).direction === 'rtl';
+    const moves: Record<string, 'earlier' | 'later' | 'first' | 'last'> = {
+        ArrowUp: 'earlier',
+        ArrowDown: 'later',
+        ArrowLeft: rtl ? 'later' : 'earlier',
+        ArrowRight: rtl ? 'earlier' : 'later',
+        Home: 'first',
+        End: 'last',
+    };
+    const move = moves[event.key];
+
+    if (move !== undefined) {
+        event.preventDefault();
+        emit('move', move);
+    }
 };
 
 const onWindowMouseUp = (): void => {
@@ -85,24 +113,30 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', onWindowMouseUp));
         <header class="flex items-center gap-1 px-3 pt-2.5">
             <button
                 type="button"
-                class="-ml-1 cursor-grab touch-none rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-muted/70 hover:text-foreground active:cursor-grabbing active:bg-muted active:text-foreground"
-                :aria-label="`${t('dashboard.widget.drag')} — ${title}`"
-                :title="t('dashboard.widget.drag')"
+                class="-ml-1 cursor-grab touch-none rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground active:cursor-grabbing active:bg-muted active:text-foreground"
+                :aria-label="t('dashboard.widget.reorder', { title })"
+                :aria-describedby="hintId"
+                :title="t('dashboard.widget.reorderHint')"
+                data-reorder-handle
                 @mousedown="onHandleDown"
+                @keydown="onHandleKeydown"
             >
-                <Icon name="drag_indicator" class="size-4" aria-hidden="true" />
+                <Icon name="drag-indicator" class="size-4" aria-hidden="true" />
             </button>
+            <span :id="hintId" class="sr-only">{{
+                t('dashboard.widget.reorderHint')
+            }}</span>
 
-            <h3
-                class="min-w-0 flex-1 truncate text-[13px] leading-5 font-medium tracking-[-0.01em] text-foreground"
+            <h2
+                class="min-w-0 flex-1 truncate text-base leading-6 font-medium text-foreground"
             >
                 {{ title }}
-            </h3>
+            </h2>
 
             <Button
                 variant="ghost"
                 size="icon-sm"
-                class="text-muted-foreground/70 opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100 hover:text-foreground focus-visible:opacity-100 pointer-coarse:opacity-100"
+                class="text-muted-foreground opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100 hover:text-foreground focus-visible:opacity-100 pointer-coarse:opacity-100"
                 :aria-label="t('dashboard.widget.settings')"
                 @click="emit('settings')"
             >

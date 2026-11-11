@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
+use Illuminate\Auth\Access\Response;
+
 /**
  * Resource-level permission resolution, shared by the budget, ledger and
- * envelope controllers (docs/shared-finances.md — permission model).
+ * envelope policies and controllers (docs/shared-finances.md — permission model).
  *
  * Effective permissions are "owner" | "contributor" | "viewer" | "none":
  * - budgets and ledgers: the resource's permission row, or implicit
@@ -22,6 +24,12 @@ final class ResourcePermissions
 
     public const OWNER = 'owner';
 
+    /**
+     * Permissions the Share drawer may grant ("owner" is reserved for
+     * transfer-ownership).
+     */
+    public const GRANTABLE = [self::CONTRIBUTOR, self::VIEWER];
+
     private const HIERARCHY = [
         self::NONE => 0,
         self::VIEWER => 1,
@@ -32,36 +40,24 @@ final class ResourcePermissions
     /**
      * Whether the effective permission satisfies the required minimum.
      */
-    public function isAtLeast(string $permission, string $minimum): bool
+    public static function isAtLeast(string $permission, string $minimum): bool
     {
         return self::HIERARCHY[$permission] >= self::HIERARCHY[$minimum];
     }
 
     /**
-     * Authorization guard for profile-scoped resources (budgets, ledgers):
-     * "none" means the resource is invisible to the caller (404); anything
-     * below the required minimum is forbidden (403). Returns the effective
-     * permission so callers can branch on it.
+     * Authorization outcome for profile-scoped resources (budgets, ledgers),
+     * used by their policies: "none" means the resource is invisible to the
+     * caller (404); anything below the required minimum is forbidden (403).
      */
-    public function authorize(string $permission, string $minimum): string
+    public static function inspect(string $permission, string $minimum): Response
     {
         if ($permission === self::NONE) {
-            abort(404);
+            return Response::denyAsNotFound();
         }
 
-        if (! $this->isAtLeast($permission, $minimum)) {
-            abort(403);
-        }
-
-        return $permission;
-    }
-
-    /**
-     * Whether the given permission row value is a grantable permission
-     * ("owner" is reserved for transfer-ownership).
-     */
-    public static function isGrantable(string $permission): bool
-    {
-        return in_array($permission, [self::CONTRIBUTOR, self::VIEWER], true);
+        return self::HIERARCHY[$permission] >= self::HIERARCHY[$minimum]
+            ? Response::allow()
+            : Response::denyWithStatus(403);
     }
 }

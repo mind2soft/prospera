@@ -12,14 +12,14 @@
         "account": "Paramètres du compte",
         "profile": {
             "title": "Compte",
-            "description": "Mettez à jour votre nom et votre adresse e-mail",
+            "description": "Mettez à jour votre nom et votre adresse courriel",
             "name": "Nom",
             "namePlaceholder": "Nom complet",
-            "email": "Adresse e-mail",
-            "emailPlaceholder": "Adresse e-mail",
-            "emailUnverified": "Votre adresse e-mail n'est pas vérifiée.",
-            "resendLink": "Cliquez ici pour renvoyer l'e-mail de vérification.",
-            "verificationSent": "Un nouveau lien de vérification a été envoyé à votre adresse e-mail.",
+            "email": "Adresse courriel",
+            "emailPlaceholder": "Adresse courriel",
+            "emailUnverified": "Votre adresse courriel n'est pas vérifiée.",
+            "resendLink": "Cliquez ici pour renvoyer le courriel de vérification.",
+            "verificationSent": "Un nouveau lien de vérification a été envoyé à votre adresse courriel.",
             "locale": "Langue préférée",
             "localeDescription": "Choisissez la langue utilisée dans toute l'application.",
             "localeAutomatic": "Automatique (langue du navigateur)",
@@ -30,12 +30,13 @@
             "description": "Mettez à jour les paramètres d'apparence de votre compte",
             "light": "Clair",
             "dark": "Sombre",
-            "system": "Système"
+            "system": "Système",
+            "theme": "Thème"
         },
         "notifications": {
             "title": "Paramètres de notification",
-            "description": "Choisissez les notifications par e-mail que vous recevez",
-            "master": "Activer les notifications par e-mail",
+            "description": "Choisissez les notifications par courriel que vous recevez",
+            "master": "Activer les notifications par courriel",
             "masterDescription": "L'interrupteur général de tous les courriels système. Le désactiver coupe toutes les notifications ci-dessous.",
             "payment_reminders": "Rappels de paiement",
             "payment_remindersDescription": "Un rappel avant un paiement planifié à venir sur l'une de vos enveloppes.",
@@ -47,7 +48,8 @@
             "envelope_limit_exceededDescription": "Les dépenses d'une enveloppe dépassent son allocation sur le budget publié du mois.",
             "profile_invite": "Invitations de profil",
             "profile_inviteDescription": "Quelqu'un partage un profil financier avec vous (les invitations que vous envoyez sont toujours remises).",
-            "allOff": "Toutes les notifications sont désactivées — activez « Activer les notifications par e-mail » pour en recevoir.",
+            "comingSoon": "Bientôt disponible",
+            "allOff": "Toutes les notifications sont désactivées — activez « Activer les notifications par courriel » pour en recevoir.",
             "saveFailed": "Impossible d'enregistrer vos paramètres de notification."
         },
         "profiles": {
@@ -59,22 +61,18 @@
             "default": "Par défaut",
             "rename": "Renommer le profil",
             "switchTo": "Passer à",
-            "setDefault": "Définir par défaut",
             "members": "Membres",
             "you": "(vous)",
             "joined": "a rejoint le profil le {date}",
             "owner": "Propriétaire",
             "collaborator": "Collaborateur",
-            "removeMember": "Retirer le membre",
             "leave": "Quitter",
             "leaveProfile": "Quitter le profil",
             "inviteSomeone": "Inviter quelqu'un",
             "emailPlaceholder": "personne{'@'}exemple.com",
             "invite": "Inviter",
-            "inviteNote": "Le lien d'invitation expire après 48 heures et ne fonctionne que pour cette adresse e-mail.",
+            "inviteNote": "Le lien d'invitation expire après 48 heures et ne fonctionne que pour cette adresse courriel.",
             "expires": "Expire le {date}",
-            "copyInviteLink": "Copier le lien d'invitation",
-            "revokeInvite": "Révoquer l'invitation",
             "transferOwnership": "Transférer la propriété",
             "chooseCollaborator": "Choisir un collaborateur",
             "transfer": "Transférer",
@@ -102,7 +100,20 @@
             "inviteCreatedToast": "Invitation créée — copiez le lien pour la partager.",
             "copyFailedToast": "Impossible de copier le lien.",
             "inviteRevokedToast": "Invitation révoquée.",
-            "somethingWentWrong": "Une erreur est survenue."
+            "somethingWentWrong": "Une erreur est survenue.",
+            "renameNamed": "Renommer {name}",
+            "setDefaultNamed": "Définir {name} comme profil par défaut",
+            "copyInviteLinkFor": "Copier le lien d’invitation pour {email}",
+            "revokeInviteFor": "Révoquer l’invitation pour {email}",
+            "linkCopiedToast": "Lien d’invitation copié.",
+            "loadError": "Vos profils n’ont pas pu être chargés.",
+            "membersLoadError": "Les membres de ce profil n’ont pas pu être chargés.",
+            "invitesLoadError": "Les invitations en attente n’ont pas pu être chargées.",
+            "removeMemberNamed": "Retirer le membre {name}",
+            "removeMember": "Retirer le membre",
+            "copyInviteLink": "Copier le lien d'invitation",
+            "revokeInvite": "Révoquer l'invitation",
+            "setDefault": "Définir par défaut"
         },
         "security": {
             "title": "Paramètres de sécurité",
@@ -127,7 +138,12 @@
             "continueSetup": "Poursuivre la configuration",
             "enable": "Activer la 2FA",
             "enabledInfo": "Un code sécurisé et aléatoire vous sera demandé lors de la connexion ; vous pouvez le récupérer depuis l'application prenant en charge TOTP sur votre téléphone.",
-            "disable": "Désactiver la 2FA"
+            "disable": "Désactiver la 2FA",
+            "errors": {
+                "qrCode": "Le code QR n’a pas pu être chargé.",
+                "setupKey": "La clé de configuration n’a pas pu être chargée.",
+                "recoveryCodes": "Les codes de récupération n’ont pas pu être chargés."
+            }
         },
         "twoFactorSetup": {
             "title": "Activer l'authentification à deux facteurs",
@@ -167,7 +183,7 @@
             "register": "Enregistrer la clé d'accès",
             "authenticating": "Authentification...",
             "signIn": "Se connecter avec une clé d'accès",
-            "orContinueWithEmail": "Ou continuer avec une adresse e-mail"
+            "orContinueWithEmail": "Ou continuer avec une adresse courriel"
         }
     }
 }

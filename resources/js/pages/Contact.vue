@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import GithubIcon from '@/components/GithubIcon.vue';
 import InputError from '@/components/InputError.vue';
@@ -14,6 +15,7 @@ import { ApiError, api } from '@/lib/api';
 import { dashboard } from '@/routes';
 import { store } from '@/routes/contact';
 
+const { t } = useI18n();
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
 const githubRepoUrl = computed(() => page.props.githubRepoUrl);
@@ -30,46 +32,41 @@ const form = ref({
 const genericError = ref<string | null>(null);
 const fieldErrors = ref<Record<string, string[]>>({});
 
-const { mutate: submit, isLoading } = useMutation(
-    async () => {
+const { mutate: submit, isPending: isLoading } = useMutation({
+    mutationFn: async () => {
         genericError.value = null;
         fieldErrors.value = {};
 
-        return api<{ redirect: string }>(store.url(), {
-            method: 'POST',
-            body: form.value,
-        });
+        return api<{ redirect: string }>(store(), { body: form.value });
     },
-    {
-        onSuccess: (data) => {
-            router.visit(data.redirect);
-        },
-        onError: (error) => {
-            if (error instanceof ApiError) {
-                // Field errors go under their input; anything else
-                // (cooldown, throttling, missing IP, server errors) shows
-                // as an alert.
-                const fieldKeys = new Set(['email', 'subject', 'message']);
-                fieldErrors.value = Object.fromEntries(
-                    Object.entries(error.errors).filter(([key]) =>
-                        fieldKeys.has(key),
-                    ),
-                );
-                const other = Object.entries(error.errors)
-                    .filter(([key]) => !fieldKeys.has(key))
-                    .flatMap(([, messages]) => messages);
-                genericError.value =
-                    other[0] ??
-                    (Object.keys(fieldErrors.value).length
-                        ? null
-                        : error.firstError);
-            } else {
-                genericError.value =
-                    error instanceof Error ? error.message : null;
-            }
-        },
+    onSuccess: (data) => {
+        router.visit(data.redirect);
     },
-);
+    onError: (error) => {
+        if (error instanceof ApiError) {
+            // Field errors go under their input; anything else
+            // (cooldown, throttling, missing IP, server errors) shows
+            // as an alert.
+            const fieldKeys = new Set(['email', 'subject', 'message']);
+            fieldErrors.value = Object.fromEntries(
+                Object.entries(error.errors).filter(([key]) =>
+                    fieldKeys.has(key),
+                ),
+            );
+            const other = Object.entries(error.errors)
+                .filter(([key]) => !fieldKeys.has(key))
+                .flatMap(([, messages]) => messages);
+            genericError.value =
+                other[0] ??
+                (Object.keys(fieldErrors.value).length
+                    ? null
+                    : error.firstError);
+        } else {
+            // A network failure ("Failed to fetch") is not user-facing text.
+            genericError.value = t('common.errors.network');
+        }
+    },
+});
 
 // The progress bar is a visual cue for the message length: under 2000
 // characters is green, then yellow, orange, and full red at the limit.
@@ -164,7 +161,10 @@ const messageBarClass = computed(() => {
                             :disabled="isLoading"
                             data-test="contact-email"
                         />
-                        <InputError :message="fieldErrors.email?.[0]" />
+                        <InputError
+                            for="contact-email"
+                            :message="fieldErrors.email?.[0]"
+                        />
                         <p
                             v-if="isSignedIn"
                             class="text-xs text-muted-foreground"
@@ -195,7 +195,10 @@ const messageBarClass = computed(() => {
                             :disabled="isLoading"
                             data-test="contact-subject"
                         />
-                        <InputError :message="fieldErrors.subject?.[0]" />
+                        <InputError
+                            for="contact-subject"
+                            :message="fieldErrors.subject?.[0]"
+                        />
                     </div>
 
                     <div class="grid gap-2">
@@ -236,7 +239,10 @@ const messageBarClass = computed(() => {
                                 }"
                             />
                         </div>
-                        <InputError :message="fieldErrors.message?.[0]" />
+                        <InputError
+                            for="contact-message"
+                            :message="fieldErrors.message?.[0]"
+                        />
                     </div>
 
                     <Button

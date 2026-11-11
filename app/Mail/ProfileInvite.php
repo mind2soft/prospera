@@ -2,15 +2,19 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\RetriesDelivery;
 use App\Models\User;
 use App\Settings\NotificationSettings;
 use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Lang;
+use Illuminate\Support\Str;
 
 /**
  * A financial profile share notification, sent when a profile owner invites
@@ -20,26 +24,32 @@ use Illuminate\Queue\SerializesModels;
  * - The email is not linked to an account: the mail invites the recipient to
  *   create an account through the invite link (registration carries the
  *   invite, so the shared profile becomes their only profile).
- * - The email matches a registered account: the mail carries a **one-click
- *   accept link** that pre-authorizes the matching signed-in user; the mail
- *   states that ignoring the request declines the share.
+ * - The email matches a registered account: the mail carries an **accept
+ *   link** to the invite confirmation page (the GET never changes state;
+ *   the signed-in user confirms with "Accept invite"); the mail states that
+ *   ignoring the request declines the share.
  *
  * Queued, localized per recipient (`users.locale`, fallback `en`), and
  * gated through the `profile_invite` notification toggle — checked at
  * dispatch time and again at send time (inside the queued send), per
  * docs/notifications.md. Recipients without an account have no settings to
  * honor and always receive the invite. The invite key hash never appears in
- * any email.
+ * any email. The links carry the raw invite key, which is never stored: the
+ * queued payload is encrypted (ShouldBeEncrypted), so the jobs and
+ * failed_jobs tables do not hold it in the clear either.
  */
-class ProfileInvite extends Mailable implements ShouldQueue
+class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
 {
-    use Queueable, SerializesModels;
+    use Queueable, RetriesDelivery, SerializesModels;
+
+    /** The longest inviter or profile name the subject line carries. */
+    public const SUBJECT_NAME_MAX = 40;
 
     /**
      * Create a new message instance.
      *
      * @param  CarbonInterface  $expiresAt  when the invite stops working (now + 48h)
-     * @param  string|null  $acceptUrl  the one-click accept link — null for
+     * @param  string|null  $acceptUrl  the accept link (to the confirmation page) — null for
      *                                  recipients without an account
      * @param  int|null  $recipientUserId  the registered recipient, for the
      *                                     send-time notification gate — null
@@ -64,19 +74,50 @@ class ProfileInvite extends Mailable implements ShouldQueue
      */
     public function envelope(): Envelope
     {
+        $inviter = self::subjectText($this->inviterName);
+        $profile = self::subjectText($this->profileName);
+
         return new Envelope(
-            subject: __('[Prospera] :inviter shared their financial profile ":profile" with you', [
-                'inviter' => $this->inviterName,
-                'profile' => $this->profileName,
-            ]),
+            subject: $inviter === '' || $profile === ''
+                ? __('mail.invite.subject_generic')
+                : __('mail.invite.subject', ['inviter' => $inviter, 'profile' => $profile]),
         );
     }
 
     /**
-     * Get the message content definition.
+     * A user-chosen name made safe for the subject line, the part of the
+     * mail an inbox shows before it is opened (SEC-8): control characters
+     * and line breaks are flattened, anything that looks like a link or a
+     * domain is dropped (a name like "Claim your refund at evil.example"
+     * must not turn the invite into a phishing lure), and the result is
+     * capped at SUBJECT_NAME_MAX characters. The body states the full
+     * names as plain text.
+     *
+     * The name is NFKC-normalized first, so full-width forms ("ＷＷＷ．")
+     * fold to ASCII, and the ideographic and half-width dots that IDNA maps
+     * to "." (。 ｡, and ． before folding) count as dots (SEC-R3-1).
+     */
+    public static function subjectText(string $name): string
+    {
+        $dot = '[.。．｡]';
+        $text = \Normalizer::normalize($name, \Normalizer::FORM_KC);
+        $text = preg_replace('/[\p{C}\s]+/u', ' ', is_string($text) ? $text : $name) ?? '';
+        $text = preg_replace("~(?:[a-z][a-z\\d+.\\-]*://|www{$dot})\\S*~iu", ' ', $text) ?? '';
+        $text = preg_replace("~[\\p{L}\\p{N}\\-_@]+(?:{$dot}[\\p{L}\\p{N}\\-_]+)+\\S*~u", ' ', $text) ?? '';
+        $text = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
+
+        return Str::limit($text, self::SUBJECT_NAME_MAX, '…', preserveWords: true);
+    }
+
+    /**
+     * Get the message content definition: a plain-text view, localized
+     * through lang/{locale}/mail.php and rendered unescaped ({!! !!} — the
+     * text part is not HTML, so `&` must not become `&amp;`).
      */
     public function content(): Content
     {
+        $roleKey = 'mail.roles.'.$this->role;
+
         return new Content(
             text: 'mail.profile-invite',
             with: [
@@ -84,6 +125,7 @@ class ProfileInvite extends Mailable implements ShouldQueue
                 'inviterEmail' => $this->inviterEmail,
                 'profileName' => $this->profileName,
                 'role' => $this->role,
+                'roleLabel' => Lang::has($roleKey) ? __($roleKey) : $this->role,
                 'inviteUrl' => $this->inviteUrl,
                 'acceptUrl' => $this->acceptUrl,
                 'expiresAt' => $this->expiresAt,

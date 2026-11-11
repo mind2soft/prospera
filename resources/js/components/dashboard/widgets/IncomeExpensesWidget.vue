@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import { CurveType } from '@unovis/ts';
-import {
-    VisArea,
-    VisAxis,
-    VisCrosshair,
-    VisLine,
-    VisStackedBar,
-    VisTooltip,
-    VisXYContainer,
-} from '@unovis/vue';
+import { CurveType } from '@unovis/ts/types/curve';
+// Per-component entry points: the @unovis/vue barrel is flagged as having
+// side effects, so importing from it bundles every chart, map and graph.
+import VisArea from '@unovis/vue/components/area';
+import VisAxis from '@unovis/vue/components/axis';
+import VisCrosshair from '@unovis/vue/components/crosshair';
+import VisLine from '@unovis/vue/components/line';
+import VisStackedBar from '@unovis/vue/components/stacked-bar';
+import VisTooltip from '@unovis/vue/components/tooltip';
+import VisXYContainer from '@unovis/vue/containers/xy-container';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useChartDuration } from '@/composables/useChartDuration';
 import { useLocale } from '@/composables/useLocale';
-import { formatMoney } from '@/lib/budget';
+import { formatCompactMoney, formatMoney } from '@/lib/budget';
+import { escapeHtml } from '@/lib/html';
 import { isClient } from '@/lib/ssr';
 import type { DashboardHistoryBucket, DashboardWidgetData } from '@/types';
 
@@ -24,6 +26,7 @@ const props = defineProps<{
 
 const { t } = useI18n();
 const { locale } = useLocale();
+const chartDuration = useChartDuration();
 
 const series = computed<DashboardHistoryBucket[]>(() =>
     props.data.type === 'income_expenses' ? props.data.series : [],
@@ -68,19 +71,8 @@ function formatBucket(bucket: string): string {
 const xTickFormat = (i: number): string => labels.value[i] ?? '';
 
 /** Compact currency for the y-axis ticks ("$2.5K"); full format in tooltips. */
-const compactMoney = (value: number): string => {
-    try {
-        return new Intl.NumberFormat(locale.value, {
-            style: 'currency',
-            currency: props.currency,
-            currencyDisplay: 'narrowSymbol',
-            notation: 'compact',
-            maximumFractionDigits: 1,
-        }).format(value);
-    } catch {
-        return formatMoney(value, props.currency);
-    }
-};
+const compactMoney = (value: number): string =>
+    formatCompactMoney(value, props.currency, locale.value);
 
 const yTickFormat = (value: number): string => compactMoney(value);
 
@@ -106,6 +98,12 @@ const yDomain = computed<[number | undefined, number | undefined]>(() => {
     return [min < 0 ? min - pad : 0, max > 0 ? max + pad : 0];
 });
 
+/** A bucket amount for the data table (masked buckets are never shown). */
+const amountText = (amount: number | null): string =>
+    amount === null
+        ? t('dashboard.widget.amountHidden')
+        : formatMoney(amount, props.currency, locale.value);
+
 const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
     if (!datum) {
         return '';
@@ -114,16 +112,18 @@ const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
     const row = (label: string, color: string, amount: number | null): string =>
         `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;">
             <span style="display:flex;align-items:center;gap:6px;">
-                <span style="width:6px;height:6px;border-radius:9999px;background:${color};flex:none;"></span>
-                <span style="color:var(--muted-foreground);">${label}</span>
+                <span style="width:6px;height:6px;border-radius:9999px;background:${escapeHtml(color)};flex:none;"></span>
+                <span style="color:var(--muted-foreground);">${escapeHtml(label)}</span>
             </span>
-            <strong style="font-variant-numeric:tabular-nums;">${
-                amount === null ? '•••' : formatMoney(amount, props.currency)
-            }</strong>
+            <strong style="font-variant-numeric:tabular-nums;">${escapeHtml(
+                amount === null
+                    ? '•••'
+                    : formatMoney(amount, props.currency, locale.value),
+            )}</strong>
         </div>`;
 
     return `<div style="font-size:12px;min-width:160px;">
-        <div style="font-weight:600;margin-bottom:6px;">${formatBucket(datum.bucket)}</div>
+        <div style="font-weight:600;margin-bottom:6px;">${escapeHtml(formatBucket(datum.bucket))}</div>
         ${row(t('dashboard.history.revenue'), REVENUE_COLOR, datum.revenue)}
         ${row(t('dashboard.history.expenses'), EXPENSE_COLOR, datum.expenses)}
     </div>`;
@@ -141,8 +141,19 @@ const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
         </p>
 
         <!-- Unovis needs a DOM to measure — client-side only. -->
-        <div v-else-if="isClient" class="chart-surface min-h-0 flex-1">
-            <VisXYContainer :data="series" :height="220" :y-domain="yDomain">
+        <!-- The chart is visual only: the data table below is its text
+             equivalent (keyboard, touch and screen readers). -->
+        <div
+            v-else-if="isClient"
+            class="chart-surface min-h-0 flex-1"
+            aria-hidden="true"
+        >
+            <VisXYContainer
+                :data="series"
+                :height="220"
+                :y-domain="yDomain"
+                :duration="chartDuration"
+            >
                 <VisStackedBar
                     v-if="viewType === 'stacked_bars'"
                     :x="x"
@@ -206,7 +217,56 @@ const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
 
         <div v-else class="min-h-0 flex-1 animate-pulse rounded-md bg-muted" />
 
-        <div class="mt-1.5 flex items-center justify-center gap-1.5 text-xs">
+        <details
+            v-if="!masked && series.length > 0"
+            class="mt-1.5 text-xs"
+            data-testid="history-data"
+        >
+            <summary
+                class="cursor-pointer rounded-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+                {{ $t('dashboard.history.showData') }}
+            </summary>
+            <div class="mt-1.5 max-h-48 overflow-y-auto">
+                <table class="w-full tabular-nums">
+                    <thead class="text-muted-foreground">
+                        <tr>
+                            <th scope="col" class="py-1 text-start font-medium">
+                                {{ $t('dashboard.history.period') }}
+                            </th>
+                            <th scope="col" class="py-1 text-end font-medium">
+                                {{ $t('dashboard.history.revenue') }}
+                            </th>
+                            <th scope="col" class="py-1 text-end font-medium">
+                                {{ $t('dashboard.history.expenses') }}
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr
+                            v-for="(bucket, index) in series"
+                            :key="bucket.bucket"
+                            class="border-t"
+                        >
+                            <th scope="row" class="py-1 text-start font-normal">
+                                {{ labels[index] }}
+                            </th>
+                            <td class="py-1 text-end">
+                                {{ amountText(bucket.revenue) }}
+                            </td>
+                            <td class="py-1 text-end">
+                                {{ amountText(bucket.expenses) }}
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </details>
+
+        <div
+            class="mt-1.5 flex items-center justify-center gap-1.5 text-xs"
+            aria-hidden="true"
+        >
             <span
                 class="flex items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-2.5 py-0.5 font-medium text-muted-foreground"
             >

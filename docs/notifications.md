@@ -5,19 +5,26 @@ is gated. This feature ships the **settings** (UI, persistence, gate helper);
 the notifications themselves are shipped by their own issues (payment
 reminders first, with scheduled transactions — issue #15).
 
+> **Status:** only **profile invitations** are sent today. Payment
+> reminders, ledger expired, contributor transactions and envelope limit
+> exceeded are **TODO — not yet implemented**: no mailable or trigger exists
+> for them. Their toggles are shown **disabled** on the settings page with a
+> "Coming soon" hint (the stored values are kept and will apply once each
+> notification ships).
+
 ## Catalog & semantics
 
 A **master switch** plus individual toggles, each with a one-line localized
 description on the settings page. **Master off = no system emails,
 regardless of the individual switches.**
 
-| Toggle | Default | Meaning |
-| ------ | ------- | ------- |
-| **Payment reminders** | on | Upcoming scheduled-transaction reminders (sent when a schedule has a `reminder_days` option set). |
-| **Ledger expired** | on | An open ledger you own (or are a member of) whose **end date has passed** — sent once, when the daily run first detects it. |
-| **Contributor transactions** | on | Another user records a transaction in a ledger you are the owner of — one email per transaction (the recipient list stays narrow to ledger owners to avoid noisy group mails; broader audiences can be added later). |
-| **Envelope limit exceeded** | on | Recorded spending for an envelope within a month **exceeds its allocation on that month's published budget** — checked when the exceeding transaction is recorded; recipients are the envelope owner + envelope contributors. Amounts are masked for recipients holding less than `viewer` permission on the envelope. |
-| **Profile invitations** | on | Someone shares a financial profile with you — the invite email with the one-click accept link (issue #39). The toggle only gates emails **received**; invitations you send are always delivered to their recipients. |
+| Toggle | Default | Status | Meaning |
+| ------ | ------- | ------ | ------- |
+| **Payment reminders** | on | TODO — not yet implemented ([#15](https://github.com/mind2soft/prospera/issues/15)) | Upcoming scheduled-transaction reminders (sent when a schedule has a `reminder_days` option set). |
+| **Ledger expired** | on | TODO — not yet implemented ([#50](https://github.com/mind2soft/prospera/issues/50)) | An open ledger you own (or are a member of) whose **end date has passed** — sent once, when the daily run first detects it. |
+| **Contributor transactions** | on | TODO — not yet implemented ([#51](https://github.com/mind2soft/prospera/issues/51)) | Another user records a transaction in a ledger you are the owner of — one email per transaction (the recipient list stays narrow to ledger owners to avoid noisy group mails; broader audiences can be added later). |
+| **Envelope limit exceeded** | on | TODO — not yet implemented ([#52](https://github.com/mind2soft/prospera/issues/52)) | Recorded spending for an envelope within a month **exceeds its allocation on that month's published budget** — checked when the exceeding transaction is recorded; recipients are the envelope owner + envelope contributors. Amounts are masked for recipients holding less than `viewer` permission on the envelope. |
+| **Profile invitations** | on | Implemented | Someone shares a financial profile with you — the invite email with the accept link to the invite confirmation (issue #39). The toggle only gates emails **received**; invitations you send are always delivered to their recipients. |
 
 Timing notes: notifications are queued per-event emails (no digests — a
 digest mode can be added later as a new option without a schema break).
@@ -28,6 +35,13 @@ recipients have no settings to honor and always receive the invite (they
 cannot opt out of an account they don't have). Once the address belongs to
 an account, the toggle (and the master switch) gates the email, re-checked
 at send time.
+
+**User-chosen names in the subject**: the invite subject carries the
+inviter's and the profile's names, which anyone can choose. There they are
+flattened to one line, stripped of anything that looks like a link or a
+domain, and capped at 40 characters (`ProfileInvite::subjectText`); when
+nothing is left, a generic subject is used. The plain-text body states the
+full names.
 
 ## Storage
 
@@ -64,15 +78,23 @@ time.
 
 ## Email conventions (for all consumers of these settings)
 
-- Emails are **queued** (works with `MAIL_MAILER=log` locally and the
-  existing queue worker).
+- Emails are **queued**, encrypted in the queue (`ShouldBeEncrypted` —
+  payloads carry links and user content), and retried with a backoff
+  (`App\Mail\Concerns\RetriesDelivery`: 5 tries over about 20 minutes,
+  then logged). Locally `composer dev` runs a worker (works with
+  `MAIL_MAILER=log`); in production the scheduler runs it — see
+  [Scheduled tasks](../README.md#scheduled-tasks).
 - Sent to **verified** addresses only (Fortify-verified accounts; unverified
   users get nothing, silently). Exception — **profile invitations**: the
   share must reach the owner of an existing (not yet verified) account too;
-  they cannot re-register with their email, and the one-click accept link
+  they cannot re-register with their email, and the accept link
   routes them through email verification before accepting.
 - Localized per recipient's `users.locale` (fallback `en`), including
-  plain-text parts.
+  plain-text parts: the copy lives in `lang/{locale}/mail.php`, one key set
+  per available locale (checked by `tests/Feature/QueuedMailTest.php`).
+- Plain-text views print values with `{!! !!}`: `{{ }}` HTML-escapes, so a
+  name like `Smith & Co` would arrive as `Smith &amp; Co`. Never pass a view
+  variable named `$message` — the mailer injects its own.
 - Every notification email carries a short "Manage your notifications"
   footer link to **Settings → Notifications** (requires login) — except the
   account-creation variant of the profile invitation, whose recipient has no
@@ -95,3 +117,6 @@ master switch visually emphasized. Individual rows show the localized
 description under the toggle. **Autosave** (no save buttons — project
 convention); master off keeps the individual rows interactive but
 semantically ignored — grayed, with an "all notifications are off" hint.
+Toggles of notifications that are not implemented yet are disabled, shown
+off, and carry a localized "Coming soon" badge (also their accessible
+description).

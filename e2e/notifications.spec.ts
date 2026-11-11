@@ -57,7 +57,7 @@ test('toggling notification settings persists across reloads', async ({
         page.locator('[data-test="notifications-all-off"]'),
     ).toBeVisible();
     await expect(
-        page.locator('[data-test="notifications-toggle-payment_reminders"]'),
+        page.locator('[data-test="notifications-toggle-profile_invite"]'),
     ).toHaveClass(/opacity-60/);
 
     // Restore the defaults so other specs start from a clean state.
@@ -75,31 +75,56 @@ test('a single toggle persists without touching the others', async ({
     await login(page);
     await visitNotifications(page);
 
-    const reminders = page.getByRole('switch', {
-        name: 'Payment reminders',
+    const invites = page.getByRole('switch', {
+        name: 'Profile invitations',
     });
-    await expect(reminders).toBeChecked();
-    await expect(
-        page.getByRole('switch', { name: 'Ledger expired' }),
-    ).toBeChecked();
+    const master = page.getByRole('switch', { name: MASTER_LABEL });
+    await expect(invites).toBeChecked();
+    await expect(master).toBeChecked();
 
-    await reminders.click();
-    await expect(reminders).not.toBeChecked();
-    await expect(
-        page.getByRole('switch', { name: 'Ledger expired' }),
-    ).toBeChecked();
+    await invites.click();
+    await expect(invites).not.toBeChecked();
+    await expect(master).toBeChecked();
 
     await visitNotifications(page);
     await expect(
-        page.getByRole('switch', { name: 'Payment reminders' }),
+        page.getByRole('switch', { name: 'Profile invitations' }),
     ).not.toBeChecked();
     await expect(
-        page.getByRole('switch', { name: 'Ledger expired' }),
+        page.getByRole('switch', { name: MASTER_LABEL }),
     ).toBeChecked();
 
     // Restore the default.
-    await page.getByRole('switch', { name: 'Payment reminders' }).click();
+    await page.getByRole('switch', { name: 'Profile invitations' }).click();
     await expect(
-        page.getByRole('switch', { name: 'Payment reminders' }),
+        page.getByRole('switch', { name: 'Profile invitations' }),
     ).toBeChecked();
+});
+
+test('notifications that are not implemented yet are disabled, marked "Coming soon"', async ({
+    page,
+}) => {
+    await login(page);
+    await visitNotifications(page);
+
+    for (const name of [
+        'Payment reminders',
+        'Ledger expired',
+        'Contributor transactions',
+        'Envelope limit exceeded',
+    ]) {
+        const toggle = page.getByRole('switch', { name });
+        await expect(toggle).toBeDisabled();
+        await expect(toggle).not.toBeChecked();
+        await expect(toggle).toHaveAccessibleDescription('Coming soon');
+    }
+
+    await expect(
+        page.locator('[data-test="notifications-coming-soon"]'),
+    ).toHaveCount(4);
+
+    // The implemented one stays interactive.
+    await expect(
+        page.getByRole('switch', { name: 'Profile invitations' }),
+    ).toBeEnabled();
 });

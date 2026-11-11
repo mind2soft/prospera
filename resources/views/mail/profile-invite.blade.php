@@ -1,21 +1,21 @@
 @if ($acceptUrl === null)
-{{ $inviterName }} ({{ $inviterEmail }}) shared their financial profile "{{ $profileName }}" with you on Prospera, as a {{ $role }}.
+{!! __('mail.invite.new_account.intro', ['inviter' => $inviterName, 'email' => $inviterEmail, 'profile' => $profileName, 'role' => $roleLabel]) !!}
 
-To join them, create your account using the link below — your email address is already filled in, and the shared profile becomes yours to explore as soon as your account is verified.
+{!! __('mail.invite.new_account.action') !!}
 
-{{ $inviteUrl }}
+{!! $inviteUrl !!}
 @else
-{{ $inviterName }} ({{ $inviterEmail }}) shared their financial profile "{{ $profileName }}" with you, as a {{ $role }}. To accept, click below; if you do not wish to join, simply ignore this message — ignoring the request declines the share.
+{!! __('mail.invite.existing_account.intro', ['inviter' => $inviterName, 'email' => $inviterEmail, 'profile' => $profileName, 'role' => $roleLabel]) !!}
 
-{{ $acceptUrl }}
+{!! $acceptUrl !!}
 
-If the link above signs you in as someone else, open {{ $inviteUrl }} instead.
+{!! __('mail.invite.existing_account.other_account', ['url' => $inviteUrl]) !!}
 @endif
 @if ($expiresAt !== null)
-This invitation expires on {{ $expiresAt->format('Y-m-d H:i T') }} (48 hours after it was sent).
+{!! __('mail.invite.expires', ['date' => $expiresAt->format('Y-m-d H:i T')]) !!}
 @endif
 @if ($acceptUrl !== null)
 ---
-Manage your notifications:
-{{ route('notifications.edit') }}
+{!! __('mail.invite.manage_notifications') !!}
+{!! route('notifications.edit') !!}
 @endif

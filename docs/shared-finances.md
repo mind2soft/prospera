@@ -15,8 +15,8 @@ default.
 
 Each user has **their own default profile** — a per-user `is_default` flag on
 the `financial_profile_user` membership pivot (issue #41). Users can select
-their default profile from **Settings → Profiles** or the user-menu profile
-switcher; on login the server-side default is the fallback when the locally
+their default profile from **Settings → Profiles** (the user-menu profile
+switcher only marks it); on login the server-side default is the fallback when the locally
 stored current profile is gone. When a user's default membership disappears
 (the profile is deleted, or they leave / are removed), their default falls
 back to the **earliest-created owned profile** they still have, else the
@@ -43,37 +43,70 @@ invite for an email and gets a link containing a hash key (`invite_key`).
   - When the email is **not linked to an account**, the mail invites the
     recipient to create an account through the invite link (inviter name and
     email, profile name, invite URL, 48 h expiry).
-  - When the email matches a **registered account**, the mail carries a
-    **one-click accept link** (`GET /invites/{inviteKey}/accept`): opening
-    it while signed in with the matching account email accepts the invite
-    straight through and lands on the dashboard. The mail states the
-    attributed role and that **ignoring the request declines the share**.
-    Guests are routed to the sign-in page first (the accept completes after
-    signing in), and every other case — email mismatch, expired, reserved,
-    already a member — falls back to the invite landing page, behaving
-    exactly as opening the plain invite link. Registered recipients can turn
-    these emails off via Settings → Notifications ("Profile invitations").
+  - When the email matches a **registered account**, the mail carries an
+    **accept link** (`GET /invites/{inviteKey}/accept`): opening it while
+    signed in with the matching account email lands on the invite
+    **confirmation page**, where one click on **Accept invite** joins the
+    profile (a CSRF-protected `POST /api/invites/{inviteKey}/accept`) and
+    lands on the dashboard. The `GET` itself **never changes state**, so a
+    link or redirect on a third-party page cannot make a signed-in user
+    join a profile without their consent. The mail states the attributed
+    role and that **ignoring the request declines the share**. Guests are
+    routed to the sign-in page first (they land on the confirmation after
+    signing in); an email mismatch or an existing membership flashes its
+    error on the landing page, and expired, reserved or unknown invites show
+    the landing page's error. Registered recipients can turn these emails
+    off via Settings → Notifications ("Profile invitations").
 - An **existing user** accepts by opening the link while signed in — the invite
-  must match their account email.
+  must match their account email. The confirmation page
+  (`GET /invites/{inviteKey}`) depends on who opens it:
+
+  - **Signed out:** the page is the registration form, and its **Log in**
+    link points at the invite's accept link, so signing in returns to this
+    confirmation page instead of the dashboard.
+  - **Signed in, email not verified:** instead of Accept/Decline the page
+    shows a **"Verify your email address first"** alert with a link to the
+    verification notice (accepting and declining require a verified email).
+  - **Signed in with another address:** an inline alert states that the
+    invite was **issued to another email address** (the invited one and the
+    current one), with **Log out** and a link back to the dashboard; only
+    the invited account can accept or decline.
 - A **new user** registers through the invite link; the invite key is carried
   through registration. Membership is **not** granted at account creation: the
   invite is **reserved** for the new account (`pending_user_id`), and
   membership is granted (and the invite consumed) when the account **verifies
   its email**. If the email was changed before verification, or the invite was
   revoked, no membership is granted — the account is then seeded with its own
-  default profile (see below). A reserved invite can't be used by anyone
-  else (treated as invalid).
+  default profile (see below). Moving the account to another address (not
+  just another letter case) in Settings → Account **releases** the
+  reservation: the invite is pending again for its original address (no
+  longer "awaiting verification"), so the owner can re-invite that address. A reserved invite can't be used by anyone
+  else (treated as invalid). The reservation is bound by the invite's
+  **48-hour expiry**: verifying after the invite expired grants nothing (the
+  account gets its own default profile and the owner can re-invite it). This
+  keeps the grant consistent with the owner's pending list, which only shows
+  — and offers to revoke — invites that have not expired.
 - Re-inviting the same email (case-insensitive) **replaces** the previous
   unreserved invite for that profile — the raw link key is never stored, so
   this is how a lost link is re-issued. Inviting an email that already belongs
-  to a member is rejected with a validation error on `email`.
+  to a member is rejected with a validation error on `email`, and so is an
+  email with a live **reservation** (the invitee already registered through
+  an invite and joins on verification — shown as "awaiting verification" in
+  the pending list); once the reservation expired, the email can be invited
+  again. When a user joins a profile (accept or verification), the profile's
+  other invites for their email are deleted.
 - Invites expire after **48 hours** (`expires_at` = creation time + 48h);
   expired invites are rejected with a validation error.
 - Invites can be revoked by the owner before acceptance; accepted invites are
   deleted.
+- The invitee can **decline** from the confirmation page (signed in with the
+  matching, verified account email): `POST /api/invites/{inviteKey}/decline`
+  deletes the invite, so it leaves the owner's pending list and can no longer
+  be accepted. Ignoring the invite still declines it implicitly (it expires).
 - Stale invites are pruned daily by the scheduled `php artisan invites:prune`
   command: expired unreserved invites, and reserved invites more than a week
-  past expiry.
+  past expiry (an expired reservation no longer grants membership; it is
+  kept that long only so a late verification still consumes it).
 - The public invite endpoints (`GET /invites/{inviteKey}`,
   `GET /api/invites/{inviteKey}`) and `POST /api/invites/{inviteKey}/accept`
   are rate-limited (20 per minute per IP).
@@ -86,7 +119,13 @@ invite for an email and gets a link containing a hash key (`invite_key`).
 - The registration endpoint accepts `invite_key` alongside the normal
   registration fields.
 - On success the invite is **reserved** for the new account; it is consumed
-  and membership is created once the account verifies its email.
+  and membership is created once the account verifies its email. The grant
+  is **self-healing**: the account is already verified when the `Verified`
+  listener runs, so a failure there (e.g. a transient database error) is
+  reported without failing the verification, and the
+  `EnsureAccountHasProfile` middleware (on every authenticated, verified
+  route) completes the grant — or seeds a default profile — on the next
+  request of a verified account that has no profile.
 - The personal "Default profile" is **not** created for registrations that
   carry a usable invite: the shared profile becomes the new account's only
   profile (and therefore its default experience — the profile switcher falls
@@ -123,6 +162,24 @@ communicates to users — keep the two in sync:
   ownership passes to the **earliest-joined remaining member** (lowest
   `financial_profile_user.created_at`, ties broken by the lowest `user_id`),
   matching the ownership-transfer rules above;
+- **pending invites** the user issued on a profile that survives them stay
+  valid: they are re-attributed (`invited_by`) to the profile's new owner, so
+  an invitee who already registered through one still joins the profile
+  when they verify their email. Invites of profiles deleted with the account
+  are deleted with them (the invitee then gets their own default profile);
+- an invite **reserved** by a deleted (not yet verified) account is released,
+  not deleted: it is pending and usable again until it expires;
+- **unverified accounts** can delete themselves too (Settings → Account,
+  password required) — e.g. after a mistyped email or an unwanted invite
+  registration. Accounts left unverified and untouched for
+  `UNVERIFIED_ACCOUNT_RETENTION_DAYS` (default 30) are deleted by the daily
+  `php artisan users:prune-unverified` — only when they hold **no data**
+  (no envelope, and only solo profiles without budgets or ledgers), so an
+  account that changed its email (which resets verification) keeps its data.
+  Each account is re-checked under a lock on its row right before it is
+  deleted (one that verified or created data meanwhile is kept) and deleted
+  in its own transaction: a failure is reported, skipped and retried by the
+  next run;
 - **the user is responsible for revoking sharing permissions before deleting
   their account** if they do not want a financial profile to keep existing —
   and be transferred — without them.
@@ -132,6 +189,21 @@ the profile owner** when that member is removed from the profile (or leaves
 voluntarily) or when their account is deleted. Auto-transfer edge cases:
 
 - The removed member's permission rows on the profile's resources are deleted.
+- The removed member's **dashboard widgets** for the profile (their
+  per-member layout, see [Dashboard](dashboard.md)) are deleted: a member
+  re-invited later starts from an empty dashboard.
+- **Envelope grants follow the profile relationship.** Envelopes are
+  user-owned, so their grants are not tied to one profile: when a member
+  leaves or is removed, or a profile is deleted, the envelope grants
+  between the departing user and each former co-member are deleted **in
+  both directions** — but only when the two users **no longer share any
+  profile**. Users who still share another profile keep their grants. The
+  single exception is a grant on an envelope still referenced by
+  budgets/ledgers of a profile the grantee belongs to (the departed
+  member's envelope still used in the profile they left — see the next
+  point): it is kept so that profile keeps working. As defence in depth,
+  `Envelope::permissionFor` resolves any other stale grant (users sharing
+  no profile) to `none`.
 - When a member **leaves or is removed** (without deleting their account),
   their envelopes referenced by this profile transfer to the profile owner,
   **except** envelopes still referenced by another profile the member belongs
@@ -150,7 +222,9 @@ voluntarily) or when their account is deleted. Auto-transfer edge cases:
 Ownership can also be transferred **explicitly** — by the owner, via the Share
 drawer (resources) or the Profiles page (profile) — to another member; the
 previous owner becomes `contributor` on a resource, or a **collaborator** on a
-profile (profiles only have an owner and collaborators). On an envelope
+profile (profiles only have an owner and collaborators). A profile ownership
+transfer also hands the profile's **draft budget** to the new profile owner
+(see [Budget](budget.md) — Ownership). On an envelope
 transfer, any permission row the new owner had on it is dropped. See [Budget](budget.md),
 [Ledger](ledger.md) and [Envelope](envelope.md).
 
@@ -173,6 +247,15 @@ type ResourcePermission = 'owner' | 'contributor' | 'viewer';
 - **Viewer** is read-only.
 - **Contributor** semantics are per resource type — see
   [Budget](budget.md), [Ledger](ledger.md) and [Envelope](envelope.md).
+
+The rules are enforced by the model policies in `app/Policies/`
+(`FinancialProfilePolicy`, `BudgetPolicy`, `LedgerPolicy`,
+`TransactionPolicy`, `EnvelopePolicy`, `DashboardWidgetPolicy`,
+`FinancialProfileInvitePolicy`), built on the models' `permissionFor()` and
+`ResourcePermissions::inspect()`. A resource the caller cannot see at all is
+a **404** (it stays invisible); one they can see but not act on is a
+**403**. Endpoints with a payload authorize in their Form Request
+(`app/Http/Requests/`), before the payload is validated.
 
 The **Share drawer** (Google Drive-like, `resources/js/components/share/ShareDrawer.vue`)
 is shared by the Budget, Ledger and Envelopes pages. It no longer invites
@@ -218,14 +301,14 @@ access to its decrypted amounts through the API only (see
 In the user menu, above "Settings", a menu "Profiles" with a sub-menu listing
 the available profiles. There _must_ be a visual distinction between owned
 profiles and shared profiles. There must be a checkmark besides the currently
-selected profile, and a "Default" marker with a "Set as default" action
-(issue #41).
+selected profile, and a "Default" marker on the user's default profile
+(issue #41) — the default itself is set in **Settings → Profiles**.
 
 The selected profile is tracked client-side in `localStorage`. Next login
 checks `localStorage` for the profile to use and falls back to the user's
 **server-side default profile** (per-user `financial_profile_user.is_default`
 — previously this fallback was the owned profile), else the first profile.
-The default is selectable in the Profiles settings page and the switcher.
+The default is selectable in the Profiles settings page.
 
 ## Profile management UI
 
@@ -292,12 +375,13 @@ per-resource docs.
 ## API
 
 All endpoints require authentication (session + CSRF). The frontend consumes
-them via **vue-query** — this is an application-wide requirement for server
+them via **TanStack Query** (`@tanstack/vue-query`) — this is an application-wide requirement for server
 data fetching.
 
 | Method   | Path                                         | Description                                                                                                                                                                                                                                                                                                                            |
 | -------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET`    | `/api/profiles`                              | List all the user's profiles (owned + shared), each with the caller's `is_owner` and `is_default` membership flags; the currently selected profile is tracked client-side (`localStorage`), not server-flagged                                                                                                                          |
+| `GET`    | `/api/profiles/{profile}`                    | One of the caller's profiles (`id`, `name`, the caller's `is_owner` and `is_default` membership flags); `404` for non-members |
 | `POST`   | `/api/profiles`                              | Create a profile (`name`) — the creator becomes owner                                                                                                                                                                                                                                                                                  |
 | `PATCH`  | `/api/profiles/{profile}`                    | Rename a profile (owner only)                                                                                                                                                                                                                                                                                                          |
 | `DELETE` | `/api/profiles/{profile}`                    | Delete a profile (owner only; blocked while it has budgets or ledgers). The former "Default profile cannot be deleted" rule is gone: deletion reassigns affected users' defaults (earliest-created owned profile, else earliest remaining membership, else a seeded default profile)                                                   |
@@ -306,11 +390,12 @@ data fetching.
 | `POST`   | `/api/profiles/{profile}/transfer-ownership` | Transfer ownership to a member (`user_id`); the previous owner becomes a collaborator                                                                                                                                                                                                                                                  |
 | `POST`   | `/api/profiles/{profile}/set-default`        | Set the caller's default profile (any member; one default per user, always exactly one)                                                                                                                                                                                                                                                |
 | `GET`    | `/api/profiles/{profile}/invites`            | List pending invites (`id`, `email`, `role`, `awaiting_verification`, `expires_at`)                                                                                                                                                                                                                                                    |
-| `POST`   | `/api/profiles/{profile}/invites`            | Create an invite (`email`, optional `role` — `collaborator` by default, only `collaborator` is grantable) → returns the invite link and queues the invitation email; replaces a previous unreserved invite for the same email (case-insensitive); `422` on `email` if already a member; rate-limited (the endpoint now triggers outbound email) |
+| `POST`   | `/api/profiles/{profile}/invites`            | Create an invite (`email`, optional `role` — `collaborator` by default, only `collaborator` is grantable) → returns the invite link and queues the invitation email; replaces a previous unreserved invite for the same email (case-insensitive); `422` on `email` if already a member or awaiting verification through a live reservation; rate-limited per IP and per user (the endpoint triggers outbound email) |
 | `DELETE` | `/api/profiles/{profile}/invites/{invite}`   | Revoke a pending invite                                                                                                                                                                                                                                                                                                                |
 | `GET`    | `/api/invites/{inviteKey}`                   | Public invite validation (rate-limited); `404` when invalid or reserved, `410` expired                                                                                                                                                                                                                                                 |
 | `POST`   | `/api/invites/{inviteKey}/accept`            | Accept an invite (signed-in user; the invite email must match the account email; rate-limited)                                                                                                                                                                                                                                         |
-| `GET`    | `/invites/{inviteKey}/accept`                | One-click accept from the invitation email (signed-in + verified user with a matching account email → accepts and lands on the dashboard; guests go to the sign-in page and complete the accept after; all other cases fall back to the invite landing page; rate-limited)                                                              |
+| `POST`   | `/api/invites/{inviteKey}/decline`           | Decline an invite (signed-in, verified user; the invite email must match the account email, else `422`; reserved or unknown invites `404`) → `204`, the invite is deleted; rate-limited                                                                                                                                                |
+| `GET`    | `/invites/{inviteKey}/accept`                | Accept link from the invitation email — never changes state: signed-in + verified users land on the invite confirmation page (one click on **Accept invite** POSTs the accept); guests go to the sign-in page first; email mismatches and existing members get an error toast; rate-limited                                             |
 
 The invite link is the frontend route `/invites/{inviteKey}`: existing users
 get an accept confirmation; new users are routed to registration with the key

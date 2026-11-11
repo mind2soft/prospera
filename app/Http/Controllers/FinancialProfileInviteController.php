@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Profile\StoreInviteRequest;
 use App\Mail\ProfileInvite;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileInvite;
@@ -13,12 +14,10 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
-use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class FinancialProfileInviteController extends Controller
 {
@@ -50,9 +49,9 @@ class FinancialProfileInviteController extends Controller
     /**
      * List the profile's pending (non-expired) invites (owner only).
      */
-    public function index(Request $request, FinancialProfile $profile): JsonResponse
+    public function index(FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile, ownerOnly: true);
+        $this->authorize('manage', $profile);
 
         $invites = FinancialProfileInvite::query()
             ->where('profile_id', $profile->id)
@@ -72,18 +71,11 @@ class FinancialProfileInviteController extends Controller
      * is re-issued; each share event sends a fresh email); existing members
      * cannot be invited.
      */
-    public function store(Request $request, FinancialProfile $profile): JsonResponse
+    public function store(StoreInviteRequest $request, FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile, ownerOnly: true);
+        $validated = $request->validated();
 
-        $validated = $request->validate([
-            'email' => ['required', 'email', 'max:255'],
-            'role' => ['sometimes', 'string', Rule::in(FinancialProfileInvite::GRANTABLE_ROLES)],
-        ]);
-
-        $alreadyMember = $profile->members()
-            ->whereRaw('lower(users.email) = ?', [mb_strtolower($validated['email'])])
-            ->exists();
+        $alreadyMember = $profile->members()->forEmail($validated['email'], 'users.email')->exists();
 
         if ($alreadyMember) {
             throw ValidationException::withMessages([
@@ -94,10 +86,26 @@ class FinancialProfileInviteController extends Controller
         $rawKey = FinancialProfileInvite::generateKey();
 
         $invite = DB::transaction(function () use ($profile, $validated, $rawKey, $request): FinancialProfileInvite {
-            FinancialProfileInvite::query()
+            // The profile's invites for the email, locked: a registration
+            // reserving one of them (CreateNewUser locks the invite too)
+            // cannot slip in between the check and the replacement.
+            $previous = FinancialProfileInvite::query()
                 ->where('profile_id', $profile->id)
-                ->whereRaw('lower(email) = ?', [mb_strtolower($validated['email'])])
-                ->whereNull('pending_user_id')
+                ->forEmail($validated['email'])
+                ->lockForUpdate()
+                ->get();
+
+            // A live reservation means the invitee already registered
+            // through an invite and joins on verification: a second invite
+            // would outlive the grant in the pending list.
+            if ($previous->contains(fn (FinancialProfileInvite $invite): bool => $invite->isReserved() && ! $invite->isExpired())) {
+                throw ValidationException::withMessages([
+                    'email' => __('This person already registered through an invite and joins the profile once they verify their email.'),
+                ]);
+            }
+
+            FinancialProfileInvite::query()
+                ->whereKey($previous->reject(fn (FinancialProfileInvite $invite): bool => $invite->isReserved())->modelKeys())
                 ->delete();
 
             return FinancialProfileInvite::create([
@@ -122,10 +130,9 @@ class FinancialProfileInviteController extends Controller
     /**
      * Revoke a pending invite (owner only).
      */
-    public function destroy(Request $request, FinancialProfile $profile, FinancialProfileInvite $invite): JsonResponse
+    public function destroy(FinancialProfile $profile, FinancialProfileInvite $invite): JsonResponse
     {
-        $this->authorizeProfile($request, $profile, ownerOnly: true);
-        abort_unless($invite->profile_id === $profile->id, 404);
+        $this->authorize('delete', [$invite, $profile]);
 
         $invite->delete();
 
@@ -172,53 +179,70 @@ class FinancialProfileInviteController extends Controller
     }
 
     /**
-     * One-click accept from the invitation email (issue #39): the signed-in
-     * user whose account email matches the invite is accepted straight
-     * through and lands on the dashboard. Guests are sent to the sign-in
-     * page with the accept URL as the intended destination (they complete
-     * the accept after signing in), unverified users are redirected to the
-     * verification notice by the `verified` middleware, and every other
-     * case (unknown, reserved, expired, email mismatch, already a member)
-     * falls back to the invite landing page, behaving exactly as opening
-     * the plain invite link today.
+     * Decline an invite (authenticated, verified user whose account email
+     * matches the invite): the invite is deleted, so it leaves the owner's
+     * pending list and can no longer be accepted. Reserved invites belong to
+     * another (new) account and are treated as unknown.
+     */
+    public function decline(Request $request, string $inviteKey): JsonResponse
+    {
+        DB::transaction(function () use ($request, $inviteKey): void {
+            /** @var FinancialProfileInvite|null $invite */
+            $invite = FinancialProfileInvite::query()
+                ->where('invite_key', FinancialProfileInvite::keyHash($inviteKey))
+                ->lockForUpdate()
+                ->first();
+
+            abort_if($invite === null || $invite->isReserved(), 404);
+
+            if (mb_strtolower($invite->email) !== mb_strtolower($request->user()->email)) {
+                throw ValidationException::withMessages([
+                    'invite_key' => __('This invite was issued to another email address.'),
+                ]);
+            }
+
+            $invite->delete();
+        });
+
+        return response()->json(status: 204);
+    }
+
+    /**
+     * Accept link from the invitation email (issue #39). A GET never changes
+     * state (a cross-site link must not make a signed-in user join a
+     * profile): the link lands on the invite confirmation page, whose
+     * "Accept invite" button sends the CSRF-protected
+     * `POST /api/invites/{inviteKey}/accept`. Guests are sent to the sign-in
+     * page with the accept URL as the intended destination (they land on
+     * the confirmation after signing in), unverified users are redirected to
+     * the verification notice by the `verified` middleware, and the cases
+     * the confirmation cannot complete (email mismatch, already a member)
+     * flash their error up front. Unknown, reserved and expired keys get the
+     * landing page's own error.
      */
     public function acceptViaLink(Request $request, string $inviteKey): RedirectResponse
     {
         $invite = FinancialProfileInvite::findByKey($inviteKey);
 
-        if ($invite === null || $invite->isReserved() || $invite->isExpired()) {
-            // The landing page re-resolves the key and flashes the
-            // appropriate error for each of these states.
-            return redirect()->route('invites.landing', ['inviteKey' => $inviteKey]);
+        if ($invite !== null && ! $invite->isReserved() && ! $invite->isExpired()) {
+            $user = $request->user();
+
+            $error = $invite->usageError($user->email)
+                ?? ($invite->profile->isMember($user) ? 'You are already a member of this profile.' : null);
+
+            if ($error !== null) {
+                Inertia::flash('toast', ['type' => 'error', 'message' => __($error)]);
+            }
         }
 
-        try {
-            $profile = $this->grantMembership($inviteKey, $request->user());
-        } catch (ValidationException $exception) {
-            Inertia::flash('toast', [
-                'type' => 'error',
-                'message' => $exception->errors()['invite_key'][0] ?? __('This invite is invalid.'),
-            ]);
-
-            return redirect()->route('invites.landing', ['inviteKey' => $inviteKey]);
-        } catch (HttpException $exception) {
-            // The invite vanished between the pre-check and the locked
-            // re-verification (a concurrent accept won) — same fallback.
-            return redirect()->route('invites.landing', ['inviteKey' => $inviteKey]);
-        }
-
-        Inertia::flash('toast', [
-            'type' => 'success',
-            'message' => __('You joined the profile ":profile."', ['profile' => $profile->name]),
-        ]);
-
-        return redirect()->route('dashboard');
+        return redirect()->route('invites.landing', ['inviteKey' => $inviteKey]);
     }
 
     /**
      * Grant the membership carried by the invite to the given user inside a
      * locked transaction, consuming the invite. Shared by the JSON accept
-     * endpoint and the one-click accept link.
+     * accept endpoint (the email's accept link only leads to the
+     * confirmation page that calls it).
      */
     private function grantMembership(string $inviteKey, User $user): FinancialProfile
     {
@@ -248,6 +272,7 @@ class FinancialProfileInviteController extends Controller
 
                 $profile->members()->attach($user->id, $invite->membershipPivotAttributes());
                 $invite->consume();
+                FinancialProfileInvite::deleteRedundantFor($profile, $user);
 
                 return $profile;
             });
@@ -278,16 +303,15 @@ class FinancialProfileInviteController extends Controller
      * Queue the invitation email for the invitee (one per share event,
      * docs/notifications.md conventions: queued, localized per recipient
      * with an `en` fallback). A registered account gets the informational
-     * variant with the one-click accept link; any other address gets the
+     * variant with the accept link (it opens the invite confirmation page,
+     * where the user confirms); any other address gets the
      * account-creation invite. Registered recipients are gated by their
      * `profile_invite` notification toggle (re-checked at send time inside
      * the mailable).
      */
     private function notifyInvitee(FinancialProfileInvite $invite, string $rawKey): void
     {
-        $recipient = User::query()
-            ->whereRaw('lower(email) = ?', [mb_strtolower($invite->email)])
-            ->first();
+        $recipient = User::query()->forEmail($invite->email)->first();
 
         if ($recipient !== null
             && ! $recipient->wantsNotification(NotificationSettings::PROFILE_INVITE)) {

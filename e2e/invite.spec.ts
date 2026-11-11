@@ -140,10 +140,13 @@ test('a signed-in user can accept an invite from the link', async ({
 
     await page.waitForURL((url) => url.pathname.endsWith('/dashboard'));
 
-    // The joined profile shows up in the switcher as a shared profile.
+    // The joined profile shows up in the switcher as a shared profile (next
+    // to the partner's own "Default profile").
     const menu = await openProfilesMenu(page);
-    const item = menu.getByRole('menuitem', { name: /Default profile/ });
-    await expect(item).toContainText('Shared');
+    const shared = menu
+        .getByRole('menuitemradio', { name: /Default profile/ })
+        .filter({ hasText: 'Shared' });
+    await expect(shared).toHaveCount(1);
 });
 
 test('declining an invite does not grant membership', async ({ page }) => {
@@ -154,6 +157,11 @@ test('declining an invite does not grant membership', async ({ page }) => {
         page.getByText('Join “Default profile”', { exact: true }),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Decline' }).click();
+    // Declining deletes the invite: it is confirmed first.
+    await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Decline invite' })
+        .click();
 
     await page.waitForURL((url) => url.pathname.endsWith('/dashboard'));
 
@@ -168,6 +176,15 @@ test('declining an invite does not grant membership', async ({ page }) => {
         (m: { email: string }) => m.email,
     );
     expect(memberEmails).not.toContain('waverer@example.com');
+
+    // Declining deletes the invite: it leaves the owner's pending list.
+    const invites = await page.request.get(
+        `/api/profiles/${profileId}/invites`,
+    );
+    const pendingEmails: string[] = (await invites.json()).invites.map(
+        (i: { email: string }) => i.email,
+    );
+    expect(pendingEmails).not.toContain('waverer@example.com');
 });
 
 test('an expired invite link renders the explicit error state', async ({
@@ -180,4 +197,8 @@ test('an expired invite link renders the explicit error state', async ({
     await expect(
         page.getByText('The invite link is invalid or has expired.'),
     ).toBeVisible();
+
+    // The way out actually works (it was a dead native <link> element).
+    await page.getByRole('link', { name: 'Go to dashboard' }).click();
+    await expect(page).toHaveURL(/\/dashboard$/);
 });

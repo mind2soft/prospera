@@ -46,6 +46,7 @@ const { isCurrentOrParentUrl } = useCurrentUrl();
     <div class="px-4 py-6">
         <Heading
             class="mb-8"
+            :level="2"
             :title="$t('settings.title')"
             :description="$t('settings.description')"
         />

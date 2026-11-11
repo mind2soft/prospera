@@ -3,12 +3,12 @@
 namespace App\Models;
 
 use App\Services\ResourcePermissions;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -18,8 +18,8 @@ use Illuminate\Support\Facades\DB;
  * @property string $name
  * @property string $type
  * @property string $color
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 class Envelope extends Model
 {
@@ -78,8 +78,16 @@ class Envelope extends Model
      * "contributor", "viewer" — or "none" (metadata-only) for users who
      * merely share a profile with the owner. Envelopes are not
      * profile-scoped, so there is no implicit viewer visibility.
+     *
+     * Defence in depth (docs/shared-finances.md): a share row only counts
+     * while the grantee still shares a profile with the owner, or while the
+     * envelope is referenced by a profile the grantee belongs to — a stale
+     * grant otherwise resolves to "none". $coMemberIds (the ids sharing a
+     * profile with $user) may be precomputed for bulk lookups.
+     *
+     * @param  Collection<int, int>|null  $coMemberIds
      */
-    public function permissionFor(User $user): string
+    public function permissionFor(User $user, ?Collection $coMemberIds = null): string
     {
         if ($this->user_id === $user->id) {
             return ResourcePermissions::OWNER;
@@ -90,11 +98,50 @@ class Envelope extends Model
             ? $this->permissions->firstWhere('user_id', $user->id)
             : $this->permissions()->where('user_id', $user->id)->first();
 
-        if ($share !== null) {
-            return $share->permission;
+        if ($share === null) {
+            return ResourcePermissions::NONE;
         }
 
-        return ResourcePermissions::NONE;
+        $coMemberIds ??= FinancialProfile::coMemberIdsOf($user->id);
+
+        if (! $coMemberIds->contains($this->user_id)
+            && ! FinancialProfile::envelopeReferencedByProfilesOf($this->id, $user->id)) {
+            return ResourcePermissions::NONE;
+        }
+
+        return $share->permission;
+    }
+
+    /**
+     * What references the envelope and so blocks its deletion and a
+     * direction change (docs/envelope.md): "budget" (a budget assignment),
+     * "transactions", or null when nothing does.
+     *
+     * @return 'budget'|'transactions'|null
+     */
+    public function referencedBy(): ?string
+    {
+        return match (true) {
+            $this->budgetEnvelopes()->exists() => 'budget',
+            $this->transactions()->exists() => 'transactions',
+            default => null,
+        };
+    }
+
+    public function isReferenced(): bool
+    {
+        return $this->referencedBy() !== null;
+    }
+
+    /**
+     * Scope envelopes referenced by a budget assignment or a transaction.
+     *
+     * @param  Builder<Envelope>  $query
+     */
+    #[Scope]
+    protected function referenced(Builder $query): void
+    {
+        $query->where(fn (Builder $query) => $query->whereHas('budgetEnvelopes')->orWhereHas('transactions'));
     }
 
     /**
@@ -184,28 +231,5 @@ class Envelope extends Model
     public function signedAmount(int $amount): int
     {
         return $this->type === self::DIRECTION_EXPENSE ? -$amount : $amount;
-    }
-
-    /**
-     * The given user's effective permission on each of the given envelopes
-     * in two queries (instead of one per envelope), keyed by envelope id.
-     * Unknown ids are omitted.
-     *
-     * @param  array<int, int>  $envelopeIds
-     * @return Collection<int, string>
-     */
-    public static function permissionsFor(User $user, array $envelopeIds): Collection
-    {
-        if ($envelopeIds === []) {
-            return collect();
-        }
-
-        return self::query()
-            ->whereIn('id', $envelopeIds)
-            ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
-            ->get()
-            ->mapWithKeys(fn (Envelope $envelope): array => [
-                $envelope->id => $envelope->permissionFor($user),
-            ]);
     }
 }

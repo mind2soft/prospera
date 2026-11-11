@@ -30,6 +30,9 @@ import type {
 const props = defineProps<{
     open: boolean;
     widget: DashboardWidgetConfig | null;
+    /** The widget's 0-based place on the dashboard, and the widget count. */
+    position?: number;
+    count?: number;
 }>();
 
 const emit = defineEmits<{
@@ -37,6 +40,8 @@ const emit = defineEmits<{
     /** A settings patch to merge into the widget configuration. */
     update: [patch: Partial<DashboardWidgetConfig>];
     remove: [];
+    /** Single-pointer alternative to dragging the widget. */
+    move: [direction: 'earlier' | 'later'];
 }>();
 
 const envelopesQuery = useEnvelopeOptions();
@@ -366,6 +371,55 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                 </Select>
             </section>
 
+            <section
+                v-if="position !== undefined && count !== undefined"
+                class="space-y-2"
+            >
+                <Label as="span">{{ $t('dashboard.settings.position') }}</Label>
+                <div class="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="flex-1"
+                        :disabled="position <= 0"
+                        @click="emit('move', 'earlier')"
+                    >
+                        <Icon
+                            name="chevron-left"
+                            class="size-4 rtl:rotate-180"
+                            aria-hidden="true"
+                        />
+                        {{ $t('dashboard.settings.moveEarlier') }}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="flex-1"
+                        :disabled="position >= count - 1"
+                        @click="emit('move', 'later')"
+                    >
+                        {{ $t('dashboard.settings.moveLater') }}
+                        <Icon
+                            name="chevron-right"
+                            class="size-4 rtl:rotate-180"
+                            aria-hidden="true"
+                        />
+                    </Button>
+                </div>
+                <p
+                    class="text-xs text-muted-foreground"
+                    role="status"
+                    data-testid="widget-position"
+                >
+                    {{
+                        $t('dashboard.settings.positionOf', {
+                            position: position + 1,
+                            count,
+                        })
+                    }}
+                </p>
+            </section>
+
             <section class="grid grid-cols-2 gap-3">
                 <div class="space-y-2">
                     <Label>{{ $t('dashboard.settings.periodType') }}</Label>
@@ -457,7 +511,9 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                                 size="icon-sm"
                                 class="text-muted-foreground hover:text-destructive"
                                 :aria-label="
-                                    $t('dashboard.settings.removeItem')
+                                    $t('dashboard.settings.removeItemNamed', {
+                                        name: envelopeName(item.envelope_id),
+                                    })
                                 "
                                 @click="removeItem(index)"
                             >
@@ -472,7 +528,7 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                         <div v-else class="space-y-2">
                             <div class="flex items-center gap-2">
                                 <Icon
-                                    name="check_indeterminate_small"
+                                    name="check-indeterminate-small"
                                     class="size-4 text-muted-foreground"
                                     aria-hidden="true"
                                 />
@@ -495,7 +551,10 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                                     size="icon-sm"
                                     class="text-muted-foreground hover:text-destructive"
                                     :aria-label="
-                                        $t('dashboard.settings.removeItem')
+                                        $t(
+                                            'dashboard.settings.removeItemNamed',
+                                            { name: item.name },
+                                        )
                                     "
                                     @click="removeItem(index)"
                                 >
@@ -525,7 +584,17 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                                     <button
                                         type="button"
                                         class="rounded-full p-0.5 text-muted-foreground hover:text-destructive"
-                                        :aria-label="`${$t('dashboard.settings.removeItem')} — ${envelopeName(envelopeId)}`"
+                                        :aria-label="
+                                            $t(
+                                                'dashboard.settings.removeFromGroup',
+                                                {
+                                                    name: envelopeName(
+                                                        envelopeId,
+                                                    ),
+                                                    group: item.name,
+                                                },
+                                            )
+                                        "
                                         @click="
                                             removeFromGroup(index, envelopeId)
                                         "
@@ -618,6 +687,7 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                 >
                     <Input
                         v-model="groupName"
+                        :aria-label="$t('dashboard.settings.groupName')"
                         :placeholder="
                             $t('dashboard.settings.groupNamePlaceholder')
                         "
@@ -669,7 +739,7 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                             size="sm"
                             @click="creatingGroup = false"
                         >
-                            {{ $t('dashboard.removeConfirm.cancel') }}
+                            {{ $t('dashboard.settings.cancelGroup') }}
                         </Button>
                         <Button
                             size="sm"
@@ -692,7 +762,7 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                     @click="startGroup"
                 >
                     <Icon
-                        name="check_indeterminate_small"
+                        name="check-indeterminate-small"
                         class="size-4"
                         aria-hidden="true"
                     />

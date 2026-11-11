@@ -10,11 +10,14 @@ use App\Models\Ledger;
 use App\Models\User;
 use App\Services\ResourcePermissions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Tests\Concerns\CountsQueries;
 use Tests\TestCase;
 
 class BudgetTest extends TestCase
 {
+    use CountsQueries;
     use RefreshDatabase;
 
     private User $user;
@@ -104,6 +107,31 @@ class BudgetTest extends TestCase
         $this->assertNotEquals($budget->id, $data[0]['id']);
     }
 
+    public function test_index_loads_only_the_callers_share_rows(): void
+    {
+        $shared = $this->createBudget($this->user, [
+            'published_at' => now()->subMonth(),
+            'effective_year' => now()->subMonth()->year,
+            'effective_month' => now()->subMonth()->month,
+        ]);
+        $shared->permissions()->create(['user_id' => $this->member->id, 'permission' => ResourcePermissions::CONTRIBUTOR]);
+        $this->createBudget($this->user);
+
+        $queries = $this->queriesDuring(function () use ($shared): void {
+            $budgets = collect($this->actingAs($this->member)->getJson('/api/budgets?profile_id='.$this->profile->id)
+                ->assertOk()
+                ->json('budgets'))
+                ->keyBy('id');
+
+            $this->assertSame(ResourcePermissions::CONTRIBUTOR, $budgets[$shared->id]['permission']);
+            $this->assertSame(ResourcePermissions::VIEWER, $budgets->except($shared->id)->first()['permission']);
+        });
+
+        $permissionQueries = array_values(array_filter($queries, fn (string $sql): bool => str_contains($sql, 'from "budget_permissions"')));
+        $this->assertCount(1, $permissionQueries);
+        $this->assertStringContainsString('"user_id" = ?', $permissionQueries[0]);
+    }
+
     public function test_guests_cannot_access_the_api(): void
     {
         $this->getJson('/api/budgets')->assertUnauthorized();
@@ -154,6 +182,19 @@ class BudgetTest extends TestCase
 
         $this->actingAs($this->user)->postJson('/api/budgets', ['currency' => 'CAD'])
             ->assertUnprocessable()->assertJsonValidationErrors('profile_id');
+    }
+
+    public function test_store_authorizes_the_profile_before_validating_the_payload(): void
+    {
+        // CQ-R2-3: collaborators get a 403, outsiders a 404 — even with an
+        // invalid payload; a missing profile is a validation error.
+        $this->actingAs($this->member)->postJson('/api/budgets', ['profile_id' => $this->profile->id, 'currency' => 'x'])
+            ->assertForbidden();
+        $this->actingAs($this->stranger)->postJson('/api/budgets', ['profile_id' => $this->profile->id])
+            ->assertNotFound();
+        $this->actingAs($this->user)->postJson('/api/budgets', ['currency' => 'CAD'])
+            ->assertUnprocessable()->assertJsonValidationErrors('profile_id');
+        $this->assertSame(0, Budget::query()->count());
     }
 
     public function test_store_rejects_a_second_draft_per_profile(): void
@@ -380,6 +421,90 @@ class BudgetTest extends TestCase
             ->assertUnprocessable();
     }
 
+    /**
+     * Simulate a publish committing right after the request's route binding
+     * read the budget as a draft (RES-8): the first retrieval of the budget
+     * marks it published in the database behind the loaded model's back.
+     */
+    private function publishConcurrentlyAfterRouteBinding(Budget $budget): void
+    {
+        $fired = false;
+
+        Budget::retrieved(function (Budget $retrieved) use ($budget, &$fired): void {
+            if ($fired || $retrieved->id !== $budget->id) {
+                return;
+            }
+
+            $fired = true;
+
+            DB::table('budgets')->where('id', $budget->id)->update([
+                'published_at' => now(),
+                'effective_year' => now()->year,
+                'effective_month' => now()->month,
+            ]);
+        });
+    }
+
+    public function test_assignment_edits_re_check_the_draft_state_under_a_lock(): void
+    {
+        $budget = $this->createBudget($this->user);
+        $rent = $this->user->envelopes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e']);
+        $food = $this->user->envelopes()->create(['name' => 'Food', 'type' => 'expense', 'color' => '#f43f5e']);
+        $budget->envelopes()->create(['envelope_id' => $rent->id, 'amount' => -100, 'type' => 'fixed']);
+
+        $this->publishConcurrentlyAfterRouteBinding($budget);
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $food->id, 'type' => 'fixed', 'amount' => 100,
+        ])->assertUnprocessable()->assertJsonValidationErrors('budget');
+        $this->assertDatabaseMissing('budget_envelopes', ['envelope_id' => $food->id]);
+
+        DB::table('budgets')->where('id', $budget->id)->update(['published_at' => null, 'effective_year' => 0, 'effective_month' => 0]);
+        Budget::flushEventListeners();
+        $this->publishConcurrentlyAfterRouteBinding($budget);
+        $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$rent->id}", [
+            'amount' => 999,
+        ])->assertUnprocessable()->assertJsonValidationErrors('budget');
+        $this->assertEncryptedAmount(BudgetEnvelope::class, ['envelope_id' => $rent->id], 'amount', -100);
+
+        DB::table('budgets')->where('id', $budget->id)->update(['published_at' => null, 'effective_year' => 0, 'effective_month' => 0]);
+        Budget::flushEventListeners();
+        $this->publishConcurrentlyAfterRouteBinding($budget);
+        $this->actingAs($this->user)->deleteJson("/api/budgets/{$budget->id}/envelopes/{$rent->id}")
+            ->assertUnprocessable()->assertJsonValidationErrors('budget');
+        $this->assertDatabaseHas('budget_envelopes', ['envelope_id' => $rent->id]);
+    }
+
+    public function test_a_concurrent_publish_is_not_run_twice(): void
+    {
+        $budget = $this->createBudget($this->user);
+
+        $this->publishConcurrentlyAfterRouteBinding($budget);
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/publish")
+            ->assertUnprocessable()->assertJsonValidationErrors('budget');
+    }
+
+    public function test_a_duplicate_add_losing_the_race_is_a_validation_error(): void
+    {
+        $budget = $this->createBudget($this->user);
+        $envelope = $this->user->envelopes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e']);
+
+        // A concurrent request inserts the same assignment between the
+        // duplicate check and the insert.
+        BudgetEnvelope::creating(function (BudgetEnvelope $assignment) use ($budget, $envelope): void {
+            DB::table('budget_envelopes')->insert([
+                'budget_id' => $budget->id,
+                'envelope_id' => $envelope->id,
+                'amount' => 'concurrent',
+                'type' => 'fixed',
+            ]);
+        });
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $envelope->id, 'type' => 'fixed', 'amount' => 100,
+        ])->assertUnprocessable()->assertJsonValidationErrors('envelope_id');
+    }
+
     public function test_update_envelope_amount(): void
     {
         $budget = $this->createBudget($this->user);
@@ -428,6 +553,69 @@ class BudgetTest extends TestCase
         $this->assertNotNull($budget->published_at);
         $this->assertEquals(now()->year, $budget->effective_year);
         $this->assertEquals(now()->month, $budget->effective_month);
+    }
+
+    public function test_publish_uses_the_users_time_zone_for_the_current_month(): void
+    {
+        // 2026-11-30 22:30 UTC is already 1 December in Sydney.
+        Carbon::setTestNow(Carbon::parse('2026-11-30 22:30:00', 'UTC'));
+
+        try {
+            $november = $this->createBudget($this->user, [
+                'published_at' => now(),
+                'effective_year' => 2026,
+                'effective_month' => 11,
+            ]);
+            $draft = $this->createBudget($this->user);
+
+            $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish", [
+                'timezone' => 'Australia/Sydney',
+                'month' => '2026-12',
+            ])->assertOk()
+                ->assertJsonPath('budget.effective_year', 2026)
+                ->assertJsonPath('budget.effective_month', 12);
+
+            $this->assertDatabaseHas('budgets', ['id' => $november->id, 'effective_month' => 11]);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_publish_refuses_a_month_other_than_the_users_current_one(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-30 22:30:00', 'UTC'));
+
+        try {
+            $november = $this->createBudget($this->user, [
+                'published_at' => now(),
+                'effective_year' => 2026,
+                'effective_month' => 11,
+            ]);
+            $draft = $this->createBudget($this->user);
+
+            // The client means December; without its time zone the server's
+            // month (November) applies — refused rather than replacing
+            // November's budget.
+            $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish", [
+                'month' => '2026-12',
+            ])->assertUnprocessable()->assertJsonValidationErrors('month');
+
+            $this->assertDatabaseHas('budgets', ['id' => $november->id]);
+            $this->assertDatabaseHas('budgets', ['id' => $draft->id, 'published_at' => null]);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_publish_rejects_unknown_time_zones(): void
+    {
+        $draft = $this->createBudget($this->user);
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish", [
+            'timezone' => 'Mars/Olympus_Mons',
+        ])->assertUnprocessable()->assertJsonValidationErrors('timezone');
+
+        $this->assertDatabaseHas('budgets', ['id' => $draft->id, 'published_at' => null]);
     }
 
     public function test_publishing_twice_is_rejected(): void
@@ -706,7 +894,12 @@ class BudgetTest extends TestCase
 
     public function test_ownership_can_be_transferred_to_a_member(): void
     {
-        $budget = $this->createBudget($this->user);
+        // A published budget: drafts stay with the profile owner (below).
+        $budget = $this->createBudget($this->user, [
+            'published_at' => now(),
+            'effective_year' => now()->year,
+            'effective_month' => now()->month,
+        ]);
 
         $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/transfer-ownership", [
             'user_id' => $this->member->id,
@@ -721,6 +914,58 @@ class BudgetTest extends TestCase
             'user_id' => $this->user->id,
             'permission' => 'contributor',
         ]);
+    }
+
+    public function test_a_draft_cannot_be_handed_to_a_collaborator(): void
+    {
+        // WF-R2-1: the collaborator could not publish it (profile ownership
+        // is required) and the profile owner could neither publish, delete
+        // nor replace it (single draft slot).
+        $draft = $this->createBudget($this->user);
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/transfer-ownership", [
+            'user_id' => $this->member->id,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['user_id' => 'A draft budget can only be owned by the profile owner.']);
+
+        $this->assertSame(ResourcePermissions::OWNER, $draft->fresh()->permissionFor($this->user));
+        $this->assertSame(ResourcePermissions::VIEWER, $draft->fresh()->permissionFor($this->member));
+        $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish")->assertOk();
+    }
+
+    public function test_a_draft_held_by_a_collaborator_can_be_handed_back_to_the_profile_owner(): void
+    {
+        // A draft stranded with a collaborator before the rule above.
+        $draft = $this->createBudget($this->member);
+
+        $this->actingAs($this->member)->postJson("/api/budgets/{$draft->id}/transfer-ownership", [
+            'user_id' => $this->user->id,
+        ])->assertOk();
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish")->assertOk();
+    }
+
+    public function test_the_migration_hands_stranded_drafts_back_to_the_profile_owner(): void
+    {
+        $stranded = $this->createBudget($this->member);
+        $published = $this->createBudget($this->member, [
+            'published_at' => now(),
+            'effective_year' => now()->year,
+            'effective_month' => now()->month,
+        ]);
+        $otherProfile = FinancialProfile::createOwnedBy($this->stranger, 'Stranger');
+        $healthy = Budget::create(['profile_id' => $otherProfile->id, 'currency' => 'CAD', 'effective_year' => 0, 'effective_month' => 0]);
+        $healthy->permissions()->create(['user_id' => $this->stranger->id, 'permission' => ResourcePermissions::OWNER]);
+
+        $migration = require database_path('migrations/2026_11_12_000001_hand_stranded_drafts_to_profile_owners.php');
+        $migration->up();
+
+        $this->assertSame(ResourcePermissions::OWNER, $stranded->fresh()->permissionFor($this->user));
+        $this->assertSame(ResourcePermissions::CONTRIBUTOR, $stranded->fresh()->permissionFor($this->member));
+        $this->assertSame(1, $stranded->permissions()->where('permission', ResourcePermissions::OWNER)->count());
+        // Published budgets keep their owner; healthy drafts are untouched.
+        $this->assertSame(ResourcePermissions::OWNER, $published->fresh()->permissionFor($this->member));
+        $this->assertSame(ResourcePermissions::OWNER, $healthy->fresh()->permissionFor($this->stranger));
+        $this->assertSame(1, $healthy->permissions()->count());
     }
 
     public function test_transfer_ownership_requires_a_member_target(): void

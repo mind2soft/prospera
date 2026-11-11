@@ -136,7 +136,21 @@ test('ledger page audit', async ({ page }) => {
 
     // --- delete the added transaction ----------------------------------------
     const addedRow = page.locator('tbody tr', { hasText: '($35)' }).first();
-    await addedRow.getByRole('button', { name: 'Remove transaction' }).click();
+    await addedRow
+        .getByRole('button', { name: /^Delete transaction: Food, Oct 22$/ })
+        .click();
+    // Deleting is irreversible → a confirmation names the entry first.
+    const confirmDelete = page.getByRole('dialog');
+    await expect(confirmDelete).toContainText('Food · October 22, 2026 · $35');
+    await confirmDelete
+        .getByRole('button', { name: 'Delete transaction' })
+        .click();
+    await expect(page.getByText('Transaction deleted.')).toBeVisible();
+    await expect(confirmDelete).toBeHidden();
+    // The deleted row's button is gone: focus lands on the table, not <body>.
+    await expect(
+        page.getByRole('region', { name: 'Transactions' }),
+    ).toBeFocused();
     await expect(newRows).toHaveCount(3);
     await expect(foodRow).toContainText('680');
 

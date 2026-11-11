@@ -2,26 +2,35 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ManagesShares;
+use App\Http\Requests\Ledger\LedgerTransactionsRequest;
+use App\Http\Requests\Ledger\StoreLedgerRequest;
+use App\Http\Requests\Ledger\StoreTransactionRequest;
 use App\Models\Budget;
 use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
+use App\Models\FinancialProfile;
 use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Security\Amounts\AmountKeyRing;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use LogicException;
 
 class LedgerController extends Controller
 {
+    /** @use ManagesShares<Ledger> */
+    use ManagesShares;
+
     public function __construct(
-        private readonly ResourcePermissions $permissions,
         private readonly ResourcePermissionService $permissionService,
     ) {}
 
@@ -33,19 +42,25 @@ class LedgerController extends Controller
     public function apiIndex(Request $request): JsonResponse
     {
         if ($request->filled('profile_id')) {
-            $this->authorizeProfile($request, (int) $request->query('profile_id'));
+            $this->authorizeProfileId((int) $request->query('profile_id'));
 
             $query = Ledger::query()->where('profile_id', (int) $request->query('profile_id'));
         } else {
             $query = Ledger::query()->visibleTo($request->user());
         }
 
-        $ledgers = $query->with('permissions')->orderByDesc('created_at')->get();
+        $user = $request->user();
+
+        // Only the caller's share row resolves their permission.
+        $ledgers = $query
+            ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
+            ->orderByDesc('created_at')
+            ->get();
 
         return response()->json([
             'ledgers' => $ledgers
                 // Both branches are scoped to the caller's profiles.
-                ->map(fn (Ledger $ledger) => $this->serializeLedger($ledger, $request->user(), isMember: true))
+                ->map(fn (Ledger $ledger) => $this->serializeLedger($ledger, $user, isMember: true))
                 ->values(),
         ]);
     }
@@ -56,18 +71,10 @@ class LedgerController extends Controller
      * The starting balance payload is always a positive integer;
      * starting_balance_type selects the stored sign (cash | debt).
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreLedgerRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'profile_id' => ['required', 'integer'],
-            'name' => ['required', 'string', 'max:255'],
-            'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
-            'starting_balance' => ['required', 'integer', 'min:0', 'max:999999999'],
-            'starting_balance_type' => ['required', 'string', Rule::in(['cash', 'debt'])],
-        ]);
-
-        $profile = $this->authorizeProfile($request, (int) $validated['profile_id'], ownerOnly: true);
+        $validated = $request->validated();
+        $profile = $request->profile();
 
         $ledger = DB::transaction(function () use ($request, $profile, $validated): Ledger {
             $ledger = Ledger::create([
@@ -96,9 +103,9 @@ class LedgerController extends Controller
     /**
      * Delete a ledger and ALL of its transactions (cascade).
      */
-    public function destroy(Request $request, Ledger $ledger): JsonResponse
+    public function destroy(Ledger $ledger): JsonResponse
     {
-        $this->authorize($request, $ledger, ResourcePermissions::OWNER);
+        $this->authorize('delete', $ledger);
 
         $ledger->deleteWithTransactions();
 
@@ -110,7 +117,7 @@ class LedgerController extends Controller
      */
     public function close(Request $request, Ledger $ledger): JsonResponse
     {
-        $this->authorize($request, $ledger, ResourcePermissions::OWNER);
+        $this->authorize('update', $ledger);
 
         $ledger->update(['closed_at' => now()]);
 
@@ -124,7 +131,7 @@ class LedgerController extends Controller
      */
     public function reopen(Request $request, Ledger $ledger): JsonResponse
     {
-        $this->authorize($request, $ledger, ResourcePermissions::OWNER);
+        $this->authorize('update', $ledger);
 
         $ledger->update(['closed_at' => null]);
 
@@ -138,20 +145,25 @@ class LedgerController extends Controller
      * envelopes the requester lacks envelope-viewer+ permission on are
      * masked server-side: amount null + masked true (metadata only).
      */
-    public function transactions(Request $request, Ledger $ledger): JsonResponse
+    public function transactions(LedgerTransactionsRequest $request, Ledger $ledger): JsonResponse
     {
-        $this->authorize($request, $ledger, ResourcePermissions::VIEWER);
-
-        $validated = $request->validate([
-            'from_date' => ['required', 'date'],
-            'to_date' => ['required', 'date', 'after_or_equal:from_date'],
-        ]);
+        $validated = $request->validated();
 
         $from = Carbon::parse($validated['from_date'])->startOfDay();
         $to = Carbon::parse($validated['to_date'])->endOfDay();
 
+        $user = $request->user();
+
+        // The ledger's profile is known: no lookup query when decrypting.
+        app(AmountKeyRing::class)->rememberLedgerProfiles([$ledger->id], $ledger->profile_id);
+
         $transactions = $ledger->transactions()
-            ->with('envelope', 'user')
+            ->with([
+                // The requester's share rows resolve the masking below
+                // without a second envelopes query.
+                'envelope.permissions' => fn ($query) => $query->where('user_id', $user->id),
+                'user',
+            ])
             ->whereBetween('event_at', [$from, $to])
             ->orderBy('event_at')
             ->orderBy('id')
@@ -175,6 +187,10 @@ class LedgerController extends Controller
             ->where('effective_month', $from->month)
             ->first();
 
+        if ($budget !== null) {
+            app(AmountKeyRing::class)->rememberBudgetProfiles([$budget->id], $ledger->profile_id);
+        }
+
         $allocations = $budget === null
             ? collect()
             : BudgetEnvelope::query()
@@ -185,16 +201,14 @@ class LedgerController extends Controller
                     (string) $allocation->envelope_id => $allocation->amount,
                 ]);
 
-        $envelopePermissions = Envelope::permissionsFor(
-            $request->user(),
-            $transactions->pluck('envelope_id')->unique()->all(),
-        );
+        // Resolved once for every row's permission check (stale grants).
+        $coMemberIds = FinancialProfile::coMemberIdsOf($user->id);
 
         return response()->json([
             'transactions' => $transactions
                 ->map(fn (Transaction $transaction) => $this->serializeTransaction(
                     $transaction,
-                    $envelopePermissions->get($transaction->envelope_id, ResourcePermissions::NONE),
+                    $transaction->envelope->permissionFor($user, $coMemberIds),
                     $this->remainingAllocated($transaction, $allocations, $totals),
                 ))
                 ->values(),
@@ -228,15 +242,9 @@ class LedgerController extends Controller
      * also contributor (or owner). The amount is signed from the envelope's
      * direction.
      */
-    public function addTransaction(Request $request, Ledger $ledger): JsonResponse
+    public function addTransaction(StoreTransactionRequest $request, Ledger $ledger): JsonResponse
     {
-        $ledgerPermission = $this->authorize($request, $ledger, ResourcePermissions::VIEWER);
-
-        $validated = $request->validate([
-            'envelope_id' => ['required', 'integer'],
-            'amount' => ['required', 'integer', 'min:1', 'max:999999999'],
-            'event_at' => ['required', 'date'],
-        ]);
+        $validated = $request->validated();
 
         if ($ledger->isClosed()) {
             throw ValidationException::withMessages([
@@ -244,16 +252,10 @@ class LedgerController extends Controller
             ]);
         }
 
-        if (! $this->permissions->isAtLeast($ledgerPermission, ResourcePermissions::CONTRIBUTOR)) {
-            abort(403);
-        }
-
         /** @var Envelope|null $envelope */
         $envelope = Envelope::query()->find($validated['envelope_id']);
 
-        $envelopePermission = $envelope?->permissionFor($request->user()) ?? ResourcePermissions::NONE;
-
-        if ($envelope === null || ! $this->permissions->isAtLeast($envelopePermission, ResourcePermissions::CONTRIBUTOR)) {
+        if ($envelope === null || $request->user()->cannot('use', $envelope)) {
             throw ValidationException::withMessages([
                 'envelope_id' => __('You need contributor access to this envelope to record transactions.'),
             ]);
@@ -270,17 +272,26 @@ class LedgerController extends Controller
             ]);
         }
 
-        $transaction = $ledger->transactions()->create([
-            'user_id' => $request->user()->id,
-            'envelope_id' => $envelope->id,
-            'amount' => $envelope->signedAmount($validated['amount']),
-            'event_at' => $eventAt,
-        ]);
+        $transaction = DB::transaction(function () use ($request, $ledger, $envelope, $validated, $eventAt): Transaction {
+            // The sign comes from the direction read under a shared lock, so
+            // a concurrent direction change (blocked once the envelope is
+            // referenced) cannot slip in between (docs/envelope.md).
+            $direction = Envelope::query()->whereKey($envelope->id)->sharedLock()->firstOrFail();
+
+            return $ledger->transactions()->create([
+                'user_id' => $request->user()->id,
+                'envelope_id' => $envelope->id,
+                'amount' => $direction->signedAmount($validated['amount']),
+                'event_at' => $eventAt,
+            ])->setRelation('envelope', $direction);
+        });
 
         return response()->json([
             'transaction' => $this->serializeTransaction(
                 $transaction,
-                $envelopePermission,
+                // Contributor+ (the `use` check above): the amount is never
+                // masked, so the permission is not resolved a second time.
+                ResourcePermissions::CONTRIBUTOR,
                 null,
                 withRemaining: false,
             ),
@@ -291,15 +302,11 @@ class LedgerController extends Controller
      * Delete a transaction (open ledgers only; ledger owner: any; ledger
      * contributor: own entries only; viewers: none).
      */
-    public function destroyTransaction(Request $request, Transaction $transaction): JsonResponse
+    public function destroyTransaction(Transaction $transaction): JsonResponse
     {
         $ledger = $transaction->ledger;
 
-        $permission = $ledger->permissionFor($request->user());
-
-        if ($permission === ResourcePermissions::NONE) {
-            abort(404);
-        }
+        $this->authorize('view', $ledger);
 
         if ($ledger->isClosed()) {
             throw ValidationException::withMessages([
@@ -307,99 +314,79 @@ class LedgerController extends Controller
             ]);
         }
 
-        $mayDelete = $permission === ResourcePermissions::OWNER
-            || ($permission === ResourcePermissions::CONTRIBUTOR && $transaction->user_id === $request->user()->id);
-
-        if (! $mayDelete) {
-            abort(403);
-        }
+        $this->authorize('delete', $transaction);
 
         $transaction->delete();
 
         return response()->json(status: 204);
     }
 
-    /**
-     * List the profile's members with their permission on the ledger.
-     */
-    public function permissionsIndex(Request $request, Ledger $ledger): JsonResponse
+    protected function sharedResource(Model $resource): Ledger
     {
-        $this->authorize($request, $ledger, ResourcePermissions::VIEWER);
+        if (! $resource instanceof Ledger) {
+            throw new LogicException('The share routes of this controller must bind a ledger.');
+        }
 
-        return response()->json([
-            'shares' => $this->permissionService->profilePermissions($ledger->profile, 'ledger_permissions', 'ledger_id', $ledger->id),
-        ]);
+        return $resource;
     }
 
     /**
-     * Assign a permission to a profile member ("owner" is rejected — use
-     * transfer-ownership).
+     * @return array{string, string}
      */
-    public function addPermission(Request $request, Ledger $ledger): JsonResponse
+    protected function shareTable(): array
     {
-        $this->authorize($request, $ledger, ResourcePermissions::OWNER);
+        return ['ledger_permissions', 'ledger_id'];
+    }
 
-        $validated = $this->permissionService->validateProfilePermission($request, $ledger->profile);
-
-        $this->permissionService->createPermission('ledger_permissions', 'ledger_id', $ledger->id, $validated['user_id'], $validated['permission'], 'ledger');
-
-        return response()->json(status: 201);
+    protected function viewSharesAbility(): string
+    {
+        return 'view';
     }
 
     /**
-     * Change a member's permission ("owner" is rejected — use
-     * transfer-ownership).
+     * The profile's members with their permission on the ledger.
+     *
+     * @param  Ledger  $resource
+     * @return array<int, array<string, int|string|bool>>
      */
-    public function updatePermission(Request $request, Ledger $ledger, int $userId): JsonResponse
+    protected function shareList(Model $resource, User $caller): array
     {
-        $this->authorize($request, $ledger, ResourcePermissions::OWNER);
+        [$table, $column] = $this->shareTable();
 
-        $permission = $this->permissionService->validatePermission($request);
-
-        $this->permissionService->updatePermission('ledger_permissions', 'ledger_id', $ledger->id, $userId, $permission);
-
-        return response()->json([
-            'shares' => $this->permissionService->profilePermissions($ledger->profile, 'ledger_permissions', 'ledger_id', $ledger->id),
-        ]);
+        return $this->permissionService->profilePermissions($resource->profile, $table, $column, $resource->id);
     }
 
     /**
-     * Revoke a share.
+     * @param  Ledger  $resource
      */
-    public function removePermission(Request $request, Ledger $ledger, int $userId): JsonResponse
+    protected function shareTarget(Model $resource, int $userId): User
     {
-        $this->authorize($request, $ledger, ResourcePermissions::OWNER);
+        return $this->permissionService->profileMember($resource->profile, $userId);
+    }
 
-        $this->permissionService->deletePermission('ledger_permissions', 'ledger_id', $ledger->id, $userId);
-
-        return response()->json(status: 204);
+    protected function alreadySharedMessage(): string
+    {
+        return __('This ledger is already shared with this user.');
     }
 
     /**
      * Transfer ownership to a member; the previous owner becomes a
      * contributor.
+     *
+     * @param  Ledger  $resource
+     * @return array<string, mixed>
      */
-    public function transferOwnership(Request $request, Ledger $ledger): JsonResponse
+    protected function transferOwnershipOf(Model $resource, User $caller, int $userId): array
     {
-        $this->authorize($request, $ledger, ResourcePermissions::OWNER);
-
-        $target = $this->permissionService->validateProfileTransferTarget($request, $ledger->profile, $request->user(), 'ledger');
-
-        $ledger->transferOwnershipTo($target);
-
-        return response()->json(['ledger' => $this->serializeLedger($ledger->refresh(), $request->user())]);
-    }
-
-    /**
-     * Ensure the current user has at least the required permission on the
-     * ledger.
-     */
-    private function authorize(Request $request, Ledger $ledger, string $minimum): string
-    {
-        return $this->permissions->authorize(
-            $ledger->permissionFor($request->user()),
-            $minimum,
+        $target = $this->permissionService->ensureNotOwner(
+            $this->permissionService->profileMember($resource->profile, $userId),
+            $caller,
+            __('You already own this ledger.'),
         );
+
+        $resource->transferOwnershipTo($target);
+
+        return ['ledger' => $this->serializeLedger($resource->refresh(), $caller)];
     }
 
     /**

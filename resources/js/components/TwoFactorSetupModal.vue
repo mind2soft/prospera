@@ -228,7 +228,7 @@ watch(
                                     >
                                         <Check
                                             v-if="copied"
-                                            class="w-4 text-green-500"
+                                            class="w-4 text-success"
                                         />
                                         <Copy v-else class="w-4" />
                                     </button>
@@ -270,7 +270,7 @@ watch(
                                         />
                                     </InputOTPGroup>
                                 </InputOTP>
-                                <InputError :message="errors?.code" />
+                                <InputError for="otp" :message="errors?.code" />
                             </div>
 
                             <div class="flex w-full items-center space-x-5">

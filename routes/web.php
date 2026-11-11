@@ -7,7 +7,15 @@ use App\Http\Controllers\EnvelopeController;
 use App\Http\Controllers\FinancialProfileController;
 use App\Http\Controllers\FinancialProfileInviteController;
 use App\Http\Controllers\LedgerController;
+use App\Http\Middleware\EnsureAccountHasProfile;
+use App\Models\Budget;
+use App\Models\Envelope;
+use App\Models\Ledger;
 use Illuminate\Support\Facades\Route;
+use Laravel\Fortify\Features;
+use Laravel\Fortify\Http\Controllers\ConfirmablePasswordController;
+use Laravel\Fortify\Http\Controllers\PasswordResetLinkController;
+use Laravel\Fortify\Http\Controllers\RegisteredUserController;
 
 Route::inertia('/', 'Welcome')->name('home');
 
@@ -23,6 +31,28 @@ Route::post('contact', [ContactController::class, 'store'])
     ->middleware('throttle:contact');
 Route::get('contact/sent', [ContactController::class, 'sent'])->name('contact.sent');
 
+// Registration (Fortify's own route has no throttle): redeclared here — app
+// routes load after Fortify's, so this one replaces it — to rate-limit the
+// verification emails it sends to arbitrary addresses.
+if (Features::enabled(Features::registration())) {
+    Route::post('register', [RegisteredUserController::class, 'store'])
+        ->middleware(['guest:'.config('fortify.guard'), 'throttle:register'])
+        ->name('register.store');
+}
+
+// Same for the password-reset request (an email to the account's address)
+// and the password confirmation (a password guess on a signed-in session):
+// Fortify declares both without a throttle.
+if (Features::enabled(Features::resetPasswords())) {
+    Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
+        ->middleware(['guest:'.config('fortify.guard'), 'throttle:password-reset'])
+        ->name('password.email');
+}
+
+Route::post('user/confirm-password', [ConfirmablePasswordController::class, 'store'])
+    ->middleware([config('fortify.auth_middleware', 'auth').':'.config('fortify.guard'), 'throttle:password-confirm'])
+    ->name('password.confirm.store');
+
 // Public invite validation (used by the invite landing page and the
 // registration flow); accepting requires authentication below.
 Route::get('api/invites/{inviteKey}', [FinancialProfileInviteController::class, 'show'])
@@ -36,12 +66,19 @@ Route::get('invites/{inviteKey}', [FinancialProfileInviteController::class, 'lan
     ->name('invites.landing')
     ->middleware('throttle:invites');
 
-Route::middleware(['auth', 'verified'])->group(function () {
-    // One-click accept from the invitation email: the signed-in user whose
-    // account email matches the invite is accepted straight through; guests
+// The Share-drawer endpoints (ManagesShares) receive their resource as a
+// plain Model, so these parameters are bound explicitly.
+Route::model('budget', Budget::class);
+Route::model('ledger', Ledger::class);
+Route::model('envelope', Envelope::class);
+
+// EnsureAccountHasProfile completes an invite grant whose verification
+// listener failed (no verified account is left without a profile).
+Route::middleware(['auth', 'verified', EnsureAccountHasProfile::class])->group(function () {
+    // Accept link from the invitation email: never changes state — it lands
+    // on the invite confirmation page, whose button POSTs the accept. Guests
     // are redirected to the sign-in page (the auth middleware preserves the
-    // intended URL), unverified users to the verification notice, and every
-    // other case falls back to the invite landing page.
+    // intended URL) and unverified users to the verification notice.
     Route::get('invites/{inviteKey}/accept', [FinancialProfileInviteController::class, 'acceptViaLink'])
         ->name('invites.accept-link')
         ->middleware('throttle:invites');
@@ -58,6 +95,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('invites/{inviteKey}/accept', [FinancialProfileInviteController::class, 'accept'])
             ->name('invites.accept')
             ->middleware('throttle:invites');
+        Route::post('invites/{inviteKey}/decline', [FinancialProfileInviteController::class, 'decline'])
+            ->name('invites.decline')
+            ->middleware('throttle:invites');
 
         Route::prefix('profiles')->name('profiles.')->group(function () {
             Route::get('/', [FinancialProfileController::class, 'index'])->name('index');
@@ -71,7 +111,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('{profile}/set-default', [FinancialProfileController::class, 'setDefault'])->name('set-default');
 
             Route::post('{profile}/invites', [FinancialProfileInviteController::class, 'store'])->name('invites.store')
-                ->middleware('throttle:invites');
+                ->middleware('throttle:invite-creation');
             Route::get('{profile}/invites', [FinancialProfileInviteController::class, 'index'])->name('invites.index');
             Route::delete('{profile}/invites/{invite}', [FinancialProfileInviteController::class, 'destroy'])->name('invites.destroy');
         })->whereNumber('profile');
@@ -110,8 +150,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::prefix('envelopes')->name('envelopes.')->group(function () {
             Route::get('/', [EnvelopeController::class, 'apiIndex'])->name('index');
-            Route::get('{envelope}/totals', [EnvelopeController::class, 'totals'])->name('totals');
-            Route::get('{envelope}/transactions', [EnvelopeController::class, 'apiTransactions'])->name('transactions.index');
             Route::get('{envelope}/shares', [EnvelopeController::class, 'permissionsIndex'])->name('shares.index');
             Route::post('{envelope}/shares', [EnvelopeController::class, 'addPermission'])->name('shares.store');
             Route::patch('{envelope}/shares/{userId}', [EnvelopeController::class, 'updatePermission'])->name('shares.update');

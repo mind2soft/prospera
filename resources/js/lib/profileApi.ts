@@ -1,4 +1,8 @@
 import { api } from '@/lib/api';
+import * as invites from '@/routes/api/invites';
+import * as profiles from '@/routes/api/profiles';
+import * as profileInvites from '@/routes/api/profiles/invites';
+import * as profileMembers from '@/routes/api/profiles/members';
 import type {
     FinancialProfile,
     InviteContext,
@@ -12,63 +16,59 @@ export type CreateInviteResult = {
 };
 
 export const profileApi = {
-    list: (): Promise<{ profiles: FinancialProfile[] }> => api('/api/profiles'),
+    list: (): Promise<{ profiles: FinancialProfile[] }> =>
+        api(profiles.index()),
 
     create: (name: string): Promise<{ profile: FinancialProfile }> =>
-        api('/api/profiles', { method: 'POST', body: { name } }),
+        api(profiles.store(), { body: { name } }),
 
     rename: (
         profileId: number,
         name: string,
     ): Promise<{ profile: FinancialProfile }> =>
-        api(`/api/profiles/${profileId}`, { method: 'PATCH', body: { name } }),
+        api(profiles.update(profileId), { body: { name } }),
 
     destroy: (profileId: number): Promise<void> =>
-        api(`/api/profiles/${profileId}`, { method: 'DELETE' }),
+        api(profiles.destroy(profileId)),
 
     members: (profileId: number): Promise<{ members: ProfileMember[] }> =>
-        api(`/api/profiles/${profileId}/members`),
+        api(profileMembers.index(profileId)),
 
     removeMember: (profileId: number, userId: number): Promise<void> =>
-        api(`/api/profiles/${profileId}/members/${userId}`, {
-            method: 'DELETE',
-        }),
+        api(profileMembers.destroy({ profile: profileId, user: userId })),
 
     transferOwnership: (
         profileId: number,
         userId: number,
     ): Promise<{ profile: FinancialProfile }> =>
-        api(`/api/profiles/${profileId}/transfer-ownership`, {
-            method: 'POST',
+        api(profiles.transferOwnership(profileId), {
             body: { user_id: userId },
         }),
 
     setDefault: (profileId: number): Promise<{ profile: FinancialProfile }> =>
-        api(`/api/profiles/${profileId}/set-default`, { method: 'POST' }),
+        api(profiles.setDefault(profileId)),
 
     /** Pending (non-expired) invites — owner only. */
     pendingInvites: (
         profileId: number,
     ): Promise<{ invites: ProfileInvite[] }> =>
-        api(`/api/profiles/${profileId}/invites`),
+        api(profileInvites.index(profileId)),
 
     createInvite: (
         profileId: number,
         email: string,
     ): Promise<CreateInviteResult> =>
-        api(`/api/profiles/${profileId}/invites`, {
-            method: 'POST',
-            body: { email },
-        }),
+        api(profileInvites.store(profileId), { body: { email } }),
 
     revokeInvite: (profileId: number, inviteId: number): Promise<void> =>
-        api(`/api/profiles/${profileId}/invites/${inviteId}`, {
-            method: 'DELETE',
-        }),
+        api(profileInvites.destroy({ profile: profileId, invite: inviteId })),
 
     inviteContext: (inviteKey: string): Promise<{ invite: InviteContext }> =>
-        api(`/api/invites/${inviteKey}`),
+        api(invites.show(inviteKey)),
 
     acceptInvite: (inviteKey: string): Promise<{ profile: FinancialProfile }> =>
-        api(`/api/invites/${inviteKey}/accept`, { method: 'POST' }),
+        api(invites.accept(inviteKey)),
+
+    declineInvite: (inviteKey: string): Promise<void> =>
+        api(invites.decline(inviteKey)),
 };

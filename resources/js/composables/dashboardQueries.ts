@@ -1,14 +1,15 @@
+import { useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
-import { useQueryClient } from 'vue-query';
 import { useMutation, useQuery } from '@/composables/query';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { dashboardApi } from '@/lib/dashboardApi';
-import type { DashboardWidgetConfig, DashboardWidgetData } from '@/types';
+import type { DashboardWidgetConfig, DashboardWidgetPayload } from '@/types';
 
 export const dashboardKeys = {
     root: ['dashboard'] as const,
     widgets: (profileId: number) =>
         ['dashboard', profileId, 'widgets'] as const,
+    dataOf: (profileId: number) => ['dashboard', profileId, 'data'] as const,
     data: (profileId: number, widgetId: number, config: string) =>
         ['dashboard', profileId, 'data', widgetId, config] as const,
 };
@@ -49,38 +50,33 @@ export function useDashboardWidgets() {
 export function useSaveDashboardLayout() {
     const queryClient = useQueryClient();
 
-    return useMutation(
-        (input: { profileId: number; widgets: DashboardWidgetConfig[] }) =>
-            dashboardApi.save(input.profileId, { widgets: input.widgets }),
-        {
-            onSuccess: (data, { profileId }) => {
-                queryClient.setQueryData(
-                    dashboardKeys.widgets(profileId),
-                    data,
-                );
-                void queryClient.invalidateQueries({
-                    queryKey: ['dashboard', profileId, 'data'],
-                });
-            },
+    return useMutation({
+        mutationFn: (input: {
+            profileId: number;
+            widgets: DashboardWidgetPayload[];
+        }) => dashboardApi.save(input.profileId, { widgets: input.widgets }),
+        onSuccess: (data, { profileId }) => {
+            queryClient.setQueryData(dashboardKeys.widgets(profileId), data);
+            void queryClient.invalidateQueries({
+                queryKey: dashboardKeys.dataOf(profileId),
+            });
         },
-    );
+    });
 }
 
 export function useRemoveDashboardWidget() {
     const queryClient = useQueryClient();
     const { profileId } = useCurrentProfile();
 
-    return useMutation(
-        (widgetId: number) =>
+    return useMutation({
+        mutationFn: (widgetId: number) =>
             dashboardApi.remove(toValue(profileId) ?? 0, widgetId),
-        {
-            onSuccess: () => {
-                void queryClient.invalidateQueries(
-                    dashboardKeys.widgets(toValue(profileId) ?? 0),
-                );
-            },
+        onSuccess: () => {
+            void queryClient.invalidateQueries({
+                queryKey: dashboardKeys.widgets(toValue(profileId) ?? 0),
+            });
         },
-    );
+    });
 }
 
 /**
@@ -109,10 +105,7 @@ export function useWidgetData(
         queryFn: () => {
             const value = toValue(widget);
 
-            return dashboardApi.data(
-                toValue(profileId) ?? 0,
-                value?.id ?? 0,
-            ) as Promise<DashboardWidgetData>;
+            return dashboardApi.data(toValue(profileId) ?? 0, value?.id ?? 0);
         },
         enabled: computed(
             () => toValue(profileId) !== null && toValue(widget) !== null,

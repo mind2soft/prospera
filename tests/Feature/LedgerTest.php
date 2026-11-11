@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\BudgetController;
 use App\Models\Budget;
 use App\Models\BudgetPermission;
 use App\Models\Envelope;
@@ -11,11 +12,16 @@ use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\ResourcePermissions;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
+use LogicException;
+use Tests\Concerns\CountsQueries;
 use Tests\TestCase;
 
 class LedgerTest extends TestCase
 {
+    use CountsQueries;
     use RefreshDatabase;
 
     private User $user;
@@ -111,6 +117,27 @@ class LedgerTest extends TestCase
         $this->getJson('/api/ledgers')->assertUnauthorized();
     }
 
+    public function test_index_loads_only_the_callers_share_rows(): void
+    {
+        $shared = $this->createLedger($this->user, ['name' => 'Shared']);
+        $shared->permissions()->create(['user_id' => $this->member->id, 'permission' => ResourcePermissions::CONTRIBUTOR]);
+        $this->createLedger($this->user, ['name' => 'Implicit']);
+
+        $queries = $this->queriesDuring(function (): void {
+            $ledgers = collect($this->actingAs($this->member)->getJson('/api/ledgers?profile_id='.$this->profile->id)
+                ->assertOk()
+                ->json('ledgers'))
+                ->keyBy('name');
+
+            $this->assertSame(ResourcePermissions::CONTRIBUTOR, $ledgers['Shared']['permission']);
+            $this->assertSame(ResourcePermissions::VIEWER, $ledgers['Implicit']['permission']);
+        });
+
+        $permissionQueries = array_values(array_filter($queries, fn (string $sql): bool => str_contains($sql, 'from "ledger_permissions"')));
+        $this->assertCount(1, $permissionQueries);
+        $this->assertStringContainsString('"user_id" = ?', $permissionQueries[0]);
+    }
+
     public function test_index_returns_only_the_profile_ledgers(): void
     {
         $this->createLedger($this->user);
@@ -200,6 +227,22 @@ class LedgerTest extends TestCase
         ])->assertCreated();
 
         $this->assertEncryptedAmount(Ledger::class, ['profile_id' => $this->profile->id], 'starting_balance', 0);
+    }
+
+    public function test_store_authorizes_the_profile_before_validating_the_payload(): void
+    {
+        // CQ-R2-3: collaborators get a 403, outsiders a 404 — even with an
+        // invalid payload; a missing profile is a validation error.
+        $this->actingAs($this->member)->postJson('/api/ledgers', ['profile_id' => $this->profile->id])
+            ->assertForbidden();
+        $this->actingAs($this->stranger)->postJson('/api/ledgers', ['profile_id' => $this->profile->id])
+            ->assertNotFound();
+        $this->actingAs($this->user)->postJson('/api/ledgers', ['profile_id' => 999999])
+            ->assertNotFound();
+        $this->actingAs($this->user)->postJson('/api/ledgers', ['name' => '2026'])
+            ->assertUnprocessable()->assertJsonValidationErrors('profile_id');
+        $this->actingAs($this->user)->postJson('/api/ledgers', ['profile_id' => 'abc'])
+            ->assertUnprocessable()->assertJsonValidationErrors('profile_id');
     }
 
     public function test_store_requires_valid_input(): void
@@ -388,6 +431,21 @@ class LedgerTest extends TestCase
             'amount' => 10,
             'event_at' => '2026-06-15',
         ])->assertUnprocessable()->assertJsonValidationErrors('ledger');
+    }
+
+    public function test_recording_is_authorized_before_the_ledger_state_and_the_payload(): void
+    {
+        // CQ-R2-3: a viewer learns nothing about the ledger's state.
+        $ledger = $this->createLedger($this->user, ['closed_at' => now()]);
+
+        $this->actingAs($this->member)->postJson("/api/ledgers/{$ledger->id}/transactions", [
+            'envelope_id' => 1,
+            'amount' => 10,
+            'event_at' => '2026-06-15',
+        ])->assertForbidden();
+
+        $this->actingAs($this->member)->postJson("/api/ledgers/{$ledger->id}/transactions", [])->assertForbidden();
+        $this->actingAs($this->stranger)->postJson("/api/ledgers/{$ledger->id}/transactions", [])->assertNotFound();
     }
 
     public function test_transactions_cannot_be_deleted_from_a_closed_ledger(): void
@@ -838,5 +896,90 @@ class LedgerTest extends TestCase
             ->assertNotFound();
 
         $this->assertDatabaseCount('ledger_permissions', 1);
+    }
+
+    public function test_revoking_through_a_route_bound_to_another_resource_type_fails_closed(): void
+    {
+        // CQ-R3-4: removePermission goes through sharedResource() like the
+        // other share endpoints, so a mis-bound route cannot revoke the
+        // budget share whose id happens to match the ledger's.
+        Route::middleware(['web', 'auth'])
+            ->delete('/__mis-bound/{ledger}/shares/{userId}', [BudgetController::class, 'removePermission']);
+
+        $ledger = $this->createLedger($this->user);
+        $budget = $this->createPublishedBudget($this->user);
+        $budget->permissions()->create(['user_id' => $this->member->id, 'permission' => BudgetPermission::PERMISSION_VIEWER]);
+        $this->assertSame($ledger->id, $budget->id);
+
+        try {
+            $this->withoutExceptionHandling()->actingAs($this->user)->deleteJson("/__mis-bound/{$ledger->id}/shares/{$this->member->id}");
+            $this->fail('The mis-bound route was served.');
+        } catch (LogicException $e) {
+            $this->assertSame('The share routes of this controller must bind a budget.', $e->getMessage());
+        }
+
+        $this->assertDatabaseHas('budget_permissions', ['budget_id' => $budget->id, 'user_id' => $this->member->id]);
+    }
+
+    public function test_transactions_queries_do_not_grow_with_rows_or_envelopes(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $budget = $this->createPublishedBudget($this->user, attributes: ['effective_year' => 2026, 'effective_month' => 6]);
+        $url = "/api/ledgers/{$ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30";
+        $record = fn (Envelope $envelope, int $amount) => $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => $amount,
+            'event_at' => '2026-06-10 00:00:00',
+        ]);
+
+        $rent = $budget->envelopes()->with('envelope')->get()->firstWhere('amount', -200)->envelope;
+        $record($rent, -5);
+        $this->actingAs($this->member);
+        $few = count($this->queriesDuring(fn () => $this->getJson($url)->assertOk()));
+
+        foreach (range(1, 8) as $i) {
+            $envelope = $this->createEnvelope("Envelope {$i}");
+            $envelope->permissions()->create(['user_id' => $this->member->id, 'permission' => EnvelopePermission::PERMISSION_VIEWER]);
+            $record($envelope, -$i);
+            $record($rent, -$i);
+        }
+
+        $queries = $this->queriesDuring(fn () => $this->getJson($url)->assertOk()->assertJsonCount(17, 'transactions'));
+
+        $this->assertCount($few, $queries);
+        // The envelopes are read once (with the requester's share rows).
+        $this->assertCount(1, array_filter($queries, fn (string $sql): bool => str_contains($sql, 'from "envelopes"')));
+        // Profiles of the ledger and the budget are known: no lookups.
+        $this->assertCount(0, array_filter($queries, fn (string $sql): bool => str_starts_with($sql, 'select "profile_id" from')));
+    }
+
+    public function test_transactions_reject_ranges_longer_than_a_year(): void
+    {
+        $ledger = $this->createLedger($this->user);
+
+        $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=1900-01-01&to_date=2999-12-31")
+            ->assertUnprocessable()->assertJsonValidationErrors('to_date');
+
+        $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-01-01&to_date=2026-12-31")
+            ->assertOk();
+
+        $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2024-01-01&to_date=2024-12-31")
+            ->assertOk();
+    }
+
+    public function test_model_dates_are_immutable_and_accepted_as_event_dates(): void
+    {
+        $ledger = $this->createLedger($this->user)->fresh();
+
+        // Date::use(CarbonImmutable::class): model dates are immutable, and
+        // the date helpers accept them (they took a mutable Carbon before).
+        $this->assertInstanceOf(CarbonImmutable::class, $ledger->start_date);
+        $this->assertTrue($ledger->acceptsEventDate($ledger->start_date));
+        $this->assertTrue($ledger->acceptsEventDate(CarbonImmutable::parse('2026-06-15')));
+        $this->assertFalse($ledger->acceptsEventDate(CarbonImmutable::parse('2027-01-01')));
     }
 }

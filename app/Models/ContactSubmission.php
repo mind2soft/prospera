@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Carbon;
 
 /**
  * A logged contact-form submission (issue #17). Rows are append-only: they
@@ -17,7 +17,7 @@ use Illuminate\Support\Carbon;
  * @property string $message
  * @property string $ip_address
  * @property int|null $user_id
- * @property Carbon $created_at
+ * @property CarbonImmutable $created_at
  */
 class ContactSubmission extends Model
 {

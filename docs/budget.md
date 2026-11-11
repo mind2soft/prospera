@@ -85,11 +85,24 @@ number; the server negates expense amounts on write.
   `published_at = null`).
 - **Publishing** a draft sets `published_at = now`, `effective_year = current year` and
   `effective_month = current month`. Publishing is irreversible (read-only afterwards).
+- **"Current month" is the user's**, not the server's (which runs on UTC): the
+  publish request carries the browser's IANA time zone as `timezone` (e.g.
+  `Australia/Sydney`; unknown zones → `422`), and the month is resolved in it.
+  Without it the application time zone (UTC) applies. The request may also
+  carry the `month` (`Y-m`) the user means to publish for — the one the
+  confirmation dialog names; if it is not the current month in the resolved
+  time zone the publish is refused (`422` on `month`), so a budget of a
+  month other than the intended one is never replaced (deleted).
 - **One published budget per profile per month**: publishing a draft for a month that
   already has a published budget **replaces** it — the previously published budget for
   that month is deleted immediately (with its shares and assignments). Transactions
   are independent of budgets and are never blocked by (or blocking) this replacement.
   The publish confirmation dialog must warn about this replacement.
+- **Concurrency** — publishing and every assignment edit (add, update,
+  remove) lock the budget row and re-check the draft state inside their
+  transaction, so an edit racing a publish never modifies a published
+  budget, and a double-submitted publish runs once. Two concurrent adds of
+  the same envelope resolve to one assignment and a validation error.
 - **"New Budget"** on a published budget creates a **clone** of it in draft mode
   (same currency and same envelope assignments). The clone dialog asks for
   confirmation (and the currency, pre-filled from the source budget).
@@ -109,6 +122,21 @@ Ownership can be transferred from the Share drawer to a profile member; the
 previous owner becomes `contributor`. When the owner is removed from the
 profile or their account is deleted, the budget auto-transfers to the profile
 owner (see [Shared Finances](shared-finances.md)).
+
+The **draft budget follows profile ownership**: when the profile changes owner
+(explicit transfer, or the hand-off on the owner's account deletion), the
+profile's draft is transferred to the new profile owner and its previous owner
+becomes `contributor`. Otherwise nobody could publish it (publishing needs
+both ownerships) and the single draft slot would block new drafts. Published
+budgets keep their owner.
+
+For the same reason a **draft is only ever owned by the profile owner**: an
+explicit transfer of a draft (Share drawer) to anyone else is refused with a
+validation error on `user_id` — only published budgets can be handed to a
+collaborator. A draft that was handed to a collaborator before this rule
+was handed back to the profile owner by a data migration (the collaborator
+became `contributor`); the profile owner can then publish, delete or keep
+editing it as usual.
 
 ### Referential integrity
 
@@ -138,7 +166,7 @@ the profile's budgets by default (see
 ## API
 
 All endpoints require authentication (session + CSRF). The frontend consumes them via
-**vue-query** — this is an application-wide requirement for server data fetching.
+**TanStack Query** (`@tanstack/vue-query`) — this is an application-wide requirement for server data fetching.
 
 | Method   | Path                                           | Description                                                                                                                                                  |
 | -------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -146,7 +174,7 @@ All endpoints require authentication (session + CSRF). The frontend consumes the
 | `POST`   | `/api/budgets`                                 | Create a draft in the current profile (`currency` required; profile owner only)                                                                              |
 | `GET`    | `/api/budgets/{budget}`                        | Budget detail with envelopes and shares                                                                                                                      |
 | `DELETE` | `/api/budgets/{budget}`                        | Delete the budget (owner only; cascades shares and envelope assignments)                                                                                     |
-| `POST`   | `/api/budgets/{budget}/publish`                | Publish draft (budget owner **and** profile owner)                                                                                                           |
+| `POST`   | `/api/budgets/{budget}/publish`                | Publish draft (budget owner **and** profile owner); optional `timezone` (IANA) and `month` (`Y-m`, must be the current month there) — see Budget lifecycle  |
 | `POST`   | `/api/budgets/{budget}/clone`                  | Clone published budget into a draft (profile owner; `viewer`+ on the budget)                                                                                 |
 | `POST`   | `/api/budgets/{budget}/envelopes`              | Assign an envelope (`envelope_id`, `type`, `amount`) to a draft — requires `contributor`+ on the envelope (`none`/`viewer` → `422` on `envelope_id`)         |
 | `PATCH`  | `/api/budgets/{budget}/envelopes/{envelopeId}` | Update amount (and type)                                                                                                                                     |
@@ -155,7 +183,7 @@ All endpoints require authentication (session + CSRF). The frontend consumes the
 | `POST`   | `/api/budgets/{budget}/shares`                 | Assign a permission to a **profile member** (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                  |
 | `PATCH`  | `/api/budgets/{budget}/shares/{userId}`        | Change a member's permission (owner only; `owner` is rejected — use transfer-ownership)                                                                      |
 | `DELETE` | `/api/budgets/{budget}/shares/{userId}`        | Revoke a share                                                                                                                                               |
-| `POST`   | `/api/budgets/{budget}/transfer-ownership`     | Transfer ownership to a member (`user_id`); the previous owner becomes `contributor`                                                                         |
+| `POST`   | `/api/budgets/{budget}/transfer-ownership`     | Transfer ownership to a member (`user_id`); the previous owner becomes `contributor`. A draft can only go to the profile owner (`422` on `user_id` otherwise) |
 
 ## User Interface
 

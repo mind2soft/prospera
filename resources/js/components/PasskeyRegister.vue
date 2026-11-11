@@ -88,7 +88,7 @@ const handleCancel = () => {
             </p>
         </div>
 
-        <InputError v-if="error" :message="error" />
+        <InputError v-if="error" for="passkey-name" :message="error" />
 
         <div class="flex gap-2">
             <Button type="submit" :disabled="isLoading || !name.trim()">

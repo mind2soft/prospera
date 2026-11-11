@@ -104,7 +104,10 @@ s'engage :
   et l'ébauche d'un budget **7 ans après sa création** ;
 - la suppression s'effectue au niveau applicatif — les montants ne peuvent
   être interprétés que dans l'application — de sorte qu'un enregistrement est
-  soit entièrement présent, soit entièrement supprimé, jamais partiellement.
+  soit entièrement présent, soit entièrement supprimé, jamais partiellement ;
+- un compte dont l'adresse courriel n'est **jamais vérifiée** et qui ne
+  contient aucune donnée financière est supprimé **30 jours** après sa
+  dernière modification.
 
 Les enveloppes et les transactions planifiées ne sont pas liées à une période
 et ne sont pas supprimées automatiquement ; elles sont retirées avec le compte

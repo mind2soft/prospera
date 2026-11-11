@@ -80,6 +80,8 @@ export function useCurrentProfile() {
         isPending: profilesQuery.isPending,
         isError: profilesQuery.isError,
         isLoading: profilesQuery.isLoading,
+        isFetching: profilesQuery.isFetching,
+        refetch: profilesQuery.refetch,
         profileId: computed(() => selectedId.value),
         currentProfile,
         select,

@@ -30,7 +30,8 @@
             "description": "Update the appearance settings for your account",
             "light": "Light",
             "dark": "Dark",
-            "system": "System"
+            "system": "System",
+            "theme": "Theme"
         },
         "notifications": {
             "title": "Notification settings",
@@ -47,6 +48,7 @@
             "envelope_limit_exceededDescription": "Spending for an envelope exceeds its allocation on the month's published budget.",
             "profile_invite": "Profile invitations",
             "profile_inviteDescription": "Someone shares a financial profile with you (invitations you send are always delivered).",
+            "comingSoon": "Coming soon",
             "allOff": "All notifications are off — turn on “Enable email notifications” to receive any.",
             "saveFailed": "Could not save your notification settings."
         },
@@ -59,13 +61,11 @@
             "default": "Default",
             "rename": "Rename profile",
             "switchTo": "Switch to",
-            "setDefault": "Set as default",
             "members": "Members",
             "you": "(you)",
             "joined": "joined {date}",
             "owner": "Owner",
             "collaborator": "Collaborator",
-            "removeMember": "Remove member",
             "leave": "Leave",
             "leaveProfile": "Leave profile",
             "inviteSomeone": "Invite someone",
@@ -73,8 +73,6 @@
             "invite": "Invite",
             "inviteNote": "The invite link expires after 48 hours and only works for this email address.",
             "expires": "Expires {date}",
-            "copyInviteLink": "Copy invite link",
-            "revokeInvite": "Revoke invite",
             "transferOwnership": "Transfer ownership",
             "chooseCollaborator": "Choose a collaborator",
             "transfer": "Transfer",
@@ -102,7 +100,20 @@
             "inviteCreatedToast": "Invite created — copy the link to share it.",
             "copyFailedToast": "Could not copy the link.",
             "inviteRevokedToast": "Invite revoked.",
-            "somethingWentWrong": "Something went wrong."
+            "somethingWentWrong": "Something went wrong.",
+            "renameNamed": "Rename {name}",
+            "setDefaultNamed": "Set {name} as default",
+            "copyInviteLinkFor": "Copy invite link for {email}",
+            "revokeInviteFor": "Revoke invite for {email}",
+            "linkCopiedToast": "Invite link copied.",
+            "loadError": "Your profiles could not be loaded.",
+            "membersLoadError": "The members of this profile could not be loaded.",
+            "invitesLoadError": "The pending invites could not be loaded.",
+            "removeMemberNamed": "Remove member {name}",
+            "removeMember": "Remove member",
+            "copyInviteLink": "Copy invite link",
+            "revokeInvite": "Revoke invite",
+            "setDefault": "Set as default"
         },
         "security": {
             "title": "Security settings",
@@ -127,7 +138,12 @@
             "continueSetup": "Continue setup",
             "enable": "Enable 2FA",
             "enabledInfo": "You will be prompted for a secure, random pin during login, which you can retrieve from the TOTP-supported application on your phone.",
-            "disable": "Disable 2FA"
+            "disable": "Disable 2FA",
+            "errors": {
+                "qrCode": "The QR code could not be loaded.",
+                "setupKey": "The setup key could not be loaded.",
+                "recoveryCodes": "The recovery codes could not be loaded."
+            }
         },
         "twoFactorSetup": {
             "title": "Enable two-factor authentication",

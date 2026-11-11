@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { useElementSize } from '@vueuse/core';
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import WidgetCard from '@/components/dashboard/WidgetCard.vue';
+import { moveItem } from '@/lib/list';
 import type { DashboardWidgetConfig } from '@/types';
 
 const props = defineProps<{
@@ -52,10 +54,53 @@ const columns = computed(() => {
 const spanOf = (widget: DashboardWidgetConfig): number =>
     Math.min(widget.column_width, columns.value);
 
+const { t } = useI18n();
+
+/** Polite announcement of keyboard moves ("Moved to position 2 of 5"). */
+const announcement = ref('');
+
+const titleOf = (widget: DashboardWidgetConfig): string =>
+    widget.title ?? t(`dashboard.widget.defaultTitle.${widget.type}`);
+
+const onKeyboardMove = async (
+    widget: DashboardWidgetConfig,
+    move: 'earlier' | 'later' | 'first' | 'last',
+): Promise<void> => {
+    const ids = props.widgets.map((w) => w.id);
+    const from = ids.indexOf(widget.id);
+    const last = ids.length - 1;
+    const to = {
+        earlier: Math.max(0, from - 1),
+        later: Math.min(last, from + 1),
+        first: 0,
+        last,
+    }[move];
+
+    if (from === -1 || to === from) {
+        return;
+    }
+
+    emit('reorder', moveItem(ids, from, to));
+
+    announcement.value = t('dashboard.widget.moved', {
+        title: titleOf(widget),
+        position: to + 1,
+        count: ids.length,
+    });
+
+    // The card re-renders at its new place: keep focus on its handle.
+    await nextTick();
+    container.value
+        ?.querySelector<HTMLElement>(
+            `[data-widget-id="${widget.id}"] [data-reorder-handle]`,
+        )
+        ?.focus();
+};
+
 const draggingId = ref<number | null>(null);
 
 const onCardDragStart = (widget: DashboardWidgetConfig): void => {
-    draggingId.value = widget.id ?? null;
+    draggingId.value = widget.id;
 };
 
 const onCardDragEnd = (): void => {
@@ -69,7 +114,7 @@ const onCardDragOver = (
     const draggedId = draggingId.value;
     const targetId = target.id;
 
-    if (draggedId === null || targetId === null || draggedId === targetId) {
+    if (draggedId === null || draggedId === targetId) {
         return;
     }
 
@@ -117,11 +162,14 @@ const onCardDragOver = (
         return;
     }
 
-    const ids = props.widgets.map((w) => w.id ?? 0);
-    ids.splice(from, 1);
-    ids.splice(targetIndex, 0, draggedId);
-
-    emit('reorder', ids);
+    emit(
+        'reorder',
+        moveItem(
+            props.widgets.map((w) => w.id),
+            from,
+            targetIndex,
+        ),
+    );
 };
 </script>
 
@@ -137,6 +185,7 @@ const onCardDragOver = (
             v-for="widget in widgets"
             :key="widget.id"
             data-widget-card
+            :data-widget-id="widget.id"
             :class="widget.id === draggingId ? 'opacity-50' : ''"
             :style="{ gridColumn: `span ${spanOf(widget)}` }"
             @dragover="onCardDragOver($event, widget)"
@@ -146,6 +195,7 @@ const onCardDragOver = (
                 :widget="widget"
                 @drag-start="onCardDragStart(widget)"
                 @drag-end="onCardDragEnd"
+                @move="onKeyboardMove(widget, $event)"
                 @settings="emit('settings', widget)"
             >
                 <template #default>
@@ -154,4 +204,7 @@ const onCardDragOver = (
             </WidgetCard>
         </li>
     </ul>
+    <p class="sr-only" aria-live="polite" data-testid="reorder-announcement">
+        {{ announcement }}
+    </p>
 </template>

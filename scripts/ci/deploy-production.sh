@@ -191,6 +191,16 @@ settle_switch() {
     fi
 }
 
+# Long-lived queue workers keep the code of the release they started from:
+# ask them to exit after their current job, so they come back on the live
+# one (the scheduler's queue:work runs are short-lived and restart anyway).
+# Best effort: the release switch is already done.
+restart_queue() {
+    if ! (cd "$CURRENT_LINK" && php artisan queue:restart); then
+        printf 'Warning: "php artisan queue:restart" failed; restart the queue workers by hand\n' >&2
+    fi
+}
+
 restore_previous() {
     if [ -n "$PREVIOUS_TARGET" ]; then
         safe_symlink "$PREVIOUS_TARGET" "$PREVIOUS_LINK"
@@ -244,6 +254,7 @@ rollback_current() {
     else
         safe_symlink "$CURRENT_TARGET" "$CURRENT_LINK"
         restore_previous
+        restart_queue
         printf 'Deployment health check failed; reverted current release\n' >&2
     fi
 }
@@ -503,7 +514,11 @@ php artisan amounts:verify
 php artisan optimize:clear
 rm -rf public/storage
 php artisan storage:link
-php artisan config:cache
+# The cached configuration holds APP_KEY (it unwraps every amount key) and
+# the database and mail passwords, like the .env: owner-only from its
+# creation. PHP runs as the deploy account (it reads the 0600 .env).
+(umask 077 && php artisan config:cache)
+chmod 600 bootstrap/cache/config.php
 php artisan route:cache
 php artisan view:cache
 
@@ -514,6 +529,7 @@ if [ -n "$CURRENT_TARGET" ]; then
 fi
 
 safe_symlink "$RELEASE_DIR" "$CURRENT_LINK"
+restart_queue
 
 if [ "$WAS_DOWN" = 1 ]; then
     printf 'Maintenance mode was on before this deploy: left on and health check skipped — lift it ("php artisan up") once the live release is verified to match the schema, and PHP workers had time to see it (realpath_cache_ttl, see docs/encryption.md)\n' >&2

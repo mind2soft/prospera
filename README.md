@@ -29,7 +29,10 @@ the filing cabinet.
   (sanitized markdown per locale, with English fallback), linked from the
   landing footer, the sign-up/login pages and the user menu.
 - **Notification settings** — a master switch plus per-type toggles that
-  gate every system email at send time.
+  gate every system email at send time. Only profile-invitation emails exist
+  today; payment reminders, ledger expired, contributor transactions and
+  envelope limit exceeded are TODO (not yet implemented — their toggles are
+  shown disabled, "Coming soon").
 
 Design docs live in [`docs/`](docs/): [dashboard](docs/dashboard.md),
 [budget](docs/budget.md),
@@ -48,6 +51,7 @@ Design docs live in [`docs/`](docs/): [dashboard](docs/dashboard.md),
 | Frontend | Vue 3 + Inertia, Tailwind CSS v4                                |
 | UI       | shadcn-vue (reka-nova style)                                    |
 | Icons    | Iconify with Material Symbols (bundled offline, no CDN calls)   |
+| Fonts    | Geist and Neuton, self-hosted via Fontsource (no CDN calls)     |
 | Routing  | Laravel Wayfinder (Laravel routes → typed TypeScript functions) |
 | Auth     | Laravel Fortify (email verification, 2FA, passkeys)             |
 
@@ -131,10 +135,34 @@ Expired invites are pruned daily (`php artisan invites:prune`), the
 contact-form submission log is pruned daily (`php artisan contact:prune`,
 retention configurable via `CONTACT_LOG_RETENTION_DAYS`), amount encryption
 keys are rotated monthly (`php artisan amounts:rotate-keys --all`),
-retired keys pruned daily (`php artisan amounts:prune-keys`) and a daily
-`php artisan amounts:verify` re-checks that every amount still decrypts. In
-production, run the scheduler (`php artisan schedule:run` every minute via
-cron).
+retired keys pruned daily (`php artisan amounts:prune-keys`), a daily
+`php artisan amounts:verify` re-checks that every amount still decrypts, and
+unverified accounts left untouched that hold no data are deleted daily
+(`php artisan users:prune-unverified`, retention configurable via
+`UNVERIFIED_ACCOUNT_RETENTION_DAYS`, default 30 days — see
+[docs/shared-finances.md](docs/shared-finances.md)).
+
+Emails (profile invitations, contact messages) are queued on the `database`
+queue. In production there is no long-lived worker (shared hosting): the
+scheduler runs `php artisan queue:work --stop-when-empty --max-time=50` every
+minute, in the background and without overlapping, and failed jobs are pruned
+after 30 days (`queue:prune-failed --hours=720`). Mails retry 5 times with a
+backoff, then land in `failed_jobs` and the log (`php artisan queue:failed`,
+`php artisan queue:retry all`).
+
+**In production, the scheduler is mandatory** — without it no email is ever
+sent and no key rotates. Install this crontab entry for the deploy user once
+(it follows the `current` release link, so it survives deploys):
+
+```cron
+* * * * * cd /path/to/app/current && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Deploys and rollbacks run `php artisan queue:restart` after switching
+releases, so a long-lived worker — if a host runs one instead, e.g. under
+systemd or supervisor with `php artisan queue:work --tries=3 --max-time=3600`
+— never keeps serving the replaced release's code. Remove the scheduled
+`queue:work` from `routes/console.php` on such a host.
 
 ### Encryption at rest
 
@@ -172,7 +200,9 @@ Failing tests abort the release.
 Required production environment variables:
 
 - `MAIL_CONTACT_ADDRESS` — recipient of the contact-form submissions; the app
-  **fails fast at boot** without it (issue #17).
+  **fails fast at boot** without it (issue #17). Set it as a variable of the
+  GitHub `Production` environment: the deploy renders it into the `.env` and
+  refuses to deploy when it is missing or not a single email address.
 - `GITHUB_REPO_URL` — public repository shown on the landing page (defaults
   to the canonical repo; self-hosted deployments can point it elsewhere).
 - `CONTACT_LOG_RETENTION_DAYS` — retention of the contact-submission log

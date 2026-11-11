@@ -2,6 +2,7 @@
     "budget": {
         "title": "Budget",
         "description": "Planifiez où va votre argent avant qu'il ne parte.",
+        "currency": "Devise",
         "toast": {
             "failed": "Une erreur est survenue.",
             "accessUpdated": "Accès mis à jour.",
@@ -13,6 +14,8 @@
             "envelopeAdded": "Enveloppe ajoutée.",
             "envelopeRemoved": "Enveloppe retirée."
         },
+        "loadError": "Vos budgets n'ont pas pu être chargés.",
+        "detailLoadError": "Ce budget n'a pas pu être chargé.",
         "empty": {
             "title": "Créez votre premier budget",
             "description": "Commencez par un brouillon : choisissez votre devise, ajoutez vos enveloppes, puis publiez quand tout vous convient.",
@@ -24,25 +27,35 @@
             "expenses": "Dépenses",
             "segmentTitle": "{name} — {amount}"
         },
+        "label": {
+            "draft": "Nouveau budget (brouillon)"
+        },
         "selector": {
             "selectBudget": "Sélectionner un budget",
             "actions": "Actions du budget",
             "publish": "Publier",
             "newBudget": "Nouveau budget",
-            "share": "Partager"
+            "share": "Partager",
+            "delete": "Supprimer le budget"
         },
         "table": {
             "addEnvelope": "Ajouter une enveloppe",
             "envelope": "Enveloppe",
             "type": "Type",
             "amount": "Montant",
+            "amountFor": "Montant — {name}",
             "leftToSpend": "Reste à dépenser",
             "actions": "Actions",
-            "removeEnvelope": "Retirer l'enveloppe",
             "empty": "Aucune enveloppe assignée pour le moment.",
             "overspending": "Dépassement",
             "leftOver": "Excédent",
-            "variableNote": "Les montants variables sont des valeurs prévues — ajustez-les à tout moment avec une révision du budget."
+            "variableNote": "Les montants variables sont des valeurs prévues — ajustez-les à tout moment avec une révision du budget.",
+            "saving": "Enregistrement…",
+            "saved": "Modifications enregistrées",
+            "notSaved": "Une modification n’a pas pu être enregistrée.",
+            "invalidAmount": "Non enregistré : saisissez un montant entier d’au moins 1.",
+            "label": "Enveloppes du budget",
+            "removeEnvelopeFor": "Retirer {name} du budget"
         },
         "addEnvelope": {
             "title": "Ajouter une enveloppe",
@@ -73,13 +86,13 @@
         },
         "share": {
             "title": "Partager le budget",
-            "resource": "ce budget"
+            "resource": "ce budget",
+            "draftTransferNote": "Un brouillon de budget ne peut être confié qu’au propriétaire du profil. Publiez-le d’abord pour le transférer à quelqu’un d’autre."
         },
         "confirm": {
             "publishTitle": "Publier ce budget ?",
-            "publishDescription": "La publication valide ce budget pour le mois en cours et le passe en lecture seule. Cette action est irréversible.",
-            "publishDescriptionWithReplace": "La publication valide ce budget pour le mois en cours et le passe en lecture seule. Cette action est irréversible. Un budget déjà publié pour ce mois sera remplacé.",
-            "replaceWarning": "Un budget déjà publié pour ce mois sera remplacé.",
+            "publishDescription": "La publication valide ce budget pour {month} et le passe en lecture seule. Cette action est irréversible.",
+            "replaceWarning": "Le budget déjà publié pour {month} sera remplacé : il sera supprimé avec ses enveloppes et ses partages.",
             "deleteTitle": "Supprimer ce budget ?",
             "deleteDescription": "Cette action supprime définitivement le budget, ainsi que toutes ses assignations d'enveloppes et ses partages.",
             "publishButton": "Publier",

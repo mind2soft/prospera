@@ -69,7 +69,10 @@ defineOptions({
                     autocomplete="current-password"
                     :placeholder="$t('settings.security.currentPassword')"
                 />
-                <InputError :message="errors.current_password" />
+                <InputError
+                    for="current_password"
+                    :message="errors.current_password"
+                />
             </div>
 
             <div class="grid gap-2">
@@ -84,7 +87,7 @@ defineOptions({
                     :placeholder="$t('settings.security.newPassword')"
                     :passwordrules="props.passwordRules"
                 />
-                <InputError :message="errors.password" />
+                <InputError for="password" :message="errors.password" />
             </div>
 
             <div class="grid gap-2">
@@ -99,7 +102,10 @@ defineOptions({
                     :placeholder="$t('settings.security.confirmPassword')"
                     :passwordrules="props.passwordRules"
                 />
-                <InputError :message="errors.password_confirmation" />
+                <InputError
+                    for="password_confirmation"
+                    :message="errors.password_confirmation"
+                />
             </div>
 
             <div class="flex items-center gap-4">

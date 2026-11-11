@@ -7,7 +7,10 @@ use App\Models\User;
 use App\Providers\AppServiceProvider;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Mockery;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -71,6 +74,65 @@ class AmountKeyBootCheckTest extends TestCase
     public function test_an_empty_database_leaves_nothing_to_verify(): void
     {
         $this->app['env'] = 'production';
+
+        $this->runBootCheck(asHttp: true);
+
+        $this->addToAssertionCount(1);
+    }
+
+    public function test_the_check_unwraps_a_single_key_whatever_the_number_of_profiles(): void
+    {
+        $owner = User::factory()->create();
+
+        for ($i = 0; $i < 50; $i++) {
+            FinancialProfile::createOwnedBy($owner, "Profile {$i}");
+        }
+
+        $this->app['env'] = 'production';
+
+        $encrypter = Mockery::mock(Crypt::getFacadeRoot());
+        $encrypter->shouldReceive('decryptString')->once()->passthru();
+        Crypt::swap($encrypter);
+
+        $queries = 0;
+        DB::listen(function () use (&$queries): void {
+            $queries++;
+        });
+
+        $this->runBootCheck(asHttp: true);
+
+        $this->assertSame(1, $queries);
+    }
+
+    public function test_maintenance_mode_skips_the_check(): void
+    {
+        FinancialProfile::createOwnedBy(User::factory()->create(), 'Family');
+        $this->rotateAppKey();
+        $this->app['env'] = 'production';
+
+        $this->app->maintenanceMode()->activate([]);
+
+        try {
+            $queries = 0;
+            DB::listen(function () use (&$queries): void {
+                $queries++;
+            });
+
+            $this->runBootCheck(asHttp: true);
+
+            $this->assertSame(0, $queries);
+        } finally {
+            $this->app->maintenanceMode()->deactivate();
+        }
+    }
+
+    public function test_an_unreadable_database_skips_the_check(): void
+    {
+        $this->app['env'] = 'production';
+
+        // Stand-in for a database that is down, locked or not migrated yet:
+        // the request must reach its own error handling instead.
+        Schema::drop('financial_profile_keys');
 
         $this->runBootCheck(asHttp: true);
 

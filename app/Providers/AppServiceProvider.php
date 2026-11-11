@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use RuntimeException;
+use Throwable;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -45,9 +46,17 @@ class AppServiceProvider extends ServiceProvider
      */
     protected function configureEvents(): void
     {
+        // The account is already verified when this runs: a failure must not
+        // turn the verification into a 500. It is reported and the
+        // EnsureAccountHasProfile middleware completes the grant on the next
+        // authenticated request (the post-verification redirect).
         Event::listen(Verified::class, function (Verified $event): void {
             if ($event->user instanceof User) {
-                FinancialProfileInvite::completePendingFor($event->user);
+                try {
+                    FinancialProfileInvite::completePendingFor($event->user);
+                } catch (Throwable $exception) {
+                    report($exception);
+                }
             }
         });
 
@@ -110,7 +119,12 @@ class AppServiceProvider extends ServiceProvider
 
     protected function shouldVerifyAmountsAtBoot(): bool
     {
-        return $this->isRealDeployment() && ! $this->runsInConsole();
+        // In maintenance mode the request only renders the 503 page: the
+        // check must not stand in its way (e.g. during a deploy's
+        // migrations, or with the database down).
+        return $this->isRealDeployment()
+            && ! $this->runsInConsole()
+            && ! $this->app->isDownForMaintenance();
     }
 
     protected function runsInConsole(): bool

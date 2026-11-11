@@ -5,7 +5,20 @@ set -eu
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 . "$SCRIPT_DIR/common.sh"
 
-require_env APP_KEY APP_URL DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD
+require_env APP_KEY APP_URL DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD MAIL_HOST MAIL_PORT MAIL_USERNAME MAIL_PASSWORD MAIL_CONTACT_ADDRESS
+
+# The app refuses to boot in production without a contact-form recipient
+# (AppServiceProvider): one plain address, nothing that could break the .env.
+case "$MAIL_CONTACT_ADDRESS" in
+    *[!A-Za-z0-9._%+@-]*|*@*@*) _contact_ok=0 ;;
+    ?*@?*) _contact_ok=1 ;;
+    *) _contact_ok=0 ;;
+esac
+
+if [ "$_contact_ok" = 0 ]; then
+    printf 'Invalid MAIL_CONTACT_ADDRESS (one email address, A-Za-z0-9._%%+- and @ only): %s\n' "$MAIL_CONTACT_ADDRESS" >&2
+    exit 1
+fi
 
 APP_NAME=${APP_NAME:-Prospera}
 # Keys are base64: whitespace (e.g. "key1, key2") would break the .env.
@@ -84,6 +97,7 @@ MAIL_USERNAME=$MAIL_USERNAME
 MAIL_PASSWORD=$MAIL_PASSWORD
 MAIL_FROM_ADDRESS=$MAIL_FROM_ADDRESS
 MAIL_FROM_NAME="$MAIL_FROM_NAME"
+MAIL_CONTACT_ADDRESS=$MAIL_CONTACT_ADDRESS
 
 VITE_APP_NAME="$VITE_APP_NAME"
 EOF

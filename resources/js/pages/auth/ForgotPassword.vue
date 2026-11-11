@@ -26,7 +26,7 @@ defineProps<{
 
     <div
         v-if="status"
-        class="mb-4 text-center text-sm font-medium text-green-600"
+        class="mb-4 text-center text-sm font-medium text-success"
     >
         {{ status }}
     </div>
@@ -43,7 +43,7 @@ defineProps<{
                     v-focus
                     placeholder="email@example.com"
                 />
-                <InputError :message="errors.email" />
+                <InputError for="email" :message="errors.email" />
             </div>
 
             <div class="my-6 flex items-center justify-start">

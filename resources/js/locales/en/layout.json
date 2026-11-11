@@ -6,30 +6,24 @@
             "ledger": "Ledger",
             "envelopes": "Envelopes"
         },
-        "header": {
-            "navigationMenu": "Navigation menu",
-            "repository": "Repository",
-            "documentation": "Documentation"
-        },
         "user": {
             "profiles": "Profiles",
             "owned": "Owned",
             "shared": "Shared",
-            "default": "Default",
-            "setDefault": "Set as default",
-            "defaultToast": "“{name}” is now your default profile.",
+            "defaultSuffix": "(default)",
             "manageProfiles": "Manage profiles",
             "settings": "Settings",
             "contact": "Contact us",
             "logOut": "Log out"
         },
-        "dashboard": {
-            "title": "Dashboard",
-            "welcome": "Welcome to Prospera"
-        },
         "loading": {
             "budgets": "Loading budgets",
             "ledgers": "Loading ledgers"
+        },
+        "notifications": "Notifications",
+        "sidebar": {
+            "title": "Navigation",
+            "description": "The app's main navigation."
         }
     }
 }

@@ -2,25 +2,29 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ManagesShares;
 use App\Http\Requests\EnvelopeRequest;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
-use App\Models\Transaction;
 use App\Models\User;
-use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use LogicException;
 
 class EnvelopeController extends Controller
 {
+    /** @use ManagesShares<Envelope> */
+    use ManagesShares;
+
     public function __construct(
-        private readonly ResourcePermissions $permissions,
         private readonly ResourcePermissionService $permissionService,
     ) {}
 
@@ -52,28 +56,40 @@ class EnvelopeController extends Controller
 
     public function update(EnvelopeRequest $request, Envelope $envelope): RedirectResponse
     {
-        $this->authorizeOwner($request, $envelope);
+        $validated = $request->validated();
 
-        $envelope->update($request->validated());
+        DB::transaction(function () use ($envelope, $validated): void {
+            // Stored amounts are signed from the direction at write time:
+            // flipping it under existing amounts would mix both conventions.
+            // The row lock serializes with writers reading the direction
+            // under a shared lock (transactions, budget assignments).
+            $locked = Envelope::query()->whereKey($envelope->id)->lockForUpdate()->firstOrFail();
+
+            if ($validated['type'] !== $locked->type && $locked->isReferenced()) {
+                throw ValidationException::withMessages([
+                    'type' => __('This envelope is already used by a budget or transactions: its direction cannot be changed.'),
+                ]);
+            }
+
+            $envelope->update($validated);
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Envelope updated.')]);
 
         return to_route('envelopes');
     }
 
-    public function destroy(Request $request, Envelope $envelope): RedirectResponse
+    public function destroy(Envelope $envelope): RedirectResponse
     {
-        $this->authorizeOwner($request, $envelope);
+        $this->authorize('delete', $envelope);
 
-        if ($envelope->budgetEnvelopes()->exists()) {
-            throw ValidationException::withMessages([
-                'envelope' => __('This envelope is used in a budget and cannot be deleted.'),
-            ]);
-        }
+        $referencedBy = $envelope->referencedBy();
 
-        if ($envelope->transactions()->exists()) {
+        if ($referencedBy !== null) {
             throw ValidationException::withMessages([
-                'envelope' => __('This envelope has transactions and cannot be deleted.'),
+                'envelope' => $referencedBy === 'budget'
+                    ? __('This envelope is used in a budget and cannot be deleted.')
+                    : __('This envelope has transactions and cannot be deleted.'),
             ]);
         }
 
@@ -84,161 +100,86 @@ class EnvelopeController extends Controller
         return to_route('envelopes');
     }
 
-    /**
-     * Computed transaction totals for the envelope (optional
-     * from_date/to_date filters). 403 without envelope-viewer+ permission —
-     * raw amounts never reach clients lacking permission.
-     */
-    public function totals(Request $request, Envelope $envelope): JsonResponse
+    protected function sharedResource(Model $resource): Envelope
     {
-        $this->authorizeViewer($request, $envelope);
-
-        $validated = $request->validate([
-            'from_date' => ['nullable', 'date'],
-            'to_date' => ['nullable', 'date', 'after_or_equal:from_date'],
-        ]);
-
-        $query = Transaction::query()->where('envelope_id', $envelope->id);
-
-        if (! empty($validated['from_date'])) {
-            $query->where('event_at', '>=', Carbon::parse($validated['from_date'])->startOfDay());
+        if (! $resource instanceof Envelope) {
+            throw new LogicException('The share routes of this controller must bind an envelope.');
         }
 
-        if (! empty($validated['to_date'])) {
-            $query->where('event_at', '<=', Carbon::parse($validated['to_date'])->endOfDay());
-        }
-
-        // Amounts are encrypted at rest: the total is computed in PHP
-        // (docs/encryption.md).
-        $transactions = $query->get(['id', 'ledger_id', 'envelope_id', 'event_at', 'amount']);
-
-        return response()->json([
-            'totals' => [
-                'envelope_id' => $envelope->id,
-                'direction' => $envelope->type,
-                'total' => (int) $transactions->sum(fn (Transaction $transaction): int => $transaction->amount),
-                'count' => $transactions->count(),
-            ],
-        ]);
+        return $resource;
     }
 
     /**
-     * Transactions referencing the envelope; 403 without envelope-viewer+
-     * permission.
+     * @return array{string, string}
      */
-    public function apiTransactions(Request $request, Envelope $envelope): JsonResponse
+    protected function shareTable(): array
     {
-        $this->authorizeViewer($request, $envelope);
-
-        $transactions = $envelope->transactions()
-            ->with('user')
-            ->orderBy('event_at')
-            ->orderBy('id')
-            ->get()
-            ->map(fn (Transaction $transaction) => $this->serializeTransaction($transaction))
-            ->values();
-
-        return response()->json(['transactions' => $transactions]);
+        return ['envelope_permissions', 'envelope_id'];
     }
 
     /**
-     * List the envelope's permission rows with the owner row first (owner
-     * and profile co-members only).
+     * Owner and profile co-members only.
      */
-    public function permissionsIndex(Request $request, Envelope $envelope): JsonResponse
+    protected function viewSharesAbility(): string
     {
-        $this->authorizeVisibleToOwnerCircle($request, $envelope);
-
-        return response()->json([
-            'shares' => $this->permissionService->explicitPermissions('envelope_permissions', 'envelope_id', $envelope->id, $envelope->user),
-        ]);
+        return 'viewShares';
     }
 
     /**
-     * Assign a permission to a profile member of the owner ("owner" is
-     * rejected — use transfer-ownership).
+     * The envelope's permission rows with the owner row first. Envelope
+     * grants span all the owner's profiles: a co-member only sees the rows
+     * of people sharing a profile with them — never grantees of the
+     * owner's other profiles (docs/envelope.md).
+     *
+     * @param  Envelope  $resource
+     * @return array<int, array<string, int|string|bool>>
      */
-    public function addPermission(Request $request, Envelope $envelope): JsonResponse
+    protected function shareList(Model $resource, User $caller): array
     {
-        $this->authorizeOwner($request, $envelope);
+        [$table, $column] = $this->shareTable();
 
-        $validated = $this->permissionService->validateOwnedPermission($request, $envelope->user);
-
-        $this->permissionService->createPermission('envelope_permissions', 'envelope_id', $envelope->id, $validated['user_id'], $validated['permission'], 'envelope');
-
-        return response()->json(status: 201);
+        return $this->permissionService->explicitPermissions(
+            $table,
+            $column,
+            $resource->id,
+            $resource->user,
+            $resource->isOwner($caller) ? null : FinancialProfile::coMemberIdsOf($caller->id),
+        );
     }
 
     /**
-     * Change a member's permission ("owner" is rejected — use
-     * transfer-ownership).
+     * A member of the owner's profiles.
+     *
+     * @param  Envelope  $resource
      */
-    public function updatePermission(Request $request, Envelope $envelope, int $userId): JsonResponse
+    protected function shareTarget(Model $resource, int $userId): User
     {
-        $this->authorizeOwner($request, $envelope);
-
-        $permission = $this->permissionService->validatePermission($request);
-
-        $this->permissionService->updatePermission('envelope_permissions', 'envelope_id', $envelope->id, $userId, $permission);
-
-        return response()->json([
-            'shares' => $this->permissionService->explicitPermissions('envelope_permissions', 'envelope_id', $envelope->id, $envelope->user),
-        ]);
+        return $this->permissionService->ownerCoMember($resource->user, $userId);
     }
 
-    /**
-     * Revoke a share (owner only).
-     */
-    public function removePermission(Request $request, Envelope $envelope, int $userId): JsonResponse
+    protected function alreadySharedMessage(): string
     {
-        $this->authorizeOwner($request, $envelope);
-
-        $this->permissionService->deletePermission('envelope_permissions', 'envelope_id', $envelope->id, $userId);
-
-        return response()->json(status: 204);
+        return __('This envelope is already shared with this user.');
     }
 
     /**
      * Transfer ownership to a member of the owner's profiles; the previous
      * owner becomes a contributor.
+     *
+     * @param  Envelope  $resource
+     * @return array<string, mixed>
      */
-    public function transferOwnership(Request $request, Envelope $envelope): JsonResponse
+    protected function transferOwnershipOf(Model $resource, User $caller, int $userId): array
     {
-        $this->authorizeOwner($request, $envelope);
-
-        $target = $this->permissionService->validateOwnedTransferTarget($request, $envelope->user);
-
-        $envelope->transferOwnershipTo($target);
-
-        return response()->json([
-            'envelope' => $this->serializeEnvelope($envelope->refresh(), $request->user()),
-        ]);
-    }
-
-    /**
-     * Shares are visible to the owner and to profile co-members of the
-     * owner.
-     */
-    private function authorizeVisibleToOwnerCircle(Request $request, Envelope $envelope): void
-    {
-        $user = $request->user();
-
-        if ($envelope->isOwner($user)) {
-            return;
-        }
-
-        abort_unless(FinancialProfile::membersShareAProfile($envelope->user, $user), 404);
-    }
-
-    /**
-     * Transaction data requires envelope-viewer+ permission (403 otherwise).
-     */
-    private function authorizeViewer(Request $request, Envelope $envelope): void
-    {
-        abort_unless(
-            $this->permissions->isAtLeast($envelope->permissionFor($request->user()), ResourcePermissions::VIEWER),
-            403,
+        $target = $this->permissionService->ensureNotOwner(
+            $this->permissionService->ownerCoMember($resource->user, $userId),
+            $resource->user,
+            __('This user already owns this envelope.'),
         );
+
+        $resource->transferOwnershipTo($target);
+
+        return ['envelope' => $this->serializeEnvelope($resource->refresh(), $caller)];
     }
 
     /**
@@ -249,59 +190,31 @@ class EnvelopeController extends Controller
      */
     private function visibleEnvelopes(User $user): array
     {
+        $coMemberIds = FinancialProfile::coMemberIdsOf($user->id);
+
         return Envelope::query()
             ->visibleTo($user)
             ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
             ->orderBy('type')
             ->orderBy('name')
             ->get()
-            ->map(fn (Envelope $envelope) => $this->serializeEnvelope($envelope, $user))
+            ->map(fn (Envelope $envelope) => $this->serializeEnvelope($envelope, $user, $coMemberIds))
             ->values()
             ->all();
     }
 
     /**
-     * Envelope management is owner-only; anything else is invisible (404).
-     */
-    private function authorizeOwner(Request $request, Envelope $envelope): void
-    {
-        abort_unless($envelope->isOwner($request->user()), 404);
-    }
-
-    /**
+     * @param  Collection<int, int>|null  $coMemberIds
      * @return array<string, string|int>
      */
-    private function serializeEnvelope(Envelope $envelope, User $user): array
+    private function serializeEnvelope(Envelope $envelope, User $user, ?Collection $coMemberIds = null): array
     {
         return [
             'id' => $envelope->id,
             'name' => $envelope->name,
             'direction' => $envelope->type,
             'color' => $envelope->color,
-            'permission' => $envelope->permissionFor($user),
-        ];
-    }
-
-    /**
-     * @return array<string, string|int|null|array<string, string|int|null>>
-     */
-    private function serializeTransaction(Transaction $transaction): array
-    {
-        $transaction->loadMissing(['user']);
-
-        return [
-            'id' => $transaction->id,
-            'ledger_id' => $transaction->ledger_id,
-            'envelope_id' => $transaction->envelope_id,
-            'amount' => $transaction->amount,
-            'event_at' => $transaction->event_at->toDateString(),
-            'created_at' => $transaction->created_at->toISOString(),
-            'user' => [
-                'id' => $transaction->user_id,
-                'name' => $transaction->user_id === null
-                    ? __('Former member')
-                    : $transaction->user->name,
-            ],
+            'permission' => $envelope->permissionFor($user, $coMemberIds),
         ];
     }
 }

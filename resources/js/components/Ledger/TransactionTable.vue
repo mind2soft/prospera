@@ -1,6 +1,8 @@
+<!-- biome-ignore-all lint/a11y/noNoninteractiveTabindex: the table scroll region must be keyboard-focusable to scroll (WCAG 2.1.1) -->
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, useTemplateRef } from 'vue';
 import Currency from '@/components/Currency.vue';
+import EnvelopeChip from '@/components/EnvelopeChip.vue';
 import Icon from '@/components/Icon.vue';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -12,6 +14,7 @@ import {
 } from '@/components/ui/tooltip';
 import { getInitials } from '@/composables/useInitials';
 import { useLocale } from '@/composables/useLocale';
+import { formatCalendarDate } from '@/lib/calendar';
 import type { Transaction } from '@/types';
 
 const { locale } = useLocale();
@@ -29,9 +32,16 @@ const props = defineProps<{
     /** True while the ledger is open (deletion is impossible when closed). */
     open?: boolean;
     pendingId?: number | null;
+    /** The month's transactions are still loading (no data yet). */
+    loading?: boolean;
+    /** The month's transactions failed to load — never shown as "no transactions". */
+    error?: boolean;
 }>();
 
-const emit = defineEmits<(e: 'remove', transactionId: number) => void>();
+const emit = defineEmits<{
+    remove: [transactionId: number];
+    retry: [];
+}>();
 
 const canDelete = computed(
     () => (props.open ?? true) && props.permission !== null,
@@ -64,13 +74,11 @@ const remainingFor = (transaction: Transaction): number | null => {
     return transaction.direction === 'expense' ? -remaining : remaining;
 };
 
-const dayLabel = (eventAt: string): string => {
-    const [year, month, day] = eventAt.split('-').map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString(locale.value, {
+const dayLabel = (eventAt: string): string =>
+    formatCalendarDate(eventAt, locale.value, {
         month: 'short',
         day: 'numeric',
     });
-};
 
 const stampLabel = (createdAt: string): string =>
     new Date(createdAt).toLocaleString(locale.value, {
@@ -80,11 +88,26 @@ const stampLabel = (createdAt: string): string =>
         hour: 'numeric',
         minute: '2-digit',
     });
+
+const region = useTemplateRef<HTMLElement>('region');
+
+/**
+ * Focuses the table region — the stable target once a row's delete action
+ * disappears with its row (focus would otherwise drop to the page body).
+ */
+defineExpose({ focus: () => region.value?.focus() });
 </script>
 
 <template>
-    <div class="overflow-hidden rounded-lg border">
-        <table class="w-full text-sm">
+    <!-- A labelled, focusable scroll region: on narrow screens the columns
+         (including the delete action) scroll instead of being clipped. -->
+    <section
+        ref="region"
+        class="overflow-x-auto rounded-lg border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        :aria-label="$t('ledger.table.label')"
+        tabindex="0"
+    >
+        <table class="w-full min-w-xl text-sm">
             <thead>
                 <tr
                     class="border-b bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase"
@@ -121,30 +144,20 @@ const stampLabel = (createdAt: string): string =>
                         {{ dayLabel(transaction.event_at) }}
                     </td>
                     <td class="px-4 py-2.5">
-                        <span
-                            class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
-                            :style="{
-                                backgroundColor: `${transaction.color}22`,
-                                color: transaction.color,
-                            }"
-                        >
-                            <Icon
-                                :name="
-                                    transaction.direction === 'revenue'
-                                        ? 'north'
-                                        : 'south'
-                                "
-                                class="size-3"
-                                aria-hidden="true"
-                            />
-                            {{ transaction.name }}
-                        </span>
+                        <EnvelopeChip
+                            :name="transaction.name"
+                            :color="transaction.color"
+                            :direction="transaction.direction"
+                        />
                     </td>
                     <td class="px-4 py-2.5 text-right">
                         <span
                             v-if="transaction.masked"
                             class="text-muted-foreground"
-                            >—</span
+                            ><span aria-hidden="true">—</span
+                            ><span class="sr-only">{{
+                                $t('ledger.table.amountHidden')
+                            }}</span></span
                         >
                         <Currency
                             v-else
@@ -167,9 +180,19 @@ const stampLabel = (createdAt: string): string =>
                     <td class="px-4 py-2.5">
                         <TooltipProvider :delay-duration="0">
                             <Tooltip v-if="transaction.user.id !== null">
-                                <TooltipTrigger as-child>
-                                    <Avatar class="size-7">
-                                        <AvatarFallback class="text-[10px]">
+                                <TooltipTrigger
+                                    class="rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+                                    :aria-label="
+                                        $t('ledger.table.recordedBy', {
+                                            name: transaction.user.name,
+                                            date: stampLabel(
+                                                transaction.created_at,
+                                            ),
+                                        })
+                                    "
+                                >
+                                    <Avatar class="size-7" aria-hidden="true">
+                                        <AvatarFallback class="text-xs">
                                             {{
                                                 getInitials(
                                                     transaction.user.name,
@@ -202,8 +225,13 @@ const stampLabel = (createdAt: string): string =>
                             v-if="mayDelete(transaction)"
                             variant="ghost"
                             size="icon-sm"
-                            class="text-destructive hover:bg-destructive hover:text-destructive"
-                            :aria-label="$t('ledger.table.removeTransaction')"
+                            class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            :aria-label="
+                                $t('ledger.table.deleteTransactionFor', {
+                                    envelope: transaction.name,
+                                    date: dayLabel(transaction.event_at),
+                                })
+                            "
                             :disabled="pendingId === transaction.id"
                             @click="emit('remove', transaction.id)"
                         >
@@ -215,7 +243,35 @@ const stampLabel = (createdAt: string): string =>
                         </Button>
                     </td>
                 </tr>
-                <tr v-if="transactions.length === 0">
+                <tr v-if="error">
+                    <td
+                        :colspan="canDelete ? 6 : 5"
+                        class="px-4 py-8 text-center"
+                        role="alert"
+                    >
+                        <span class="block text-muted-foreground">
+                            {{ $t('ledger.table.error') }}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            class="mt-3"
+                            @click="emit('retry')"
+                        >
+                            {{ $t('common.actions.retry') }}
+                        </Button>
+                    </td>
+                </tr>
+                <tr v-else-if="loading">
+                    <td
+                        :colspan="canDelete ? 6 : 5"
+                        class="px-4 py-8 text-center text-muted-foreground"
+                        role="status"
+                    >
+                        {{ $t('ledger.table.loading') }}
+                    </td>
+                </tr>
+                <tr v-else-if="transactions.length === 0">
                     <td
                         :colspan="canDelete ? 6 : 5"
                         class="px-4 py-8 text-center text-muted-foreground"
@@ -225,5 +281,5 @@ const stampLabel = (createdAt: string): string =>
                 </tr>
             </tbody>
         </table>
-    </div>
+    </section>
 </template>

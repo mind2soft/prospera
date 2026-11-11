@@ -160,8 +160,14 @@ export type DashboardWidget = {
     order: number;
 };
 
-/** A widget configuration being edited / saved; `id` present for saved widgets (in-place updates). */
-export type DashboardWidgetConfig = Omit<DashboardWidget, 'id' | 'order'> & {
+/**
+ * A widget configuration being edited. Saved widgets carry their server id;
+ * widgets added but not saved yet carry a negative, client-side temporary id.
+ */
+export type DashboardWidgetConfig = Omit<DashboardWidget, 'order'>;
+
+/** A widget in the full-layout save payload: `id` only for saved widgets (in-place updates). */
+export type DashboardWidgetPayload = Omit<DashboardWidgetConfig, 'id'> & {
     id?: number;
 };
 

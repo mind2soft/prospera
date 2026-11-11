@@ -145,7 +145,7 @@ account is deleted, the ledger auto-transfers to the profile owner (see
 ## API
 
 All endpoints require authentication (session + CSRF). The frontend consumes
-them via **vue-query** — this is an application-wide requirement for server
+them via **TanStack Query** (`@tanstack/vue-query`) — this is an application-wide requirement for server
 data fetching.
 
 | Method   | Path                                       | Description                                                                                                                                                                                                                                    |
@@ -155,7 +155,7 @@ data fetching.
 | `DELETE` | `/api/ledgers/{ledger}`                    | Delete the ledger **and all of its transactions** (owner only)                                                                                                                                                                                 |
 | `POST`   | `/api/ledgers/{ledger}/close`              | Close the ledger (read-only; owner only)                                                                                                                                                                                                       |
 | `POST`   | `/api/ledgers/{ledger}/reopen`             | Re-open a closed ledger (owner only)                                                                                                                                                                                                           |
-| `GET`    | `/api/ledgers/{ledger}/transactions`       | Transactions filtered by `from_date` and `to_date` (query params). Rows on envelopes the requester lacks envelope-`viewer`+ permission on are **masked server-side**: `amount: null` + `masked: true` (metadata only — name, color, direction) |
+| `GET`    | `/api/ledgers/{ledger}/transactions`       | Transactions filtered by `from_date` and `to_date` (query params; at most 366 days, `422` on `to_date` otherwise). Rows on envelopes the requester lacks envelope-`viewer`+ permission on are **masked server-side**: `amount: null` + `masked: true` (metadata only — name, color, direction) |
 | `POST`   | `/api/ledgers/{ledger}/transactions`       | Add a transaction (`envelope_id`, `amount`, `event_at`) — ledger owner or contributor, who must also be contributor+ on the target envelope                                                                                                    |
 | `DELETE` | `/api/transactions/{transaction}`          | Delete a transaction (open ledgers only; ledger owner: any transaction; ledger contributor: own entries only; viewer: none)                                                                                                                    |
 | `GET`    | `/api/ledgers/{ledger}/shares`             | List shares — profile members with their effective permission and an `explicit` flag (`false` = implicit viewer, not revocable)                                                                                                               |

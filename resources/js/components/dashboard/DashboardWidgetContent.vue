@@ -27,7 +27,7 @@ const props = defineProps<{
  * ids); freshly added ones render as skeletons until the autosave lands.
  */
 const { data, isPending, isError, refetch } = useWidgetData(
-    computed(() => ((props.widget.id ?? 0) > 0 ? props.widget : null)),
+    computed(() => (props.widget.id > 0 ? props.widget : null)),
 );
 </script>
 

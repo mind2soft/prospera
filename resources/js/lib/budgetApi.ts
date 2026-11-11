@@ -1,4 +1,9 @@
 import { api, setResourceShare } from '@/lib/api';
+import { browserTimeZone } from '@/lib/calendar';
+import * as budgets from '@/routes/api/budgets';
+import * as budgetEnvelopes from '@/routes/api/budgets/envelopes';
+import * as budgetShares from '@/routes/api/budgets/shares';
+import * as envelopes from '@/routes/api/envelopes';
 import type { Budget, BudgetDetail, BudgetEnvelope } from '@/types';
 
 export type EnvelopeOption = {
@@ -22,23 +27,29 @@ export type CreateBudgetInput = {
 
 export const budgetApi = {
     list: (profileId: number): Promise<{ budgets: Budget[] }> =>
-        api(`/api/budgets?profile_id=${profileId}`),
+        api(budgets.index({ query: { profile_id: profileId } })),
 
     get: (id: number): Promise<{ budget: BudgetDetail }> =>
-        api(`/api/budgets/${id}`),
+        api(budgets.show(id)),
 
     create: (input: CreateBudgetInput): Promise<{ budget: BudgetDetail }> =>
-        api('/api/budgets', { method: 'POST', body: input }),
+        api(budgets.store(), { body: input }),
 
-    publish: (id: number): Promise<{ budget: BudgetDetail }> =>
-        api(`/api/budgets/${id}/publish`, { method: 'POST' }),
+    /**
+     * Publishes for `month` (`Y-m`) — the month the confirmation named; the
+     * server refuses if it is not the current month in `timezone`.
+     */
+    publish: (
+        id: number,
+        month: string,
+        timezone: string | undefined = browserTimeZone(),
+    ): Promise<{ budget: BudgetDetail }> =>
+        api(budgets.publish(id), { body: { month, timezone } }),
 
-    destroy: (id: number): Promise<void> =>
-        api(`/api/budgets/${id}`, { method: 'DELETE' }),
+    destroy: (id: number): Promise<void> => api(budgets.destroy(id)),
 
     clone: (id: number, currency?: string): Promise<{ budget: BudgetDetail }> =>
-        api(`/api/budgets/${id}/clone`, {
-            method: 'POST',
+        api(budgets.clone(id), {
             body: currency ? { currency } : undefined,
         }),
 
@@ -46,38 +57,41 @@ export const budgetApi = {
         id: number,
         input: AddEnvelopeInput,
     ): Promise<{ envelope: BudgetEnvelope }> =>
-        api(`/api/budgets/${id}/envelopes`, { method: 'POST', body: input }),
+        api(budgetEnvelopes.store(id), { body: input }),
 
     updateEnvelope: (
         id: number,
         envelopeId: number,
         input: { amount: number },
     ): Promise<{ envelope: BudgetEnvelope }> =>
-        api(`/api/budgets/${id}/envelopes/${envelopeId}`, {
-            method: 'PATCH',
+        // keepalive: the budget page flushes its amount edits while unloading.
+        api(budgetEnvelopes.update({ budget: id, envelopeId }), {
             body: input,
+            keepalive: true,
         }),
 
     removeEnvelope: (id: number, envelopeId: number): Promise<void> =>
-        api(`/api/budgets/${id}/envelopes/${envelopeId}`, {
-            method: 'DELETE',
-        }),
+        api(budgetEnvelopes.destroy({ budget: id, envelopeId })),
 
     setShare: (id: number, userId: number, permission: string): Promise<void> =>
-        setResourceShare(`/api/budgets/${id}/shares`, userId, permission),
+        setResourceShare(
+            {
+                update: budgetShares.update({ budget: id, userId }),
+                store: budgetShares.store(id),
+            },
+            userId,
+            permission,
+        ),
 
     removeShare: (id: number, userId: number): Promise<void> =>
-        api(`/api/budgets/${id}/shares/${userId}`, { method: 'DELETE' }),
+        api(budgetShares.destroy({ budget: id, userId })),
 
     transferOwnership: (
         id: number,
         userId: number,
     ): Promise<{ budget: Budget }> =>
-        api(`/api/budgets/${id}/transfer-ownership`, {
-            method: 'POST',
-            body: { user_id: userId },
-        }),
+        api(budgets.transferOwnership(id), { body: { user_id: userId } }),
 
     envelopeOptions: (): Promise<{ envelopes: EnvelopeOption[] }> =>
-        api('/api/envelopes'),
+        api(envelopes.index()),
 };

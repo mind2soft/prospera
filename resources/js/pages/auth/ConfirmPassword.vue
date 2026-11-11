@@ -51,7 +51,7 @@ defineOptions({
                     autofocus
                 />
 
-                <InputError :message="errors.password" />
+                <InputError for="password" :message="errors.password" />
             </div>
 
             <div class="flex items-center">

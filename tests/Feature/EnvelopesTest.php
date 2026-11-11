@@ -2,6 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Budget;
+use App\Models\FinancialProfile;
+use App\Models\Ledger;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -129,6 +133,105 @@ class EnvelopesTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors(['type']);
+    }
+
+    public function test_direction_cannot_change_once_transactions_reference_the_envelope(): void
+    {
+        $user = User::factory()->create();
+        $profile = FinancialProfile::createOwnedBy($user, 'Home');
+        $envelope = $user->envelopes()->create(['name' => 'Food', 'type' => 'expense']);
+        $ledger = Ledger::create([
+            'profile_id' => $profile->id,
+            'name' => '2026',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+            'starting_balance' => 0,
+        ]);
+        $ledger->transactions()->create([
+            'user_id' => $user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -10,
+            'event_at' => '2026-03-03 00:00:00',
+        ]);
+
+        $this->actingAs($user)->put("/envelopes/{$envelope->id}", [
+            'name' => 'Food',
+            'type' => 'revenue',
+            'color' => '#0ea5e9',
+        ])->assertSessionHasErrors('type');
+
+        $this->assertDatabaseHas('envelopes', ['id' => $envelope->id, 'type' => 'expense', 'color' => '#6366f1']);
+        $this->assertSame(-10, Transaction::query()->sole()->amount);
+
+        // Other attributes stay editable.
+        $this->actingAs($user)->put("/envelopes/{$envelope->id}", [
+            'name' => 'Groceries',
+            'type' => 'expense',
+            'color' => '#0ea5e9',
+        ])->assertSessionHasNoErrors()->assertRedirect(route('envelopes'));
+
+        $this->assertDatabaseHas('envelopes', ['id' => $envelope->id, 'name' => 'Groceries', 'color' => '#0ea5e9']);
+    }
+
+    public function test_direction_cannot_change_once_a_budget_references_the_envelope(): void
+    {
+        $user = User::factory()->create();
+        $profile = FinancialProfile::createOwnedBy($user, 'Home');
+        $envelope = $user->envelopes()->create(['name' => 'Salary', 'type' => 'revenue']);
+        $budget = Budget::create([
+            'profile_id' => $profile->id,
+            'currency' => 'CAD',
+            'effective_year' => 0,
+            'effective_month' => 0,
+        ]);
+        $budget->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => 3000, 'type' => 'fixed']);
+
+        $this->actingAs($user)->put("/envelopes/{$envelope->id}", [
+            'name' => 'Salary',
+            'type' => 'expense',
+            'color' => '#6366f1',
+        ])->assertSessionHasErrors('type');
+
+        $this->assertDatabaseHas('envelopes', ['id' => $envelope->id, 'type' => 'revenue']);
+    }
+
+    public function test_deleting_a_referenced_envelope_names_what_references_it(): void
+    {
+        $user = User::factory()->create();
+        $profile = FinancialProfile::createOwnedBy($user, 'Home');
+        $budgeted = $user->envelopes()->create(['name' => 'Rent', 'type' => 'expense']);
+        $spent = $user->envelopes()->create(['name' => 'Food', 'type' => 'expense']);
+        Budget::create(['profile_id' => $profile->id, 'currency' => 'CAD', 'effective_year' => 0, 'effective_month' => 0])
+            ->envelopes()->create(['envelope_id' => $budgeted->id, 'amount' => -100, 'type' => 'fixed']);
+        Ledger::create([
+            'profile_id' => $profile->id,
+            'name' => '2026',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+            'starting_balance' => 0,
+        ])->transactions()->create(['user_id' => $user->id, 'envelope_id' => $spent->id, 'amount' => -10, 'event_at' => '2026-03-03 00:00:00']);
+
+        $this->actingAs($user)->delete("/envelopes/{$budgeted->id}")
+            ->assertSessionHasErrors(['envelope' => 'This envelope is used in a budget and cannot be deleted.']);
+        $this->actingAs($user)->delete("/envelopes/{$spent->id}")
+            ->assertSessionHasErrors(['envelope' => 'This envelope has transactions and cannot be deleted.']);
+
+        $this->assertModelExists($budgeted);
+        $this->assertModelExists($spent);
+    }
+
+    public function test_editing_is_authorized_before_the_payload_is_validated(): void
+    {
+        // CQ-R2-3: a non-owner gets a 404 (envelopes are invisible), not
+        // the validation errors of their payload.
+        $owner = User::factory()->create();
+        $envelope = $owner->envelopes()->create(['name' => 'Rent', 'type' => 'expense']);
+
+        $this->actingAs(User::factory()->create())->put("/envelopes/{$envelope->id}", ['name' => ''])
+            ->assertNotFound();
+
+        $this->actingAs($owner)->put("/envelopes/{$envelope->id}", ['name' => ''])
+            ->assertSessionHasErrors(['name', 'type', 'color']);
     }
 
     public function test_guests_are_redirected(): void

@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ContactRequest;
 use App\Mail\ContactMessage;
 use App\Models\ContactSubmission;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -13,13 +15,6 @@ use Inertia\Response;
 
 class ContactController extends Controller
 {
-    /**
-     * Maximum lengths, mirrored client-side (issue #17).
-     */
-    private const SUBJECT_MAX = 100;
-
-    private const MESSAGE_MAX = 4000;
-
     /**
      * Render the contact form (guests and authenticated users).
      */
@@ -43,24 +38,9 @@ class ContactController extends Controller
      * users; the signed-in account email always wins over the (read-only)
      * form field.
      */
-    public function store(Request $request): JsonResponse
+    public function store(ContactRequest $request): JsonResponse
     {
-        if ($request->user()) {
-            $request->merge(['email' => $request->user()->email]);
-        }
-
-        $validated = $request->validate([
-            'email' => ['required', 'email:filter', 'max:255'],
-            'subject' => ['required', 'string', 'max:'.self::SUBJECT_MAX],
-            'message' => ['required', 'string', 'max:'.self::MESSAGE_MAX],
-        ], [
-            'email.required' => __('Please enter your email address.'),
-            'email.email' => __('Please enter a valid email address.'),
-            'subject.required' => __('Please enter a subject.'),
-            'subject.max' => __('The subject must not exceed :max characters.'),
-            'message.required' => __('Please enter a message.'),
-            'message.max' => __('The message must not exceed :max characters.'),
-        ]);
+        $validated = $request->validated();
 
         $subject = self::sanitize($validated['subject']);
         $message = self::sanitize($validated['message']);
@@ -96,23 +76,28 @@ class ContactController extends Controller
 
         $user = $request->user();
 
-        ContactSubmission::create([
-            'email' => $validated['email'],
-            'subject' => $subject,
-            'message' => $message,
-            'ip_address' => $ip,
-            'user_id' => $user?->id,
-        ]);
+        // The log entry drives the cooldown: it must only exist once the mail
+        // is queued, or a failed dispatch would block the resend. With the
+        // database queue, both inserts commit (or roll back) together.
+        DB::transaction(function () use ($validated, $subject, $message, $ip, $user): void {
+            ContactSubmission::create([
+                'email' => $validated['email'],
+                'subject' => $subject,
+                'message' => $message,
+                'ip_address' => $ip,
+                'user_id' => $user?->id,
+            ]);
 
-        Mail::to(config('mail.contact_address'))
-            ->send(new ContactMessage(
-                contactEmail: $validated['email'],
-                contactSubject: $subject,
-                contactMessage: $message,
-                accountName: $user?->name,
-                accountId: $user?->id,
-                senderLocale: $user->locale ?? app()->getLocale(),
-            ));
+            Mail::to(config('mail.contact_address'))
+                ->queue(new ContactMessage(
+                    contactEmail: $validated['email'],
+                    contactSubject: $subject,
+                    contactMessage: $message,
+                    accountName: $user?->name,
+                    accountId: $user?->id,
+                    senderLocale: $user->locale ?? app()->getLocale(),
+                ));
+        });
 
         return response()->json(['redirect' => route('contact.sent')]);
     }

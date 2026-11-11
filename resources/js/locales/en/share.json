@@ -24,7 +24,14 @@
             "transferNote": "The new owner gets full control; you become a contributor.",
             "transferTitle": "Transfer ownership?",
             "transferDescription": "{name} will become the owner of {resource} and get full control over it. You will become a contributor.",
-            "done": "Done"
+            "done": "Done",
+            "accessFor": "{name}: access level",
+            "accessLevel": "Access level",
+            "revokeFor": "Revoke access for {name}",
+            "revokeTitle": "Revoke {name}’s access?",
+            "revokeDescription": "{name} will lose access to {resource}. You can grant it again from this drawer.",
+            "revokeDescriptionMember": "{name} will lose the access granted on {resource} and keep only the read-only access of profile members.",
+            "loadError": "The people with access could not be loaded."
         },
         "envelope": {
             "title": "Share envelope",
