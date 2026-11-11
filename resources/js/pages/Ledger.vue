@@ -441,11 +441,11 @@ const onRemoveTransaction = (transactionId: number) => {
                     />
                 </div>
 
-                <h3
+                <h2
                     class="mt-6 bg-linear-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
                 >
                     {{ $t('ledger.empty.title') }}
-                </h3>
+                </h2>
                 <p
                     class="mt-3 max-w-xl text-sm leading-relaxed text-balance text-muted-foreground sm:text-base"
                 >

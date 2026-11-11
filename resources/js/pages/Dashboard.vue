@@ -373,9 +373,9 @@ const onDestroy = (): void => {
                     <Icon name="dashboard" class="size-7" aria-hidden="true" />
                 </span>
                 <div class="space-y-1">
-                    <h3 class="text-lg font-semibold">
+                    <h2 class="text-lg font-semibold">
                         {{ $t('dashboard.empty.title') }}
-                    </h3>
+                    </h2>
                     <p class="mx-auto max-w-md text-sm text-muted-foreground">
                         {{ $t('dashboard.empty.description') }}
                     </p>

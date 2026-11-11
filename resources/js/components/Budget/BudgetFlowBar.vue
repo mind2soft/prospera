@@ -45,9 +45,9 @@ const fmt = (amount: number) =>
 <template>
     <section>
         <div class="mb-2 flex items-baseline justify-between gap-4">
-            <h3 class="text-sm font-medium text-muted-foreground">
+            <h2 class="text-sm font-medium text-muted-foreground">
                 {{ title }}
-            </h3>
+            </h2>
             <span class="text-sm font-medium tabular-nums">{{
                 fmt(total)
             }}</span>

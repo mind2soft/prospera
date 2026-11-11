@@ -93,11 +93,11 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', onWindowMouseUp));
                 <Icon name="drag-indicator" class="size-4" aria-hidden="true" />
             </button>
 
-            <h3
+            <h2
                 class="min-w-0 flex-1 truncate text-[13px] leading-5 font-medium tracking-[-0.01em] text-foreground"
             >
                 {{ title }}
-            </h3>
+            </h2>
 
             <Button
                 variant="ghost"

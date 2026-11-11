@@ -75,3 +75,19 @@ test('reduced motion removes interface animations', async ({ browser }) => {
 
     await context.close();
 });
+
+test('every main page has a single top-level heading', async ({ page }) => {
+    await login(page);
+    for (const [path, title] of [
+        ['/dashboard', 'Dashboard'],
+        ['/budget', 'Budget'],
+        ['/ledger', 'Ledger'],
+        ['/envelopes', 'Envelopes'],
+        ['/settings/profiles', 'Profiles'],
+    ]) {
+        await page.goto(path);
+        const h1 = page.getByRole('heading', { level: 1 });
+        await expect(h1).toHaveCount(1);
+        await expect(h1).toHaveText(title);
+    }
+});

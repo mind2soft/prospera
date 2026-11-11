@@ -381,6 +381,8 @@ const joinedLabel = (joinedAt: string): string =>
 <template>
     <Head :title="$t('settings.profiles.title')" />
 
+    <h1 class="sr-only">{{ $t('settings.profiles.title') }}</h1>
+
     <div class="flex flex-col space-y-6">
         <div class="flex flex-wrap items-end justify-between gap-4">
             <Heading

@@ -1,18 +1,28 @@
 <script setup lang="ts">
+import { computed } from 'vue';
+
 type Props = {
     title: string;
     description?: string;
     variant?: 'default' | 'small';
+    /** Heading level; defaults to the page title (1) or a section (2). */
+    level?: 1 | 2 | 3;
 };
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
     variant: 'default',
+    level: undefined,
 });
+
+const tag = computed(
+    () => `h${props.level ?? (props.variant === 'small' ? 2 : 1)}`,
+);
 </script>
 
 <template>
     <header :class="variant === 'small' ? '' : 'space-y-1'">
-        <h2
+        <component
+            :is="tag"
             :class="
                 variant === 'small'
                     ? 'mb-0.5 text-base font-medium'
@@ -20,7 +30,7 @@ withDefaults(defineProps<Props>(), {
             "
         >
             {{ title }}
-        </h2>
+        </component>
         <p v-if="description" class="text-sm text-muted-foreground">
             {{ description }}
         </p>
