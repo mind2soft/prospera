@@ -192,6 +192,36 @@ class DashboardDataTest extends TestCase
         return "/api/dashboard/{$this->profile->id}/widgets/{$widget->id}/data";
     }
 
+    public function test_today_is_the_requesters_calendar_day(): void
+    {
+        // 2026-11-10 20:00 UTC is already 2026-11-11 in Auckland (UTC+13).
+        Carbon::setTestNow(Carbon::parse('2026-11-10 20:00:00', 'UTC'));
+        $this->record($this->gas, -33, Carbon::parse('2026-11-11'));
+
+        $widget = $this->createWidget('envelope_spending', 'single', ['type' => 'days', 'range' => 1], [
+            ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
+        ]);
+
+        // Server day (UTC): the 10th.
+        $this->actingAs($this->owner)->getJson($this->dataUrl($widget))
+            ->assertOk()->assertJsonPath('rows.0.spent', -120);
+
+        $this->actingAs($this->owner)->getJson($this->dataUrl($widget).'?timezone=Pacific/Auckland')
+            ->assertOk()->assertJsonPath('rows.0.spent', -33);
+
+        $history = $this->createWidget('income_expenses', 'line', ['type' => 'days', 'range' => 1], [
+            ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
+        ]);
+
+        $this->actingAs($this->owner)->getJson($this->dataUrl($history).'?timezone=Pacific/Auckland')
+            ->assertOk()
+            ->assertJsonPath('series.0.bucket', '2026-11-11')
+            ->assertJsonPath('series.0.expenses', -33);
+
+        $this->actingAs($this->owner)->getJson($this->dataUrl($widget).'?timezone=Nowhere/Land')
+            ->assertUnprocessable()->assertJsonValidationErrors('timezone');
+    }
+
     // ---- Envelope spending ----
 
     public function test_envelope_spending_sums_transactions_and_allocations(): void

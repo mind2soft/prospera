@@ -8,6 +8,7 @@ use App\Models\FinancialProfile;
 use App\Services\Dashboard\DashboardAggregator;
 use App\Services\Dashboard\DashboardLayoutValidator;
 use App\Services\Dashboard\WidgetSelection;
+use App\Services\LocalCalendar;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -135,7 +136,12 @@ class DashboardController extends Controller
         }
 
         return response()->json(
-            $this->aggregator->data($widget, $profile, $request->user()),
+            $this->aggregator->data(
+                $widget,
+                $profile,
+                $request->user(),
+                LocalCalendar::fromRequest($request)->today(),
+            ),
         );
     }
 

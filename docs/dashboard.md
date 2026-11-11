@@ -98,6 +98,10 @@ the Share drawer):
 
 ### Period semantics
 
+- "Today" is the **requester's calendar day**: the widget data request
+  carries the browser's IANA time zone as `timezone` (unknown zones →
+  `422`); without it the application time zone (UTC) applies. Transaction
+  dates are calendar dates, compared as such.
 - `days`, range *n* — the past *n* days **including today**
   (`[today − (n−1), today]`).
 - `months`, range *n* — the current month back *n* months inclusive,
@@ -156,7 +160,7 @@ the Share drawer):
 | `GET`    | `/api/dashboard/{profileId}/widgets`                 | Ordered widgets for (user, profile) — `404` for non-members; selections pruned of deleted envelopes             |
 | `PUT`    | `/api/dashboard/{profileId}/widgets`                 | Full layout save (ordered list; each member manages **their own** dashboard for that profile; validates types, ranges, widths, one-occurrence-per-envelope selection, flat groups). Widgets carrying their id are updated **in place** (ids stay stable, so in-flight widget-data requests keep resolving); entries without an id are created; ids missing from the payload are removed |
 | `DELETE` | `/api/dashboard/{profileId}/widgets/{widget}`        | Remove one widget (own only; `404` otherwise)                                                                    |
-| `GET`    | `/api/dashboard/{profileId}/widgets/{widget}/data`   | Server-computed aggregate payload for the widget (masked per permissions), with `period`/`selection` applied server-side |
+| `GET`    | `/api/dashboard/{profileId}/widgets/{widget}/data`   | Server-computed aggregate payload for the widget (masked per permissions), with `period`/`selection` applied server-side; optional `timezone` query param (IANA) for "today" |
 
 The widget data endpoint returns, per type:
 

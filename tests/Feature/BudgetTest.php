@@ -10,6 +10,7 @@ use App\Models\Ledger;
 use App\Models\User;
 use App\Services\ResourcePermissions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -512,6 +513,69 @@ class BudgetTest extends TestCase
         $this->assertNotNull($budget->published_at);
         $this->assertEquals(now()->year, $budget->effective_year);
         $this->assertEquals(now()->month, $budget->effective_month);
+    }
+
+    public function test_publish_uses_the_users_time_zone_for_the_current_month(): void
+    {
+        // 2026-11-30 22:30 UTC is already 1 December in Sydney.
+        Carbon::setTestNow(Carbon::parse('2026-11-30 22:30:00', 'UTC'));
+
+        try {
+            $november = $this->createBudget($this->user, [
+                'published_at' => now(),
+                'effective_year' => 2026,
+                'effective_month' => 11,
+            ]);
+            $draft = $this->createBudget($this->user);
+
+            $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish", [
+                'timezone' => 'Australia/Sydney',
+                'month' => '2026-12',
+            ])->assertOk()
+                ->assertJsonPath('budget.effective_year', 2026)
+                ->assertJsonPath('budget.effective_month', 12);
+
+            $this->assertDatabaseHas('budgets', ['id' => $november->id, 'effective_month' => 11]);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_publish_refuses_a_month_other_than_the_users_current_one(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-30 22:30:00', 'UTC'));
+
+        try {
+            $november = $this->createBudget($this->user, [
+                'published_at' => now(),
+                'effective_year' => 2026,
+                'effective_month' => 11,
+            ]);
+            $draft = $this->createBudget($this->user);
+
+            // The client means December; without its time zone the server's
+            // month (November) applies — refused rather than replacing
+            // November's budget.
+            $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish", [
+                'month' => '2026-12',
+            ])->assertUnprocessable()->assertJsonValidationErrors('month');
+
+            $this->assertDatabaseHas('budgets', ['id' => $november->id]);
+            $this->assertDatabaseHas('budgets', ['id' => $draft->id, 'published_at' => null]);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_publish_rejects_unknown_time_zones(): void
+    {
+        $draft = $this->createBudget($this->user);
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish", [
+            'timezone' => 'Mars/Olympus_Mons',
+        ])->assertUnprocessable()->assertJsonValidationErrors('timezone');
+
+        $this->assertDatabaseHas('budgets', ['id' => $draft->id, 'published_at' => null]);
     }
 
     public function test_publishing_twice_is_rejected(): void

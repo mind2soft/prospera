@@ -7,6 +7,7 @@ use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\User;
+use App\Services\LocalCalendar;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -120,8 +121,28 @@ class BudgetController extends Controller
             ]);
         }
 
-        $year = now()->year;
-        $month = now()->month;
+        // The current month is the user's, not the server's (UTC): near a
+        // month boundary they differ, and publishing replaces — deletes —
+        // the published budget of the stamped month.
+        $today = LocalCalendar::fromRequest($request)->today();
+
+        $validated = $request->validate([
+            'month' => ['sometimes', 'nullable', 'date_format:Y-m'],
+        ]);
+
+        // The client may state the month it means to publish for: a
+        // mismatch (e.g. a dialog left open across midnight) is refused
+        // rather than replacing another month's budget.
+        if (isset($validated['month']) && $validated['month'] !== $today->format('Y-m')) {
+            throw ValidationException::withMessages([
+                'month' => __('Budgets can only be published for the current month (:month).', [
+                    'month' => $today->format('Y-m'),
+                ]),
+            ]);
+        }
+
+        $year = $today->year;
+        $month = $today->month;
 
         DB::transaction(function () use ($budget, $year, $month): void {
             FinancialProfile::query()->whereKey($budget->profile_id)->lockForUpdate()->firstOrFail();

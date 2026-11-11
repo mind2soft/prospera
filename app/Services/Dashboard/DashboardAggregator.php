@@ -11,6 +11,8 @@ use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\ResourcePermissions;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 /**
@@ -31,8 +33,11 @@ final class DashboardAggregator
      *
      * @return array<string, mixed>
      */
-    public function data(DashboardWidget $widget, FinancialProfile $profile, User $user): array
+    public function data(DashboardWidget $widget, FinancialProfile $profile, User $user, ?CarbonInterface $today = null): array
     {
+        // "Today" is the requester's calendar day (LocalCalendar).
+        $today = $today === null ? CarbonImmutable::today() : CarbonImmutable::instance($today);
+
         $selection = WidgetSelection::fromConfig($widget->selection);
 
         $envelopeIds = $selection->envelopeIds();
@@ -52,7 +57,7 @@ final class DashboardAggregator
         $period = WidgetPeriod::fromConfig($widget->periodConfig());
 
         if ($envelopeIds === []) {
-            return $this->emptyPayload($widget, $period);
+            return $this->emptyPayload($widget, $period, $today);
         }
 
         $envelopes = Envelope::query()->whereIn('id', $envelopeIds)->get()->keyBy('id');
@@ -65,14 +70,14 @@ final class DashboardAggregator
             ],
         );
 
-        $transactions = $this->transactions($profile, $period, $envelopeIds);
+        $transactions = $this->transactions($profile, $period, $envelopeIds, $today);
 
         return match ($widget->type) {
             DashboardWidget::TYPE_ENVELOPE_SPENDING => $this->envelopeSpending(
-                $widget, $profile, $period, $selection, $envelopes, $amountVisible, $transactions,
+                $widget, $profile, $period, $selection, $envelopes, $amountVisible, $transactions, $today,
             ),
             DashboardWidget::TYPE_INCOME_EXPENSES => $this->incomeExpenses(
-                $widget, $period, $selection, $amountVisible, $transactions,
+                $widget, $period, $selection, $amountVisible, $transactions, $today,
             ),
             DashboardWidget::TYPE_RADIAL => $this->radial(
                 $widget, $period, $selection, $envelopes, $amountVisible, $transactions,
@@ -101,9 +106,10 @@ final class DashboardAggregator
         Collection $envelopes,
         Collection $amountVisible,
         Collection $transactions,
+        CarbonImmutable $today,
     ): array {
         $totals = $this->totalsByEnvelope($transactions);
-        $allocations = $this->allocationsByEnvelope($profile, $period, $selection->envelopeIds());
+        $allocations = $this->allocationsByEnvelope($profile, $period, $selection->envelopeIds(), $today);
 
         $rows = [];
 
@@ -181,6 +187,7 @@ final class DashboardAggregator
         WidgetSelection $selection,
         Collection $amountVisible,
         Collection $transactions,
+        CarbonImmutable $today,
     ): array {
         $masked = collect($selection->envelopeIds())->contains(
             fn (int $envelopeId): bool => $amountVisible->get($envelopeId, false) === false,
@@ -201,7 +208,7 @@ final class DashboardAggregator
 
         $series = [];
 
-        foreach ($period->buckets() as $bucket) {
+        foreach ($period->buckets($today) as $bucket) {
             $amounts = $byBucket->get($bucket, ['revenue' => 0, 'expenses' => 0]);
 
             $series[] = [
@@ -291,7 +298,7 @@ final class DashboardAggregator
      *
      * @return array<string, mixed>
      */
-    private function emptyPayload(DashboardWidget $widget, WidgetPeriod $period): array
+    private function emptyPayload(DashboardWidget $widget, WidgetPeriod $period, CarbonImmutable $today): array
     {
         return match ($widget->type) {
             DashboardWidget::TYPE_ENVELOPE_SPENDING => [
@@ -301,7 +308,7 @@ final class DashboardAggregator
             DashboardWidget::TYPE_INCOME_EXPENSES => [
                 'type' => $widget->type,
                 'masked' => false,
-                'series' => collect($period->buckets())->map(fn (string $bucket): array => [
+                'series' => collect($period->buckets($today))->map(fn (string $bucket): array => [
                     'bucket' => $bucket,
                     'masked' => false,
                     'revenue' => 0,
@@ -323,7 +330,7 @@ final class DashboardAggregator
      * @param  list<int>  $envelopeIds
      * @return Collection<int, Transaction>
      */
-    private function transactions(FinancialProfile $profile, WidgetPeriod $period, array $envelopeIds): Collection
+    private function transactions(FinancialProfile $profile, WidgetPeriod $period, array $envelopeIds, CarbonImmutable $today): Collection
     {
         $ledgerIds = Ledger::query()->where('profile_id', $profile->id)->pluck('id');
 
@@ -331,7 +338,7 @@ final class DashboardAggregator
             return collect();
         }
 
-        ['from' => $from, 'to' => $to] = $period->window();
+        ['from' => $from, 'to' => $to] = $period->window($today);
 
         return Transaction::query()
             ->whereIn('ledger_id', $ledgerIds)
@@ -366,19 +373,19 @@ final class DashboardAggregator
      * @param  list<int>  $envelopeIds
      * @return Collection<int, int> envelope id → summed allocation
      */
-    private function allocationsByEnvelope(FinancialProfile $profile, WidgetPeriod $period, array $envelopeIds): Collection
+    private function allocationsByEnvelope(FinancialProfile $profile, WidgetPeriod $period, array $envelopeIds, CarbonImmutable $today): Collection
     {
-        ['from' => $from, 'to' => $to] = $period->window();
+        ['from' => $from, 'to' => $to] = $period->window($today);
 
         // The calendar months the period window touches.
         $months = [];
 
-        $cursor = $from->copy()->startOfMonth();
+        $cursor = $from->startOfMonth();
 
         while ($cursor->lte($to)) {
             $months[$cursor->year.'-'.$cursor->month] = true;
 
-            $cursor->addMonth();
+            $cursor = $cursor->addMonth();
         }
 
         $budgets = Budget::query()
