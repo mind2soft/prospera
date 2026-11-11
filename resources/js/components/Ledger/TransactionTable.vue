@@ -216,7 +216,7 @@ const stampLabel = (createdAt: string): string =>
                             v-if="mayDelete(transaction)"
                             variant="ghost"
                             size="icon-sm"
-                            class="text-destructive hover:bg-destructive hover:text-destructive"
+                            class="text-destructive hover:bg-destructive/10 hover:text-destructive"
                             :aria-label="
                                 $t('ledger.table.deleteTransactionFor', {
                                     envelope: transaction.name,
