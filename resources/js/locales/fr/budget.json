@@ -2,6 +2,7 @@
     "budget": {
         "title": "Budget",
         "description": "Planifiez où va votre argent avant qu'il ne parte.",
+        "currency": "Devise",
         "toast": {
             "failed": "Une erreur est survenue.",
             "accessUpdated": "Accès mis à jour.",
@@ -41,6 +42,7 @@
             "envelope": "Enveloppe",
             "type": "Type",
             "amount": "Montant",
+            "amountFor": "Montant — {name}",
             "leftToSpend": "Reste à dépenser",
             "actions": "Actions",
             "removeEnvelope": "Retirer l'enveloppe",

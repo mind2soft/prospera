@@ -24,7 +24,9 @@
             "transferNote": "The new owner gets full control; you become a contributor.",
             "transferTitle": "Transfer ownership?",
             "transferDescription": "{name} will become the owner of {resource} and get full control over it. You will become a contributor.",
-            "done": "Done"
+            "done": "Done",
+            "accessFor": "{name}: access level",
+            "accessLevel": "Access level"
         },
         "envelope": {
             "title": "Share envelope",

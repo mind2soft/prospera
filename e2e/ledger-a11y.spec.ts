@@ -33,3 +33,19 @@ test('envelope names in the transaction table meet contrast', async ({
         .analyze();
     expect(results.violations).toEqual([]);
 });
+
+test('ledger form controls have accessible names', async ({ page }) => {
+    await login(page);
+    await page.goto('/ledger');
+    await expect(
+        page.getByRole('combobox', { name: 'Select ledger' }),
+    ).toBeVisible();
+    await expect(
+        page.getByRole('combobox', { name: 'Envelope' }),
+    ).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+        .withRules(['label', 'button-name', 'select-name'])
+        .analyze();
+    expect(results.violations.map((v) => v.id)).toEqual([]);
+});

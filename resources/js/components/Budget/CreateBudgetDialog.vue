@@ -9,6 +9,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -55,22 +56,27 @@ const confirm = () => {
                 </DialogDescription>
             </DialogHeader>
 
-            <Select v-model="currency">
-                <SelectTrigger class="w-full">
-                    <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem
-                        v-for="option in CURRENCIES"
-                        :key="option.code"
-                        :value="option.code"
-                    >
-                        {{ option.code }}
-                        —
-                        {{ currencyName(option.code, locale) }}
-                    </SelectItem>
-                </SelectContent>
-            </Select>
+            <div class="grid gap-2">
+                <Label for="create-budget-currency">{{
+                    $t('budget.currency')
+                }}</Label>
+                <Select v-model="currency">
+                    <SelectTrigger id="create-budget-currency" class="w-full">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem
+                            v-for="option in CURRENCIES"
+                            :key="option.code"
+                            :value="option.code"
+                        >
+                            {{ option.code }}
+                            —
+                            {{ currencyName(option.code, locale) }}
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
 
             <DialogFooter>
                 <Button variant="ghost" @click="emit('update:open', false)">{{

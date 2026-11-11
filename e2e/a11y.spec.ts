@@ -126,3 +126,51 @@ test('the budget table meets contrast in both themes', async ({ page }) => {
         expect(results.violations, appearance).toEqual([]);
     }
 });
+
+const NAME_RULES = [
+    'label',
+    'button-name',
+    'select-name',
+    'aria-input-field-name',
+    'aria-command-name',
+];
+
+async function expectNamedControls(page: Page, label: string): Promise<void> {
+    const results = await new AxeBuilder({ page })
+        .withRules(NAME_RULES)
+        .analyze();
+    expect(
+        results.violations.map((v) => [v.id, v.nodes.map((n) => n.target)]),
+        label,
+    ).toEqual([]);
+}
+
+test('budget form controls have accessible names', async ({ page }) => {
+    await login(page);
+    await page.goto('/budget');
+    await expect(
+        page.getByRole('combobox', { name: 'Select budget' }),
+    ).toBeVisible();
+    await expect(
+        page.getByRole('spinbutton', { name: 'Paychecks amount' }),
+    ).toBeVisible();
+    await expectNamedControls(page, 'budget page');
+
+    await page.getByRole('button', { name: 'Add envelope' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(
+        dialog.getByRole('combobox', { name: 'Envelope' }),
+    ).toBeVisible();
+    await expect(dialog.getByRole('combobox', { name: 'Type' })).toBeVisible();
+    await expect(
+        dialog.getByRole('spinbutton', { name: 'Amount' }),
+    ).toBeVisible();
+    await expectNamedControls(page, 'add envelope dialog');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+
+    await page.getByRole('button', { name: 'Budget actions' }).click();
+    await page.getByRole('menuitem', { name: 'Share' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expectNamedControls(page, 'share drawer');
+});

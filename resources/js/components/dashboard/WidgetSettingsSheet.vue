@@ -618,6 +618,7 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                 >
                     <Input
                         v-model="groupName"
+                        :aria-label="$t('dashboard.settings.groupName')"
                         :placeholder="
                             $t('dashboard.settings.groupNamePlaceholder')
                         "

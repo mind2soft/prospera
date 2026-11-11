@@ -73,13 +73,15 @@ const confirm = () => {
 <template>
     <form class="flex flex-wrap items-end gap-3" @submit.prevent="confirm">
         <div class="grid gap-1.5">
-            <Label>{{ $t('ledger.form.envelope') }}</Label>
+            <Label for="transaction-envelope">{{
+                $t('ledger.form.envelope')
+            }}</Label>
             <Select
                 :model-value="envelopeId ?? undefined"
                 :disabled="disabled || envelopes.length === 0"
                 @update:model-value="(value) => (envelopeId = Number(value))"
             >
-                <SelectTrigger class="w-52">
+                <SelectTrigger id="transaction-envelope" class="w-52">
                     <SelectValue
                         :placeholder="$t('ledger.form.envelopePlaceholder')"
                     />

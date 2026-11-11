@@ -59,7 +59,10 @@ const isDraft = computed(() => selected.value?.published_at === null);
                 (value) => emit('update:selectedId', Number(value))
             "
         >
-            <SelectTrigger class="w-56">
+            <SelectTrigger
+                class="w-56"
+                :aria-label="$t('budget.selector.selectBudget')"
+            >
                 <SelectValue>
                     {{
                         selected

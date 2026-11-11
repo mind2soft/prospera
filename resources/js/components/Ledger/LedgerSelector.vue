@@ -63,7 +63,10 @@ const label = (ledger: Ledger): string => {
                 (value) => emit('update:selectedId', Number(value))
             "
         >
-            <SelectTrigger class="w-64">
+            <SelectTrigger
+                class="w-64"
+                :aria-label="$t('ledger.selector.selectLedger')"
+            >
                 <SelectValue>
                     <span
                         v-if="selected"

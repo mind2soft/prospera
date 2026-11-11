@@ -704,21 +704,23 @@ const joinedLabel = (joinedAt: string): string =>
                             <!-- Owner-only management -->
                             <template v-if="profile.is_owner">
                                 <div class="space-y-2">
-                                    <p
-                                        class="text-xs font-medium text-muted-foreground"
+                                    <Label
+                                        :for="`invite-email-${profile.id}`"
+                                        class="text-xs text-muted-foreground"
                                     >
                                         {{
                                             $t(
                                                 'settings.profiles.inviteSomeone',
                                             )
                                         }}
-                                    </p>
+                                    </Label>
                                     <form
                                         class="flex items-start gap-2"
                                         @submit.prevent="onInvite"
                                     >
                                         <div class="flex-1 space-y-1">
                                             <Input
+                                                :id="`invite-email-${profile.id}`"
                                                 v-model="inviteEmail"
                                                 type="email"
                                                 required
@@ -831,15 +833,16 @@ const joinedLabel = (joinedAt: string): string =>
                                     v-if="transferCandidates.length > 0"
                                     class="space-y-2"
                                 >
-                                    <p
-                                        class="text-xs font-medium text-muted-foreground"
+                                    <Label
+                                        :for="`transfer-member-${profile.id}`"
+                                        class="text-xs text-muted-foreground"
                                     >
                                         {{
                                             $t(
                                                 'settings.profiles.transferOwnership',
                                             )
                                         }}
-                                    </p>
+                                    </Label>
                                     <div class="flex items-center gap-2">
                                         <Select
                                             :model-value="
@@ -851,7 +854,10 @@ const joinedLabel = (joinedAt: string): string =>
                                                         Number(value))
                                             "
                                         >
-                                            <SelectTrigger class="flex-1">
+                                            <SelectTrigger
+                                                :id="`transfer-member-${profile.id}`"
+                                                class="flex-1"
+                                            >
                                                 <SelectValue
                                                     :placeholder="
                                                         $t(

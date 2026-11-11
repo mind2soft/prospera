@@ -99,14 +99,19 @@ const confirm = () => {
 
             <div class="grid gap-4">
                 <div class="grid gap-2">
-                    <Label>{{ $t('budget.addEnvelope.envelope') }}</Label>
+                    <Label for="add-envelope-envelope">{{
+                        $t('budget.addEnvelope.envelope')
+                    }}</Label>
                     <Select
                         :model-value="envelopeId ?? undefined"
                         @update:model-value="
                             (value) => (envelopeId = Number(value))
                         "
                     >
-                        <SelectTrigger class="w-full">
+                        <SelectTrigger
+                            id="add-envelope-envelope"
+                            class="w-full"
+                        >
                             <SelectValue
                                 :placeholder="
                                     $t('budget.addEnvelope.chooseEnvelope')
@@ -156,9 +161,11 @@ const confirm = () => {
                 </div>
 
                 <div class="grid gap-2">
-                    <Label>{{ $t('budget.addEnvelope.type') }}</Label>
+                    <Label for="add-envelope-type">{{
+                        $t('budget.addEnvelope.type')
+                    }}</Label>
                     <Select v-model="type">
-                        <SelectTrigger class="w-full">
+                        <SelectTrigger id="add-envelope-type" class="w-full">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -173,8 +180,11 @@ const confirm = () => {
                 </div>
 
                 <div class="grid gap-2">
-                    <Label>{{ $t('budget.addEnvelope.amount') }}</Label>
+                    <Label for="add-envelope-amount">{{
+                        $t('budget.addEnvelope.amount')
+                    }}</Label>
                     <Input
+                        id="add-envelope-amount"
                         v-model="amount"
                         type="number"
                         min="1"

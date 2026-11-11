@@ -2,6 +2,7 @@
     "budget": {
         "title": "Budget",
         "description": "Plan where your money goes before it goes anywhere.",
+        "currency": "Currency",
         "toast": {
             "failed": "Something went wrong.",
             "accessUpdated": "Access updated.",
@@ -41,6 +42,7 @@
             "envelope": "Envelope",
             "type": "Type",
             "amount": "Amount",
+            "amountFor": "{name} amount",
             "leftToSpend": "Left to spend",
             "actions": "Actions",
             "removeEnvelope": "Remove envelope",

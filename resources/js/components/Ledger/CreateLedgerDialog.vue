@@ -140,11 +140,14 @@ const confirm = () => {
                         />
                     </div>
                     <div class="grid gap-2">
-                        <Label>{{
+                        <Label for="ledger-balance-type">{{
                             $t('ledger.createDialog.balanceType')
                         }}</Label>
                         <Select v-model="balanceType">
-                            <SelectTrigger class="w-full">
+                            <SelectTrigger
+                                id="ledger-balance-type"
+                                class="w-full"
+                            >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>

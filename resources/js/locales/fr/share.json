@@ -24,7 +24,9 @@
             "transferNote": "Le nouveau propriétaire obtient le contrôle total ; vous devenez contributeur.",
             "transferTitle": "Transférer la propriété ?",
             "transferDescription": "{name} deviendra le propriétaire de {resource} et en obtiendra le contrôle total. Vous deviendrez contributeur.",
-            "done": "Terminé"
+            "done": "Terminé",
+            "accessFor": "{name} : niveau d’accès",
+            "accessLevel": "Niveau d’accès"
         },
         "envelope": {
             "title": "Partager l'enveloppe",

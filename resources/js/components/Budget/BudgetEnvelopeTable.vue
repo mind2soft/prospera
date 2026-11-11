@@ -173,6 +173,11 @@ const runningLeft = computed(() => {
                             <template v-if="editable">
                                 <Input
                                     :model-value="edits[row.envelope_id]"
+                                    :aria-label="
+                                        $t('budget.table.amountFor', {
+                                            name: row.name,
+                                        })
+                                    "
                                     type="number"
                                     min="1"
                                     step="1"

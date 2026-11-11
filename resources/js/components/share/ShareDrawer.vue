@@ -11,6 +11,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -233,7 +234,15 @@ watch(
                                     onPermissionChange(member, String(value))
                             "
                         >
-                            <SelectTrigger size="sm" class="w-32 shrink-0">
+                            <SelectTrigger
+                                size="sm"
+                                class="w-32 shrink-0"
+                                :aria-label="
+                                    $t('share.drawer.accessFor', {
+                                        name: member.name,
+                                    })
+                                "
+                            >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -288,9 +297,9 @@ watch(
                 <Separator />
 
                 <div v-if="profileCircle" class="space-y-2">
-                    <p class="text-sm font-medium">
+                    <Label for="share-grant-member">
                         {{ $t('share.drawer.grantAccess') }}
-                    </p>
+                    </Label>
                     <div class="flex items-center gap-2">
                         <Select
                             :model-value="newUserId ?? undefined"
@@ -298,7 +307,10 @@ watch(
                                 (value) => (newUserId = Number(value))
                             "
                         >
-                            <SelectTrigger class="flex-1">
+                            <SelectTrigger
+                                id="share-grant-member"
+                                class="flex-1"
+                            >
                                 <SelectValue
                                     :placeholder="
                                         $t('share.drawer.chooseMember')
@@ -316,7 +328,11 @@ watch(
                             </SelectContent>
                         </Select>
                         <Select v-model="newPermission">
-                            <SelectTrigger size="sm" class="w-32 shrink-0">
+                            <SelectTrigger
+                                size="sm"
+                                class="w-32 shrink-0"
+                                :aria-label="$t('share.drawer.accessLevel')"
+                            >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -355,9 +371,9 @@ watch(
                 </div>
 
                 <div v-if="transferCandidates.length > 0" class="space-y-2">
-                    <p class="text-sm font-medium">
+                    <Label for="share-transfer-member">
                         {{ $t('share.drawer.transferOwnership') }}
-                    </p>
+                    </Label>
                     <div class="flex items-center gap-2">
                         <Select
                             :model-value="transferTarget ?? undefined"
@@ -365,7 +381,10 @@ watch(
                                 (value) => (transferTarget = Number(value))
                             "
                         >
-                            <SelectTrigger class="flex-1">
+                            <SelectTrigger
+                                id="share-transfer-member"
+                                class="flex-1"
+                            >
                                 <SelectValue
                                     :placeholder="
                                         $t('share.drawer.chooseMember')
