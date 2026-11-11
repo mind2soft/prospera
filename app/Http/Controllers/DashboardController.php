@@ -35,7 +35,7 @@ class DashboardController extends Controller
     {
         $this->authorizeProfile($request, $profile);
 
-        $widgets = DashboardWidget::scopeFor(
+        $widgets = DashboardWidget::forUserAndProfile(
             (int) $request->user()->id,
             $profile->id,
         )->get();

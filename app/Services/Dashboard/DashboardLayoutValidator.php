@@ -73,7 +73,7 @@ final class DashboardLayoutValidator
 
     /**
      * The ids of the envelopes the requester can see (metadata visibility —
-     * see Envelope::scopeVisibleTo), keyed by id.
+     * see the Envelope::visibleTo scope), keyed by id.
      *
      * @return array<int, int>
      */
