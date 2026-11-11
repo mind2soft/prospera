@@ -6,9 +6,9 @@ use App\Models\Envelope;
 use App\Models\EnvelopePermission;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
-use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class EnvelopePermissionsTest extends TestCase
@@ -38,25 +38,6 @@ class EnvelopePermissionsTest extends TestCase
 
         $this->envelope = $this->owner->envelopes()->create([
             'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
-        ]);
-    }
-
-    private function createLedgerWithTransaction(int $amount, string $eventAt = '2026-06-15'): Transaction
-    {
-        $ledger = Ledger::create([
-            'profile_id' => $this->profile->id,
-            'name' => '2026',
-            'start_date' => '2026-01-01',
-            'end_date' => '2026-12-31',
-            'starting_balance' => 0,
-        ]);
-        $ledger->permissions()->create(['user_id' => $this->owner->id, 'permission' => 'owner']);
-
-        return $ledger->transactions()->create([
-            'user_id' => $this->owner->id,
-            'envelope_id' => $this->envelope->id,
-            'amount' => $amount,
-            'event_at' => $eventAt.' 00:00:00',
         ]);
     }
 
@@ -103,64 +84,62 @@ class EnvelopePermissionsTest extends TestCase
     }
 
     // ------------------------------------------------------------------
-    // Totals & transactions endpoints
+    // Transaction data never crosses profile boundaries (SEC-1)
     // ------------------------------------------------------------------
 
-    public function test_totals_are_403_without_envelope_viewer_permission(): void
+    /**
+     * The envelope-wide totals/transactions endpoints returned every
+     * transaction on the envelope across all ledgers of all profiles: an
+     * envelope viewer could read another profile's entries. They had no
+     * frontend caller and were removed; transaction data is only served
+     * through profile-scoped endpoints (ledger, dashboard).
+     */
+    public function test_an_envelope_viewer_cannot_read_transactions_of_a_profile_they_are_not_a_member_of(): void
     {
-        $this->createLedgerWithTransaction(-100);
+        $carol = User::factory()->create();
+        $private = FinancialProfile::createOwnedBy($this->owner, 'Private');
+        $private->members()->attach($carol->id, ['is_owner' => false]);
 
-        // Co-member without a permission row: metadata-only.
-        $this->actingAs($this->member)->getJson("/api/envelopes/{$this->envelope->id}/totals")
-            ->assertForbidden();
-
-        // A stranger: also forbidden (never leaks amounts).
-        $this->actingAs($this->stranger)->getJson("/api/envelopes/{$this->envelope->id}/totals")
-            ->assertForbidden();
-
-        // With viewer permission: allowed.
-        $this->envelope->permissions()->create([
-            'user_id' => $this->member->id,
-            'permission' => EnvelopePermission::PERMISSION_VIEWER,
+        $this->envelope->permissions()->createMany([
+            ['user_id' => $carol->id, 'permission' => EnvelopePermission::PERMISSION_CONTRIBUTOR],
+            ['user_id' => $this->member->id, 'permission' => EnvelopePermission::PERMISSION_VIEWER],
         ]);
 
-        $response = $this->actingAs($this->member)->getJson("/api/envelopes/{$this->envelope->id}/totals");
+        $ledger = Ledger::create([
+            'profile_id' => $private->id,
+            'name' => 'Private 2026',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+            'starting_balance' => 0,
+        ]);
+        $ledger->permissions()->create(['user_id' => $this->owner->id, 'permission' => 'owner']);
+        $ledger->transactions()->create([
+            'user_id' => $carol->id,
+            'envelope_id' => $this->envelope->id,
+            'amount' => -12345,
+            'event_at' => '2026-03-03 00:00:00',
+        ]);
 
-        $response->assertOk()
-            ->assertJsonPath('totals.total', -100)
-            ->assertJsonPath('totals.direction', 'expense')
-            ->assertJsonPath('totals.count', 1);
-    }
-
-    public function test_totals_support_date_filters(): void
-    {
-        $this->createLedgerWithTransaction(-100, '2026-05-10');
-        $this->createLedgerWithTransaction(-50, '2026-06-20');
-
-        $this->actingAs($this->owner)->getJson(
-            "/api/envelopes/{$this->envelope->id}/totals?from_date=2026-06-01&to_date=2026-06-30"
-        )->assertOk()->assertJsonPath('totals.total', -50)->assertJsonPath('totals.count', 1);
-    }
-
-    public function test_transactions_endpoint_is_403_without_envelope_viewer_permission(): void
-    {
-        $this->createLedgerWithTransaction(-100);
+        $this->assertFalse(Route::has('api.envelopes.totals'));
+        $this->assertFalse(Route::has('api.envelopes.transactions.index'));
 
         $this->actingAs($this->member)->getJson("/api/envelopes/{$this->envelope->id}/transactions")
-            ->assertForbidden();
+            ->assertNotFound()
+            ->assertDontSee('12345');
+        $this->actingAs($this->member)->getJson("/api/envelopes/{$this->envelope->id}/totals")
+            ->assertNotFound()
+            ->assertDontSee('12345');
 
-        $this->envelope->permissions()->create([
-            'user_id' => $this->member->id,
-            'permission' => EnvelopePermission::PERMISSION_VIEWER,
-        ]);
+        // The profile-scoped ledger endpoint stays closed to non-members.
+        $this->actingAs($this->member)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-01-01&to_date=2026-12-31")
+            ->assertNotFound();
 
-        $response = $this->actingAs($this->member)->getJson("/api/envelopes/{$this->envelope->id}/transactions");
-
-        $response->assertOk();
-        $row = $response->json('transactions.0');
-        $this->assertEquals(-100, $row['amount']);
-        $this->assertEquals($this->owner->id, $row['user']['id']);
-        $this->assertEquals($this->owner->name, $row['user']['name']);
+        // Control: a member of the private profile still reads it there.
+        $this->actingAs($carol)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-03-01&to_date=2026-03-31")
+            ->assertOk()
+            ->assertJsonPath('transactions.0.amount', -12345);
     }
 
     // ------------------------------------------------------------------

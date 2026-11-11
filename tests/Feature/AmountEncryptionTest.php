@@ -587,30 +587,6 @@ class AmountEncryptionTest extends TestCase
     // Aggregates computed in PHP
     // ------------------------------------------------------------------
 
-    public function test_envelope_totals_span_profiles_and_honour_date_filters(): void
-    {
-        $otherLedger = $this->createLedger(FinancialProfile::createOwnedBy($this->user, 'Other'));
-        $this->transaction($this->ledger, $this->rent, -100, '2026-06-01');
-        $this->transaction($this->ledger, $this->rent, -200, '2026-06-20');
-        $this->transaction($otherLedger, $this->rent, -400, '2026-07-05');
-        $this->transaction($this->ledger, $this->salary, 5000, '2026-06-02');
-
-        $this->actingAs($this->user)->getJson("/api/envelopes/{$this->rent->id}/totals")
-            ->assertOk()
-            ->assertJsonPath('totals.total', -700)
-            ->assertJsonPath('totals.count', 3);
-
-        $this->actingAs($this->user)->getJson("/api/envelopes/{$this->rent->id}/totals?from_date=2026-06-10&to_date=2026-07-05")
-            ->assertOk()
-            ->assertJsonPath('totals.total', -600)
-            ->assertJsonPath('totals.count', 2);
-
-        $this->actingAs($this->user)->getJson("/api/envelopes/{$this->rent->id}/totals?from_date=2027-01-01")
-            ->assertOk()
-            ->assertJsonPath('totals.total', 0)
-            ->assertJsonPath('totals.count', 0);
-    }
-
     public function test_ledger_transactions_report_remaining_allocations(): void
     {
         $budget = $this->createBudget($this->profile);

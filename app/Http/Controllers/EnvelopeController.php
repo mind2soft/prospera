@@ -5,14 +5,11 @@ namespace App\Http\Controllers;
 use App\Http\Requests\EnvelopeRequest;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
-use App\Models\Transaction;
 use App\Models\User;
-use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -20,7 +17,6 @@ use Inertia\Response;
 class EnvelopeController extends Controller
 {
     public function __construct(
-        private readonly ResourcePermissions $permissions,
         private readonly ResourcePermissionService $permissionService,
     ) {}
 
@@ -82,63 +78,6 @@ class EnvelopeController extends Controller
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Envelope deleted.')]);
 
         return to_route('envelopes');
-    }
-
-    /**
-     * Computed transaction totals for the envelope (optional
-     * from_date/to_date filters). 403 without envelope-viewer+ permission —
-     * raw amounts never reach clients lacking permission.
-     */
-    public function totals(Request $request, Envelope $envelope): JsonResponse
-    {
-        $this->authorizeViewer($request, $envelope);
-
-        $validated = $request->validate([
-            'from_date' => ['nullable', 'date'],
-            'to_date' => ['nullable', 'date', 'after_or_equal:from_date'],
-        ]);
-
-        $query = Transaction::query()->where('envelope_id', $envelope->id);
-
-        if (! empty($validated['from_date'])) {
-            $query->where('event_at', '>=', Carbon::parse($validated['from_date'])->startOfDay());
-        }
-
-        if (! empty($validated['to_date'])) {
-            $query->where('event_at', '<=', Carbon::parse($validated['to_date'])->endOfDay());
-        }
-
-        // Amounts are encrypted at rest: the total is computed in PHP
-        // (docs/encryption.md).
-        $transactions = $query->get(['id', 'ledger_id', 'envelope_id', 'event_at', 'amount']);
-
-        return response()->json([
-            'totals' => [
-                'envelope_id' => $envelope->id,
-                'direction' => $envelope->type,
-                'total' => (int) $transactions->sum(fn (Transaction $transaction): int => $transaction->amount),
-                'count' => $transactions->count(),
-            ],
-        ]);
-    }
-
-    /**
-     * Transactions referencing the envelope; 403 without envelope-viewer+
-     * permission.
-     */
-    public function apiTransactions(Request $request, Envelope $envelope): JsonResponse
-    {
-        $this->authorizeViewer($request, $envelope);
-
-        $transactions = $envelope->transactions()
-            ->with('user')
-            ->orderBy('event_at')
-            ->orderBy('id')
-            ->get()
-            ->map(fn (Transaction $transaction) => $this->serializeTransaction($transaction))
-            ->values();
-
-        return response()->json(['transactions' => $transactions]);
     }
 
     /**
@@ -231,17 +170,6 @@ class EnvelopeController extends Controller
     }
 
     /**
-     * Transaction data requires envelope-viewer+ permission (403 otherwise).
-     */
-    private function authorizeViewer(Request $request, Envelope $envelope): void
-    {
-        abort_unless(
-            $this->permissions->isAtLeast($envelope->permissionFor($request->user()), ResourcePermissions::VIEWER),
-            403,
-        );
-    }
-
-    /**
      * All envelopes visible to the user, serialized with their effective
      * permission (the user's share rows are eager-loaded — no per-row query).
      *
@@ -279,29 +207,6 @@ class EnvelopeController extends Controller
             'direction' => $envelope->type,
             'color' => $envelope->color,
             'permission' => $envelope->permissionFor($user),
-        ];
-    }
-
-    /**
-     * @return array<string, string|int|null|array<string, string|int|null>>
-     */
-    private function serializeTransaction(Transaction $transaction): array
-    {
-        $transaction->loadMissing(['user']);
-
-        return [
-            'id' => $transaction->id,
-            'ledger_id' => $transaction->ledger_id,
-            'envelope_id' => $transaction->envelope_id,
-            'amount' => $transaction->amount,
-            'event_at' => $transaction->event_at->toDateString(),
-            'created_at' => $transaction->created_at->toISOString(),
-            'user' => [
-                'id' => $transaction->user_id,
-                'name' => $transaction->user_id === null
-                    ? __('Former member')
-                    : $transaction->user->name,
-            ],
         ];
     }
 }

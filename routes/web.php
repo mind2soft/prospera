@@ -110,8 +110,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::prefix('envelopes')->name('envelopes.')->group(function () {
             Route::get('/', [EnvelopeController::class, 'apiIndex'])->name('index');
-            Route::get('{envelope}/totals', [EnvelopeController::class, 'totals'])->name('totals');
-            Route::get('{envelope}/transactions', [EnvelopeController::class, 'apiTransactions'])->name('transactions.index');
             Route::get('{envelope}/shares', [EnvelopeController::class, 'permissionsIndex'])->name('shares.index');
             Route::post('{envelope}/shares', [EnvelopeController::class, 'addPermission'])->name('shares.store');
             Route::patch('{envelope}/shares/{userId}', [EnvelopeController::class, 'updatePermission'])->name('shares.update');

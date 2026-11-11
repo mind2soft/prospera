@@ -78,9 +78,16 @@ existing **profile members** of the owner (see
   metadata with **masked amounts** (`—`) and a masked "remaining allocated";
   the server masks them (amount `null` plus a `masked` flag) so raw amounts
   never reach clients lacking permission.
-- Amount totals are computed by dedicated server-side endpoints that validate
-  permissions; raw transaction data is never exposed to clients lacking
-  permission.
+- Amount totals are computed server-side by the profile-scoped endpoints
+  that show them (the ledger's transactions, the dashboard's widget data),
+  which validate permissions; raw transaction data is never exposed to
+  clients lacking permission.
+- **Transaction data never crosses profile boundaries.** An envelope can be
+  used by ledgers of several profiles of its owner, but an envelope
+  permission alone never reveals transactions: they are only served
+  through a ledger (or a dashboard of a profile) the caller can read. There
+  is deliberately no envelope-wide transactions or totals endpoint — it
+  would aggregate entries across every profile using the envelope.
 
 ## API
 
@@ -95,8 +102,6 @@ data fetching.
 | `PUT`    | `/envelopes/{envelope}`                        | Update an envelope (owner only; same fields as create)                                                                                                                                                       |
 | `DELETE` | `/envelopes/{envelope}`                        | Delete an envelope (owner only; blocked when referenced)                                                                                                                                                     |
 | `GET`    | `/api/envelopes`                               | List all envelopes visible to the user (their own + ones shared with them via profile membership), each with a `permission` field: `"owner" \| "contributor" \| "viewer" \| "none"` (`none` = metadata-only) |
-| `GET`    | `/api/envelopes/{envelope}/totals`             | Computed transaction totals (optional `from_date`/`to_date` date query params, `to_date` ≥ `from_date`; `422` if invalid); `403` without `viewer`+                                                           |
-| `GET`    | `/api/envelopes/{envelope}/transactions`       | Transactions referencing the envelope; `403` without `viewer`+                                                                                                                                               |
 | `GET`    | `/api/envelopes/{envelope}/shares`             | List shares — the owner row first (labeled `owner`), then explicit rows, each with an `explicit` flag (owner and profile co-members only)                                                                     |
 | `POST`   | `/api/envelopes/{envelope}/shares`             | Assign a permission to a profile member (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                                                                      |
 | `PATCH`  | `/api/envelopes/{envelope}/shares/{userId}`    | Change a member's permission (owner only; `owner` is rejected — use transfer-ownership); returns `200` with `{ shares: [...] }`                                                                              |
