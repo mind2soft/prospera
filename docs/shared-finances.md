@@ -58,7 +58,19 @@ invite for an email and gets a link containing a hash key (`invite_key`).
     the landing page's error. Registered recipients can turn these emails
     off via Settings → Notifications ("Profile invitations").
 - An **existing user** accepts by opening the link while signed in — the invite
-  must match their account email.
+  must match their account email. The confirmation page
+  (`GET /invites/{inviteKey}`) depends on who opens it:
+
+  - **Signed out:** the page is the registration form, and its **Log in**
+    link points at the invite's accept link, so signing in returns to this
+    confirmation page instead of the dashboard.
+  - **Signed in, email not verified:** instead of Accept/Decline the page
+    shows a **"Verify your email address first"** alert with a link to the
+    verification notice (accepting and declining require a verified email).
+  - **Signed in with another address:** an inline alert states that the
+    invite was **issued to another email address** (the invited one and the
+    current one), with **Log out** and a link back to the dashboard; only
+    the invited account can accept or decline.
 - A **new user** registers through the invite link; the invite key is carried
   through registration. Membership is **not** granted at account creation: the
   invite is **reserved** for the new account (`pending_user_id`), and
