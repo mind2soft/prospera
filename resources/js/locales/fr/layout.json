@@ -10,7 +10,6 @@
             "profiles": "Profils",
             "owned": "Possédés",
             "shared": "Partagés",
-            "default": "Par défaut",
             "defaultSuffix": "(par défaut)",
             "manageProfiles": "Gérer les profils",
             "settings": "Paramètres",
