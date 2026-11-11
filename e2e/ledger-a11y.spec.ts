@@ -124,3 +124,15 @@ test('the ledger reflows at 320 px; the table scrolls in a labelled region', asy
         .poll(() => region.evaluate((el) => el.scrollLeft))
         .toBeGreaterThan(0);
 });
+
+test('ledger actions say what they act on', async ({ page }) => {
+    await login(page);
+    await page.goto('/ledger');
+    await page.getByRole('button', { name: 'Ledger actions' }).click();
+    await expect(
+        page.getByRole('menuitem', { name: 'Close ledger', exact: true }),
+    ).toBeVisible();
+    await expect(
+        page.getByRole('menuitem', { name: 'Delete ledger', exact: true }),
+    ).toBeVisible();
+});

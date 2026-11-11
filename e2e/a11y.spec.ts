@@ -169,7 +169,15 @@ test('budget form controls have accessible names', async ({ page }) => {
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
 
+    await expect(
+        page.getByRole('button', {
+            name: 'Remove Food from the budget',
+        }),
+    ).toBeVisible();
     await page.getByRole('button', { name: 'Budget actions' }).click();
+    await expect(
+        page.getByRole('menuitem', { name: 'Delete budget', exact: true }),
+    ).toBeVisible();
     await page.getByRole('menuitem', { name: 'Share' }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await expectNamedControls(page, 'share drawer');

@@ -35,7 +35,8 @@
             "actions": "Actions du budget",
             "publish": "Publier",
             "newBudget": "Nouveau budget",
-            "share": "Partager"
+            "share": "Partager",
+            "delete": "Supprimer le budget"
         },
         "table": {
             "addEnvelope": "Ajouter une enveloppe",
@@ -45,7 +46,6 @@
             "amountFor": "Montant — {name}",
             "leftToSpend": "Reste à dépenser",
             "actions": "Actions",
-            "removeEnvelope": "Retirer l'enveloppe",
             "empty": "Aucune enveloppe assignée pour le moment.",
             "overspending": "Dépassement",
             "leftOver": "Excédent",
@@ -54,7 +54,8 @@
             "saved": "Modifications enregistrées",
             "notSaved": "Une modification n’a pas pu être enregistrée.",
             "invalidAmount": "Non enregistré : saisissez un montant entier d’au moins 1.",
-            "label": "Enveloppes du budget"
+            "label": "Enveloppes du budget",
+            "removeEnvelopeFor": "Retirer {name} du budget"
         },
         "addEnvelope": {
             "title": "Ajouter une enveloppe",

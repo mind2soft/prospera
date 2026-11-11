@@ -141,7 +141,7 @@ const label = (ledger: Ledger): string => {
                         {{
                             isClosed
                                 ? $t('ledger.menu.reopen')
-                                : $t('common.actions.close')
+                                : $t('ledger.menu.close')
                         }}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -153,7 +153,7 @@ const label = (ledger: Ledger): string => {
                         "
                     >
                         <Icon name="delete" class="size-4" aria-hidden="true" />
-                        {{ $t('common.actions.delete') }}
+                        {{ $t('ledger.menu.delete') }}
                     </DropdownMenuItem>
                 </template>
                 <DropdownMenuItem

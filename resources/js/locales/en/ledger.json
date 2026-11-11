@@ -61,7 +61,9 @@
         },
         "menu": {
             "reopen": "Reopen",
-            "share": "Share"
+            "share": "Share",
+            "close": "Close ledger",
+            "delete": "Delete ledger"
         },
         "calendar": {
             "previousMonth": "Previous month",

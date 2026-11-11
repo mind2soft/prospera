@@ -457,7 +457,7 @@ const roleLabel: Record<string, string> = {
                                             class="size-4"
                                             aria-hidden="true"
                                         />
-                                        {{ $t('common.actions.delete') }}
+                                        {{ $t('envelopes.menu.delete') }}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -641,7 +641,7 @@ const roleLabel: Record<string, string> = {
                         {{ $t('common.actions.cancel') }}
                     </Button>
                     <Button variant="destructive" @click="remove">
-                        {{ $t('common.actions.delete') }}
+                        {{ $t('envelopes.delete.confirm') }}
                     </Button>
                 </DialogFooter>
             </DialogContent>

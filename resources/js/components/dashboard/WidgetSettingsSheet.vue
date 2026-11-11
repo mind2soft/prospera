@@ -457,7 +457,9 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                                 size="icon-sm"
                                 class="text-muted-foreground hover:text-destructive"
                                 :aria-label="
-                                    $t('dashboard.settings.removeItem')
+                                    $t('dashboard.settings.removeItemNamed', {
+                                        name: envelopeName(item.envelope_id),
+                                    })
                                 "
                                 @click="removeItem(index)"
                             >
@@ -495,7 +497,10 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                                     size="icon-sm"
                                     class="text-muted-foreground hover:text-destructive"
                                     :aria-label="
-                                        $t('dashboard.settings.removeItem')
+                                        $t(
+                                            'dashboard.settings.removeItemNamed',
+                                            { name: item.name },
+                                        )
                                     "
                                     @click="removeItem(index)"
                                 >
@@ -525,7 +530,17 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                                     <button
                                         type="button"
                                         class="rounded-full p-0.5 text-muted-foreground hover:text-destructive"
-                                        :aria-label="`${$t('dashboard.settings.removeItem')} — ${envelopeName(envelopeId)}`"
+                                        :aria-label="
+                                            $t(
+                                                'dashboard.settings.removeFromGroup',
+                                                {
+                                                    name: envelopeName(
+                                                        envelopeId,
+                                                    ),
+                                                    group: item.name,
+                                                },
+                                            )
+                                        "
                                         @click="
                                             removeFromGroup(index, envelopeId)
                                         "
@@ -670,7 +685,7 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                             size="sm"
                             @click="creatingGroup = false"
                         >
-                            {{ $t('dashboard.removeConfirm.cancel') }}
+                            {{ $t('dashboard.settings.cancelGroup') }}
                         </Button>
                         <Button
                             size="sm"

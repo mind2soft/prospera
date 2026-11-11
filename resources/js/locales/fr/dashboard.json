@@ -73,8 +73,10 @@
             "groupName": "Nom du groupe",
             "groupNamePlaceholder": "p. ex. Revenus combinés",
             "noEnvelopesLeft": "Toutes les enveloppes visibles sont déjà sélectionnées.",
-            "removeItem": "Retirer de la sélection",
-            "done": "Terminé"
+            "done": "Terminé",
+            "removeItemNamed": "Retirer {name} de la sélection",
+            "cancelGroup": "Annuler",
+            "removeFromGroup": "Retirer {name} de {group}"
         },
         "empty": {
             "title": "Personnalisez-le",

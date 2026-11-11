@@ -142,7 +142,7 @@ const isDraft = computed(() => selected.value?.published_at === null);
                     "
                 >
                     <Icon name="delete" class="size-4" aria-hidden="true" />
-                    {{ $t('common.actions.delete') }}
+                    {{ $t('budget.selector.delete') }}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

@@ -35,7 +35,8 @@
             "actions": "Budget actions",
             "publish": "Publish",
             "newBudget": "New Budget",
-            "share": "Share"
+            "share": "Share",
+            "delete": "Delete budget"
         },
         "table": {
             "addEnvelope": "Add envelope",
@@ -45,7 +46,6 @@
             "amountFor": "{name} amount",
             "leftToSpend": "Left to spend",
             "actions": "Actions",
-            "removeEnvelope": "Remove envelope",
             "empty": "No envelopes assigned yet.",
             "overspending": "Overspending",
             "leftOver": "Left over",
@@ -54,7 +54,8 @@
             "saved": "All changes saved",
             "notSaved": "A change could not be saved.",
             "invalidAmount": "Not saved: enter a whole amount of 1 or more.",
-            "label": "Budget envelopes"
+            "label": "Budget envelopes",
+            "removeEnvelopeFor": "Remove {name} from the budget"
         },
         "addEnvelope": {
             "title": "Add an envelope",

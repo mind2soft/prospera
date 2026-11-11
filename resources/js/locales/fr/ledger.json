@@ -61,7 +61,9 @@
         },
         "menu": {
             "reopen": "Rouvrir",
-            "share": "Partager"
+            "share": "Partager",
+            "close": "Clôturer le grand livre",
+            "delete": "Supprimer le grand livre"
         },
         "calendar": {
             "previousMonth": "Mois précédent",

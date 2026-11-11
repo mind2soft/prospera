@@ -261,7 +261,11 @@ const runningLeft = computed(() => {
                                 variant="ghost"
                                 size="icon-sm"
                                 class="text-destructive hover:bg-destructive hover:text-destructive"
-                                :aria-label="$t('budget.table.removeEnvelope')"
+                                :aria-label="
+                                    $t('budget.table.removeEnvelopeFor', {
+                                        name: row.name,
+                                    })
+                                "
                                 :disabled="pendingId === row.envelope_id"
                                 @click="emit('remove', row.envelope_id)"
                             >

@@ -73,8 +73,10 @@
             "groupName": "Group name",
             "groupNamePlaceholder": "e.g. Combine income",
             "noEnvelopesLeft": "Every visible envelope is already selected.",
-            "removeItem": "Remove from selection",
-            "done": "Done"
+            "done": "Done",
+            "removeItemNamed": "Remove {name} from the selection",
+            "cancelGroup": "Cancel",
+            "removeFromGroup": "Remove {name} from {group}"
         },
         "empty": {
             "title": "Make it yours",

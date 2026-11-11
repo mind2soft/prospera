@@ -22,7 +22,8 @@
         },
         "optionsFor": "Envelope options for {name}",
         "menu": {
-            "share": "Share"
+            "share": "Share",
+            "delete": "Delete envelope"
         },
         "dialog": {
             "newTitle": "New envelope",
@@ -55,7 +56,8 @@
         "delete": {
             "title": "Delete envelope?",
             "description": "“{name}” will be removed from your envelopes. Existing transactions are not deleted.",
-            "failed": "Could not delete the envelope."
+            "failed": "Could not delete the envelope.",
+            "confirm": "Delete envelope"
         }
     }
 }
