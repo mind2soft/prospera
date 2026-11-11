@@ -66,7 +66,11 @@ invite for an email and gets a link containing a hash key (`invite_key`).
   its email**. If the email was changed before verification, or the invite was
   revoked, no membership is granted — the account is then seeded with its own
   default profile (see below). A reserved invite can't be used by anyone
-  else (treated as invalid).
+  else (treated as invalid). The reservation is bound by the invite's
+  **48-hour expiry**: verifying after the invite expired grants nothing (the
+  account gets its own default profile and the owner can re-invite it). This
+  keeps the grant consistent with the owner's pending list, which only shows
+  — and offers to revoke — invites that have not expired.
 - Re-inviting the same email (case-insensitive) **replaces** the previous
   unreserved invite for that profile — the raw link key is never stored, so
   this is how a lost link is re-issued. Inviting an email that already belongs
@@ -81,7 +85,8 @@ invite for an email and gets a link containing a hash key (`invite_key`).
   be accepted. Ignoring the invite still declines it implicitly (it expires).
 - Stale invites are pruned daily by the scheduled `php artisan invites:prune`
   command: expired unreserved invites, and reserved invites more than a week
-  past expiry.
+  past expiry (an expired reservation no longer grants membership; it is
+  kept that long only so a late verification still consumes it).
 - The public invite endpoints (`GET /invites/{inviteKey}`,
   `GET /api/invites/{inviteKey}`) and `POST /api/invites/{inviteKey}/accept`
   are rate-limited (20 per minute per IP).

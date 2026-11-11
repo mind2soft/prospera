@@ -216,9 +216,9 @@ class FinancialProfileInvite extends Model
      *
      * Accounts that register through an invite skip the personal default
      * profile seeding (docs/shared-finances.md — invites), so whenever the
-     * pending grant does not happen — the invite was revoked, pruned, or the
-     * account's email changed before verification — the account is seeded
-     * with its own default profile here to keep it usable.
+     * pending grant does not happen — the invite was revoked, pruned or has
+     * expired, or the account's email changed before verification — the
+     * account is seeded with its own default profile here to keep it usable.
      */
     public static function completePendingFor(User $user): void
     {
@@ -235,7 +235,12 @@ class FinancialProfileInvite extends Model
                 return;
             }
 
-            if (mb_strtolower($invite->email) === mb_strtolower($user->email)
+            // An expired reservation no longer grants anything: the owner's
+            // pending list stops showing (and offering to revoke) invites
+            // once they expire, so a grant past expiry would be invisible
+            // to them.
+            if (! $invite->isExpired()
+                && mb_strtolower($invite->email) === mb_strtolower($user->email)
                 && ! $invite->profile->isMember($user)) {
                 $invite->profile->members()->attach($user->id, $invite->membershipPivotAttributes());
 

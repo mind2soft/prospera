@@ -771,6 +771,35 @@ class FinancialProfileInviteTest extends TestCase
         ]);
     }
 
+    public function test_an_expired_reservation_does_not_grant_membership_on_verification(): void
+    {
+        $invite = $this->createInvite(email: 'newbie@example.com');
+
+        $this->post('/register', [
+            'name' => 'New User',
+            'email' => 'newbie@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'invite_key' => self::RAW_KEY,
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $user = User::where('email', 'newbie@example.com')->firstOrFail();
+
+        // WF-2: past its expiry the reservation disappears from the owner's
+        // pending list (nothing left to revoke) — so it must not grant.
+        $this->travel(49)->hours();
+        $this->actingAs($this->owner)->getJson("/api/profiles/{$this->profile->id}/invites")
+            ->assertOk()->assertJsonCount(0, 'invites');
+
+        $user->markEmailAsVerified();
+        event(new Verified($user));
+
+        $this->assertFalse($this->profile->isMember($user));
+        $this->assertSame(1, $user->profiles()->count());
+        $this->assertTrue($user->profiles()->sole()->isOwner($user));
+        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
+    }
+
     public function test_registration_without_an_invite_still_creates_a_default_profile(): void
     {
         $this->post('/register', [
