@@ -135,10 +135,15 @@ const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
 
 /**
  * A draft can only be handed to the profile owner (docs/budget.md —
- * ownership): anyone else could neither publish nor delete it.
+ * ownership): anyone else could neither publish nor delete it. Only the
+ * budget's owner sees the transfer, so only they fetch the members.
  */
 const profileMembersQuery = useProfileMembers(
-    computed(() => (isDraft.value ? (currentProfile.value?.id ?? null) : null)),
+    computed(() =>
+        isDraft.value && isOwner.value
+            ? (currentProfile.value?.id ?? null)
+            : null,
+    ),
 );
 const draftTransferTo = computed(() =>
     isDraft.value
@@ -679,7 +684,7 @@ const onRemoveEnvelope = (envelopeId: number) => {
                 isDraft ? $t('budget.share.draftTransferNote') : undefined
             "
             :current-user-id="currentUserId"
-            :can-manage="budget.permission === 'owner'"
+            :can-manage="isOwner"
             @update:open="showShare = $event"
             @set-permission="onSetSharePermission"
             @revoke="onRevokeShare"
