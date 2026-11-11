@@ -245,7 +245,7 @@ const rightNavItems = computed<NavItem[]>(() => [
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                class="relative size-10 w-auto rounded-full p-1 focus-within:ring-2 focus-within:ring-primary"
+                                class="relative size-10 w-auto rounded-full p-1 focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 focus-within:ring-offset-background"
                             >
                                 <Avatar
                                     class="size-8 overflow-hidden rounded-full"
