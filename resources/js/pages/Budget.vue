@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import { useQueryClient } from '@tanstack/vue-query';
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    ref,
+    useTemplateRef,
+    watch,
+} from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import AddEnvelopeDialog from '@/components/Budget/AddEnvelopeDialog.vue';
@@ -272,11 +279,31 @@ const onTransferOwnership = (userId: number) => {
     );
 };
 
-const onPublish = () => {
+/** Waiting for pending amount saves before publishing. */
+const flushingBeforePublish = ref(false);
+
+const onPublish = async () => {
     const id = selectedId.value ?? budget.value?.id;
     if (id === undefined) {
         return;
     }
+
+    // A published budget is read-only: an amount edit still debounced or in
+    // flight would be rejected after publish and silently lost.
+    flushingBeforePublish.value = true;
+    let saved: boolean;
+    try {
+        saved = await flushAmountSaves();
+    } finally {
+        flushingBeforePublish.value = false;
+    }
+
+    if (!saved) {
+        // The failed save was reported; publishing now would publish the
+        // previous amount.
+        return;
+    }
+
     publishBudget.mutate(
         { id, month: publishMonth.value },
         {
@@ -417,6 +444,9 @@ const onEditAmount = (envelopeId: number, amount: number) => {
     });
 };
 
+/** In-flight amount saves, so publishing can wait for them. */
+const inFlightRequests = new Set<Promise<boolean>>();
+
 const saveAmount = (
     envelopeId: number,
     budgetIdValue: number,
@@ -424,31 +454,50 @@ const saveAmount = (
 ) => {
     pendingSaves.delete(envelopeId);
     inFlightSaves.value += 1;
-    updateEnvelope.mutate(
-        { budgetId: budgetIdValue, envelopeId, amount },
-        {
-            onSettled: () => {
-                inFlightSaves.value -= 1;
-                settleSaveStatus();
-            },
-            onError: (error) => {
+    // `mutateAsync`, not `mutate` callbacks: those only fire for the latest
+    // of several concurrent calls, which would leave a save counted forever.
+    const request: Promise<boolean> = updateEnvelope
+        .mutateAsync({ budgetId: budgetIdValue, envelopeId, amount })
+        .then(
+            () => true,
+            (error: unknown) => {
                 saveStatus.value = 'error';
                 fail(error);
                 void queryClient.invalidateQueries({
                     queryKey: budgetKeys.detail(budgetIdValue),
                 });
+
+                return false;
             },
-        },
-    );
+        )
+        .finally(() => {
+            inFlightSaves.value -= 1;
+            inFlightRequests.delete(request);
+            settleSaveStatus();
+        });
+    inFlightRequests.add(request);
 };
 
-onBeforeUnmount(() => {
+/**
+ * Sends every debounced amount edit now and waits for all saves to land;
+ * false when one of them failed.
+ */
+const flushAmountSaves = async (): Promise<boolean> => {
     for (const [envelopeId, pending] of pendingSaves) {
         clearTimeout(pending.timer);
         saveAmount(envelopeId, pending.budgetId, pending.amount);
     }
-    pendingSaves.clear();
+    const results = await Promise.all([...inFlightRequests]);
+
+    return results.every(Boolean);
+};
+
+onBeforeUnmount(() => {
+    void flushAmountSaves();
 });
+
+const envelopeTable =
+    useTemplateRef<InstanceType<typeof BudgetEnvelopeTable>>('envelopeTable');
 
 const onRemoveEnvelope = (envelopeId: number) => {
     const id = budgetId.value;
@@ -462,7 +511,12 @@ const onRemoveEnvelope = (envelopeId: number) => {
             onSettled: () => {
                 pendingEnvelopeId.value = null;
             },
-            onSuccess: () => toast.success(t('budget.toast.envelopeRemoved')),
+            onSuccess: async () => {
+                toast.success(t('budget.toast.envelopeRemoved'));
+                // The row's remove button is gone: keep focus in the table.
+                await nextTick();
+                envelopeTable.value?.focus();
+            },
             onError: fail,
         },
     );
@@ -572,6 +626,7 @@ const onRemoveEnvelope = (envelopeId: number) => {
                 />
 
                 <BudgetEnvelopeTable
+                    ref="envelopeTable"
                     :envelopes="budget.envelopes"
                     :currency="budget.currency"
                     :editable="canEdit"
@@ -652,8 +707,16 @@ const onRemoveEnvelope = (envelopeId: number) => {
                             $t('common.actions.cancel')
                         }}</Button
                     >
-                    <Button :disabled="working" @click="onPublish">
-                        <Spinner v-if="publishBudget.isPending.value" />
+                    <Button
+                        :disabled="working || flushingBeforePublish"
+                        @click="onPublish"
+                    >
+                        <Spinner
+                            v-if="
+                                publishBudget.isPending.value ||
+                                flushingBeforePublish
+                            "
+                        />
                         {{ $t('budget.confirm.publishButton') }}
                     </Button>
                 </DialogFooter>

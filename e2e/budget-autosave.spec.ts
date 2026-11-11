@@ -63,3 +63,74 @@ test('an invalid amount is explained inline instead of silently reverted', async
     await expect(amount).toHaveValue('800');
     await expect(amount).not.toHaveAttribute('aria-invalid', 'true');
 });
+
+test('publishing waits for a pending amount edit to be saved', async ({
+    page,
+}) => {
+    // A fake clock (paused below) keeps the debounced save from firing on
+    // its own: the publish is asked for inside the debounce window.
+    await page.clock.install();
+    await login(page);
+    await page.goto('/budget');
+
+    // Hold the amount save in flight until the publish has been asked for.
+    const order: string[] = [];
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    await page.route(/\/api\/budgets\/\d+\/envelopes\/\d+$/, async (route) => {
+        if (route.request().method() !== 'PATCH') {
+            return route.fallback();
+        }
+        await held;
+        await route.continue();
+        order.push('amount saved');
+    });
+    page.on('request', (request) => {
+        if (request.method() === 'POST' && /\/publish$/.test(request.url())) {
+            order.push('publish sent');
+        }
+    });
+
+    // Edit, then publish right away (inside the autosave debounce).
+    await page.clock.pauseAt(Date.now() + 60_000);
+    await page.getByRole('spinbutton', { name: 'Food amount' }).fill('950');
+    await page.getByRole('button', { name: 'Budget actions' }).click();
+    await page.getByRole('menuitem', { name: 'Publish' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Publish this budget?' });
+    await dialog.getByRole('button', { name: 'Publish' }).click();
+
+    // Confirm waits (busy) while the edit is saving; nothing is published.
+    await expect(
+        dialog.getByRole('button', { name: 'Publish' }),
+    ).toBeDisabled();
+    expect(order).toEqual([]);
+
+    release();
+    await page.clock.resume();
+    await expect(page.getByText('Budget published.')).toBeVisible();
+    expect(order).toEqual(['amount saved', 'publish sent']);
+
+    // The published budget carries the edited amount.
+    await page.reload();
+    await expect(
+        page.getByRole('row', { name: /Food/ }).getByText('$950'),
+    ).toBeVisible();
+});
+
+test('removing an envelope keeps keyboard focus in the table', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/budget');
+
+    await page
+        .getByRole('button', { name: 'Remove Food from the budget' })
+        .click();
+    await expect(page.getByText('Envelope removed.')).toBeVisible();
+    // The row's button is gone: focus lands on the table, not <body>.
+    await expect(
+        page.getByRole('region', { name: 'Budget envelopes' }),
+    ).toBeFocused();
+});
