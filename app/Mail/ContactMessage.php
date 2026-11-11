@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -10,13 +11,15 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Contact-form submission (issue #17), queued. The recipient is the
+ * Contact-form submission (issue #17), queued — encrypted in the queue
+ * (ShouldBeEncrypted): the payload carries the message, which is encrypted
+ * at rest in contact_submissions too. The recipient is the
  * deployment-configured contact address; the submitter's email is set as
  * Reply-To so maintainers can answer directly. Subject and message are
  * sanitized to plain text upstream (see ContactController) and rendered as
  * plain text (no HTML escaping — the text part is not HTML).
  */
-class ContactMessage extends Mailable implements ShouldQueue
+class ContactMessage extends Mailable implements ShouldBeEncrypted, ShouldQueue
 {
     use Queueable, SerializesModels;
 

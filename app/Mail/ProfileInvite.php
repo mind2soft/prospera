@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Settings\NotificationSettings;
 use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
@@ -29,9 +30,11 @@ use Illuminate\Queue\SerializesModels;
  * dispatch time and again at send time (inside the queued send), per
  * docs/notifications.md. Recipients without an account have no settings to
  * honor and always receive the invite. The invite key hash never appears in
- * any email.
+ * any email. The links carry the raw invite key, which is never stored: the
+ * queued payload is encrypted (ShouldBeEncrypted), so the jobs and
+ * failed_jobs tables do not hold it in the clear either.
  */
-class ProfileInvite extends Mailable implements ShouldQueue
+class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
 {
     use Queueable, SerializesModels;
 
