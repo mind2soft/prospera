@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\Profile\StoreFinancialProfileRequest;
+use App\Http\Requests\Profile\UpdateFinancialProfileRequest;
+use App\Http\Requests\Sharing\TransferOwnershipRequest;
 use App\Models\Budget;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
 use App\Models\User;
+use App\Services\ResourcePermissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -14,6 +18,10 @@ use Illuminate\Validation\ValidationException;
 
 class FinancialProfileController extends Controller
 {
+    public function __construct(
+        private readonly ResourcePermissionService $permissionService,
+    ) {}
+
     /**
      * List all the user's profiles (owned + shared), each with the caller's
      * is_owner and is_default membership flags.
@@ -44,11 +52,9 @@ class FinancialProfileController extends Controller
     /**
      * Create a profile — the creator becomes the owner.
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreFinancialProfileRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-        ]);
+        $validated = $request->validated();
 
         $profile = FinancialProfile::createOwnedBy($request->user(), $validated['name']);
 
@@ -62,7 +68,7 @@ class FinancialProfileController extends Controller
      */
     public function show(Request $request, FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile);
+        $this->authorize('view', $profile);
 
         return response()->json([
             'profile' => $this->serialize(
@@ -76,15 +82,9 @@ class FinancialProfileController extends Controller
     /**
      * Rename a profile (owner only).
      */
-    public function update(Request $request, FinancialProfile $profile): JsonResponse
+    public function update(UpdateFinancialProfileRequest $request, FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile, ownerOnly: true);
-
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-        ]);
-
-        $profile->update($validated);
+        $profile->update($request->validated());
 
         return response()->json([
             'profile' => $this->serialize(
@@ -102,7 +102,7 @@ class FinancialProfileController extends Controller
      */
     public function setDefault(Request $request, FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile);
+        $this->authorize('view', $profile);
 
         $profile->markDefaultFor($request->user());
 
@@ -121,9 +121,9 @@ class FinancialProfileController extends Controller
      * defaults are reassigned afterwards (earliest created owned profile,
      * else earliest remaining membership, else a seeded default).
      */
-    public function destroy(Request $request, FinancialProfile $profile): JsonResponse
+    public function destroy(FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile, ownerOnly: true);
+        $this->authorize('delete', $profile);
 
         $hasBudgets = Budget::query()->where('profile_id', $profile->id)->exists();
         $hasLedgers = Ledger::query()->where('profile_id', $profile->id)->exists();
@@ -157,9 +157,9 @@ class FinancialProfileController extends Controller
     /**
      * List the profile's members.
      */
-    public function members(Request $request, FinancialProfile $profile): JsonResponse
+    public function members(FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile);
+        $this->authorize('view', $profile);
 
         $members = DB::table('financial_profile_user')
             ->join('users', 'users.id', '=', 'financial_profile_user.user_id')
@@ -195,7 +195,7 @@ class FinancialProfileController extends Controller
     {
         $current = $request->user();
 
-        $this->authorizeProfile($request, $profile);
+        $this->authorize('view', $profile);
         abort_unless($profile->isMember($user), 404);
 
         if ($user->id === $current->id) {
@@ -206,7 +206,7 @@ class FinancialProfileController extends Controller
                 ]);
             }
         } else {
-            $this->authorizeProfile($request, $profile, ownerOnly: true);
+            $this->authorize('manage', $profile);
 
             if ($profile->isOwner($user)) {
                 throw ValidationException::withMessages([
@@ -223,28 +223,13 @@ class FinancialProfileController extends Controller
     /**
      * Transfer ownership to a member; the previous owner is demoted.
      */
-    public function transferOwnership(Request $request, FinancialProfile $profile): JsonResponse
+    public function transferOwnership(TransferOwnershipRequest $request, FinancialProfile $profile): JsonResponse
     {
-        $this->authorizeProfile($request, $profile, ownerOnly: true);
-
-        $validated = $request->validate([
-            'user_id' => ['required', 'integer'],
-        ]);
-
-        /** @var User|null $target */
-        $target = User::query()->find($validated['user_id']);
-
-        if ($target === null || ! $profile->isMember($target)) {
-            throw ValidationException::withMessages([
-                'user_id' => __('The target user must be a member of the profile.'),
-            ]);
-        }
-
-        if ($target->id === $request->user()->id) {
-            throw ValidationException::withMessages([
-                'user_id' => __('You already own this profile.'),
-            ]);
-        }
+        $target = $this->permissionService->ensureNotOwner(
+            $this->permissionService->profileMember($profile, $request->targetId()),
+            $request->user(),
+            __('You already own this profile.'),
+        );
 
         $profile->transferOwnershipTo($target);
 

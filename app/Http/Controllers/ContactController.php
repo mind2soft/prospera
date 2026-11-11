@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ContactRequest;
 use App\Mail\ContactMessage;
 use App\Models\ContactSubmission;
 use Illuminate\Http\JsonResponse;
@@ -14,13 +15,6 @@ use Inertia\Response;
 
 class ContactController extends Controller
 {
-    /**
-     * Maximum lengths, mirrored client-side (issue #17).
-     */
-    private const SUBJECT_MAX = 100;
-
-    private const MESSAGE_MAX = 4000;
-
     /**
      * Render the contact form (guests and authenticated users).
      */
@@ -44,24 +38,9 @@ class ContactController extends Controller
      * users; the signed-in account email always wins over the (read-only)
      * form field.
      */
-    public function store(Request $request): JsonResponse
+    public function store(ContactRequest $request): JsonResponse
     {
-        if ($request->user()) {
-            $request->merge(['email' => $request->user()->email]);
-        }
-
-        $validated = $request->validate([
-            'email' => ['required', 'email:filter', 'max:255'],
-            'subject' => ['required', 'string', 'max:'.self::SUBJECT_MAX],
-            'message' => ['required', 'string', 'max:'.self::MESSAGE_MAX],
-        ], [
-            'email.required' => __('Please enter your email address.'),
-            'email.email' => __('Please enter a valid email address.'),
-            'subject.required' => __('Please enter a subject.'),
-            'subject.max' => __('The subject must not exceed :max characters.'),
-            'message.required' => __('Please enter a message.'),
-            'message.max' => __('The message must not exceed :max characters.'),
-        ]);
+        $validated = $request->validated();
 
         $subject = self::sanitize($validated['subject']);
         $message = self::sanitize($validated['message']);

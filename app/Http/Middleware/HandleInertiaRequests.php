@@ -41,6 +41,8 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            // The locale server-side strings are rendered in (SetLocale).
+            'locale' => app()->getLocale(),
             'locales' => config('app.available_locales'),
             'githubRepoUrl' => config('prospera.github_repo_url'),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',

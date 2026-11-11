@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\EnvelopeRequest;
+use App\Http\Requests\Sharing\StoreShareRequest;
+use App\Http\Requests\Sharing\TransferOwnershipRequest;
+use App\Http\Requests\Sharing\UpdateShareRequest;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\User;
@@ -10,6 +13,7 @@ use App\Services\ResourcePermissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -49,7 +53,7 @@ class EnvelopeController extends Controller
 
     public function update(EnvelopeRequest $request, Envelope $envelope): RedirectResponse
     {
-        $this->authorizeOwner($request, $envelope);
+        $this->authorize('update', $envelope);
 
         $validated = $request->validated();
 
@@ -77,9 +81,9 @@ class EnvelopeController extends Controller
         return to_route('envelopes');
     }
 
-    public function destroy(Request $request, Envelope $envelope): RedirectResponse
+    public function destroy(Envelope $envelope): RedirectResponse
     {
-        $this->authorizeOwner($request, $envelope);
+        $this->authorize('delete', $envelope);
 
         if ($envelope->budgetEnvelopes()->exists()) {
             throw ValidationException::withMessages([
@@ -104,9 +108,9 @@ class EnvelopeController extends Controller
      * List the envelope's permission rows with the owner row first (owner
      * and profile co-members only).
      */
-    public function permissionsIndex(Request $request, Envelope $envelope): JsonResponse
+    public function permissionsIndex(Envelope $envelope): JsonResponse
     {
-        $this->authorizeVisibleToOwnerCircle($request, $envelope);
+        $this->authorize('viewShares', $envelope);
 
         return response()->json([
             'shares' => $this->permissionService->explicitPermissions('envelope_permissions', 'envelope_id', $envelope->id, $envelope->user),
@@ -117,13 +121,11 @@ class EnvelopeController extends Controller
      * Assign a permission to a profile member of the owner ("owner" is
      * rejected — use transfer-ownership).
      */
-    public function addPermission(Request $request, Envelope $envelope): JsonResponse
+    public function addPermission(StoreShareRequest $request, Envelope $envelope): JsonResponse
     {
-        $this->authorizeOwner($request, $envelope);
+        $target = $this->permissionService->ownerCoMember($envelope->user, $request->targetId());
 
-        $validated = $this->permissionService->validateOwnedPermission($request, $envelope->user);
-
-        $this->permissionService->createPermission('envelope_permissions', 'envelope_id', $envelope->id, $validated['user_id'], $validated['permission'], 'envelope');
+        $this->permissionService->createPermission('envelope_permissions', 'envelope_id', $envelope->id, $target->id, $request->permission(), __('This envelope is already shared with this user.'));
 
         return response()->json(status: 201);
     }
@@ -132,13 +134,9 @@ class EnvelopeController extends Controller
      * Change a member's permission ("owner" is rejected — use
      * transfer-ownership).
      */
-    public function updatePermission(Request $request, Envelope $envelope, int $userId): JsonResponse
+    public function updatePermission(UpdateShareRequest $request, Envelope $envelope, int $userId): JsonResponse
     {
-        $this->authorizeOwner($request, $envelope);
-
-        $permission = $this->permissionService->validatePermission($request);
-
-        $this->permissionService->updatePermission('envelope_permissions', 'envelope_id', $envelope->id, $userId, $permission);
+        $this->permissionService->updatePermission('envelope_permissions', 'envelope_id', $envelope->id, $userId, $request->permission());
 
         return response()->json([
             'shares' => $this->permissionService->explicitPermissions('envelope_permissions', 'envelope_id', $envelope->id, $envelope->user),
@@ -148,9 +146,9 @@ class EnvelopeController extends Controller
     /**
      * Revoke a share (owner only).
      */
-    public function removePermission(Request $request, Envelope $envelope, int $userId): JsonResponse
+    public function removePermission(Envelope $envelope, int $userId): JsonResponse
     {
-        $this->authorizeOwner($request, $envelope);
+        $this->authorize('share', $envelope);
 
         $this->permissionService->deletePermission('envelope_permissions', 'envelope_id', $envelope->id, $userId);
 
@@ -161,32 +159,19 @@ class EnvelopeController extends Controller
      * Transfer ownership to a member of the owner's profiles; the previous
      * owner becomes a contributor.
      */
-    public function transferOwnership(Request $request, Envelope $envelope): JsonResponse
+    public function transferOwnership(TransferOwnershipRequest $request, Envelope $envelope): JsonResponse
     {
-        $this->authorizeOwner($request, $envelope);
-
-        $target = $this->permissionService->validateOwnedTransferTarget($request, $envelope->user);
+        $target = $this->permissionService->ensureNotOwner(
+            $this->permissionService->ownerCoMember($envelope->user, $request->targetId()),
+            $envelope->user,
+            __('This user already owns this envelope.'),
+        );
 
         $envelope->transferOwnershipTo($target);
 
         return response()->json([
             'envelope' => $this->serializeEnvelope($envelope->refresh(), $request->user()),
         ]);
-    }
-
-    /**
-     * Shares are visible to the owner and to profile co-members of the
-     * owner.
-     */
-    private function authorizeVisibleToOwnerCircle(Request $request, Envelope $envelope): void
-    {
-        $user = $request->user();
-
-        if ($envelope->isOwner($user)) {
-            return;
-        }
-
-        abort_unless(FinancialProfile::membersShareAProfile($envelope->user, $user), 404);
     }
 
     /**
@@ -197,36 +182,31 @@ class EnvelopeController extends Controller
      */
     private function visibleEnvelopes(User $user): array
     {
+        $coMemberIds = FinancialProfile::coMemberIdsOf($user->id);
+
         return Envelope::query()
             ->visibleTo($user)
             ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
             ->orderBy('type')
             ->orderBy('name')
             ->get()
-            ->map(fn (Envelope $envelope) => $this->serializeEnvelope($envelope, $user))
+            ->map(fn (Envelope $envelope) => $this->serializeEnvelope($envelope, $user, $coMemberIds))
             ->values()
             ->all();
     }
 
     /**
-     * Envelope management is owner-only; anything else is invisible (404).
-     */
-    private function authorizeOwner(Request $request, Envelope $envelope): void
-    {
-        abort_unless($envelope->isOwner($request->user()), 404);
-    }
-
-    /**
+     * @param  Collection<int, int>|null  $coMemberIds
      * @return array<string, string|int>
      */
-    private function serializeEnvelope(Envelope $envelope, User $user): array
+    private function serializeEnvelope(Envelope $envelope, User $user, ?Collection $coMemberIds = null): array
     {
         return [
             'id' => $envelope->id,
             'name' => $envelope->name,
             'direction' => $envelope->type,
             'color' => $envelope->color,
-            'permission' => $envelope->permissionFor($user),
+            'permission' => $envelope->permissionFor($user, $coMemberIds),
         ];
     }
 }

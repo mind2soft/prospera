@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Settings;
 
 use App\Actions\DeleteAccount;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\SetLocale;
 use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -38,6 +40,9 @@ class ProfileController extends Controller
         }
 
         $request->user()->save();
+
+        // A changed preferred language applies to this response already.
+        App::setLocale(SetLocale::resolve($request));
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Profile updated.')]);
 

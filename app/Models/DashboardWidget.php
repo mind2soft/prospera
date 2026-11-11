@@ -115,7 +115,7 @@ final class DashboardWidget extends Model
      *
      * @return Builder<static>
      */
-    public static function scopeFor(int $userId, int $profileId): Builder
+    public static function forUserAndProfile(int $userId, int $profileId): Builder
     {
         $query = self::query();
 
