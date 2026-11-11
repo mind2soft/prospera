@@ -3,6 +3,8 @@
 namespace App\Security\Amounts;
 
 use App\Models\FinancialProfileKey;
+use Illuminate\Database\QueryException;
+use PDOException;
 use RuntimeException;
 
 /**
@@ -17,34 +19,35 @@ final class AmountKeyHealthCheck
         TXT;
 
     /**
-     * Unwrap one amount key per profile — its highest active version: cheap,
-     * and enough to detect an APP_KEY rotation, which breaks every wrapped
-     * key at once. Damage limited to individual amounts is caught by
-     * `amounts:verify`.
+     * Unwrap a single amount key — the most recently created active one. An
+     * APP_KEY rotation breaks every wrapped key at once, so one key detects
+     * it at constant cost (one indexed query, one unwrap) whatever the
+     * number of profiles. Damage limited to individual keys or amounts is
+     * caught by `amounts:verify` (deploys and daily).
+     *
+     * A database that cannot be read (down, locked, not migrated yet) is
+     * not this check's concern: it is skipped so the request reaches its
+     * own error handling (and the maintenance page keeps rendering).
      */
     public function assertAppKeyCanUnwrap(): void
     {
-        $latest = FinancialProfileKey::query()
-            ->selectRaw('profile_id, MAX(version) as version')
-            ->whereNull('retired_at')
-            ->groupBy('profile_id');
+        try {
+            $row = FinancialProfileKey::query()
+                ->whereNull('retired_at')
+                ->orderByDesc('id')
+                ->first(['profile_id', 'version', 'wrapped_key']);
+        } catch (QueryException|PDOException) {
+            return;
+        }
 
-        $rows = FinancialProfileKey::query()
-            ->joinSub($latest, 'latest', fn ($join) => $join
-                ->on('financial_profile_keys.profile_id', 'latest.profile_id')
-                ->on('financial_profile_keys.version', 'latest.version'))
-            ->get([
-                'financial_profile_keys.profile_id as profile_id',
-                'financial_profile_keys.version as version',
-                'financial_profile_keys.wrapped_key as wrapped_key',
-            ]);
+        if ($row === null) {
+            return;
+        }
 
-        foreach ($rows as $row) {
-            try {
-                AmountKeyRing::unwrap($row->profile_id, $row->version, $row->wrapped_key);
-            } catch (AmountDecryptionException $exception) {
-                throw new RuntimeException(self::MESSAGE, previous: $exception);
-            }
+        try {
+            AmountKeyRing::unwrap($row->profile_id, $row->version, $row->wrapped_key);
+        } catch (AmountDecryptionException $exception) {
+            throw new RuntimeException(self::MESSAGE, previous: $exception);
         }
     }
 }
