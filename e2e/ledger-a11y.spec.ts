@@ -49,3 +49,42 @@ test('ledger form controls have accessible names', async ({ page }) => {
         .analyze();
     expect(results.violations.map((v) => v.id)).toEqual([]);
 });
+
+test('calendar days are named, expose today/selection and use arrow keys', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/ledger');
+    const calendar = page.getByTestId('month-calendar');
+    const days = calendar.getByRole('group');
+    await expect(days).toHaveAccessibleName(/\d{4}/);
+
+    const selected = calendar.locator('[aria-pressed="true"]');
+    await expect(selected).toHaveCount(1);
+    await expect(selected).toHaveAttribute('tabindex', '0');
+    await expect(
+        calendar.locator('button[tabindex="0"][data-date]'),
+    ).toHaveCount(1);
+    // The accessible name is the full localized date, not just "12".
+    await expect(selected).toHaveAccessibleName(/\w+, \w+ \d{1,2}, \d{4}/);
+
+    const date = await selected.getAttribute('data-date');
+    const [y, m, d] = (date ?? '').split('-').map(Number);
+    const isoOf = (day: Date) =>
+        `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    if (date === isoOf(new Date())) {
+        await expect(selected).toHaveAttribute('aria-current', 'date');
+    }
+    // Move one day back — inside the ledger's period (2026) unless the
+    // selected day is its first day, then move forward.
+    const back = new Date(y, m - 1, d - 1);
+    const goBack = isoOf(back) >= '2026-01-01';
+    const target = isoOf(goBack ? back : new Date(y, m - 1, d + 1));
+
+    await selected.focus();
+    await page.keyboard.press(goBack ? 'ArrowLeft' : 'ArrowRight');
+    const targetDay = calendar.locator(`[data-date="${target}"]`);
+    await expect(targetDay).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(targetDay).toHaveAttribute('aria-pressed', 'true');
+});

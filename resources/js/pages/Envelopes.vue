@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { RadioGroupIndicator, RadioGroupItem, RadioGroupRoot } from 'reka-ui';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
@@ -77,6 +78,11 @@ const palette = [
     { name: 'envelopes.colors.violet', value: '#8b5cf6' },
     { name: 'envelopes.colors.slate', value: '#64748b' },
 ];
+
+const typeOptions = [
+    { value: 'expense', label: 'envelopes.form.expense', icon: 'south-west' },
+    { value: 'revenue', label: 'envelopes.form.revenue', icon: 'north-east' },
+] as const;
 
 const defaults = {
     name: '',
@@ -342,9 +348,13 @@ const roleLabel: Record<string, string> = {
                 ]"
                 :key="group.type"
                 class="space-y-4"
+                :aria-labelledby="`envelope-group-${group.type}`"
             >
                 <div class="flex items-center gap-3">
-                    <h2 class="text-sm font-medium text-muted-foreground">
+                    <h2
+                        :id="`envelope-group-${group.type}`"
+                        class="text-sm font-medium text-muted-foreground"
+                    >
                         {{ $t(group.title) }}
                     </h2>
                     <div
@@ -522,68 +532,69 @@ const roleLabel: Record<string, string> = {
                     </div>
 
                     <div class="grid gap-2">
-                        <Label>{{ $t('envelopes.form.type') }}</Label>
-                        <div
+                        <Label id="envelope-type-label" as="span">{{
+                            $t('envelopes.form.type')
+                        }}</Label>
+                        <RadioGroupRoot
+                            id="envelope-type"
+                            v-model="form.type"
+                            aria-labelledby="envelope-type-label"
+                            orientation="horizontal"
                             class="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1"
                         >
-                            <button
-                                type="button"
-                                class="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all"
-                                :class="
-                                    form.type === 'expense'
-                                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
-                                        : 'text-muted-foreground hover:text-foreground'
-                                "
-                                @click="form.type = 'expense'"
+                            <RadioGroupItem
+                                v-for="option in typeOptions"
+                                :key="option.value"
+                                :value="option.value"
+                                class="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-background data-[state=checked]:text-foreground data-[state=checked]:shadow-sm data-[state=checked]:ring-1 data-[state=checked]:ring-border"
                             >
                                 <Icon
-                                    name="south-west"
+                                    :name="option.icon"
                                     class="size-4"
                                     aria-hidden="true"
                                 />
-                                {{ $t('envelopes.form.expense') }}
-                            </button>
-                            <button
-                                type="button"
-                                class="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all"
-                                :class="
-                                    form.type === 'revenue'
-                                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
-                                        : 'text-muted-foreground hover:text-foreground'
-                                "
-                                @click="form.type = 'revenue'"
-                            >
-                                <Icon
-                                    name="north-east"
-                                    class="size-4"
-                                    aria-hidden="true"
-                                />
-                                {{ $t('envelopes.form.revenue') }}
-                            </button>
-                        </div>
-                        <InputError :message="form.errors.type" />
+                                {{ $t(option.label) }}
+                            </RadioGroupItem>
+                        </RadioGroupRoot>
+                        <InputError
+                            for="envelope-type"
+                            :message="form.errors.type"
+                        />
                     </div>
 
                     <div class="grid gap-2">
-                        <Label>{{ $t('envelopes.form.color') }}</Label>
-                        <div class="flex flex-wrap gap-2">
-                            <button
+                        <Label id="envelope-color-label" as="span">{{
+                            $t('envelopes.form.color')
+                        }}</Label>
+                        <RadioGroupRoot
+                            id="envelope-color"
+                            v-model="form.color"
+                            aria-labelledby="envelope-color-label"
+                            orientation="horizontal"
+                            class="flex flex-wrap gap-2"
+                        >
+                            <RadioGroupItem
                                 v-for="color in palette"
                                 :key="color.value"
-                                type="button"
-                                class="size-8 rounded-full transition-transform hover:scale-110"
-                                :class="
-                                    form.color === color.value
-                                        ? 'ring-2 ring-ring ring-offset-2 ring-offset-background'
-                                        : 'ring-1 ring-border'
-                                "
+                                :value="color.value"
+                                class="grid size-8 place-items-center rounded-full ring-1 ring-border outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[state=checked]:ring-2 data-[state=checked]:ring-ring data-[state=checked]:ring-offset-2 data-[state=checked]:ring-offset-background"
                                 :style="{ backgroundColor: color.value }"
                                 :title="$t(color.name)"
                                 :aria-label="$t(color.name)"
-                                @click="form.color = color.value"
-                            />
-                        </div>
-                        <InputError :message="form.errors.color" />
+                            >
+                                <RadioGroupIndicator>
+                                    <Icon
+                                        name="check"
+                                        class="size-4 text-white drop-shadow"
+                                        aria-hidden="true"
+                                    />
+                                </RadioGroupIndicator>
+                            </RadioGroupItem>
+                        </RadioGroupRoot>
+                        <InputError
+                            for="envelope-color"
+                            :message="form.errors.color"
+                        />
                     </div>
 
                     <DialogFooter class="gap-2 pt-2">

@@ -194,3 +194,41 @@ test('validation errors are linked to their field, announced and focused', async
     );
     await expect(email).toBeFocused();
 });
+
+test('the envelope type and color pickers expose their selection', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/envelopes');
+    await page.getByRole('button', { name: 'New envelope' }).first().click();
+    const dialog = page.getByRole('dialog');
+
+    const type = dialog.getByRole('radiogroup', { name: 'Type' });
+    await expect(type.getByRole('radio', { name: 'Expense' })).toBeChecked();
+    await type.getByRole('radio', { name: 'Expense' }).click();
+    await expect(type.getByRole('radio', { name: 'Expense' })).toBeFocused();
+    // Arrow keys move the selection (held like a real key press: reka
+    // checks the radio on focus while the arrow key is still down).
+    await page.keyboard.down('ArrowRight');
+    await expect(type.getByRole('radio', { name: 'Revenue' })).toBeChecked();
+    await page.keyboard.up('ArrowRight');
+    await expect(type.getByRole('radio', { name: 'Revenue' })).toBeFocused();
+    await expect(
+        type.getByRole('radio', { name: 'Expense' }),
+    ).not.toBeChecked();
+
+    const color = dialog.getByRole('radiogroup', { name: 'Color' });
+    await expect(color.getByRole('radio', { checked: true })).toHaveCount(1);
+    await color.getByRole('radio', { name: 'Teal' }).click();
+    await expect(color.getByRole('radio', { name: 'Teal' })).toBeChecked();
+
+    // The picked values are submitted.
+    await dialog.getByRole('textbox', { name: 'Name' }).fill('Bonus');
+    await dialog.getByRole('button', { name: 'Create envelope' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(
+        page
+            .getByRole('region', { name: 'Revenue' })
+            .getByText('Bonus', { exact: true }),
+    ).toBeVisible();
+});

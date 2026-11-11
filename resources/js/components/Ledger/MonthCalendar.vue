@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/composables/useLocale';
@@ -112,6 +112,94 @@ const weeks = computed<CalendarDay[][]>(() => {
     return grid;
 });
 
+/** Full, localized date for a day's accessible name. */
+const fullDateLabel = (date: string): string => {
+    const [year, month, day] = date.split('-').map(Number);
+    return new Date(year, month - 1, day).toLocaleDateString(locale.value, {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    });
+};
+
+const monthLabelId = useId();
+const grid = useTemplateRef<HTMLElement>('grid');
+const days = computed(() => weeks.value.flat());
+
+/**
+ * Roving tabindex: one day is in the tab order (the selected day when it is
+ * shown, else the first selectable day of the month); arrow keys move it.
+ */
+const focusDate = ref<string | null>(null);
+
+const tabbableDate = computed(() => {
+    const visible = (date: string | null) =>
+        date !== null && days.value.some((d) => d.date === date && !d.disabled);
+    if (visible(focusDate.value)) {
+        return focusDate.value;
+    }
+    if (visible(props.selectedDate)) {
+        return props.selectedDate;
+    }
+    return (
+        days.value.find((d) => d.inMonth && !d.disabled)?.date ??
+        days.value.find((d) => !d.disabled)?.date ??
+        null
+    );
+});
+
+watch(
+    () => props.selectedDate,
+    () => {
+        focusDate.value = null;
+    },
+);
+
+const focusDay = async (date: string) => {
+    focusDate.value = date;
+    await nextTick();
+    grid.value
+        ?.querySelector<HTMLButtonElement>(`[data-date="${date}"]`)
+        ?.focus();
+};
+
+const shiftDate = (date: string, days: number): string => {
+    const [year, month, day] = date.split('-').map(Number);
+    return iso(new Date(year, month - 1, day + days));
+};
+
+const KEY_STEPS: Record<string, number> = {
+    ArrowLeft: -1,
+    ArrowRight: 1,
+    ArrowUp: -7,
+    ArrowDown: 7,
+};
+
+const onDayKeydown = async (event: KeyboardEvent, day: CalendarDay) => {
+    let target: string | null = null;
+    if (event.key in KEY_STEPS) {
+        target = shiftDate(day.date, KEY_STEPS[event.key]);
+    } else if (event.key === 'Home' || event.key === 'End') {
+        const week = weeks.value.find((w) =>
+            w.some((d) => d.date === day.date),
+        );
+        target = (event.key === 'Home' ? week?.[0] : week?.[6])?.date ?? null;
+    } else {
+        return;
+    }
+    event.preventDefault();
+
+    if (target === null || isOutOfRange(target)) {
+        return;
+    }
+    if (!days.value.some((d) => d.date === target)) {
+        emit('navigate-month', target < day.date ? 'prev' : 'next');
+        await nextTick();
+    }
+    await focusDay(target);
+};
+
 /** Weekday names Mon–Sun in the active locale (2023-01-02 was a Monday). */
 const weekDays = computed(() =>
     Array.from({ length: 7 }, (_, i) =>
@@ -138,7 +226,13 @@ const weekDays = computed(() =>
             >
                 <Icon name="chevron-left" class="size-4" aria-hidden="true" />
             </Button>
-            <p class="text-sm font-semibold">{{ monthLabel }}</p>
+            <p
+                :id="monthLabelId"
+                class="text-sm font-semibold"
+                aria-live="polite"
+            >
+                {{ monthLabel }}
+            </p>
             <Button
                 variant="ghost"
                 size="icon-sm"
@@ -153,13 +247,18 @@ const weekDays = computed(() =>
 
         <div
             class="grid grid-cols-7 gap-1 text-center text-xs font-medium tracking-wide text-muted-foreground uppercase"
+            aria-hidden="true"
         >
             <span v-for="weekday in weekDays" :key="weekday">{{
                 weekday
             }}</span>
         </div>
 
-        <div class="mt-2 space-y-1">
+        <fieldset
+            ref="grid"
+            class="mt-2 min-w-0 space-y-1"
+            :aria-labelledby="monthLabelId"
+        >
             <div
                 v-for="(week, index) in weeks"
                 :key="index"
@@ -181,12 +280,18 @@ const weekDays = computed(() =>
                               : '',
                     ]"
                     :disabled="day.disabled"
+                    :tabindex="day.date === tabbableDate ? 0 : -1"
+                    :aria-label="fullDateLabel(day.date)"
+                    :aria-pressed="day.date === selectedDate"
+                    :aria-current="day.date === todayIso ? 'date' : undefined"
+                    :data-date="day.date"
                     :data-testid="`calendar-day-${day.date}`"
                     @click="emit('select-date', day.date)"
+                    @keydown="onDayKeydown($event, day)"
                 >
                     {{ day.day }}
                 </button>
             </div>
-        </div>
+        </fieldset>
     </div>
 </template>
