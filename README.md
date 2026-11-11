@@ -208,7 +208,10 @@ Required production environment variables:
   migrations are forward-only: a rollback only switches to a release with the
   same migrations, and a deploy failing during or after its migrations stays
   in maintenance mode until a fix is deployed — see
-  [docs/encryption.md](docs/encryption.md#deployments).
+  [docs/encryption.md](docs/encryption.md#deployments). Every deploy with
+  pending migrations backs the database up first (`shared/backups/`, the 5
+  newest kept) and aborts if that fails; the restore procedure is in
+  [docs/encryption.md](docs/encryption.md#pre-migration-backups).
 
 ## The envelope system, briefly
 

@@ -26,6 +26,8 @@ mkdir -p "$WORK/bin" "$WORK/home"
 
 # Release features: .has-ran (migrations:ran exists), .has-verify
 # (amounts:verify exists). $WORK/no-table: no migrations table yet.
+# db:backup writes the migrations run so far into its file, then exits
+# $BACKUP_EXIT (a partial dump on failure).
 cat > "$WORK/bin/php" <<'EOF'
 #!/bin/sh
 rel=$(pwd -P)
@@ -52,6 +54,9 @@ case "$2" in
             first) pending | head -n 1 >> "$WORK/ran" ;;
         esac
         [ "${MIGRATE_EXIT:-0}" = 0 ] || exit "$MIGRATE_EXIT" ;;
+    db:backup)
+        printf 'dump of %s\n' "$(cat "$WORK/ran")" > "$3"
+        [ "${BACKUP_EXIT:-0}" = 0 ] || exit "$BACKUP_EXIT" ;;
     list) [ -e "$rel/.has-verify" ] && echo 'amounts:verify   Check that every encrypted amount decrypts' ;;
     down) mkdir -p "$rel/storage/framework" && : > "$rel/storage/framework/down" ;;
     up) rm -f "$rel/storage/framework/down" ;;
@@ -362,6 +367,77 @@ mv "$APP/releases/new" "$APP/releases/new2" && ln -sfn "$APP/releases/new2" "$AP
 rm -f "$APP/previous"
 rc=$(deploy HEALTH_EXIT=22)
 expect "deploy: a failed deploy's maintenance is kept when the fix fails too" "$rc $(live) $(maintenance)" '1 new on'
+
+# --- database backup before migrating --------------------------------------
+
+backups() {
+    ls "$APP/shared/backups" 2>/dev/null | grep -c '\.dump$' || true
+}
+
+setup
+rc=$(deploy)
+_backup=$(ls "$APP"/shared/backups/new-*.dump 2>/dev/null | head -n 1)
+expect 'deploy: the database is backed up in maintenance, before migrating, owner-only' \
+    "$rc $(before "$(at ' down')" "$(at ' db:backup')") $(before "$(at ' db:backup')" "$(at ' migrate --force')") $(cat "$_backup") $(ls -ld "$APP/shared/backups" | cut -c1-10) $(ls -l "$_backup" | cut -c1-10) $(grep -c 'Database backed up to' "$WORK/out")" \
+    '0 yes yes dump of a drwx------ -rw------- 1'
+
+setup
+rm "$WORK/pkg/database/migrations/b.php"
+rc=$(deploy)
+expect 'deploy: no backup without pending migrations' "$rc $(ran 'db:backup') $(backups)" '0 no 0'
+
+setup
+rm "$APP/current"
+: > "$WORK/no-table"
+rc=$(deploy)
+expect 'deploy: a first install has nothing to back up' "$rc $(live) $(ran 'db:backup') $(ran 'migrate --force')" '0 new no yes'
+
+setup
+rc=$(deploy BACKUP_EXIT=1)
+expect 'deploy: a failed backup aborts before migrating, lifts its maintenance and leaves no partial file' \
+    "$rc $(live) $(maintenance) $(marker) $(ran 'migrate --force') $(backups) $(grep -c 'database backup failed' "$WORK/out") $(consistent)" \
+    '1 old off none no 0 1 yes'
+
+setup
+mkdir -p "$APP/shared/storage/framework" && : > "$APP/shared/storage/framework/down"
+rc=$(deploy BACKUP_EXIT=1)
+expect "deploy: a failed backup leaves an operator's maintenance on" "$rc $(live) $(maintenance) $(ran ' up')" '1 old on no'
+
+setup
+rc=$(deploy FAIL=amounts:verify)
+mv "$APP/releases/new" "$APP/releases/new2" && ln -sfn "$APP/releases/new2" "$APP/current"
+rm -f "$APP/previous"
+release "$WORK/pkg" 'ran verify' a b c
+: > "$WORK/log"
+rc=$(deploy BACKUP_EXIT=1)
+expect "deploy: a failed backup keeps a failed deploy's maintenance on" "$rc $(live) $(maintenance) $(marker) $(ran 'migrate --force')" '1 new2 on marker no'
+
+setup
+mkdir -p "$APP/shared/backups"
+for _i in 1 2 3 4 5 6; do
+    : > "$APP/shared/backups/v$_i-2020.dump"
+    touch -t "202001010${_i}00" "$APP/shared/backups/v$_i-2020.dump"
+done
+: > "$APP/shared/backups/keep.txt"
+rc=$(deploy)
+expect 'deploy: the KEEP_BACKUPS newest backups are kept' \
+    "$rc $(ls "$APP/shared/backups" | sed 's/^new-.*/new/' | sort | tr '\n' ' ')" '0 keep.txt new v3-2020.dump v4-2020.dump v5-2020.dump v6-2020.dump '
+
+for _keep in 0 x '' 10000; do
+    setup
+    rc=$(deploy_wrapper RELEASE_ID=e2e-$$ KEEP_BACKUPS="$_keep")
+    expect "deploy wrapper: an invalid KEEP_BACKUPS [$_keep] is refused before scp and ssh" \
+        "$rc $(live) $([ -e "$WORK/ssh-log" ] && echo ssh || echo no-ssh)" "$([ -z "$_keep" ] && echo "0 e2e-$$ ssh" || echo '1 old no-ssh')"
+done
+
+setup
+package
+cp "$WORK/release.tgz" "$WORK/upload.tgz"
+_rc=0
+(cd "$WORK" && env WORK="$WORK" PATH="$WORK/bin:$PATH" $SHELL_UNDER_TEST "$WORK/deploy-remote.sh" "$APP" new "$WORK/upload.tgz" "$WORK/env" 3 "" 0 0) \
+    > "$WORK/out" 2>&1 || _rc=$?
+expect 'deploy: KEEP_BACKUPS=0 is refused on the host' "$_rc $(live) $(grep -c 'KEEP_BACKUPS must be' "$WORK/out")" '1 old 1'
+printf 'APP_KEY=x\n' > "$WORK/env"
 
 # --- queue workers ----------------------------------------------------------
 

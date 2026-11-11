@@ -11,6 +11,7 @@ prepare_ssh
 
 RELEASE_ID=$(release_id)
 KEEP_RELEASES=${KEEP_RELEASES:-3}
+KEEP_BACKUPS=${KEEP_BACKUPS:-5}
 
 if ! valid_app_path "$SSH_APP_PATH"; then
     printf 'Refusing to deploy: invalid SSH_APP_PATH (absolute, A-Za-z0-9._/- only): %s\n' "$SSH_APP_PATH" >&2
@@ -20,6 +21,14 @@ fi
 case "$KEEP_RELEASES" in
     ''|*[!0-9]*|?????*)
         printf 'Refusing to deploy: KEEP_RELEASES must be a number (0-9999): %s\n' "$KEEP_RELEASES" >&2
+        exit 1
+        ;;
+esac
+
+# At least one: the backup just taken is never pruned.
+case "$KEEP_BACKUPS" in
+    ''|*[!0-9]*|?????*|0|00|000|0000)
+        printf 'Refusing to deploy: KEEP_BACKUPS must be a number (1-9999): %s\n' "$KEEP_BACKUPS" >&2
         exit 1
         ;;
 esac
@@ -57,7 +66,7 @@ chmod 600 "$LOCAL_ENV_PATH"
 scp_to_remote "$RELEASE_ARCHIVE_PATH" "$SSH_USER@$SSH_HOST:$REMOTE_ARCHIVE_PATH"
 scp_to_remote "$LOCAL_ENV_PATH" "$SSH_USER@$SSH_HOST:$REMOTE_ENV_PATH"
 
-ssh_remote_script "$SSH_APP_PATH" "$RELEASE_ID" "$REMOTE_ARCHIVE_PATH" "$REMOTE_ENV_PATH" "$KEEP_RELEASES" "$HEALTHCHECK_URL" "$SWITCH_WAIT" <<'REMOTE'
+ssh_remote_script "$SSH_APP_PATH" "$RELEASE_ID" "$REMOTE_ARCHIVE_PATH" "$REMOTE_ENV_PATH" "$KEEP_RELEASES" "$HEALTHCHECK_URL" "$SWITCH_WAIT" "$KEEP_BACKUPS" <<'REMOTE'
 set -eu
 
 APP_ROOT=$1
@@ -67,6 +76,7 @@ ENV_UPLOAD_PATH=$4
 KEEP_RELEASES=$5
 HEALTHCHECK_URL=${6:-}
 SWITCH_WAIT=${7:-}
+KEEP_BACKUPS=${8:-5}
 
 
 RELEASES_DIR=$APP_ROOT/releases
@@ -91,6 +101,12 @@ CURRENT_TARGET=''
 SCHEMA_RECORD=$APP_ROOT/shared/schema-migrations
 DEPLOY_DOWN=$APP_ROOT/shared/deploy-maintenance
 DOWN_FILE=$SHARED_DIR/storage/framework/down
+# Pending migrations run only after a database backup succeeded (they cannot
+# be rolled back in production): one file per migrating deploy, owner-only,
+# the KEEP_BACKUPS newest kept. Restoring one needs an APP_KEY that unwraps
+# its amount keys (docs/encryption.md, "Restores").
+BACKUP_DIR=$SHARED_DIR/backups
+HAS_SCHEMA=0
 PREVIOUS_TARGET=''
 MIGRATED=0
 MAINTENANCE=0
@@ -207,6 +223,35 @@ restore_previous() {
     else
         rm -f "$PREVIOUS_LINK"
     fi
+}
+
+# Back the database up with the release's `php artisan db:backup`; a failure
+# removes any partial file.
+backup_database() {
+    mkdir -p "$BACKUP_DIR"
+    chmod 700 "$BACKUP_DIR"
+    _backup=$BACKUP_DIR/$RELEASE_ID-$(date -u +%Y%m%d%H%M%S).dump
+
+    if ! (umask 077 && cd "$RELEASE_DIR" && php artisan db:backup "$_backup"); then
+        rm -f "$_backup"
+        return 1
+    fi
+
+    printf 'Database backed up to %s\n' "$_backup" >&2
+    prune_old_backups
+}
+
+# Keeps the KEEP_BACKUPS newest backups (fails closed like the releases).
+prune_old_backups() {
+    _count=0
+
+    (ls -1t "$BACKUP_DIR"/*.dump 2>/dev/null || true) | while IFS= read -r _path; do
+        _count=$((_count + 1))
+
+        if [ "$_count" -gt "$KEEP_BACKUPS" ] 2>/dev/null; then
+            rm -f "$_path"
+        fi
+    done
 }
 
 # Whether release $1 ships exactly the migrations the database ran.
@@ -376,6 +421,13 @@ case "$KEEP_RELEASES" in
         ;;
 esac
 
+case "$KEEP_BACKUPS" in
+    ''|*[!0-9]*|?????*|0|00|000|0000)
+        printf 'Refusing to deploy: KEEP_BACKUPS must be a number (1-9999): %s\n' "$KEEP_BACKUPS" >&2
+        exit 1
+        ;;
+esac
+
 case "$SWITCH_WAIT" in
     *[!0-9]*|?????*)
         printf 'DEPLOY_SWITCH_WAIT must be a number of seconds (0-9999): %s\n' "$SWITCH_WAIT" >&2
@@ -462,6 +514,7 @@ composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader
 migration_names "$RELEASE_DIR" > "$RELEASE_DIR/.migrations-shipped"
 
 if php artisan migrations:ran > "$RELEASE_DIR/.migrations-ran" 2>/dev/null; then
+    HAS_SCHEMA=1
     _unknown=$(lines_missing_from "$RELEASE_DIR/.migrations-ran" "$RELEASE_DIR/.migrations-shipped")
 
     if [ -n "$_unknown" ]; then
@@ -499,8 +552,23 @@ ENV_PENDING=0
 # maintenance mode so the previous release stops serving requests before the
 # schema changes under it.
 if [ "$PENDING" = 1 ]; then
+    _maintenance_before=$MAINTENANCE
+
     if [ -n "$CURRENT_TARGET" ]; then
         maintenance_down
+    fi
+
+    # A first install (no migrations table) has nothing to back up.
+    if [ "$HAS_SCHEMA" = 1 ] && ! backup_database; then
+        # Nothing migrated: the live release still matches the schema. Lift
+        # the maintenance mode this deploy turned on (never a taken-over or
+        # an operator's one).
+        if [ "$_maintenance_before" = 0 ] && [ "$MAINTENANCE" = 1 ]; then
+            maintenance_up
+        fi
+
+        printf 'Refusing to migrate: the database backup failed (nothing was migrated)\n' >&2
+        exit 1
     fi
 
     MIGRATED=1
