@@ -73,7 +73,7 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', onWindowMouseUp));
     <article
         draggable="true"
         :aria-label="title"
-        class="group/card relative flex h-full flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-card transition-[box-shadow,translate] duration-200 ease-out outline-none focus-within:ring-2 focus-within:ring-ring/60 hover:-translate-y-px hover:shadow-card-hover"
+        class="group/card relative flex h-full flex-col overflow-hidden rounded-xl border bg-card text-card-foreground shadow-card transition-[box-shadow,translate] duration-200 ease-out outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background hover:-translate-y-px hover:shadow-card-hover"
         @dragstart="onDragStart"
         @dragend="onDragEnd"
     >

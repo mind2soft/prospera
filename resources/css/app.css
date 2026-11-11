@@ -92,7 +92,7 @@
         border-color: var(--color-gray-200, currentColor);
     }
     * {
-        @apply border-border outline-ring/50;
+        @apply border-border outline-ring;
     }
     body {
         @apply bg-background text-foreground;
@@ -121,7 +121,7 @@
     --destructive-foreground: hsl(0 0% 98%);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
-    --ring: oklch(0.7 0.09 165);
+    --ring: oklch(0.4 0.1 165);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -143,7 +143,7 @@
     --sidebar-accent: oklch(0.97 0 0);
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --sidebar-ring: var(--ring);
     --sidebar: oklch(0.985 0 0);
 }
 
@@ -168,7 +168,7 @@
     --destructive-foreground: hsl(0 0% 98%);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --ring: oklch(0.78 0.12 165);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -187,13 +187,13 @@
     --sidebar-accent: oklch(0.269 0 0);
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --sidebar-ring: var(--ring);
     --sidebar: oklch(0.205 0 0);
 }
 
 @layer base {
     * {
-        @apply border-border outline-ring/50;
+        @apply border-border outline-ring;
     }
     body {
         @apply bg-background text-foreground;
