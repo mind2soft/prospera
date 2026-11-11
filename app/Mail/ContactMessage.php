@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\RetriesDelivery;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -21,7 +22,7 @@ use Illuminate\Queue\SerializesModels;
  */
 class ContactMessage extends Mailable implements ShouldBeEncrypted, ShouldQueue
 {
-    use Queueable, SerializesModels;
+    use Queueable, RetriesDelivery, SerializesModels;
 
     /**
      * Create a new message instance.

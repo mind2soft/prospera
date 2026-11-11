@@ -7,7 +7,9 @@ use App\Mail\ProfileInvite;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\SendQueuedMailable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -64,5 +66,40 @@ class QueuedMailTest extends TestCase
     {
         $this->assertTrue((new SendQueuedMailable($this->invite()))->shouldBeEncrypted);
         $this->assertTrue((new SendQueuedMailable($this->contact()))->shouldBeEncrypted);
+    }
+
+    public function test_deliveries_are_retried_with_a_backoff(): void
+    {
+        config()->set('queue.default', 'database');
+
+        Mail::to('invitee@example.com')->queue($this->invite());
+        Mail::to('team@example.com')->queue($this->contact());
+
+        foreach ([$this->invite(), $this->contact()] as $mailable) {
+            $job = new SendQueuedMailable($mailable);
+
+            $this->assertSame(5, $job->tries);
+            $this->assertSame([60, 300, 900], $job->backoff());
+        }
+
+        // The worker reads the policy from the payload.
+        foreach (DB::table('jobs')->pluck('payload') as $payload) {
+            $decoded = json_decode($payload, true);
+
+            $this->assertSame(5, $decoded['maxTries']);
+            $this->assertSame('60,300,900', $decoded['backoff']);
+        }
+    }
+
+    public function test_a_failed_delivery_is_logged_without_the_mail_content(): void
+    {
+        Log::spy();
+
+        (new SendQueuedMailable($this->contact()))->failed(new RuntimeException('SMTP 451 try later'));
+
+        Log::shouldHaveReceived('error')->once()->withArgs(fn (string $message, array $context) => $message === 'Queued mail delivery failed'
+            && $context['mailable'] === ContactMessage::class
+            && $context['message'] === 'SMTP 451 try later'
+            && ! str_contains(json_encode($context, JSON_THROW_ON_ERROR), 'confidential'));
     }
 }

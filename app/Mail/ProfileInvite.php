@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\RetriesDelivery;
 use App\Models\User;
 use App\Settings\NotificationSettings;
 use Carbon\CarbonInterface;
@@ -36,7 +37,7 @@ use Illuminate\Queue\SerializesModels;
  */
 class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
 {
-    use Queueable, SerializesModels;
+    use Queueable, RetriesDelivery, SerializesModels;
 
     /**
      * Create a new message instance.
