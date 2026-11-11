@@ -19,7 +19,8 @@ export const dashboardApi = {
         profileId: number,
         input: SaveLayoutInput,
     ): Promise<{ widgets: DashboardWidget[] }> =>
-        api(widgets.save(profileId), { body: input }),
+        // keepalive: the dashboard flushes its autosave while unloading.
+        api(widgets.save(profileId), { body: input, keepalive: true }),
 
     remove: (profileId: number, widgetId: number): Promise<void> =>
         api(widgets.destroy({ profile: profileId, widget: widgetId })),

@@ -73,6 +73,8 @@ type ApiMethod = 'get' | 'post' | 'patch' | 'put' | 'delete';
 type ApiOptions = {
     body?: unknown;
     signal?: AbortSignal;
+    /** Let the request outlive the page (a save sent while it unloads). */
+    keepalive?: boolean;
 };
 
 /**
@@ -96,7 +98,7 @@ export async function api<T>(
     }
 
     const method = route.method.toUpperCase();
-    const { body, signal } = options;
+    const { body, signal, keepalive } = options;
 
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (body !== undefined) {
@@ -115,6 +117,7 @@ export async function api<T>(
         method,
         headers,
         signal,
+        keepalive,
         body: body === undefined ? undefined : JSON.stringify(body),
     });
 
