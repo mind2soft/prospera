@@ -25,13 +25,15 @@
             },
             "settings": "Widget settings",
             "remove": "Remove widget",
-            "drag": "Drag to reorder",
             "emptySelection": "Select envelopes in the widget settings to see data.",
             "masked": "Amounts hidden — you don't have access to this envelope's amounts.",
             "error": "This widget could not be loaded.",
             "retry": "Retry",
             "overBudget": "Over budget",
-            "noBudget": "No budget covers this period"
+            "noBudget": "No budget covers this period",
+            "reorder": "Reorder {title}",
+            "reorderHint": "Drag, or use the arrow keys, to move this widget earlier or later.",
+            "moved": "{title} moved to position {position} of {count}."
         },
         "settings": {
             "title": "Title",
@@ -76,7 +78,11 @@
             "done": "Done",
             "removeItemNamed": "Remove {name} from the selection",
             "cancelGroup": "Cancel",
-            "removeFromGroup": "Remove {name} from {group}"
+            "removeFromGroup": "Remove {name} from {group}",
+            "position": "Position",
+            "positionOf": "Position {position} of {count}",
+            "moveEarlier": "Move earlier",
+            "moveLater": "Move later"
         },
         "empty": {
             "title": "Make it yours",

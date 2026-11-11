@@ -170,7 +170,7 @@ test('dashboard audit', async ({ page }) => {
     // (first) — the order is an ordered list, autosaved.
     const firstCard = page.locator('[data-widget-card]').first();
     const radialHandle = radialCard.getByRole('button', {
-        name: /Drag to reorder/,
+        name: /^Reorder /,
     });
     // Drop on the target's leading edge — the insertion point is derived
     // from the pointer half of the hovered card.

@@ -295,6 +295,32 @@ const openSettings = (widget: DashboardWidgetConfig): void => {
     settingsOpen.value = true;
 };
 
+const settingsPosition = computed(() => {
+    const widget = settingsWidget.value;
+    const index = widget === null ? -1 : widgets.value.indexOf(widget);
+
+    return index === -1 ? undefined : index;
+});
+
+const onMoveFromSettings = (direction: 'earlier' | 'later'): void => {
+    const from = settingsPosition.value;
+
+    if (from === undefined) {
+        return;
+    }
+
+    const to = direction === 'earlier' ? from - 1 : from + 1;
+
+    if (to < 0 || to >= widgets.value.length) {
+        return;
+    }
+
+    const ids = widgets.value.map((w) => w.id ?? 0);
+    const [moved] = ids.splice(from, 1);
+    ids.splice(to, 0, moved);
+    onReorder(ids);
+};
+
 const onSettingsUpdate = (patch: Partial<DashboardWidgetConfig>): void => {
     if (settingsWidget.value) {
         Object.assign(settingsWidget.value, patch);
@@ -399,7 +425,10 @@ const onDestroy = (): void => {
         <WidgetSettingsSheet
             :open="settingsOpen"
             :widget="settingsWidget"
+            :position="settingsPosition"
+            :count="widgets.length"
             @update:open="settingsOpen = $event"
+            @move="onMoveFromSettings"
             @update="onSettingsUpdate"
             @remove="onRemove"
         />

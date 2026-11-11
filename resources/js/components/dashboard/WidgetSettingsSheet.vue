@@ -30,6 +30,9 @@ import type {
 const props = defineProps<{
     open: boolean;
     widget: DashboardWidgetConfig | null;
+    /** The widget's 0-based place on the dashboard, and the widget count. */
+    position?: number;
+    count?: number;
 }>();
 
 const emit = defineEmits<{
@@ -37,6 +40,8 @@ const emit = defineEmits<{
     /** A settings patch to merge into the widget configuration. */
     update: [patch: Partial<DashboardWidgetConfig>];
     remove: [];
+    /** Single-pointer alternative to dragging the widget. */
+    move: [direction: 'earlier' | 'later'];
 }>();
 
 const envelopesQuery = useEnvelopeOptions();
@@ -364,6 +369,55 @@ const hasUnusedEnvelopes = computed(() => unusedEnvelopes.value.length > 0);
                         </SelectItem>
                     </SelectContent>
                 </Select>
+            </section>
+
+            <section
+                v-if="position !== undefined && count !== undefined"
+                class="space-y-2"
+            >
+                <Label as="span">{{ $t('dashboard.settings.position') }}</Label>
+                <div class="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="flex-1"
+                        :disabled="position <= 0"
+                        @click="emit('move', 'earlier')"
+                    >
+                        <Icon
+                            name="chevron-left"
+                            class="size-4 rtl:rotate-180"
+                            aria-hidden="true"
+                        />
+                        {{ $t('dashboard.settings.moveEarlier') }}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        class="flex-1"
+                        :disabled="position >= count - 1"
+                        @click="emit('move', 'later')"
+                    >
+                        {{ $t('dashboard.settings.moveLater') }}
+                        <Icon
+                            name="chevron-right"
+                            class="size-4 rtl:rotate-180"
+                            aria-hidden="true"
+                        />
+                    </Button>
+                </div>
+                <p
+                    class="text-xs text-muted-foreground"
+                    role="status"
+                    data-testid="widget-position"
+                >
+                    {{
+                        $t('dashboard.settings.positionOf', {
+                            position: position + 1,
+                            count,
+                        })
+                    }}
+                </p>
             </section>
 
             <section class="grid grid-cols-2 gap-3">

@@ -25,13 +25,15 @@
             },
             "settings": "Paramètres du widget",
             "remove": "Supprimer le widget",
-            "drag": "Glisser pour réorganiser",
             "emptySelection": "Choisissez des enveloppes dans les paramètres du widget pour voir des données.",
             "masked": "Montants masqués — vous n'avez pas accès aux montants de cette enveloppe.",
             "error": "Ce widget n'a pas pu être chargé.",
             "retry": "Réessayer",
             "overBudget": "Hors budget",
-            "noBudget": "Aucun budget ne couvre cette période"
+            "noBudget": "Aucun budget ne couvre cette période",
+            "reorder": "Réordonner {title}",
+            "reorderHint": "Faites glisser, ou utilisez les flèches, pour déplacer ce widget plus tôt ou plus tard.",
+            "moved": "{title} déplacé en position {position} sur {count}."
         },
         "settings": {
             "title": "Titre",
@@ -76,7 +78,11 @@
             "done": "Terminé",
             "removeItemNamed": "Retirer {name} de la sélection",
             "cancelGroup": "Annuler",
-            "removeFromGroup": "Retirer {name} de {group}"
+            "removeFromGroup": "Retirer {name} de {group}",
+            "position": "Position",
+            "positionOf": "Position {position} sur {count}",
+            "moveEarlier": "Déplacer plus tôt",
+            "moveLater": "Déplacer plus tard"
         },
         "empty": {
             "title": "Personnalisez-le",
