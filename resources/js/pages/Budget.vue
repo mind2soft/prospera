@@ -49,7 +49,7 @@ import { useLocale } from '@/composables/useLocale';
 import { errorMessage } from '@/lib/api';
 import { budgetMonthLabel } from '@/lib/budget';
 import type { AddEnvelopeInput } from '@/lib/budgetApi';
-import { currentMonth } from '@/lib/calendar';
+import { currentMonth, parseMonth } from '@/lib/calendar';
 import { budget as budgetRoute } from '@/routes';
 import type { BudgetDetail, ResourcePermission } from '@/types';
 
@@ -224,7 +224,7 @@ const askPublish = () => {
 };
 
 const publishMonthLabel = computed(() => {
-    const [year, month] = publishMonth.value.split('-').map(Number);
+    const [year, month] = parseMonth(publishMonth.value);
     return budgetMonthLabel(year, month, locale.value);
 });
 
@@ -236,7 +236,7 @@ const replaceWarning = computed(() => {
     if (budget.value === null) {
         return false;
     }
-    const [year, month] = publishMonth.value.split('-').map(Number);
+    const [year, month] = parseMonth(publishMonth.value);
     return budgets.value.some(
         (b) =>
             b.id !== budget.value?.id &&

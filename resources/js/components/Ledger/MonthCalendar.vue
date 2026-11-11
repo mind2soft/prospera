@@ -3,7 +3,7 @@ import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/composables/useLocale';
-import { formatCalendarDate } from '@/lib/calendar';
+import { formatCalendarDate, parseMonth } from '@/lib/calendar';
 
 const { locale } = useLocale();
 
@@ -28,7 +28,7 @@ const todayIso = computed(() => iso(new Date()));
 
 /** First day of the month `offset` months away from the viewed month, ISO. */
 const monthOffset = (offset: number): string => {
-    const [year, month] = props.viewMonth.split('-').map(Number);
+    const [year, month] = parseMonth(props.viewMonth);
     return iso(new Date(year, month - 1 + offset, 1));
 };
 
@@ -54,7 +54,7 @@ const isOutOfRange = (date: string): boolean =>
     (props.maxDate !== undefined && date > props.maxDate);
 
 const monthLabel = computed(() => {
-    const [year, month] = props.viewMonth.split('-').map(Number);
+    const [year, month] = parseMonth(props.viewMonth);
     return new Date(year, month - 1, 1).toLocaleDateString(locale.value, {
         month: 'long',
         year: 'numeric',
@@ -69,7 +69,7 @@ type CalendarDay = {
 };
 
 const weeks = computed<CalendarDay[][]>(() => {
-    const [year, month] = props.viewMonth.split('-').map(Number);
+    const [year, month] = parseMonth(props.viewMonth);
     const first = new Date(year, month - 1, 1);
     const startOffset = (first.getDay() + 6) % 7; // weeks start on Monday
     const daysInMonth = new Date(year, month, 0).getDate();

@@ -50,7 +50,7 @@ import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useLocale } from '@/composables/useLocale';
 import { errorMessage } from '@/lib/api';
 import { formatMoney } from '@/lib/budget';
-import { formatCalendarDate } from '@/lib/calendar';
+import { formatCalendarDate, parseMonth } from '@/lib/calendar';
 import type {
     AddTransactionInput,
     CreateLedgerInput,
@@ -90,7 +90,7 @@ const clampDate = (date: string, min?: string, max?: string): string => {
 };
 
 const monthRange = computed(() => {
-    const [year, month] = viewMonth.value.split('-').map(Number);
+    const [year, month] = parseMonth(viewMonth.value);
     const first = new Date(year, month - 1, 1);
     const last = new Date(year, month, 0);
     const iso = (d: Date) =>
@@ -106,7 +106,7 @@ const onSelectDate = (date: string) => {
 };
 
 const navigateMonth = (direction: 'prev' | 'next') => {
-    const [year, month] = viewMonth.value.split('-').map(Number);
+    const [year, month] = parseMonth(viewMonth.value);
     const date = new Date(year, month - 1 + (direction === 'next' ? 1 : -1), 1);
     const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`;
     viewMonth.value = iso;
