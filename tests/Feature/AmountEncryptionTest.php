@@ -12,6 +12,7 @@ use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Security\Amounts\AmountCipher;
+use App\Security\Amounts\AmountContext;
 use App\Security\Amounts\AmountDecryptionException;
 use App\Security\Amounts\AmountKeyRing;
 use App\Security\Amounts\DataKey;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 use LogicException;
+use Mockery;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -485,6 +487,81 @@ class AmountEncryptionTest extends TestCase
         // Other bulk writes are unaffected.
         Budget::query()->whereKey($budget->id)->update(['currency' => 'EUR']);
         $this->assertSame('EUR', $budget->fresh()?->currency);
+    }
+
+    public function test_decrypted_amounts_are_memoized_per_model(): void
+    {
+        $transaction = Transaction::query()->findOrFail($this->transaction($this->ledger, $this->rent, -321)->id);
+
+        $real = app(AmountKeyRing::class);
+        $ring = Mockery::mock($real);
+        $ring->shouldReceive('decrypt')->once()->andReturnUsing(
+            fn (string $payload, AmountContext $context): int => $real->decrypt($payload, $context),
+        );
+        $this->app->instance(AmountKeyRing::class, $ring);
+
+        $this->assertSame(-321, $transaction->amount);
+        $this->assertSame(-321, $transaction->amount);
+        $this->assertSame(-321, $transaction->amount);
+    }
+
+    /**
+     * The memo must not weaken the context-change guard: after the amount
+     * was read (and memoized), changing any bound attribute still refuses
+     * an implicit re-encryption, and the amount still reads from the
+     * original context.
+     */
+    public function test_the_context_change_guard_holds_with_memoized_amounts(): void
+    {
+        $otherLedger = $this->createLedger($this->profile);
+        $created = $this->transaction($this->ledger, $this->rent, -321);
+        $raw = $this->rawAmount($created);
+
+        $changes = [
+            'ledger_id' => $otherLedger->id,
+            'envelope_id' => $this->salary->id,
+            'event_at' => '2026-07-01 00:00:00',
+        ];
+
+        foreach ($changes as $attribute => $value) {
+            $transaction = Transaction::query()->findOrFail($created->id);
+            $this->assertSame(-321, $transaction->amount); // memoized
+
+            $transaction->setAttribute($attribute, $value);
+            $this->assertSame(-321, $transaction->amount);
+
+            try {
+                $transaction->save();
+                $this->fail("Changing {$attribute} re-encrypted the memoized amount implicitly.");
+            } catch (LogicException) {
+                $this->assertSame($raw, $this->rawAmount($created));
+            }
+        }
+    }
+
+    public function test_a_memoized_amount_is_not_reused_for_another_payload(): void
+    {
+        $mine = $this->transaction($this->ledger, $this->rent, -10);
+        $other = $this->transaction($this->ledger, $this->salary, 99999);
+
+        $transaction = Transaction::query()->findOrFail($mine->id);
+        $this->assertSame(-10, $transaction->amount);
+
+        // Another row's ciphertext set raw: decrypted afresh in this row's
+        // context — and rejected — instead of reading the memoized -10.
+        $transaction->setRawAttributes(['amount' => $this->rawAmount($other)] + $transaction->getAttributes());
+
+        $this->expectException(AmountDecryptionException::class);
+        $transaction->amount;
+    }
+
+    public function test_serialized_models_do_not_carry_memoized_amounts(): void
+    {
+        $transaction = Transaction::query()->findOrFail($this->transaction($this->ledger, $this->rent, -987654)->id);
+        $this->assertSame(-987654, $transaction->amount);
+
+        $this->assertStringNotContainsString('-987654', serialize($transaction));
+        $this->assertSame(-987654, unserialize(serialize($transaction))->amount);
     }
 
     public function test_a_time_change_within_the_same_day_keeps_the_context(): void

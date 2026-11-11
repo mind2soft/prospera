@@ -387,9 +387,16 @@ cascade-delete child rows.
 ### Performance
 
 Decryption costs one AES-GCM operation per amount plus one key unwrap per
-profile and request; the boot-time smoke check adds one unwrap and one
-small indexed query per request, independent of the number of profiles. Totals hydrate and
-decrypt the rows they sum; rotation and `amounts:verify` scan every amount.
+profile and request. Each model memoizes its decrypted amounts against the
+exact inputs of the decryption (payload, raw context attributes, original
+values), so repeated reads of `->amount` decrypt once while any change to
+those inputs decrypts afresh — the context-change rule above still applies.
+The memo is dropped when a model is serialized. (Laravel's `shouldCache()`
+accessor cache is deliberately not used: it writes the cached plaintext back
+into the attributes through the mutator.) The boot-time smoke check adds one
+unwrap and one small indexed query per request, independent of the number of
+profiles. Totals hydrate and decrypt the rows they sum; rotation and
+`amounts:verify` scan every amount.
 
 ## Why not the original proposal
 
