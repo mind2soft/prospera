@@ -11,6 +11,7 @@ use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\ResourcePermissions;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\Concerns\CountsQueries;
 use Tests\TestCase;
@@ -890,5 +891,17 @@ class LedgerTest extends TestCase
         $this->actingAs($this->user)
             ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2024-01-01&to_date=2024-12-31")
             ->assertOk();
+    }
+
+    public function test_model_dates_are_immutable_and_accepted_as_event_dates(): void
+    {
+        $ledger = $this->createLedger($this->user)->fresh();
+
+        // Date::use(CarbonImmutable::class): model dates are immutable, and
+        // the date helpers accept them (they took a mutable Carbon before).
+        $this->assertInstanceOf(CarbonImmutable::class, $ledger->start_date);
+        $this->assertTrue($ledger->acceptsEventDate($ledger->start_date));
+        $this->assertTrue($ledger->acceptsEventDate(CarbonImmutable::parse('2026-06-15')));
+        $this->assertFalse($ledger->acceptsEventDate(CarbonImmutable::parse('2027-01-01')));
     }
 }

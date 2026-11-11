@@ -6,11 +6,11 @@ use App\Models\Builders\GuardedBuilder;
 use App\Models\Concerns\HasImmutableProfile;
 use App\Models\Concerns\HasProfilePermissions;
 use App\Models\Contracts\HasImmutableColumns;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Query\Builder;
-use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -18,9 +18,9 @@ use Illuminate\Support\Carbon;
  * @property string $currency
  * @property int $effective_year
  * @property int $effective_month
- * @property Carbon|null $published_at
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $published_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 class Budget extends Model implements HasImmutableColumns
 {
