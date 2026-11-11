@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import Icon from '@/components/Icon.vue';
+import { useLocale } from '@/composables/useLocale';
 import { formatMoney } from '@/lib/budget';
 import type { DashboardSpendingRow, DashboardWidgetData } from '@/types';
 
@@ -8,6 +9,8 @@ const props = defineProps<{
     data: DashboardWidgetData;
     currency: string;
 }>();
+
+const { locale } = useLocale();
 
 const rows = computed(() =>
     props.data.type === 'envelope_spending' ? props.data.rows : [],
@@ -42,7 +45,7 @@ function spentLabel(row: DashboardSpendingRow): string {
         return '•••';
     }
 
-    return formatMoney(row.spent, props.currency);
+    return formatMoney(row.spent, props.currency, locale.value);
 }
 
 function allocatedLabel(row: DashboardSpendingRow): string | null {
@@ -50,7 +53,7 @@ function allocatedLabel(row: DashboardSpendingRow): string | null {
         return null;
     }
 
-    return formatMoney(row.allocated, props.currency);
+    return formatMoney(row.allocated, props.currency, locale.value);
 }
 
 /** Presentation colors derived from the envelope's hex color (RTL-safe). */

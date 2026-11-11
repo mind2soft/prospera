@@ -26,6 +26,9 @@
             "expenses": "Expenses",
             "segmentTitle": "{name} — {amount}"
         },
+        "label": {
+            "draft": "New Budget (draft)"
+        },
         "selector": {
             "selectBudget": "Select budget",
             "actions": "Budget actions",

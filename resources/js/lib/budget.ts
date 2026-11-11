@@ -1,18 +1,3 @@
-export const MONTH_NAMES = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-] as const;
-
 export const CURRENCIES = [
     { code: 'CAD' },
     { code: 'USD' },
@@ -48,22 +33,27 @@ export function currencyName(code: string, locale: string): string {
 const formatters = new Map<string, Intl.NumberFormat>();
 
 /**
- * Formats an absolute amount with the budget's currency, e.g. "$1,300".
+ * Formats an absolute amount with the budget's currency in the given
+ * (active app) locale, e.g. "$1,300" in `en` or "1 300 $" in `fr`.
  */
-export function formatMoney(amount: number, currency: string): string {
-    const key = `${currency}`;
+export function formatMoney(
+    amount: number,
+    currency: string,
+    locale: string,
+): string {
+    const key = `${locale}|${currency}`;
     let formatter = formatters.get(key);
 
     if (!formatter) {
         try {
-            formatter = new Intl.NumberFormat(undefined, {
+            formatter = new Intl.NumberFormat(locale, {
                 style: 'currency',
                 currency,
                 currencyDisplay: 'narrowSymbol',
                 maximumFractionDigits: 0,
             });
         } catch {
-            formatter = new Intl.NumberFormat(undefined, {
+            formatter = new Intl.NumberFormat(locale, {
                 maximumFractionDigits: 0,
             });
         }
@@ -74,16 +64,40 @@ export function formatMoney(amount: number, currency: string): string {
 }
 
 /**
- * Human label for a budget: "New Budget (draft)" or "May 2026".
+ * A budget's month in the given locale, e.g. "May 2026" / "mai 2026".
  */
-export function budgetLabel(budget: {
-    published_at: string | null;
-    effective_year: number;
-    effective_month: number;
-}): string {
+export function budgetMonthLabel(
+    year: number,
+    month: number,
+    locale: string,
+): string {
+    return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString(locale, {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+    });
+}
+
+/**
+ * Human label for a budget: the (translated) draft label, or its month,
+ * e.g. "May 2026".
+ */
+export function budgetLabel(
+    budget: {
+        published_at: string | null;
+        effective_year: number;
+        effective_month: number;
+    },
+    locale: string,
+    draftLabel: string,
+): string {
     if (budget.published_at === null) {
-        return 'New Budget (draft)';
+        return draftLabel;
     }
 
-    return `${MONTH_NAMES[budget.effective_month - 1] ?? budget.effective_month} ${budget.effective_year}`;
+    return budgetMonthLabel(
+        budget.effective_year,
+        budget.effective_month,
+        locale,
+    );
 }

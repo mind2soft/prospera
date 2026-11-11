@@ -79,7 +79,7 @@ const compactMoney = (value: number): string => {
             maximumFractionDigits: 1,
         }).format(value);
     } catch {
-        return formatMoney(value, props.currency);
+        return formatMoney(value, props.currency, locale.value);
     }
 };
 
@@ -119,7 +119,9 @@ const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
                 <span style="color:var(--muted-foreground);">${escapeHtml(label)}</span>
             </span>
             <strong style="font-variant-numeric:tabular-nums;">${escapeHtml(
-                amount === null ? '•••' : formatMoney(amount, props.currency),
+                amount === null
+                    ? '•••'
+                    : formatMoney(amount, props.currency, locale.value),
             )}</strong>
         </div>`;
 

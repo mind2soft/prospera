@@ -26,6 +26,9 @@
             "expenses": "Dépenses",
             "segmentTitle": "{name} — {amount}"
         },
+        "label": {
+            "draft": "Nouveau budget (brouillon)"
+        },
         "selector": {
             "selectBudget": "Sélectionner un budget",
             "actions": "Actions du budget",

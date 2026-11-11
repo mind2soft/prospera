@@ -4,6 +4,7 @@ import Currency from '@/components/Currency.vue';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useLocale } from '@/composables/useLocale';
 import { formatMoney } from '@/lib/budget';
 import type { BudgetEnvelope } from '@/types';
 
@@ -13,6 +14,8 @@ const props = defineProps<{
     editable?: boolean;
     pendingId?: number | null;
 }>();
+
+const { locale } = useLocale();
 
 const emit = defineEmits<{
     (e: 'add'): void;
@@ -200,7 +203,7 @@ const runningLeft = computed(() => {
                                 />
                             </template>
                             <template v-else>{{
-                                formatMoney(row.amount, currency)
+                                formatMoney(row.amount, currency, locale)
                             }}</template>
                         </td>
                         <td

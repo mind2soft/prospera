@@ -63,7 +63,7 @@ const compactMoney = (amount: number): string => {
             maximumFractionDigits: 1,
         }).format(amount);
     } catch {
-        return formatMoney(amount, props.currency);
+        return formatMoney(amount, props.currency, locale.value);
     }
 };
 
@@ -109,7 +109,7 @@ const tooltipTemplate = (arc?: SegmentArc): string => {
         <span style="font-variant-numeric:tabular-nums">${escapeHtml(
             datum.value === null
                 ? '•••'
-                : formatMoney(datum.value, props.currency),
+                : formatMoney(datum.value, props.currency, locale.value),
         )}${escapeHtml(share)}</span>
     </div>`;
 };

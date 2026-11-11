@@ -38,7 +38,7 @@ const positions = computed(() => {
 
 const fmt = (amount: number) =>
     props.currency
-        ? formatMoney(amount, props.currency)
+        ? formatMoney(amount, props.currency, locale.value)
         : amount.toLocaleString(locale.value);
 </script>
 
