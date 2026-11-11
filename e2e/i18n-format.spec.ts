@@ -63,3 +63,28 @@ test('budget envelope types are translated', async ({ browser }) => {
 
     await context.close();
 });
+
+test('shared controls have translated accessible names', async ({
+    browser,
+}) => {
+    const { context, page } = await frenchPage(browser);
+    await login(page);
+    await page.goto('/budget');
+
+    await expect(
+        page.getByRole('button', {
+            name: 'Afficher ou masquer la barre latérale',
+        }),
+    ).toBeVisible();
+    await expect(
+        page.getByRole('navigation', { name: 'Fil d’Ariane' }),
+    ).toBeVisible();
+
+    await page.getByRole('button', { name: 'Actions du budget' }).click();
+    await page.getByRole('menuitem', { name: 'Partager' }).click();
+    await expect(
+        page.getByRole('dialog').getByRole('button', { name: 'Fermer' }),
+    ).toBeVisible();
+
+    await context.close();
+});

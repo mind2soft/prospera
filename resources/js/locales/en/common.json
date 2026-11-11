@@ -9,14 +9,17 @@
             "confirm": "Confirm",
             "back": "Back",
             "retry": "Retry",
-            "remove": "Remove"
+            "remove": "Remove",
+            "toggleSidebar": "Toggle sidebar",
+            "more": "More"
         },
         "fields": {
             "name": "Name",
             "email": "Email address",
             "password": "Password"
         },
-        "loading": "Loading\u2026",
-        "error": "Something went wrong. Please try again."
+        "loading": "Loading…",
+        "error": "Something went wrong. Please try again.",
+        "breadcrumb": "Breadcrumb"
     }
 }
