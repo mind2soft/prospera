@@ -103,7 +103,7 @@ class EnvelopeController extends Controller
     protected function sharedResource(Model $resource): Envelope
     {
         if (! $resource instanceof Envelope) {
-            throw new LogicException('The share routes of this controller must bind a envelope.');
+            throw new LogicException('The share routes of this controller must bind an envelope.');
         }
 
         return $resource;
@@ -136,9 +136,11 @@ class EnvelopeController extends Controller
      */
     protected function shareList(Model $resource, User $caller): array
     {
+        [$table, $column] = $this->shareTable();
+
         return $this->permissionService->explicitPermissions(
-            'envelope_permissions',
-            'envelope_id',
+            $table,
+            $column,
             $resource->id,
             $resource->user,
             $resource->isOwner($caller) ? null : FinancialProfile::coMemberIdsOf($caller->id),

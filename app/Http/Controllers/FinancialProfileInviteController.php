@@ -75,9 +75,7 @@ class FinancialProfileInviteController extends Controller
     {
         $validated = $request->validated();
 
-        $alreadyMember = $profile->members()
-            ->whereRaw('lower(users.email) = ?', [mb_strtolower($validated['email'])])
-            ->exists();
+        $alreadyMember = $profile->members()->forEmail($validated['email'], 'users.email')->exists();
 
         if ($alreadyMember) {
             throw ValidationException::withMessages([
@@ -85,29 +83,29 @@ class FinancialProfileInviteController extends Controller
             ]);
         }
 
-        // A live reservation means the invitee already registered through
-        // an invite and joins on verification: a second invite would
-        // outlive the grant in the pending list.
-        $awaitingVerification = FinancialProfileInvite::query()
-            ->where('profile_id', $profile->id)
-            ->whereRaw('lower(email) = ?', [mb_strtolower($validated['email'])])
-            ->whereNotNull('pending_user_id')
-            ->notExpired()
-            ->exists();
-
-        if ($awaitingVerification) {
-            throw ValidationException::withMessages([
-                'email' => __('This person already registered through an invite and joins the profile once they verify their email.'),
-            ]);
-        }
-
         $rawKey = FinancialProfileInvite::generateKey();
 
         $invite = DB::transaction(function () use ($profile, $validated, $rawKey, $request): FinancialProfileInvite {
-            FinancialProfileInvite::query()
+            // The profile's invites for the email, locked: a registration
+            // reserving one of them (CreateNewUser locks the invite too)
+            // cannot slip in between the check and the replacement.
+            $previous = FinancialProfileInvite::query()
                 ->where('profile_id', $profile->id)
-                ->whereRaw('lower(email) = ?', [mb_strtolower($validated['email'])])
-                ->whereNull('pending_user_id')
+                ->forEmail($validated['email'])
+                ->lockForUpdate()
+                ->get();
+
+            // A live reservation means the invitee already registered
+            // through an invite and joins on verification: a second invite
+            // would outlive the grant in the pending list.
+            if ($previous->contains(fn (FinancialProfileInvite $invite): bool => $invite->isReserved() && ! $invite->isExpired())) {
+                throw ValidationException::withMessages([
+                    'email' => __('This person already registered through an invite and joins the profile once they verify their email.'),
+                ]);
+            }
+
+            FinancialProfileInvite::query()
+                ->whereKey($previous->reject(fn (FinancialProfileInvite $invite): bool => $invite->isReserved())->modelKeys())
                 ->delete();
 
             return FinancialProfileInvite::create([
@@ -313,9 +311,7 @@ class FinancialProfileInviteController extends Controller
      */
     private function notifyInvitee(FinancialProfileInvite $invite, string $rawKey): void
     {
-        $recipient = User::query()
-            ->whereRaw('lower(email) = ?', [mb_strtolower($invite->email)])
-            ->first();
+        $recipient = User::query()->forEmail($invite->email)->first();
 
         if ($recipient !== null
             && ! $recipient->wantsNotification(NotificationSettings::PROFILE_INVITE)) {

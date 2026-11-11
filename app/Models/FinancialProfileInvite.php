@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\MatchesEmail;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
@@ -24,6 +25,8 @@ use Illuminate\Support\Facades\DB;
  */
 class FinancialProfileInvite extends Model
 {
+    use MatchesEmail;
+
     /** A member who can contribute but not manage the profile. */
     public const ROLE_COLLABORATOR = 'collaborator';
 
@@ -218,7 +221,8 @@ class FinancialProfileInvite extends Model
      * Accounts that register through an invite skip the personal default
      * profile seeding (docs/shared-finances.md — invites), so whenever the
      * pending grant does not happen — the invite was revoked, pruned or has
-     * expired, or the account's email changed before verification — the
+     * expired, or the account's email changed before verification (the
+     * settings page releases the reservation then) — the
      * account is seeded with its own default profile here to keep it usable.
      */
     public static function completePendingFor(User $user): void
@@ -278,7 +282,7 @@ class FinancialProfileInvite extends Model
     {
         self::query()
             ->where('profile_id', $profile->id)
-            ->whereRaw('lower(email) = ?', [mb_strtolower($user->email)])
+            ->forEmail($user->email)
             ->delete();
     }
 
@@ -310,9 +314,11 @@ class FinancialProfileInvite extends Model
     }
 
     /**
-     * Before the given (unverified) account is deleted: the invite it
-     * reserved is released instead of cascading away, so the owner's invite
-     * stays pending and usable (e.g. to re-register with the same email).
+     * Release the invite the given (unverified) account reserved, so the
+     * owner's invite stays pending and usable: before the account is
+     * deleted (instead of cascading away — e.g. to re-register with the
+     * same email), and when it moves to another email address (the
+     * reservation could no longer grant anything).
      */
     public static function releaseReservationOf(User $user): void
     {

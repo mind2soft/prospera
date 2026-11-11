@@ -24,12 +24,17 @@ class SetLocale
         return $next($request);
     }
 
-    public static function resolve(Request $request): string
+    /**
+     * @param  bool  $withUser  false skips the user's preferred locale — for
+     *                          callers that must not resolve the user (it
+     *                          can hit the database)
+     */
+    public static function resolve(Request $request, bool $withUser = true): string
     {
         $default = (string) config('app.locale');
         $available = array_map('strval', array_keys(config('app.available_locales', [])));
 
-        $preferred = $request->user()?->locale;
+        $preferred = $withUser ? $request->user()?->locale : null;
 
         if (is_string($preferred) && in_array($preferred, $available, true)) {
             return $preferred;

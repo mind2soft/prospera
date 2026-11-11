@@ -2,12 +2,17 @@
 
 namespace App\Http\Requests\Ledger;
 
-use App\Http\Controllers\LedgerController;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Validator;
 
 class LedgerTransactionsRequest extends LedgerRequest
 {
+    /**
+     * The longest from_date..to_date span (inclusive, in days) the
+     * transactions endpoint serves.
+     */
+    public const MAX_RANGE_DAYS = 366;
+
     /**
      * @return array<string, list<mixed>>
      */
@@ -36,9 +41,9 @@ class LedgerTransactionsRequest extends LedgerRequest
                 $from = Carbon::parse((string) $this->input('from_date'))->startOfDay();
                 $to = Carbon::parse((string) $this->input('to_date'))->startOfDay();
 
-                if ($from->diffInDays($to) >= LedgerController::MAX_RANGE_DAYS) {
+                if ($from->diffInDays($to) >= self::MAX_RANGE_DAYS) {
                     $validator->errors()->add('to_date', __('The date range cannot exceed :days days.', [
-                        'days' => LedgerController::MAX_RANGE_DAYS,
+                        'days' => self::MAX_RANGE_DAYS,
                     ]));
                 }
             },

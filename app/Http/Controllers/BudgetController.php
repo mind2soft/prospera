@@ -356,7 +356,9 @@ class BudgetController extends Controller
      */
     protected function shareList(Model $resource, User $caller): array
     {
-        return $this->permissionService->profilePermissions($resource->profile, 'budget_permissions', 'budget_id', $resource->id);
+        [$table, $column] = $this->shareTable();
+
+        return $this->permissionService->profilePermissions($resource->profile, $table, $column, $resource->id);
     }
 
     /**

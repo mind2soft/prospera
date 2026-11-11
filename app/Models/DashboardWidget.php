@@ -5,7 +5,6 @@ namespace App\Models;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * A single dashboard widget of a user's dashboard for one financial profile
@@ -88,26 +87,6 @@ final class DashboardWidget extends Model
         'period_range' => 'integer',
         'sort_order' => 'integer',
     ];
-
-    /**
-     * The owning user (each member has their own dashboard per profile).
-     *
-     * @return BelongsTo<User, $this>
-     */
-    public function user(): BelongsTo
-    {
-        return $this->belongsTo(User::class);
-    }
-
-    /**
-     * The financial profile the widget is configured for.
-     *
-     * @return BelongsTo<FinancialProfile, $this>
-     */
-    public function profile(): BelongsTo
-    {
-        return $this->belongsTo(FinancialProfile::class, 'financial_profile_id');
-    }
 
     /**
      * Widgets of the given user's dashboard for the given profile, in

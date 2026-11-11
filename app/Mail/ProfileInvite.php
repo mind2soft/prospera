@@ -92,12 +92,18 @@ class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
      * must not turn the invite into a phishing lure), and the result is
      * capped at SUBJECT_NAME_MAX characters. The body states the full
      * names as plain text.
+     *
+     * The name is NFKC-normalized first, so full-width forms ("ＷＷＷ．")
+     * fold to ASCII, and the ideographic and half-width dots that IDNA maps
+     * to "." (。 ｡, and ． before folding) count as dots (SEC-R3-1).
      */
     public static function subjectText(string $name): string
     {
-        $text = preg_replace('/[\p{C}\s]+/u', ' ', $name) ?? '';
-        $text = preg_replace('~(?:[a-z][a-z\d+.\-]*://|www\.)\S*~iu', ' ', $text) ?? '';
-        $text = preg_replace('~[\p{L}\p{N}\-_@]+(?:\.[\p{L}\p{N}\-_]+)+\S*~u', ' ', $text) ?? '';
+        $dot = '[.。．｡]';
+        $text = \Normalizer::normalize($name, \Normalizer::FORM_KC);
+        $text = preg_replace('/[\p{C}\s]+/u', ' ', is_string($text) ? $text : $name) ?? '';
+        $text = preg_replace("~(?:[a-z][a-z\\d+.\\-]*://|www{$dot})\\S*~iu", ' ', $text) ?? '';
+        $text = preg_replace("~[\\p{L}\\p{N}\\-_@]+(?:{$dot}[\\p{L}\\p{N}\\-_]+)+\\S*~u", ' ', $text) ?? '';
         $text = trim(preg_replace('/\s+/u', ' ', $text) ?? '');
 
         return Str::limit($text, self::SUBJECT_NAME_MAX, '…', preserveWords: true);
