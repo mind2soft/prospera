@@ -243,7 +243,8 @@ class FinancialProfileInviteController extends Controller
     /**
      * Grant the membership carried by the invite to the given user inside a
      * locked transaction, consuming the invite. Shared by the JSON accept
-     * endpoint and the one-click accept link.
+     * accept endpoint (the email's accept link only leads to the
+     * confirmation page that calls it).
      */
     private function grantMembership(string $inviteKey, User $user): FinancialProfile
     {
@@ -304,7 +305,8 @@ class FinancialProfileInviteController extends Controller
      * Queue the invitation email for the invitee (one per share event,
      * docs/notifications.md conventions: queued, localized per recipient
      * with an `en` fallback). A registered account gets the informational
-     * variant with the one-click accept link; any other address gets the
+     * variant with the accept link (it opens the invite confirmation page,
+     * where the user confirms); any other address gets the
      * account-creation invite. Registered recipients are gated by their
      * `profile_invite` notification toggle (re-checked at send time inside
      * the mailable).

@@ -24,9 +24,10 @@ use Illuminate\Support\Str;
  * - The email is not linked to an account: the mail invites the recipient to
  *   create an account through the invite link (registration carries the
  *   invite, so the shared profile becomes their only profile).
- * - The email matches a registered account: the mail carries a **one-click
- *   accept link** that pre-authorizes the matching signed-in user; the mail
- *   states that ignoring the request declines the share.
+ * - The email matches a registered account: the mail carries an **accept
+ *   link** to the invite confirmation page (the GET never changes state;
+ *   the signed-in user confirms with "Accept invite"); the mail states that
+ *   ignoring the request declines the share.
  *
  * Queued, localized per recipient (`users.locale`, fallback `en`), and
  * gated through the `profile_invite` notification toggle — checked at
@@ -48,7 +49,7 @@ class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
      * Create a new message instance.
      *
      * @param  CarbonInterface  $expiresAt  when the invite stops working (now + 48h)
-     * @param  string|null  $acceptUrl  the one-click accept link — null for
+     * @param  string|null  $acceptUrl  the accept link (to the confirmation page) — null for
      *                                  recipients without an account
      * @param  int|null  $recipientUserId  the registered recipient, for the
      *                                     send-time notification gate — null
