@@ -244,11 +244,17 @@ class BudgetController extends Controller
             ]);
         }
 
-        $assignment = $budget->envelopes()->create([
-            'envelope_id' => $envelope->id,
-            'amount' => $envelope->signedAmount($validated['amount']),
-            'type' => $validated['type'],
-        ]);
+        $assignment = DB::transaction(function () use ($budget, $envelope, $validated): BudgetEnvelope {
+            // Sign from the direction read under a shared lock: a concurrent
+            // direction change cannot slip in between (docs/envelope.md).
+            $direction = Envelope::query()->whereKey($envelope->id)->sharedLock()->firstOrFail();
+
+            return $budget->envelopes()->create([
+                'envelope_id' => $envelope->id,
+                'amount' => $direction->signedAmount($validated['amount']),
+                'type' => $validated['type'],
+            ]);
+        });
 
         return response()->json([
             'envelope' => $this->serializeEnvelope($assignment->load('envelope')),

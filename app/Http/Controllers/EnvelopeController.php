@@ -10,6 +10,7 @@ use App\Services\ResourcePermissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -50,7 +51,26 @@ class EnvelopeController extends Controller
     {
         $this->authorizeOwner($request, $envelope);
 
-        $envelope->update($request->validated());
+        $validated = $request->validated();
+
+        DB::transaction(function () use ($envelope, $validated): void {
+            // Stored amounts are signed from the direction at write time:
+            // flipping it under existing amounts would mix both conventions.
+            // The row lock serializes with writers reading the direction
+            // under a shared lock (transactions, budget assignments).
+            $locked = Envelope::query()->whereKey($envelope->id)->lockForUpdate()->firstOrFail();
+
+            $referenced = fn (): bool => $locked->budgetEnvelopes()->exists()
+                || $locked->transactions()->exists();
+
+            if ($validated['type'] !== $locked->type && $referenced()) {
+                throw ValidationException::withMessages([
+                    'type' => __('This envelope is already used by a budget or transactions: its direction cannot be changed.'),
+                ]);
+            }
+
+            $envelope->update($validated);
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Envelope updated.')]);
 

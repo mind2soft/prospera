@@ -99,7 +99,7 @@ data fetching.
 | -------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `GET`    | `/envelopes`                                   | Envelopes page (Inertia)                                                                                                                                                                                     |
 | `POST`   | `/envelopes`                                   | Create an envelope (`name`, `type` (`expense`\|`revenue`), `color`); responses expose `type` as `direction`                                                                                                  |
-| `PUT`    | `/envelopes/{envelope}`                        | Update an envelope (owner only; same fields as create)                                                                                                                                                       |
+| `PUT`    | `/envelopes/{envelope}`                        | Update an envelope (owner only; same fields as create; direction locked once referenced)                                                                                                                     |
 | `DELETE` | `/envelopes/{envelope}`                        | Delete an envelope (owner only; blocked when referenced)                                                                                                                                                     |
 | `GET`    | `/api/envelopes`                               | List all envelopes visible to the user (their own + ones shared with them via profile membership), each with a `permission` field: `"owner" \| "contributor" \| "viewer" \| "none"` (`none` = metadata-only) |
 | `GET`    | `/api/envelopes/{envelope}/shares`             | List shares — the owner row first (labeled `owner`), then explicit rows, each with an `explicit` flag (owner and profile co-members only)                                                                     |
@@ -137,6 +137,13 @@ data fetching.
 - **Deleting an envelope that is referenced by any budget or transaction is
   blocked** with a validation error (data integrity is enforced, not
   cascaded).
+- **Changing the direction of an envelope that is referenced by any budget
+  or transaction is blocked** with a validation error on `type`: stored
+  amounts are signed from the direction at write time, so flipping it would
+  mix both sign conventions. Name and color stay editable. The check runs
+  with the envelope row locked; recording a transaction or assigning the
+  envelope to a budget reads the direction under a shared lock, so neither
+  can race the check.
 - `name` must be unique per owner. On auto-transfer, a collision with the new
   owner's existing names is resolved by appending ` (imported)`.
 - Ownership transfer follows the shared rule: ownership can be transferred

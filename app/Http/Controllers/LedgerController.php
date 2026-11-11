@@ -270,12 +270,19 @@ class LedgerController extends Controller
             ]);
         }
 
-        $transaction = $ledger->transactions()->create([
-            'user_id' => $request->user()->id,
-            'envelope_id' => $envelope->id,
-            'amount' => $envelope->signedAmount($validated['amount']),
-            'event_at' => $eventAt,
-        ]);
+        $transaction = DB::transaction(function () use ($request, $ledger, $envelope, $validated, $eventAt): Transaction {
+            // The sign comes from the direction read under a shared lock, so
+            // a concurrent direction change (blocked once the envelope is
+            // referenced) cannot slip in between (docs/envelope.md).
+            $direction = Envelope::query()->whereKey($envelope->id)->sharedLock()->firstOrFail();
+
+            return $ledger->transactions()->create([
+                'user_id' => $request->user()->id,
+                'envelope_id' => $envelope->id,
+                'amount' => $direction->signedAmount($validated['amount']),
+                'event_at' => $eventAt,
+            ]);
+        });
 
         return response()->json([
             'transaction' => $this->serializeTransaction(
