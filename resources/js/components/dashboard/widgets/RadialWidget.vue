@@ -6,7 +6,7 @@ import VisTooltip from '@unovis/vue/components/tooltip';
 import VisSingleContainer from '@unovis/vue/containers/single-container';
 import { computed } from 'vue';
 import { useLocale } from '@/composables/useLocale';
-import { formatMoney } from '@/lib/budget';
+import { formatCompactMoney, formatMoney } from '@/lib/budget';
 import { escapeHtml } from '@/lib/html';
 import { isClient } from '@/lib/ssr';
 import type { DashboardRadialRow, DashboardWidgetData } from '@/types';
@@ -53,19 +53,8 @@ function colorOf(row: DashboardRadialRow, index: number): string {
 const value = (d: DashboardRadialRow): number => d.value ?? 0;
 
 /** Compact currency for the donut's central total ("$2.5K"). */
-const compactMoney = (amount: number): string => {
-    try {
-        return new Intl.NumberFormat(locale.value, {
-            style: 'currency',
-            currency: props.currency,
-            currencyDisplay: 'narrowSymbol',
-            notation: 'compact',
-            maximumFractionDigits: 1,
-        }).format(amount);
-    } catch {
-        return formatMoney(amount, props.currency, locale.value);
-    }
-};
+const compactMoney = (amount: number): string =>
+    formatCompactMoney(amount, props.currency, locale.value);
 
 /** Segment colors keyed by row key (masked rows fall back to muted). */
 const colorByKey = computed(() => {

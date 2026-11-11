@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/tooltip';
 import { getInitials } from '@/composables/useInitials';
 import { useLocale } from '@/composables/useLocale';
+import { formatCalendarDate } from '@/lib/calendar';
 import type { Transaction } from '@/types';
 
 const { locale } = useLocale();
@@ -73,13 +74,11 @@ const remainingFor = (transaction: Transaction): number | null => {
     return transaction.direction === 'expense' ? -remaining : remaining;
 };
 
-const dayLabel = (eventAt: string): string => {
-    const [year, month, day] = eventAt.split('-').map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString(locale.value, {
+const dayLabel = (eventAt: string): string =>
+    formatCalendarDate(eventAt, locale.value, {
         month: 'short',
         day: 'numeric',
     });
-};
 
 const stampLabel = (createdAt: string): string =>
     new Date(createdAt).toLocaleString(locale.value, {

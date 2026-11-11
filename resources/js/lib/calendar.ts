@@ -15,3 +15,19 @@ export function browserTimeZone(): string | undefined {
 export function currentMonth(now: Date = new Date()): string {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
+
+/** The local `Date` of a calendar date (`Y-m-d`), at midnight. */
+export function parseCalendarDate(date: string): Date {
+    const [year, month, day] = date.split('-').map(Number);
+
+    return new Date(year, month - 1, day);
+}
+
+/** A calendar date (`Y-m-d`), formatted for the given locale. */
+export function formatCalendarDate(
+    date: string,
+    locale: string,
+    options: Intl.DateTimeFormatOptions,
+): string {
+    return parseCalendarDate(date).toLocaleDateString(locale, options);
+}

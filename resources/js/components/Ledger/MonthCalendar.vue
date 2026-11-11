@@ -3,6 +3,7 @@ import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/composables/useLocale';
+import { formatCalendarDate } from '@/lib/calendar';
 
 const { locale } = useLocale();
 
@@ -113,15 +114,13 @@ const weeks = computed<CalendarDay[][]>(() => {
 });
 
 /** Full, localized date for a day's accessible name. */
-const fullDateLabel = (date: string): string => {
-    const [year, month, day] = date.split('-').map(Number);
-    return new Date(year, month - 1, day).toLocaleDateString(locale.value, {
+const fullDateLabel = (date: string): string =>
+    formatCalendarDate(date, locale.value, {
         weekday: 'long',
         day: 'numeric',
         month: 'long',
         year: 'numeric',
     });
-};
 
 const monthLabelId = useId();
 const grid = useTemplateRef<HTMLElement>('grid');

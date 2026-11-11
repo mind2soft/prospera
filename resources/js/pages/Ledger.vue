@@ -50,6 +50,7 @@ import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useLocale } from '@/composables/useLocale';
 import { ApiError } from '@/lib/api';
 import { formatMoney } from '@/lib/budget';
+import { formatCalendarDate } from '@/lib/calendar';
 import type {
     AddTransactionInput,
     CreateLedgerInput,
@@ -412,11 +413,11 @@ const transactionSummary = computed(() => {
     if (tx === null) {
         return '';
     }
-    const [year, month, day] = tx.event_at.split('-').map(Number);
-    const date = new Date(year, month - 1, day).toLocaleDateString(
-        locale.value,
-        { day: 'numeric', month: 'long', year: 'numeric' },
-    );
+    const date = formatCalendarDate(tx.event_at, locale.value, {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    });
     // A masked amount is never revealed, not even in the confirmation.
     return tx.masked || tx.amount === null
         ? t('ledger.deleteTransaction.summaryMasked', {
