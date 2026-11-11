@@ -53,7 +53,8 @@
             "saving": "Enregistrement…",
             "saved": "Modifications enregistrées",
             "notSaved": "Une modification n’a pas pu être enregistrée.",
-            "invalidAmount": "Non enregistré : saisissez un montant entier d’au moins 1."
+            "invalidAmount": "Non enregistré : saisissez un montant entier d’au moins 1.",
+            "label": "Enveloppes du budget"
         },
         "addEnvelope": {
             "title": "Ajouter une enveloppe",

@@ -51,7 +51,7 @@ const isDraft = computed(() => selected.value?.published_at === null);
 </script>
 
 <template>
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex items-center justify-between gap-2 sm:gap-4">
         <Select
             :model-value="selectedId ?? undefined"
             :disabled="loading || budgets.length < 2"
@@ -60,7 +60,7 @@ const isDraft = computed(() => selected.value?.published_at === null);
             "
         >
             <SelectTrigger
-                class="w-56"
+                class="w-full min-w-0 sm:w-56"
                 :aria-label="$t('budget.selector.selectBudget')"
             >
                 <SelectValue>

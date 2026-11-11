@@ -1,3 +1,4 @@
+<!-- biome-ignore-all lint/a11y/noNoninteractiveTabindex: the table scroll region must be keyboard-focusable to scroll (WCAG 2.1.1) -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import Currency from '@/components/Currency.vue';
@@ -91,8 +92,14 @@ const stampLabel = (createdAt: string): string =>
 </script>
 
 <template>
-    <div class="overflow-hidden rounded-lg border">
-        <table class="w-full text-sm">
+    <!-- A labelled, focusable scroll region: on narrow screens the columns
+         (including the delete action) scroll instead of being clipped. -->
+    <section
+        class="overflow-x-auto rounded-lg border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        :aria-label="$t('ledger.table.label')"
+        tabindex="0"
+    >
+        <table class="w-full min-w-xl text-sm">
             <thead>
                 <tr
                     class="border-b bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase"
@@ -253,5 +260,5 @@ const stampLabel = (createdAt: string): string =>
                 </tr>
             </tbody>
         </table>
-    </div>
+    </section>
 </template>

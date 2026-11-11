@@ -238,3 +238,29 @@ test('the envelope type and color pickers expose their selection', async ({
             .getByText('Bonus', { exact: true }),
     ).toBeVisible();
 });
+
+test('the budget page reflows at 320 px', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await login(page);
+    await page.goto('/budget');
+    await expect(
+        page.getByRole('region', { name: 'Budget envelopes' }),
+    ).toBeVisible();
+
+    const overflowing = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('body *')]
+            .filter(
+                (el) =>
+                    el.scrollWidth > el.clientWidth + 1 &&
+                    ['auto', 'scroll'].includes(getComputedStyle(el).overflowX),
+            )
+            .map((el) => el.getAttribute('aria-label') ?? el.className),
+    );
+    expect(overflowing).toEqual(['Budget envelopes']);
+    await expect(
+        page.getByRole('combobox', { name: 'Select budget' }),
+    ).toBeInViewport({ ratio: 1 });
+    await expect(
+        page.getByRole('button', { name: 'Budget actions' }),
+    ).toBeInViewport({ ratio: 1 });
+});

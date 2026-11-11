@@ -88,3 +88,39 @@ test('calendar days are named, expose today/selection and use arrow keys', async
     await page.keyboard.press('Enter');
     await expect(targetDay).toHaveAttribute('aria-pressed', 'true');
 });
+
+test('the ledger reflows at 320 px; the table scrolls in a labelled region', async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 320, height: 800 });
+    await login(page);
+    await page.goto('/ledger');
+    const region = page.getByRole('region', { name: 'Transactions' });
+    await expect(region).toBeVisible();
+
+    // Nothing but the table region scrolls horizontally.
+    const overflowing = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>('body *')]
+            .filter(
+                (el) =>
+                    el.scrollWidth > el.clientWidth + 1 &&
+                    ['auto', 'scroll'].includes(getComputedStyle(el).overflowX),
+            )
+            .map((el) => el.getAttribute('aria-label') ?? el.className),
+    );
+    expect(overflowing).toEqual(['Transactions']);
+    expect(
+        await page.evaluate(
+            () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+    ).toBe(true);
+
+    // The region is keyboard-scrollable to reach the trailing columns.
+    await region.focus();
+    await expect(region).toBeFocused();
+    await page.keyboard.press('End');
+    await page.keyboard.press('ArrowRight');
+    await expect
+        .poll(() => region.evaluate((el) => el.scrollLeft))
+        .toBeGreaterThan(0);
+});

@@ -53,7 +53,8 @@
             "saving": "Saving…",
             "saved": "All changes saved",
             "notSaved": "A change could not be saved.",
-            "invalidAmount": "Not saved: enter a whole amount of 1 or more."
+            "invalidAmount": "Not saved: enter a whole amount of 1 or more.",
+            "label": "Budget envelopes"
         },
         "addEnvelope": {
             "title": "Add an envelope",

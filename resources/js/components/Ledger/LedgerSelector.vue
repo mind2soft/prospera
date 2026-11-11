@@ -55,7 +55,7 @@ const label = (ledger: Ledger): string => {
 </script>
 
 <template>
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex items-center justify-between gap-2 sm:gap-4">
         <Select
             :model-value="selectedId ?? undefined"
             :disabled="loading || ledgers.length < 2"
@@ -64,7 +64,7 @@ const label = (ledger: Ledger): string => {
             "
         >
             <SelectTrigger
-                class="w-64"
+                class="w-full min-w-0 sm:w-64"
                 :aria-label="$t('ledger.selector.selectLedger')"
             >
                 <SelectValue>

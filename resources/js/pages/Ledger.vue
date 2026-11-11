@@ -527,7 +527,9 @@ const confirmRemoveTransaction = () => {
                 @remove="showDelete = true"
             />
 
-            <div class="grid items-start gap-6 lg:grid-cols-[auto_1fr]">
+            <div
+                class="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[auto_minmax(0,1fr)]"
+            >
                 <div class="lg:sticky lg:top-8">
                     <MonthCalendar
                         :selected-date="selectedDate"

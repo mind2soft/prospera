@@ -1,3 +1,4 @@
+<!-- biome-ignore-all lint/a11y/noNoninteractiveTabindex: the table scroll region must be keyboard-focusable to scroll (WCAG 2.1.1) -->
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue';
 import Currency from '@/components/Currency.vue';
@@ -159,8 +160,12 @@ const runningLeft = computed(() => {
             </Button>
         </div>
 
-        <div class="overflow-hidden rounded-lg border">
-            <table class="w-full text-sm">
+        <section
+            class="overflow-x-auto rounded-lg border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            :aria-label="$t('budget.table.label')"
+            tabindex="0"
+        >
+            <table class="w-full min-w-lg text-sm">
                 <thead>
                     <tr
                         class="border-b bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase"
@@ -316,7 +321,7 @@ const runningLeft = computed(() => {
                     </tr>
                 </tfoot>
             </table>
-        </div>
+        </section>
 
         <p
             v-if="hasVariable"
