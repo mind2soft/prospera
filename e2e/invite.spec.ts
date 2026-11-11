@@ -157,6 +157,11 @@ test('declining an invite does not grant membership', async ({ page }) => {
         page.getByText('Join “Default profile”', { exact: true }),
     ).toBeVisible();
     await page.getByRole('button', { name: 'Decline' }).click();
+    // Declining deletes the invite: it is confirmed first.
+    await page
+        .getByRole('dialog')
+        .getByRole('button', { name: 'Decline invite' })
+        .click();
 
     await page.waitForURL((url) => url.pathname.endsWith('/dashboard'));
 
