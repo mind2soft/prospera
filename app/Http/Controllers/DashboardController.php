@@ -3,11 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\DashboardWidget;
-use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Services\Dashboard\DashboardAggregator;
 use App\Services\Dashboard\DashboardLayoutValidator;
+use App\Services\Dashboard\SelectionEnvelopes;
 use App\Services\Dashboard\WidgetSelection;
+use App\Services\LocalCalendar;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,9 +40,22 @@ class DashboardController extends Controller
             $profile->id,
         )->get();
 
+        $selections = $widgets->mapWithKeys(fn (DashboardWidget $widget): array => [
+            $widget->id => WidgetSelection::fromConfig($widget->selection),
+        ]);
+
+        // Deleted envelopes are pruned from every widget's selection with a
+        // single existence query.
+        $existing = SelectionEnvelopes::existingIds(
+            $selections->flatMap(fn (WidgetSelection $selection): array => $selection->envelopeIds())->all(),
+        );
+
         return response()->json([
             'widgets' => $widgets
-                ->map(fn (DashboardWidget $widget) => $this->serializeWidget($widget))
+                ->map(fn (DashboardWidget $widget) => $this->serializeWidget(
+                    $widget,
+                    $selections->get($widget->id)->pruned($existing),
+                ))
                 ->values(),
         ]);
     }
@@ -135,31 +149,20 @@ class DashboardController extends Controller
         }
 
         return response()->json(
-            $this->aggregator->data($widget, $profile, $request->user()),
+            $this->aggregator->data(
+                $widget,
+                $profile,
+                $request->user(),
+                LocalCalendar::fromRequest($request)->today(),
+            ),
         );
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function serializeWidget(DashboardWidget $widget): array
+    private function serializeWidget(DashboardWidget $widget, WidgetSelection $selection): array
     {
-        $selection = WidgetSelection::fromConfig($widget->selection);
-
-        $envelopeIds = $selection->envelopeIds();
-
-        // Prune deleted envelopes (and shrink groups) server-side — one
-        // query for every widget's selection.
-        if ($envelopeIds !== []) {
-            $existing = Envelope::query()
-                ->whereIn('id', $envelopeIds)
-                ->pluck('id')
-                ->map(fn (mixed $id): int => (int) $id)
-                ->values()
-                ->all();
-            $selection = $selection->pruned($existing);
-        }
-
         return [
             'id' => $widget->id,
             'type' => $widget->type,

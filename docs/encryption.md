@@ -161,15 +161,22 @@ key at once (e.g. `composer setup`, which runs `key:generate`
 unconditionally). Instead of scattered `AmountDecryptionException` 500s, two
 safeguards report it explicitly (issue #36):
 
-- **Boot-time smoke check** — on every production HTTP request, one active
-  amount key per profile is unwrapped; a failure aborts the request with an
+- **Boot-time smoke check** — on every production HTTP request, a single
+  amount key (the most recently created active one) is unwrapped — a
+  rotation breaks every wrapped key at once, so one is enough, at constant
+  cost whatever the number of profiles; a failure aborts the request with an
   explicit, actionable error in the logs: restore the previous `APP_KEY` from
   the backup, or, if the rotation was intentional, list the old key in
   `APP_PREVIOUS_KEYS` and run `amounts:rewrap-keys`. HTTP requests only:
   artisan must keep booting so the recovery itself stays runnable. A broken
   key also fails the deploy's `/up` health check, leaving the previous
   release live or the app in maintenance mode (the deploy's own pre-switch
-  `amounts:verify` catches it before the switch).
+  `amounts:verify` catches it before the switch). The check is skipped in
+  maintenance mode (the 503 page must keep rendering, e.g. during a
+  deploy's migrations) and when the key table cannot be read (database
+  down or not migrated yet — the request fails on its own terms). It is
+  not cached: with the default `database` cache store a cache lookup costs
+  the same single query.
 - **Daily scheduled `amounts:verify`** — so the failure surfaces in the logs
   even when no request touches amounts; the command logs a failure summary
   itself, since the scheduler's own output goes to `/dev/null`.
@@ -380,9 +387,16 @@ cascade-delete child rows.
 ### Performance
 
 Decryption costs one AES-GCM operation per amount plus one key unwrap per
-profile and request; the boot-time smoke check adds one more unwrap per
-profile (its highest active key only) and one small query. Totals hydrate and
-decrypt the rows they sum; rotation and `amounts:verify` scan every amount.
+profile and request. Each model memoizes its decrypted amounts against the
+exact inputs of the decryption (payload, raw context attributes, original
+values), so repeated reads of `->amount` decrypt once while any change to
+those inputs decrypts afresh — the context-change rule above still applies.
+The memo is dropped when a model is serialized. (Laravel's `shouldCache()`
+accessor cache is deliberately not used: it writes the cached plaintext back
+into the attributes through the mutator.) The boot-time smoke check adds one
+unwrap and one small indexed query per request, independent of the number of
+profiles. Totals hydrate and decrypt the rows they sum; rotation and
+`amounts:verify` scan every amount.
 
 ## Why not the original proposal
 

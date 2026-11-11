@@ -11,11 +11,14 @@ use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\ResourcePermissions;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\CountsQueries;
 use Tests\TestCase;
 
 class LedgerTest extends TestCase
 {
+    use CountsQueries;
     use RefreshDatabase;
 
     private User $user;
@@ -838,5 +841,67 @@ class LedgerTest extends TestCase
             ->assertNotFound();
 
         $this->assertDatabaseCount('ledger_permissions', 1);
+    }
+
+    public function test_transactions_queries_do_not_grow_with_rows_or_envelopes(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $budget = $this->createPublishedBudget($this->user, attributes: ['effective_year' => 2026, 'effective_month' => 6]);
+        $url = "/api/ledgers/{$ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30";
+        $record = fn (Envelope $envelope, int $amount) => $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => $amount,
+            'event_at' => '2026-06-10 00:00:00',
+        ]);
+
+        $rent = $budget->envelopes()->with('envelope')->get()->firstWhere('amount', -200)->envelope;
+        $record($rent, -5);
+        $this->actingAs($this->member);
+        $few = count($this->queriesDuring(fn () => $this->getJson($url)->assertOk()));
+
+        foreach (range(1, 8) as $i) {
+            $envelope = $this->createEnvelope("Envelope {$i}");
+            $envelope->permissions()->create(['user_id' => $this->member->id, 'permission' => EnvelopePermission::PERMISSION_VIEWER]);
+            $record($envelope, -$i);
+            $record($rent, -$i);
+        }
+
+        $queries = $this->queriesDuring(fn () => $this->getJson($url)->assertOk()->assertJsonCount(17, 'transactions'));
+
+        $this->assertCount($few, $queries);
+        // The envelopes are read once (with the requester's share rows).
+        $this->assertCount(1, array_filter($queries, fn (string $sql): bool => str_contains($sql, 'from "envelopes"')));
+        // Profiles of the ledger and the budget are known: no lookups.
+        $this->assertCount(0, array_filter($queries, fn (string $sql): bool => str_starts_with($sql, 'select "profile_id" from')));
+    }
+
+    public function test_transactions_reject_ranges_longer_than_a_year(): void
+    {
+        $ledger = $this->createLedger($this->user);
+
+        $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=1900-01-01&to_date=2999-12-31")
+            ->assertUnprocessable()->assertJsonValidationErrors('to_date');
+
+        $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-01-01&to_date=2026-12-31")
+            ->assertOk();
+
+        $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2024-01-01&to_date=2024-12-31")
+            ->assertOk();
+    }
+
+    public function test_model_dates_are_immutable_and_accepted_as_event_dates(): void
+    {
+        $ledger = $this->createLedger($this->user)->fresh();
+
+        // Date::use(CarbonImmutable::class): model dates are immutable, and
+        // the date helpers accept them (they took a mutable Carbon before).
+        $this->assertInstanceOf(CarbonImmutable::class, $ledger->start_date);
+        $this->assertTrue($ledger->acceptsEventDate($ledger->start_date));
+        $this->assertTrue($ledger->acceptsEventDate(CarbonImmutable::parse('2026-06-15')));
+        $this->assertFalse($ledger->acceptsEventDate(CarbonImmutable::parse('2027-01-01')));
     }
 }

@@ -2,6 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Budget;
+use App\Models\FinancialProfile;
+use App\Models\Ledger;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -129,6 +133,66 @@ class EnvelopesTest extends TestCase
         ]);
 
         $response->assertSessionHasErrors(['type']);
+    }
+
+    public function test_direction_cannot_change_once_transactions_reference_the_envelope(): void
+    {
+        $user = User::factory()->create();
+        $profile = FinancialProfile::createOwnedBy($user, 'Home');
+        $envelope = $user->envelopes()->create(['name' => 'Food', 'type' => 'expense']);
+        $ledger = Ledger::create([
+            'profile_id' => $profile->id,
+            'name' => '2026',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+            'starting_balance' => 0,
+        ]);
+        $ledger->transactions()->create([
+            'user_id' => $user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -10,
+            'event_at' => '2026-03-03 00:00:00',
+        ]);
+
+        $this->actingAs($user)->put("/envelopes/{$envelope->id}", [
+            'name' => 'Food',
+            'type' => 'revenue',
+            'color' => '#0ea5e9',
+        ])->assertSessionHasErrors('type');
+
+        $this->assertDatabaseHas('envelopes', ['id' => $envelope->id, 'type' => 'expense', 'color' => '#6366f1']);
+        $this->assertSame(-10, Transaction::query()->sole()->amount);
+
+        // Other attributes stay editable.
+        $this->actingAs($user)->put("/envelopes/{$envelope->id}", [
+            'name' => 'Groceries',
+            'type' => 'expense',
+            'color' => '#0ea5e9',
+        ])->assertSessionHasNoErrors()->assertRedirect(route('envelopes'));
+
+        $this->assertDatabaseHas('envelopes', ['id' => $envelope->id, 'name' => 'Groceries', 'color' => '#0ea5e9']);
+    }
+
+    public function test_direction_cannot_change_once_a_budget_references_the_envelope(): void
+    {
+        $user = User::factory()->create();
+        $profile = FinancialProfile::createOwnedBy($user, 'Home');
+        $envelope = $user->envelopes()->create(['name' => 'Salary', 'type' => 'revenue']);
+        $budget = Budget::create([
+            'profile_id' => $profile->id,
+            'currency' => 'CAD',
+            'effective_year' => 0,
+            'effective_month' => 0,
+        ]);
+        $budget->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => 3000, 'type' => 'fixed']);
+
+        $this->actingAs($user)->put("/envelopes/{$envelope->id}", [
+            'name' => 'Salary',
+            'type' => 'expense',
+            'color' => '#6366f1',
+        ])->assertSessionHasErrors('type');
+
+        $this->assertDatabaseHas('envelopes', ['id' => $envelope->id, 'type' => 'revenue']);
     }
 
     public function test_guests_are_redirected(): void

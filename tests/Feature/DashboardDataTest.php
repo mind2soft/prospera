@@ -11,10 +11,12 @@ use App\Models\Ledger;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Tests\Concerns\CountsQueries;
 use Tests\TestCase;
 
 class DashboardDataTest extends TestCase
 {
+    use CountsQueries;
     use RefreshDatabase;
 
     private User $owner;
@@ -190,6 +192,36 @@ class DashboardDataTest extends TestCase
     private function dataUrl(DashboardWidget $widget): string
     {
         return "/api/dashboard/{$this->profile->id}/widgets/{$widget->id}/data";
+    }
+
+    public function test_today_is_the_requesters_calendar_day(): void
+    {
+        // 2026-11-10 20:00 UTC is already 2026-11-11 in Auckland (UTC+13).
+        Carbon::setTestNow(Carbon::parse('2026-11-10 20:00:00', 'UTC'));
+        $this->record($this->gas, -33, Carbon::parse('2026-11-11'));
+
+        $widget = $this->createWidget('envelope_spending', 'single', ['type' => 'days', 'range' => 1], [
+            ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
+        ]);
+
+        // Server day (UTC): the 10th.
+        $this->actingAs($this->owner)->getJson($this->dataUrl($widget))
+            ->assertOk()->assertJsonPath('rows.0.spent', -120);
+
+        $this->actingAs($this->owner)->getJson($this->dataUrl($widget).'?timezone=Pacific/Auckland')
+            ->assertOk()->assertJsonPath('rows.0.spent', -33);
+
+        $history = $this->createWidget('income_expenses', 'line', ['type' => 'days', 'range' => 1], [
+            ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
+        ]);
+
+        $this->actingAs($this->owner)->getJson($this->dataUrl($history).'?timezone=Pacific/Auckland')
+            ->assertOk()
+            ->assertJsonPath('series.0.bucket', '2026-11-11')
+            ->assertJsonPath('series.0.expenses', -33);
+
+        $this->actingAs($this->owner)->getJson($this->dataUrl($widget).'?timezone=Nowhere/Land')
+            ->assertUnprocessable()->assertJsonValidationErrors('timezone');
     }
 
     // ---- Envelope spending ----
@@ -514,6 +546,49 @@ class DashboardDataTest extends TestCase
             ->getJson($this->dataUrl($spending))
             ->assertOk()
             ->assertJson(['type' => 'envelope_spending', 'rows' => []]);
+    }
+
+    public function test_widget_data_queries_do_not_grow_with_ledgers_budgets_or_envelopes(): void
+    {
+        $widget = $this->createWidget('envelope_spending', 'single', ['type' => 'months', 'range' => 12], [
+            ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
+            ['kind' => 'group', 'name' => 'Food', 'envelope_ids' => [$this->groceries->id]],
+        ]);
+        $this->actingAs($this->owner);
+
+        $before = count($this->queriesDuring(fn () => $this->getJson($this->dataUrl($widget))->assertOk()));
+
+        // More ledgers (each a profile lookup when decrypting), more covering
+        // budgets, more selected envelopes shared with share rows.
+        foreach (range(1, 4) as $i) {
+            $ledger = Ledger::create([
+                'profile_id' => $this->profile->id,
+                'name' => "Ledger {$i}",
+                'start_date' => '2025-01-01',
+                'end_date' => '2027-12-31',
+                'starting_balance' => 0,
+            ]);
+            $ledger->transactions()->create([
+                'user_id' => $this->owner->id,
+                'envelope_id' => $this->gas->id,
+                'amount' => -$i,
+                'event_at' => Carbon::parse('2026-11-0'.$i),
+            ]);
+            $this->publishedBudget(Carbon::parse('2026-0'.($i + 4).'-01'), [[$this->gas, -10]]);
+        }
+
+        $widget->update(['selection' => [
+            ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
+            ['kind' => 'group', 'name' => 'Food', 'envelope_ids' => [$this->groceries->id, $this->entertainment->id]],
+            ['kind' => 'envelope', 'envelope_id' => $this->paycheck->id],
+        ]]);
+
+        $queries = $this->queriesDuring(fn () => $this->getJson($this->dataUrl($widget))->assertOk()
+            ->assertJsonPath('rows.0.spent', -210)
+            ->assertJsonPath('rows.0.allocated', -240));
+
+        $this->assertCount($before, $queries);
+        $this->assertCount(1, array_filter($queries, fn (string $sql): bool => str_contains($sql, 'from "envelopes"')));
     }
 
     public function test_deleted_envelopes_disappear_from_the_data(): void

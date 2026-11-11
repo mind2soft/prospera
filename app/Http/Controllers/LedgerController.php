@@ -8,6 +8,7 @@ use App\Models\Envelope;
 use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Security\Amounts\AmountKeyRing;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
 use Illuminate\Http\JsonResponse;
@@ -20,6 +21,12 @@ use Illuminate\Validation\ValidationException;
 
 class LedgerController extends Controller
 {
+    /**
+     * The longest from_date..to_date span (inclusive, in days) the
+     * transactions endpoint serves.
+     */
+    public const MAX_RANGE_DAYS = 366;
+
     public function __construct(
         private readonly ResourcePermissions $permissions,
         private readonly ResourcePermissionService $permissionService,
@@ -150,8 +157,26 @@ class LedgerController extends Controller
         $from = Carbon::parse($validated['from_date'])->startOfDay();
         $to = Carbon::parse($validated['to_date'])->endOfDay();
 
+        // Every row read is hydrated and decrypted: the range is bounded to
+        // a ledger's yearly span (the UI asks for one month at a time).
+        if ($from->diffInDays($to->copy()->startOfDay()) >= self::MAX_RANGE_DAYS) {
+            throw ValidationException::withMessages([
+                'to_date' => __('The date range cannot exceed :days days.', ['days' => self::MAX_RANGE_DAYS]),
+            ]);
+        }
+
+        $user = $request->user();
+
+        // The ledger's profile is known: no lookup query when decrypting.
+        app(AmountKeyRing::class)->rememberLedgerProfiles([$ledger->id], $ledger->profile_id);
+
         $transactions = $ledger->transactions()
-            ->with('envelope', 'user')
+            ->with([
+                // The requester's share rows resolve the masking below
+                // without a second envelopes query.
+                'envelope.permissions' => fn ($query) => $query->where('user_id', $user->id),
+                'user',
+            ])
             ->whereBetween('event_at', [$from, $to])
             ->orderBy('event_at')
             ->orderBy('id')
@@ -175,6 +200,10 @@ class LedgerController extends Controller
             ->where('effective_month', $from->month)
             ->first();
 
+        if ($budget !== null) {
+            app(AmountKeyRing::class)->rememberBudgetProfiles([$budget->id], $ledger->profile_id);
+        }
+
         $allocations = $budget === null
             ? collect()
             : BudgetEnvelope::query()
@@ -185,16 +214,11 @@ class LedgerController extends Controller
                     (string) $allocation->envelope_id => $allocation->amount,
                 ]);
 
-        $envelopePermissions = Envelope::permissionsFor(
-            $request->user(),
-            $transactions->pluck('envelope_id')->unique()->all(),
-        );
-
         return response()->json([
             'transactions' => $transactions
                 ->map(fn (Transaction $transaction) => $this->serializeTransaction(
                     $transaction,
-                    $envelopePermissions->get($transaction->envelope_id, ResourcePermissions::NONE),
+                    $transaction->envelope->permissionFor($user),
                     $this->remainingAllocated($transaction, $allocations, $totals),
                 ))
                 ->values(),
@@ -270,12 +294,19 @@ class LedgerController extends Controller
             ]);
         }
 
-        $transaction = $ledger->transactions()->create([
-            'user_id' => $request->user()->id,
-            'envelope_id' => $envelope->id,
-            'amount' => $envelope->signedAmount($validated['amount']),
-            'event_at' => $eventAt,
-        ]);
+        $transaction = DB::transaction(function () use ($request, $ledger, $envelope, $validated, $eventAt): Transaction {
+            // The sign comes from the direction read under a shared lock, so
+            // a concurrent direction change (blocked once the envelope is
+            // referenced) cannot slip in between (docs/envelope.md).
+            $direction = Envelope::query()->whereKey($envelope->id)->sharedLock()->firstOrFail();
+
+            return $ledger->transactions()->create([
+                'user_id' => $request->user()->id,
+                'envelope_id' => $envelope->id,
+                'amount' => $direction->signedAmount($validated['amount']),
+                'event_at' => $eventAt,
+            ]);
+        });
 
         return response()->json([
             'transaction' => $this->serializeTransaction(

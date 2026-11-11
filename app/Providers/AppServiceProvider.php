@@ -110,7 +110,12 @@ class AppServiceProvider extends ServiceProvider
 
     protected function shouldVerifyAmountsAtBoot(): bool
     {
-        return $this->isRealDeployment() && ! $this->runsInConsole();
+        // In maintenance mode the request only renders the 503 page: the
+        // check must not stand in its way (e.g. during a deploy's
+        // migrations, or with the database down).
+        return $this->isRealDeployment()
+            && ! $this->runsInConsole()
+            && ! $this->app->isDownForMaintenance();
     }
 
     protected function runsInConsole(): bool

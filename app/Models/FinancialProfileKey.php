@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * A versioned per-profile amount data key, stored wrapped (encrypted) by the
@@ -14,9 +14,9 @@ use Illuminate\Support\Carbon;
  * @property int $profile_id
  * @property int $version
  * @property string $wrapped_key
- * @property Carbon|null $retired_at
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $retired_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 class FinancialProfileKey extends Model
 {

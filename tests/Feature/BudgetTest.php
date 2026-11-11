@@ -10,6 +10,7 @@ use App\Models\Ledger;
 use App\Models\User;
 use App\Services\ResourcePermissions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -380,6 +381,90 @@ class BudgetTest extends TestCase
             ->assertUnprocessable();
     }
 
+    /**
+     * Simulate a publish committing right after the request's route binding
+     * read the budget as a draft (RES-8): the first retrieval of the budget
+     * marks it published in the database behind the loaded model's back.
+     */
+    private function publishConcurrentlyAfterRouteBinding(Budget $budget): void
+    {
+        $fired = false;
+
+        Budget::retrieved(function (Budget $retrieved) use ($budget, &$fired): void {
+            if ($fired || $retrieved->id !== $budget->id) {
+                return;
+            }
+
+            $fired = true;
+
+            DB::table('budgets')->where('id', $budget->id)->update([
+                'published_at' => now(),
+                'effective_year' => now()->year,
+                'effective_month' => now()->month,
+            ]);
+        });
+    }
+
+    public function test_assignment_edits_re_check_the_draft_state_under_a_lock(): void
+    {
+        $budget = $this->createBudget($this->user);
+        $rent = $this->user->envelopes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e']);
+        $food = $this->user->envelopes()->create(['name' => 'Food', 'type' => 'expense', 'color' => '#f43f5e']);
+        $budget->envelopes()->create(['envelope_id' => $rent->id, 'amount' => -100, 'type' => 'fixed']);
+
+        $this->publishConcurrentlyAfterRouteBinding($budget);
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $food->id, 'type' => 'fixed', 'amount' => 100,
+        ])->assertUnprocessable()->assertJsonValidationErrors('budget');
+        $this->assertDatabaseMissing('budget_envelopes', ['envelope_id' => $food->id]);
+
+        DB::table('budgets')->where('id', $budget->id)->update(['published_at' => null, 'effective_year' => 0, 'effective_month' => 0]);
+        Budget::flushEventListeners();
+        $this->publishConcurrentlyAfterRouteBinding($budget);
+        $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$rent->id}", [
+            'amount' => 999,
+        ])->assertUnprocessable()->assertJsonValidationErrors('budget');
+        $this->assertEncryptedAmount(BudgetEnvelope::class, ['envelope_id' => $rent->id], 'amount', -100);
+
+        DB::table('budgets')->where('id', $budget->id)->update(['published_at' => null, 'effective_year' => 0, 'effective_month' => 0]);
+        Budget::flushEventListeners();
+        $this->publishConcurrentlyAfterRouteBinding($budget);
+        $this->actingAs($this->user)->deleteJson("/api/budgets/{$budget->id}/envelopes/{$rent->id}")
+            ->assertUnprocessable()->assertJsonValidationErrors('budget');
+        $this->assertDatabaseHas('budget_envelopes', ['envelope_id' => $rent->id]);
+    }
+
+    public function test_a_concurrent_publish_is_not_run_twice(): void
+    {
+        $budget = $this->createBudget($this->user);
+
+        $this->publishConcurrentlyAfterRouteBinding($budget);
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/publish")
+            ->assertUnprocessable()->assertJsonValidationErrors('budget');
+    }
+
+    public function test_a_duplicate_add_losing_the_race_is_a_validation_error(): void
+    {
+        $budget = $this->createBudget($this->user);
+        $envelope = $this->user->envelopes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e']);
+
+        // A concurrent request inserts the same assignment between the
+        // duplicate check and the insert.
+        BudgetEnvelope::creating(function (BudgetEnvelope $assignment) use ($budget, $envelope): void {
+            DB::table('budget_envelopes')->insert([
+                'budget_id' => $budget->id,
+                'envelope_id' => $envelope->id,
+                'amount' => 'concurrent',
+                'type' => 'fixed',
+            ]);
+        });
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$budget->id}/envelopes", [
+            'envelope_id' => $envelope->id, 'type' => 'fixed', 'amount' => 100,
+        ])->assertUnprocessable()->assertJsonValidationErrors('envelope_id');
+    }
+
     public function test_update_envelope_amount(): void
     {
         $budget = $this->createBudget($this->user);
@@ -428,6 +513,69 @@ class BudgetTest extends TestCase
         $this->assertNotNull($budget->published_at);
         $this->assertEquals(now()->year, $budget->effective_year);
         $this->assertEquals(now()->month, $budget->effective_month);
+    }
+
+    public function test_publish_uses_the_users_time_zone_for_the_current_month(): void
+    {
+        // 2026-11-30 22:30 UTC is already 1 December in Sydney.
+        Carbon::setTestNow(Carbon::parse('2026-11-30 22:30:00', 'UTC'));
+
+        try {
+            $november = $this->createBudget($this->user, [
+                'published_at' => now(),
+                'effective_year' => 2026,
+                'effective_month' => 11,
+            ]);
+            $draft = $this->createBudget($this->user);
+
+            $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish", [
+                'timezone' => 'Australia/Sydney',
+                'month' => '2026-12',
+            ])->assertOk()
+                ->assertJsonPath('budget.effective_year', 2026)
+                ->assertJsonPath('budget.effective_month', 12);
+
+            $this->assertDatabaseHas('budgets', ['id' => $november->id, 'effective_month' => 11]);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_publish_refuses_a_month_other_than_the_users_current_one(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-30 22:30:00', 'UTC'));
+
+        try {
+            $november = $this->createBudget($this->user, [
+                'published_at' => now(),
+                'effective_year' => 2026,
+                'effective_month' => 11,
+            ]);
+            $draft = $this->createBudget($this->user);
+
+            // The client means December; without its time zone the server's
+            // month (November) applies — refused rather than replacing
+            // November's budget.
+            $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish", [
+                'month' => '2026-12',
+            ])->assertUnprocessable()->assertJsonValidationErrors('month');
+
+            $this->assertDatabaseHas('budgets', ['id' => $november->id]);
+            $this->assertDatabaseHas('budgets', ['id' => $draft->id, 'published_at' => null]);
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_publish_rejects_unknown_time_zones(): void
+    {
+        $draft = $this->createBudget($this->user);
+
+        $this->actingAs($this->user)->postJson("/api/budgets/{$draft->id}/publish", [
+            'timezone' => 'Mars/Olympus_Mons',
+        ])->assertUnprocessable()->assertJsonValidationErrors('timezone');
+
+        $this->assertDatabaseHas('budgets', ['id' => $draft->id, 'published_at' => null]);
     }
 
     public function test_publishing_twice_is_rejected(): void

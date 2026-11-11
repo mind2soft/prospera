@@ -2,10 +2,10 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * A single dashboard widget of a user's dashboard for one financial profile
@@ -23,8 +23,8 @@ use Illuminate\Support\Carbon;
  * @property int $period_range canonical enumeration, see PERIOD_RANGES
  * @property array<int, array<string, mixed>> $selection
  * @property int $sort_order
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 final class DashboardWidget extends Model
 {

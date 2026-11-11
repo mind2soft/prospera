@@ -7,10 +7,12 @@ use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\CountsQueries;
 use Tests\TestCase;
 
 class DashboardWidgetsTest extends TestCase
 {
+    use CountsQueries;
     use RefreshDatabase;
 
     private User $owner;
@@ -394,5 +396,27 @@ class DashboardWidgetsTest extends TestCase
             ],
             $widgets[0]['selection'],
         );
+    }
+
+    public function test_listing_widgets_runs_a_constant_number_of_queries(): void
+    {
+        $url = "/api/dashboard/{$this->profile->id}/widgets";
+        $this->actingAs($this->owner);
+
+        $this->actingAs($this->owner)->putJson($url, ['widgets' => [$this->widgetPayload()]])->assertOk();
+        $one = count($this->queriesDuring(fn () => $this->getJson($url)->assertOk()->assertJsonCount(1, 'widgets')));
+
+        $this->putJson($url, ['widgets' => array_map(fn (int $i): array => $this->widgetPayload([
+            'selection' => [
+                ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
+                ['kind' => 'group', 'name' => "Group {$i}", 'envelope_ids' => [$this->groceries->id, $this->paycheck->id]],
+            ],
+        ]), range(1, 12))])->assertOk();
+
+        $queries = $this->queriesDuring(fn () => $this->getJson($url)->assertOk()->assertJsonCount(12, 'widgets'));
+
+        $this->assertCount($one, $queries);
+        // Pruning checks every widget's envelopes with one query.
+        $this->assertCount(1, array_filter($queries, fn (string $sql): bool => str_contains($sql, 'from "envelopes"')));
     }
 }

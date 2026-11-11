@@ -125,17 +125,6 @@ class HardeningTest extends TestCase
         $this->assertDatabaseCount('transactions', 0);
     }
 
-    public function test_envelope_totals_validate_dates(): void
-    {
-        $envelope = $this->owner->envelopes()->create(['name' => 'Mine', 'type' => 'expense', 'color' => '#000000']);
-
-        $this->actingAs($this->owner)->getJson("/api/envelopes/{$envelope->id}/totals?from_date=not-a-date")
-            ->assertUnprocessable()->assertJsonValidationErrors('from_date');
-
-        $this->actingAs($this->owner)->getJson("/api/envelopes/{$envelope->id}/totals")
-            ->assertOk()->assertJsonPath('totals.total', 0)->assertJsonPath('totals.count', 0);
-    }
-
     // ------------------------------------------------------------------
     // Ownership transfers
     // ------------------------------------------------------------------

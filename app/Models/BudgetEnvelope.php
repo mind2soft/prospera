@@ -6,10 +6,10 @@ use App\Models\Concerns\EncryptsAmounts;
 use App\Models\Contracts\HasEncryptedAmounts;
 use App\Security\Amounts\AmountContext;
 use App\Security\Amounts\AmountKeyRing;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -17,8 +17,8 @@ use Illuminate\Support\Carbon;
  * @property int $envelope_id
  * @property int $amount encrypted at rest (docs/encryption.md)
  * @property string $type
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 class BudgetEnvelope extends Model implements HasEncryptedAmounts
 {

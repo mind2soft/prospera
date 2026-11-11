@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\Pivot;
-use Illuminate\Support\Carbon;
 
 /**
  * Pivot table for profile membership (table: financial_profile_user).
@@ -12,8 +12,8 @@ use Illuminate\Support\Carbon;
  * @property int $user_id
  * @property bool $is_owner
  * @property bool $is_default
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 class FinancialProfileUser extends Pivot
 {

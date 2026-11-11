@@ -34,6 +34,19 @@ use LogicException;
 trait EncryptsAmounts
 {
     /**
+     * Decrypted amounts per column, memoized against the exact raw inputs
+     * of the decryption (stored payload, raw context attributes, original
+     * values): any change to them misses the memo and decrypts afresh, so
+     * the context-change guard keeps applying. Laravel's own accessor cache
+     * (`shouldCache`) is not used: it writes cached values back into the
+     * attributes through the mutator, turning the stored ciphertext into a
+     * plaintext int that would silently re-encrypt in a changed context.
+     *
+     * @var array<string, array{0: string, 1: int}>
+     */
+    private array $decryptedAmounts = [];
+
+    /**
      * The encryption context of a column, from raw attribute values (a model's
      * attributes or a database row).
      *
@@ -180,14 +193,53 @@ trait EncryptsAmounts
         }
 
         /** @var string $value */
+        $memoKey = $this->decryptionMemoKey($column, $value);
+
+        if (isset($this->decryptedAmounts[$column]) && $this->decryptedAmounts[$column][0] === $memoKey) {
+            return $this->decryptedAmounts[$column][1];
+        }
+
         $useOriginalContext = $this->exists
             && $value === $this->getRawOriginal($column)
             && $this->amountContextChanged($column);
 
-        return app(AmountKeyRing::class)->decrypt(
+        $amount = app(AmountKeyRing::class)->decrypt(
             $value,
             $useOriginalContext ? $this->originalAmountContext($column) : $this->currentAmountContext($column),
         );
+
+        $this->decryptedAmounts[$column] = [$memoKey, $amount];
+
+        return $amount;
+    }
+
+    /**
+     * Everything the decryption of the column depends on, from the raw
+     * attribute arrays (no casting): the payload, the current and original
+     * context attributes, the original payload and whether the row exists.
+     */
+    private function decryptionMemoKey(string $column, string $payload): string
+    {
+        $inputs = [$payload, $this->exists, $this->original[$column] ?? null];
+
+        foreach (static::amountContextAttributes() as $attribute) {
+            $inputs[] = $this->attributes[$attribute] ?? null;
+            $inputs[] = $this->original[$attribute] ?? null;
+        }
+
+        return serialize($inputs);
+    }
+
+    /**
+     * Decrypted amounts never leave the process with a serialized model.
+     *
+     * @return array<int, string>
+     */
+    public function __sleep()
+    {
+        $this->decryptedAmounts = [];
+
+        return parent::__sleep();
     }
 
     private function currentAmountContext(string $column): AmountContext

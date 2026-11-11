@@ -85,11 +85,24 @@ number; the server negates expense amounts on write.
   `published_at = null`).
 - **Publishing** a draft sets `published_at = now`, `effective_year = current year` and
   `effective_month = current month`. Publishing is irreversible (read-only afterwards).
+- **"Current month" is the user's**, not the server's (which runs on UTC): the
+  publish request carries the browser's IANA time zone as `timezone` (e.g.
+  `Australia/Sydney`; unknown zones → `422`), and the month is resolved in it.
+  Without it the application time zone (UTC) applies. The request may also
+  carry the `month` (`Y-m`) the user means to publish for — the one the
+  confirmation dialog names; if it is not the current month in the resolved
+  time zone the publish is refused (`422` on `month`), so a budget of a
+  month other than the intended one is never replaced (deleted).
 - **One published budget per profile per month**: publishing a draft for a month that
   already has a published budget **replaces** it — the previously published budget for
   that month is deleted immediately (with its shares and assignments). Transactions
   are independent of budgets and are never blocked by (or blocking) this replacement.
   The publish confirmation dialog must warn about this replacement.
+- **Concurrency** — publishing and every assignment edit (add, update,
+  remove) lock the budget row and re-check the draft state inside their
+  transaction, so an edit racing a publish never modifies a published
+  budget, and a double-submitted publish runs once. Two concurrent adds of
+  the same envelope resolve to one assignment and a validation error.
 - **"New Budget"** on a published budget creates a **clone** of it in draft mode
   (same currency and same envelope assignments). The clone dialog asks for
   confirmation (and the currency, pre-filled from the source budget).
@@ -146,7 +159,7 @@ All endpoints require authentication (session + CSRF). The frontend consumes the
 | `POST`   | `/api/budgets`                                 | Create a draft in the current profile (`currency` required; profile owner only)                                                                              |
 | `GET`    | `/api/budgets/{budget}`                        | Budget detail with envelopes and shares                                                                                                                      |
 | `DELETE` | `/api/budgets/{budget}`                        | Delete the budget (owner only; cascades shares and envelope assignments)                                                                                     |
-| `POST`   | `/api/budgets/{budget}/publish`                | Publish draft (budget owner **and** profile owner)                                                                                                           |
+| `POST`   | `/api/budgets/{budget}/publish`                | Publish draft (budget owner **and** profile owner); optional `timezone` (IANA) and `month` (`Y-m`, must be the current month there) — see Budget lifecycle  |
 | `POST`   | `/api/budgets/{budget}/clone`                  | Clone published budget into a draft (profile owner; `viewer`+ on the budget)                                                                                 |
 | `POST`   | `/api/budgets/{budget}/envelopes`              | Assign an envelope (`envelope_id`, `type`, `amount`) to a draft — requires `contributor`+ on the envelope (`none`/`viewer` → `422` on `envelope_id`)         |
 | `PATCH`  | `/api/budgets/{budget}/envelopes/{envelopeId}` | Update amount (and type)                                                                                                                                     |

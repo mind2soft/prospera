@@ -8,23 +8,24 @@ use App\Models\Concerns\HasProfilePermissions;
 use App\Models\Contracts\HasEncryptedAmounts;
 use App\Models\Contracts\HasImmutableColumns;
 use App\Security\Amounts\AmountContext;
+use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
  * @property int $id
  * @property int $profile_id
  * @property string $name
- * @property Carbon $start_date
- * @property Carbon $end_date
+ * @property CarbonImmutable $start_date
+ * @property CarbonImmutable $end_date
  * @property int $starting_balance encrypted at rest (docs/encryption.md)
- * @property Carbon|null $closed_at
- * @property Carbon|null $created_at
- * @property Carbon|null $updated_at
+ * @property CarbonImmutable|null $closed_at
+ * @property CarbonImmutable|null $created_at
+ * @property CarbonImmutable|null $updated_at
  */
 class Ledger extends Model implements HasEncryptedAmounts, HasImmutableColumns
 {
@@ -129,7 +130,7 @@ class Ledger extends Model implements HasEncryptedAmounts, HasImmutableColumns
      * Whether a transaction can be entered on the given date: the ledger must
      * be open and the date must fall within the ledger's range.
      */
-    public function acceptsEventDate(Carbon $date): bool
+    public function acceptsEventDate(CarbonInterface $date): bool
     {
         return $this->isOpen()
             && $date->between($this->start_date, $this->end_date);
