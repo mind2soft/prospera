@@ -55,8 +55,9 @@ final class DashboardAggregator
             return $this->emptyPayload($widget, $period, $today);
         }
 
+        $coMemberIds = FinancialProfile::coMemberIdsOf($user->id);
         $amountVisible = $envelopes->map(
-            fn (Envelope $envelope): bool => $envelope->permissionFor($user) !== ResourcePermissions::NONE,
+            fn (Envelope $envelope): bool => $envelope->permissionFor($user, $coMemberIds) !== ResourcePermissions::NONE,
         );
 
         $transactions = $this->transactions($profile, $period, $envelopeIds, $today);

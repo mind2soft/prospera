@@ -10,6 +10,7 @@ use App\Services\ResourcePermissionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -197,13 +198,15 @@ class EnvelopeController extends Controller
      */
     private function visibleEnvelopes(User $user): array
     {
+        $coMemberIds = FinancialProfile::coMemberIdsOf($user->id);
+
         return Envelope::query()
             ->visibleTo($user)
             ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
             ->orderBy('type')
             ->orderBy('name')
             ->get()
-            ->map(fn (Envelope $envelope) => $this->serializeEnvelope($envelope, $user))
+            ->map(fn (Envelope $envelope) => $this->serializeEnvelope($envelope, $user, $coMemberIds))
             ->values()
             ->all();
     }
@@ -217,16 +220,17 @@ class EnvelopeController extends Controller
     }
 
     /**
+     * @param  Collection<int, int>|null  $coMemberIds
      * @return array<string, string|int>
      */
-    private function serializeEnvelope(Envelope $envelope, User $user): array
+    private function serializeEnvelope(Envelope $envelope, User $user, ?Collection $coMemberIds = null): array
     {
         return [
             'id' => $envelope->id,
             'name' => $envelope->name,
             'direction' => $envelope->type,
             'color' => $envelope->color,
-            'permission' => $envelope->permissionFor($user),
+            'permission' => $envelope->permissionFor($user, $coMemberIds),
         ];
     }
 }
