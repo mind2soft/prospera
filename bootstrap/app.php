@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\LocalizedJsonErrors;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
@@ -30,6 +31,10 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
+            fn (Request $request) => LocalizedJsonErrors::wantsJson($request),
+        );
+
+        $exceptions->render(
+            fn (Throwable $e, Request $request) => LocalizedJsonErrors::render($e, $request),
         );
     })->create();
