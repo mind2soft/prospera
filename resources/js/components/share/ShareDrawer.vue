@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import Icon from '@/components/Icon.vue';
+import QueryErrorState from '@/components/QueryErrorState.vue';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -47,6 +48,10 @@ const props = defineProps<{
      * empty list, the pre-`loading` heuristic).
      */
     loading?: boolean;
+    /** The members failed to load: an error with retry, never an empty list. */
+    error?: boolean;
+    /** True while a retry of the failed load is in flight. */
+    retrying?: boolean;
     currentUserId: number;
     /** True when the current user owns the resource. */
     canManage: boolean;
@@ -64,6 +69,7 @@ const emit = defineEmits<{
     (e: 'revoke', userId: number): void;
     (e: 'transfer', userId: number): void;
     (e: 'grant', userId: number, permission: ResourcePermission): void;
+    (e: 'retry'): void;
 }>();
 
 const { getInitials } = useInitials();
@@ -205,8 +211,15 @@ watch(
                     {{ $t('share.drawer.people') }}
                 </p>
 
+                <QueryErrorState
+                    v-if="error && members.length === 0"
+                    :message="$t('share.drawer.loadError')"
+                    :retrying="retrying"
+                    @retry="emit('retry')"
+                />
+
                 <p
-                    v-if="props.loading ?? members.length === 0"
+                    v-else-if="props.loading ?? members.length === 0"
                     class="py-4 text-sm text-muted-foreground"
                 >
                     {{ $t('common.loading') }}
