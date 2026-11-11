@@ -91,3 +91,17 @@ test('every main page has a single top-level heading', async ({ page }) => {
         await expect(h1).toHaveText(title);
     }
 });
+
+test('empty-state headlines are solid text, not gradient-clipped', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/ledger');
+
+    const headline = page.getByRole('heading', {
+        name: 'Create your first ledger',
+    });
+    await expect(headline).toBeVisible();
+    await expect(headline).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');
+    await expect(headline).toHaveCSS('background-image', 'none');
+});

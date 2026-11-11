@@ -152,7 +152,7 @@ const weekDays = computed(() =>
         </div>
 
         <div
-            class="grid grid-cols-7 gap-1 text-center text-[10px] font-medium tracking-wide text-muted-foreground uppercase"
+            class="grid grid-cols-7 gap-1 text-center text-xs font-medium tracking-wide text-muted-foreground uppercase"
         >
             <span v-for="weekday in weekDays" :key="weekday">{{
                 weekday

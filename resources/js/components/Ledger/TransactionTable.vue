@@ -176,7 +176,7 @@ const stampLabel = (createdAt: string): string =>
                             <Tooltip v-if="transaction.user.id !== null">
                                 <TooltipTrigger as-child>
                                     <Avatar class="size-7">
-                                        <AvatarFallback class="text-[10px]">
+                                        <AvatarFallback class="text-xs">
                                             {{
                                                 getInitials(
                                                     transaction.user.name,

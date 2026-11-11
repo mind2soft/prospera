@@ -121,7 +121,7 @@ const menuProfiles = computed(() =>
                             }}</span>
                         </span>
                         <span
-                            class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                            class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
                             :class="
                                 profile.is_owner
                                     ? 'bg-primary/10 text-primary'

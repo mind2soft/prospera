@@ -417,22 +417,13 @@ const onRemoveTransaction = (transactionId: number) => {
         <!-- No ledgers yet -->
         <Card
             v-else-if="ledgers.length === 0"
-            class="relative overflow-hidden border-sidebar-border/70 dark:border-sidebar-border"
+            class="border-sidebar-border/70 dark:border-sidebar-border"
         >
-            <div
-                class="pointer-events-none absolute inset-0 bg-linear-to-br from-primary/10 via-transparent to-primary/5"
-                aria-hidden="true"
-            />
-            <div
-                class="pointer-events-none absolute -top-24 left-1/2 h-64 w-xl -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
-                aria-hidden="true"
-            />
-
             <CardContent
-                class="relative flex flex-col items-center px-6 py-16 text-center sm:py-20"
+                class="flex flex-col items-center px-6 py-16 text-center sm:py-20"
             >
                 <div
-                    class="flex size-16 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 shadow-inner shadow-primary/10"
+                    class="flex size-16 items-center justify-center rounded-2xl bg-primary/10"
                 >
                     <Icon
                         name="receipt-long"
@@ -442,7 +433,7 @@ const onRemoveTransaction = (transactionId: number) => {
                 </div>
 
                 <h2
-                    class="mt-6 bg-linear-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
+                    class="mt-6 font-display text-3xl leading-9 tracking-tight text-foreground"
                 >
                     {{ $t('ledger.empty.title') }}
                 </h2>
@@ -455,7 +446,7 @@ const onRemoveTransaction = (transactionId: number) => {
                 <Button
                     v-if="isProfileOwner"
                     size="lg"
-                    class="mt-8 gap-2 shadow-lg shadow-primary/25"
+                    class="mt-8 gap-2"
                     @click="showCreate = true"
                 >
                     <Icon name="add" class="size-5" aria-hidden="true" />

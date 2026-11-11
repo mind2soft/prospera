@@ -356,16 +356,9 @@ const onDestroy = (): void => {
         />
 
         <!-- Empty dashboard: no seeded widgets — the user composes their own. -->
-        <Card
-            v-else-if="widgets.length === 0"
-            class="relative overflow-hidden border-dashed"
-        >
-            <span
-                class="pointer-events-none absolute -top-24 left-1/2 size-64 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
-                aria-hidden="true"
-            />
+        <Card v-else-if="widgets.length === 0" class="border-dashed">
             <CardContent
-                class="relative flex flex-col items-center gap-4 py-16 text-center"
+                class="flex flex-col items-center gap-4 py-16 text-center"
             >
                 <span
                     class="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary"
@@ -373,7 +366,7 @@ const onDestroy = (): void => {
                     <Icon name="dashboard" class="size-7" aria-hidden="true" />
                 </span>
                 <div class="space-y-1">
-                    <h2 class="text-lg font-semibold">
+                    <h2 class="font-display text-3xl leading-9 tracking-tight">
                         {{ $t('dashboard.empty.title') }}
                     </h2>
                     <p class="mx-auto max-w-md text-sm text-muted-foreground">

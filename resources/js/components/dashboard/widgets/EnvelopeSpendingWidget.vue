@@ -118,7 +118,7 @@ function barColors(row: DashboardSpendingRow): {
                             aria-hidden="true"
                         />
                         <span
-                            class="truncate text-[13px] font-medium text-foreground"
+                            class="truncate text-sm font-medium text-foreground"
                         >
                             {{ row.name }}
                         </span>
@@ -129,7 +129,7 @@ function barColors(row: DashboardSpendingRow): {
                             :aria-label="$t('dashboard.widget.masked')"
                         />
                     </span>
-                    <span class="shrink-0 text-[13px] leading-5 tabular-nums">
+                    <span class="shrink-0 text-sm leading-5 tabular-nums">
                         <span
                             class="font-semibold"
                             :class="

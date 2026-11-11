@@ -94,7 +94,7 @@ onBeforeUnmount(() => window.removeEventListener('mouseup', onWindowMouseUp));
             </button>
 
             <h2
-                class="min-w-0 flex-1 truncate text-[13px] leading-5 font-medium tracking-[-0.01em] text-foreground"
+                class="min-w-0 flex-1 truncate text-base leading-6 font-medium text-foreground"
             >
                 {{ title }}
             </h2>
