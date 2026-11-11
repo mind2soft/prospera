@@ -100,7 +100,9 @@ lang/
   localized, user-facing `message` (never a model class name); a 403
   keeps the reason the application gave, translated. The client
   (`resources/js/lib/api.ts`) falls back to the same messages
-  (`common.errors.*`) when a response carries none.
+  (`common.errors.*`) when a response carries none;
+  [`ErrorMessageParityTest`](../tests/Feature/ErrorMessageParityTest.php)
+  keeps the two tables identical in every locale.
 - [`LangParityTest`](../tests/Unit/LangParityTest.php) fails when a locale
   misses a key of `lang/en/*.php`, when a literal `__('…')` string of `app/`
   has no `lang/{locale}.json` entry, or when placeholders differ.
