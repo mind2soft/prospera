@@ -5,6 +5,7 @@ import EnvelopeChip from '@/components/EnvelopeChip.vue';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
 import { useLocale } from '@/composables/useLocale';
 import { formatMoney } from '@/lib/budget';
 import type { BudgetEnvelope } from '@/types';
@@ -14,6 +15,8 @@ const props = defineProps<{
     currency: string;
     editable?: boolean;
     pendingId?: number | null;
+    /** Autosave status of the amount edits. */
+    saveStatus?: 'idle' | 'saving' | 'saved' | 'error';
 }>();
 
 const { locale } = useLocale();
@@ -71,14 +74,19 @@ const onAmountInput = (row: BudgetEnvelope, value: string) => {
 };
 
 /**
- * On blur, revert invalid (empty / non-integer / non-positive) edits back to
- * the current amount; valid edits are already applied and being saved.
+ * An invalid edit (empty / non-integer / non-positive) is not saved: it stays
+ * in the field with an inline message until fixed; Escape restores the saved
+ * amount.
  */
-const revertIfInvalid = (row: BudgetEnvelope) => {
-    if (!isValidAmount(edits[row.envelope_id] ?? '')) {
-        edits[row.envelope_id] = String(Math.abs(row.amount));
-    }
+const isInvalid = (row: BudgetEnvelope): boolean =>
+    !isValidAmount(edits[row.envelope_id] ?? '');
+
+const revert = (row: BudgetEnvelope) => {
+    edits[row.envelope_id] = String(Math.abs(row.amount));
 };
+
+const errorId = (row: BudgetEnvelope): string =>
+    `budget-amount-${row.envelope_id}-error`;
 
 const ordered = computed(() =>
     [...props.envelopes].sort((a, b) =>
@@ -116,7 +124,30 @@ const runningLeft = computed(() => {
 
 <template>
     <section class="space-y-2">
-        <div v-if="editable" class="flex justify-end">
+        <div v-if="editable" class="flex items-center justify-end gap-3">
+            <p
+                class="mr-auto flex items-center gap-1.5 text-xs"
+                :class="
+                    saveStatus === 'error'
+                        ? 'text-destructive'
+                        : 'text-muted-foreground'
+                "
+                role="status"
+                data-testid="budget-save-status"
+            >
+                <template v-if="saveStatus === 'saving'">
+                    <Spinner class="size-3.5" aria-hidden="true" />
+                    {{ $t('budget.table.saving') }}
+                </template>
+                <template v-else-if="saveStatus === 'saved'">
+                    <Icon name="check" class="size-3.5" aria-hidden="true" />
+                    {{ $t('budget.table.saved') }}
+                </template>
+                <template v-else-if="saveStatus === 'error'">
+                    <Icon name="warning" class="size-3.5" aria-hidden="true" />
+                    {{ $t('budget.table.notSaved') }}
+                </template>
+            </p>
             <Button
                 variant="default"
                 size="sm"
@@ -178,6 +209,12 @@ const runningLeft = computed(() => {
                                             name: row.name,
                                         })
                                     "
+                                    :aria-invalid="isInvalid(row) || undefined"
+                                    :aria-describedby="
+                                        isInvalid(row)
+                                            ? errorId(row)
+                                            : undefined
+                                    "
                                     type="number"
                                     min="1"
                                     step="1"
@@ -185,13 +222,21 @@ const runningLeft = computed(() => {
                                     @update:model-value="
                                         onAmountInput(row, String($event))
                                     "
-                                    @blur="revertIfInvalid(row)"
+                                    @keydown.escape="revert(row)"
                                     @keydown.enter="
                                         (
                                             $event.target as HTMLInputElement
                                         ).blur()
                                     "
                                 />
+                                <p
+                                    v-if="isInvalid(row)"
+                                    :id="errorId(row)"
+                                    class="mt-1 text-xs text-destructive"
+                                    role="alert"
+                                >
+                                    {{ $t('budget.table.invalidAmount') }}
+                                </p>
                             </template>
                             <template v-else>{{
                                 formatMoney(row.amount, currency, locale)

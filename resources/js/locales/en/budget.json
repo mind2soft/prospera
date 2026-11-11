@@ -49,7 +49,11 @@
             "empty": "No envelopes assigned yet.",
             "overspending": "Overspending",
             "leftOver": "Left over",
-            "variableNote": "Variable amounts are expected values — re-adjust them any time with a budget revision."
+            "variableNote": "Variable amounts are expected values — re-adjust them any time with a budget revision.",
+            "saving": "Saving…",
+            "saved": "All changes saved",
+            "notSaved": "A change could not be saved.",
+            "invalidAmount": "Not saved: enter a whole amount of 1 or more."
         },
         "addEnvelope": {
             "title": "Add an envelope",

@@ -362,6 +362,25 @@ const pendingSaves = new Map<
     { timer: ReturnType<typeof setTimeout>; budgetId: number; amount: number }
 >();
 
+/**
+ * Autosave status shown next to the table: debounced or in-flight edits are
+ * "saving", a failed one is "error" until the next successful save.
+ */
+const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
+const inFlightSaves = ref(0);
+
+watch(budgetId, () => {
+    saveStatus.value = 'idle';
+});
+
+const settleSaveStatus = () => {
+    if (pendingSaves.size === 0 && inFlightSaves.value === 0) {
+        if (saveStatus.value === 'saving') {
+            saveStatus.value = 'saved';
+        }
+    }
+};
+
 const onEditAmount = (envelopeId: number, amount: number) => {
     const id = budgetId.value;
     const current = budget.value;
@@ -383,6 +402,7 @@ const onEditAmount = (envelopeId: number, amount: number) => {
         },
     });
 
+    saveStatus.value = 'saving';
     const existing = pendingSaves.get(envelopeId);
     if (existing !== undefined) {
         clearTimeout(existing.timer);
@@ -403,10 +423,16 @@ const saveAmount = (
     amount: number,
 ) => {
     pendingSaves.delete(envelopeId);
+    inFlightSaves.value += 1;
     updateEnvelope.mutate(
         { budgetId: budgetIdValue, envelopeId, amount },
         {
+            onSettled: () => {
+                inFlightSaves.value -= 1;
+                settleSaveStatus();
+            },
             onError: (error) => {
+                saveStatus.value = 'error';
                 fail(error);
                 void queryClient.invalidateQueries({
                     queryKey: budgetKeys.detail(budgetIdValue),
@@ -550,6 +576,7 @@ const onRemoveEnvelope = (envelopeId: number) => {
                     :currency="budget.currency"
                     :editable="canEdit"
                     :pending-id="pendingEnvelopeId"
+                    :save-status="saveStatus"
                     @add="showAddEnvelope = true"
                     @update-amount="onEditAmount"
                     @remove="onRemoveEnvelope"

@@ -49,7 +49,11 @@
             "empty": "Aucune enveloppe assignée pour le moment.",
             "overspending": "Dépassement",
             "leftOver": "Excédent",
-            "variableNote": "Les montants variables sont des valeurs prévues — ajustez-les à tout moment avec une révision du budget."
+            "variableNote": "Les montants variables sont des valeurs prévues — ajustez-les à tout moment avec une révision du budget.",
+            "saving": "Enregistrement…",
+            "saved": "Modifications enregistrées",
+            "notSaved": "Une modification n’a pas pu être enregistrée.",
+            "invalidAmount": "Non enregistré : saisissez un montant entier d’au moins 1."
         },
         "addEnvelope": {
             "title": "Ajouter une enveloppe",
