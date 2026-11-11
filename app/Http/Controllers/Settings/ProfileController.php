@@ -7,11 +7,13 @@ use App\Http\Controllers\Controller;
 use App\Http\Middleware\SetLocale;
 use App\Http\Requests\Settings\ProfileDeleteRequest;
 use App\Http\Requests\Settings\ProfileUpdateRequest;
+use App\Models\FinancialProfileInvite;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -33,13 +35,27 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $user = $request->user();
+        $previousEmail = $user->email;
 
-        if ($request->user()->isDirty('email')) {
-            $request->user()->email_verified_at = null;
+        $user->fill($request->validated());
+
+        if ($user->isDirty('email')) {
+            $user->email_verified_at = null;
         }
 
-        $request->user()->save();
+        DB::transaction(function () use ($user, $previousEmail): void {
+            $user->save();
+
+            // An invite reserved at registration only grants to its own
+            // address: once the account moves to another one, the
+            // reservation is released, so the owner's pending list stops
+            // showing it as awaiting verification and the original address
+            // can be re-invited (WF-R3-2).
+            if (mb_strtolower($previousEmail) !== mb_strtolower($user->email)) {
+                FinancialProfileInvite::releaseReservationOf($user);
+            }
+        });
 
         // A changed preferred language applies to this response already.
         App::setLocale(SetLocale::resolve($request));

@@ -65,7 +65,10 @@ invite for an email and gets a link containing a hash key (`invite_key`).
   membership is granted (and the invite consumed) when the account **verifies
   its email**. If the email was changed before verification, or the invite was
   revoked, no membership is granted — the account is then seeded with its own
-  default profile (see below). A reserved invite can't be used by anyone
+  default profile (see below). Moving the account to another address (not
+  just another letter case) in Settings → Account **releases** the
+  reservation: the invite is pending again for its original address (no
+  longer "awaiting verification"), so the owner can re-invite that address. A reserved invite can't be used by anyone
   else (treated as invalid). The reservation is bound by the invite's
   **48-hour expiry**: verifying after the invite expired grants nothing (the
   account gets its own default profile and the owner can re-invite it). This

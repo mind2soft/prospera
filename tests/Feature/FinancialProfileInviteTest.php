@@ -834,6 +834,69 @@ class FinancialProfileInviteTest extends TestCase
         $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
     }
 
+    public function test_moving_the_account_to_another_email_releases_its_reservation(): void
+    {
+        // WF-R3-2: the reservation could no longer grant anything, so it
+        // must not keep blocking a re-invite of the original address.
+        $invite = $this->createInvite(email: 'newbie@example.com');
+
+        $this->post('/register', [
+            'name' => 'New User',
+            'email' => 'newbie@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'invite_key' => self::RAW_KEY,
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $user = User::where('email', 'newbie@example.com')->firstOrFail();
+        $this->assertSame($user->id, $invite->fresh()->pending_user_id);
+
+        $this->actingAs($user)->patch(route('profile.update'), [
+            'name' => 'New User',
+            'email' => 'changed@example.com',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertNull($invite->fresh()->pending_user_id);
+        $this->actingAs($this->owner)->getJson("/api/profiles/{$this->profile->id}/invites")
+            ->assertOk()->assertJsonPath('invites.0.awaiting_verification', false);
+
+        // The original address can be re-invited; the released invite is
+        // replaced like any unreserved one.
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'newbie@example.com',
+        ])->assertCreated();
+        $this->assertModelMissing($invite);
+        $this->assertSame(1, FinancialProfileInvite::query()->count());
+
+        // The moved account verifies its new address: no grant, its own
+        // default profile instead.
+        $user->refresh()->markEmailAsVerified();
+        event(new Verified($user));
+
+        $this->assertFalse($this->profile->isMember($user));
+        $this->assertTrue(FinancialProfile::query()->where('name', FinancialProfile::DEFAULT_NAME)->firstOrFail()->isMember($user));
+        $this->assertSame(1, FinancialProfileInvite::query()->count());
+    }
+
+    public function test_changing_only_the_case_of_the_email_keeps_the_reservation(): void
+    {
+        $newbie = User::factory()->unverified()->create(['email' => 'newbie@example.com']);
+        $reserved = $this->createInvite(email: 'newbie@example.com');
+        $reserved->update(['pending_user_id' => $newbie->id]);
+
+        $this->actingAs($newbie)->patch(route('profile.update'), [
+            'name' => $newbie->name,
+            'email' => 'Newbie@Example.com',
+        ])->assertSessionHasNoErrors();
+
+        // Still the invited address: the reservation still grants, and the
+        // re-invite is still refused.
+        $this->assertSame($newbie->id, $reserved->fresh()->pending_user_id);
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'newbie@example.com',
+        ])->assertUnprocessable()->assertJsonValidationErrors('email');
+    }
+
     public function test_a_revoked_reservation_still_seeds_a_default_profile(): void
     {
         $invite = $this->createInvite(email: 'newbie@example.com');
