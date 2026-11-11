@@ -60,6 +60,10 @@ Configuration only — **no money amounts are stored** in
 - **Drag & drop** through the drag handle (`drag_indicator`); the widget
   moves together with its settings. The order is an ordered list
   (`sort_order`), saved by the same autosave as every other setting.
+  Dragging always has alternatives (WCAG 2.5.7): the focused handle moves
+  its widget with the arrow keys (Home/End: first/last; the new position
+  is announced), and the settings sheet offers **Move earlier / Move
+  later**.
   Implementation note: `vue-grid-layout` (and its Vue 3 port) and GridStack
   were evaluated; both impose fixed row heights, which conflicts with the
   intrinsic-height requirement below — the grid is therefore a native CSS
