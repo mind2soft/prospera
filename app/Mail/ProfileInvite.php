@@ -13,6 +13,7 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Lang;
 
 /**
  * A financial profile share notification, sent when a profile owner invites
@@ -69,7 +70,7 @@ class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: __('[Prospera] :inviter shared their financial profile ":profile" with you', [
+            subject: __('mail.invite.subject', [
                 'inviter' => $this->inviterName,
                 'profile' => $this->profileName,
             ]),
@@ -77,10 +78,14 @@ class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
     }
 
     /**
-     * Get the message content definition.
+     * Get the message content definition: a plain-text view, localized
+     * through lang/{locale}/mail.php and rendered unescaped ({!! !!} — the
+     * text part is not HTML, so `&` must not become `&amp;`).
      */
     public function content(): Content
     {
+        $roleKey = 'mail.roles.'.$this->role;
+
         return new Content(
             text: 'mail.profile-invite',
             with: [
@@ -88,6 +93,7 @@ class ProfileInvite extends Mailable implements ShouldBeEncrypted, ShouldQueue
                 'inviterEmail' => $this->inviterEmail,
                 'profileName' => $this->profileName,
                 'role' => $this->role,
+                'roleLabel' => Lang::has($roleKey) ? __($roleKey) : $this->role,
                 'inviteUrl' => $this->inviteUrl,
                 'acceptUrl' => $this->acceptUrl,
                 'expiresAt' => $this->expiresAt,

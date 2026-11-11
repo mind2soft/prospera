@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Mail\ContactMessage;
 use App\Mail\ProfileInvite;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Mailable;
 use Illuminate\Mail\SendQueuedMailable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -89,6 +91,84 @@ class QueuedMailTest extends TestCase
             $this->assertSame(5, $decoded['maxTries']);
             $this->assertSame('60,300,900', $decoded['backoff']);
         }
+    }
+
+    /**
+     * Deliver through the array transport and return the raw message.
+     */
+    private function deliver(Mailable $mailable): string
+    {
+        $transport = $this->app['mailer']->getSymfonyTransport();
+        $mailable->to('someone@example.com')->send($this->app['mailer']);
+
+        $messages = $transport->messages();
+        $this->assertCount(1, $messages);
+
+        return quoted_printable_decode($messages[0]->toString());
+    }
+
+    public function test_plain_text_invites_keep_special_characters_unescaped(): void
+    {
+        $body = $this->deliver(new ProfileInvite(
+            inviterName: 'Jo & "Al"',
+            inviterEmail: 'owner@example.com',
+            profileName: "Smith & Co's",
+            role: 'collaborator',
+            inviteUrl: 'https://prospera.test/invites/key?a=1&b=2',
+            expiresAt: now()->addHours(48),
+        ));
+
+        $this->assertStringContainsString('Jo & "Al" (owner@example.com) shared their financial profile "Smith & Co\'s" with you on Prospera, as a collaborator.', $body);
+        $this->assertStringContainsString('https://prospera.test/invites/key?a=1&b=2', $body);
+        $this->assertStringNotContainsString('&amp;', $body);
+        $this->assertStringNotContainsString('&quot;', $body);
+        $this->assertStringNotContainsString('&#039;', $body);
+    }
+
+    public function test_invites_are_rendered_in_the_recipient_locale(): void
+    {
+        $body = $this->deliver(new ProfileInvite(
+            inviterName: 'Owner & Co',
+            inviterEmail: 'owner@example.com',
+            profileName: 'Famille',
+            role: 'collaborator',
+            inviteUrl: 'https://prospera.test/invites/key',
+            acceptUrl: 'https://prospera.test/invites/key/accept',
+            expiresAt: now()->addHours(48),
+            locale: 'fr',
+        ));
+
+        $this->assertStringContainsString('a partagé son profil financier « Famille » avec vous, en tant que collaborateur', $body);
+        $this->assertStringContainsString('Cette invitation expire le', $body);
+        $this->assertStringContainsString('Gérer vos notifications', $body);
+        $this->assertStringNotContainsString('shared their financial profile', $body);
+        $this->assertStringNotContainsString('mail.invite', $body);
+        $this->assertStringNotContainsString('&amp;', $body);
+    }
+
+    public function test_every_mail_key_is_translated_in_every_available_locale(): void
+    {
+        $english = Arr::dot(trans('mail', [], 'en'));
+
+        foreach (array_keys(config('app.available_locales')) as $locale) {
+            $this->assertSame(array_keys($english), array_keys(Arr::dot(trans('mail', [], $locale))), "lang/{$locale}/mail.php");
+        }
+    }
+
+    public function test_plain_text_contact_messages_keep_special_characters_unescaped(): void
+    {
+        $body = $this->deliver(new ContactMessage(
+            contactEmail: 'jane@example.com',
+            contactSubject: 'Q & A',
+            contactMessage: 'Tom & Jerry "quoted" it\'s',
+            accountName: 'Jane & Co',
+            accountId: 7,
+        ));
+
+        $this->assertStringContainsString('Account: Jane & Co (user id 7)', $body);
+        $this->assertStringContainsString('Tom & Jerry "quoted" it\'s', $body);
+        $this->assertStringNotContainsString('&amp;', $body);
+        $this->assertStringNotContainsString('&quot;', $body);
     }
 
     public function test_a_failed_delivery_is_logged_without_the_mail_content(): void

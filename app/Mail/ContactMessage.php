@@ -50,7 +50,8 @@ class ContactMessage extends Mailable implements ShouldBeEncrypted, ShouldQueue
     /**
      * Get the message content definition. Properties are passed explicitly:
      * the promoted names must not collide with Mailable's own `$subject` /
-     * `$locale` properties.
+     * `$locale` properties, and the text is passed as `body` because the
+     * mailer injects its own `$message` (the Message instance) into views.
      */
     public function content(): Content
     {
@@ -59,7 +60,7 @@ class ContactMessage extends Mailable implements ShouldBeEncrypted, ShouldQueue
             with: [
                 'email' => $this->contactEmail,
                 'subject' => $this->contactSubject,
-                'message' => $this->contactMessage,
+                'body' => $this->contactMessage,
                 'accountName' => $this->accountName,
                 'accountId' => $this->accountId,
                 'locale' => $this->senderLocale,
