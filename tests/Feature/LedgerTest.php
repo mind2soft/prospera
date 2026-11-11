@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\BudgetController;
 use App\Models\Budget;
 use App\Models\BudgetPermission;
 use App\Models\Envelope;
@@ -13,6 +14,8 @@ use App\Models\User;
 use App\Services\ResourcePermissions;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
+use LogicException;
 use Tests\Concerns\CountsQueries;
 use Tests\TestCase;
 
@@ -893,6 +896,29 @@ class LedgerTest extends TestCase
             ->assertNotFound();
 
         $this->assertDatabaseCount('ledger_permissions', 1);
+    }
+
+    public function test_revoking_through_a_route_bound_to_another_resource_type_fails_closed(): void
+    {
+        // CQ-R3-4: removePermission goes through sharedResource() like the
+        // other share endpoints, so a mis-bound route cannot revoke the
+        // budget share whose id happens to match the ledger's.
+        Route::middleware(['web', 'auth'])
+            ->delete('/__mis-bound/{ledger}/shares/{userId}', [BudgetController::class, 'removePermission']);
+
+        $ledger = $this->createLedger($this->user);
+        $budget = $this->createPublishedBudget($this->user);
+        $budget->permissions()->create(['user_id' => $this->member->id, 'permission' => BudgetPermission::PERMISSION_VIEWER]);
+        $this->assertSame($ledger->id, $budget->id);
+
+        try {
+            $this->withoutExceptionHandling()->actingAs($this->user)->deleteJson("/__mis-bound/{$ledger->id}/shares/{$this->member->id}");
+            $this->fail('The mis-bound route was served.');
+        } catch (LogicException $e) {
+            $this->assertSame('The share routes of this controller must bind a budget.', $e->getMessage());
+        }
+
+        $this->assertDatabaseHas('budget_permissions', ['budget_id' => $budget->id, 'user_id' => $this->member->id]);
     }
 
     public function test_transactions_queries_do_not_grow_with_rows_or_envelopes(): void

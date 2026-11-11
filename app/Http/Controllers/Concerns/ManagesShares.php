@@ -125,6 +125,8 @@ trait ManagesShares
      */
     public function removePermission(Model $resource, int $userId): JsonResponse
     {
+        $resource = $this->sharedResource($resource);
+
         $this->authorize('share', $resource);
 
         [$table, $column] = $this->shareTable();
