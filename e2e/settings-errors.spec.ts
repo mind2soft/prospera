@@ -96,3 +96,32 @@ test('a failed share list load offers a retry instead of an empty list', async (
     await error.getByRole('button', { name: 'Retry' }).click();
     await expect(drawer.getByText('playwright@example.com')).toBeVisible();
 });
+
+test('a refused invite explains why next to the email field', async ({
+    page,
+}) => {
+    await login(page);
+    const message =
+        'This address already has a pending invite awaiting verification.';
+    await page.route(/\/api\/profiles\/\d+\/invites$/, (route) =>
+        route.request().method() === 'POST'
+            ? route.fulfill({
+                  status: 422,
+                  contentType: 'application/json',
+                  body: JSON.stringify({
+                      message,
+                      errors: { email: [message] },
+                  }),
+              })
+            : route.fallback(),
+    );
+
+    await page.goto('/settings/profiles');
+    const email = page.getByRole('textbox', { name: 'Invite someone' });
+    await email.fill('reserved@example.com');
+    await page.getByRole('button', { name: 'Invite', exact: true }).click();
+
+    await expect(email).toHaveAttribute('aria-invalid', 'true');
+    await expect(email).toHaveAccessibleDescription(message);
+    await expect(email).toBeFocused();
+});
