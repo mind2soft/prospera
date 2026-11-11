@@ -203,13 +203,17 @@ test('the notifications settings page renders', async ({ page }) => {
     await expect(
         page.getByRole('switch', { name: 'Enable email notifications' }),
     ).toBeChecked();
+    await expect(
+        page.getByRole('switch', { name: 'Profile invitations' }),
+    ).toBeChecked();
+    // Not implemented yet: rendered disabled (notifications.spec.ts).
     for (const toggle of [
         'Payment reminders',
         'Ledger expired',
         'Contributor transactions',
         'Envelope limit exceeded',
     ]) {
-        await expect(page.getByRole('switch', { name: toggle })).toBeChecked();
+        await expect(page.getByRole('switch', { name: toggle })).toBeDisabled();
     }
 
     await expectNoViolations(violations, 'Settings › Notifications');
