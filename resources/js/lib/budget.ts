@@ -63,6 +63,41 @@ export function formatMoney(
     return formatter.format(Math.abs(amount));
 }
 
+const compactFormatters = new Map<string, Intl.NumberFormat | null>();
+
+/**
+ * Compact, signed currency for chart ticks and totals ("$2.5K" in `en`,
+ * "2,5 k $" in `fr`). Falls back to {@link formatMoney} for a currency the
+ * runtime cannot format.
+ */
+export function formatCompactMoney(
+    amount: number,
+    currency: string,
+    locale: string,
+): string {
+    const key = `${locale}|${currency}`;
+    let formatter = compactFormatters.get(key);
+
+    if (formatter === undefined) {
+        try {
+            formatter = new Intl.NumberFormat(locale, {
+                style: 'currency',
+                currency,
+                currencyDisplay: 'narrowSymbol',
+                notation: 'compact',
+                maximumFractionDigits: 1,
+            });
+        } catch {
+            formatter = null;
+        }
+        compactFormatters.set(key, formatter);
+    }
+
+    return formatter === null
+        ? formatMoney(amount, currency, locale)
+        : formatter.format(amount);
+}
+
 /**
  * A budget's month in the given locale, e.g. "May 2026" / "mai 2026".
  */

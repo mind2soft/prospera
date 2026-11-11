@@ -35,9 +35,13 @@ test('profile cards are disclosures with separate, reachable actions', async ({
     const own = disclosures.filter({ hasText: 'Default profile' });
     await own.focus();
     await page.keyboard.press('Tab');
+    // Row actions name the profile they act on.
     await expect(
-        page.getByRole('button', { name: 'Rename profile' }),
+        page.getByRole('button', { name: 'Rename Default profile' }),
     ).toBeFocused();
+    await expect(
+        page.getByRole('button', { name: 'Set Family as default' }),
+    ).toBeVisible();
     await page.keyboard.press('Enter');
     const rename = page.getByRole('textbox', { name: 'Rename profile' });
     await expect(rename).toBeFocused();

@@ -86,7 +86,8 @@
         },
         "share": {
             "title": "Partager le budget",
-            "resource": "ce budget"
+            "resource": "ce budget",
+            "draftTransferNote": "Un brouillon de budget ne peut être confié qu’au propriétaire du profil. Publiez-le d’abord pour le transférer à quelqu’un d’autre."
         },
         "confirm": {
             "publishTitle": "Publier ce budget ?",

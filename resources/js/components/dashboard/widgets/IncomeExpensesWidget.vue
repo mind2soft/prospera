@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CurveType } from '@unovis/ts';
+import { CurveType } from '@unovis/ts/types/curve';
 // Per-component entry points: the @unovis/vue barrel is flagged as having
 // side effects, so importing from it bundles every chart, map and graph.
 import VisArea from '@unovis/vue/components/area';
@@ -12,7 +12,8 @@ import VisXYContainer from '@unovis/vue/containers/xy-container';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useLocale } from '@/composables/useLocale';
-import { formatMoney } from '@/lib/budget';
+import { useChartDuration } from '@/composables/useReducedMotion';
+import { formatCompactMoney, formatMoney } from '@/lib/budget';
 import { escapeHtml } from '@/lib/html';
 import { isClient } from '@/lib/ssr';
 import type { DashboardHistoryBucket, DashboardWidgetData } from '@/types';
@@ -25,6 +26,7 @@ const props = defineProps<{
 
 const { t } = useI18n();
 const { locale } = useLocale();
+const chartDuration = useChartDuration();
 
 const series = computed<DashboardHistoryBucket[]>(() =>
     props.data.type === 'income_expenses' ? props.data.series : [],
@@ -69,19 +71,8 @@ function formatBucket(bucket: string): string {
 const xTickFormat = (i: number): string => labels.value[i] ?? '';
 
 /** Compact currency for the y-axis ticks ("$2.5K"); full format in tooltips. */
-const compactMoney = (value: number): string => {
-    try {
-        return new Intl.NumberFormat(locale.value, {
-            style: 'currency',
-            currency: props.currency,
-            currencyDisplay: 'narrowSymbol',
-            notation: 'compact',
-            maximumFractionDigits: 1,
-        }).format(value);
-    } catch {
-        return formatMoney(value, props.currency, locale.value);
-    }
-};
+const compactMoney = (value: number): string =>
+    formatCompactMoney(value, props.currency, locale.value);
 
 const yTickFormat = (value: number): string => compactMoney(value);
 
@@ -157,7 +148,12 @@ const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
             class="chart-surface min-h-0 flex-1"
             aria-hidden="true"
         >
-            <VisXYContainer :data="series" :height="220" :y-domain="yDomain">
+            <VisXYContainer
+                :data="series"
+                :height="220"
+                :y-domain="yDomain"
+                :duration="chartDuration"
+            >
                 <VisStackedBar
                     v-if="viewType === 'stacked_bars'"
                     :x="x"

@@ -170,12 +170,9 @@ const features = [
                         class="mt-6 font-display text-5xl leading-[1.05] tracking-tight text-balance sm:text-6xl lg:text-7xl"
                     >
                         {{ $t('welcome.hero.title') }}
-                        <em
-                            class="bg-linear-to-r from-brand to-teal-500 bg-clip-text pr-1 text-transparent"
-                            >{{
-                                $t('welcome.hero.emphasis')
-                            }}</em
-                        >
+                        <em class="pr-1 text-brand">{{
+                            $t('welcome.hero.emphasis')
+                        }}</em>
                     </h1>
                     <p
                         class="mx-auto mt-6 max-w-lg text-lg text-pretty text-muted-foreground lg:mx-0"

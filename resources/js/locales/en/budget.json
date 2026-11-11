@@ -86,7 +86,8 @@
         },
         "share": {
             "title": "Share budget",
-            "resource": "this budget"
+            "resource": "this budget",
+            "draftTransferNote": "A draft budget can only be handed to the profile owner. Publish it first to transfer it to someone else."
         },
         "confirm": {
             "publishTitle": "Publish this budget?",

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import GithubIcon from '@/components/GithubIcon.vue';
 import InputError from '@/components/InputError.vue';
@@ -14,6 +15,7 @@ import { ApiError, api } from '@/lib/api';
 import { dashboard } from '@/routes';
 import { store } from '@/routes/contact';
 
+const { t } = useI18n();
 const page = usePage();
 const user = computed(() => page.props.auth?.user);
 const githubRepoUrl = computed(() => page.props.githubRepoUrl);
@@ -60,7 +62,8 @@ const { mutate: submit, isPending: isLoading } = useMutation({
                     ? null
                     : error.firstError);
         } else {
-            genericError.value = error instanceof Error ? error.message : null;
+            // A network failure ("Failed to fetch") is not user-facing text.
+            genericError.value = t('common.errors.network');
         }
     },
 });

@@ -147,6 +147,10 @@ test('ledger page audit', async ({ page }) => {
         .click();
     await expect(page.getByText('Transaction deleted.')).toBeVisible();
     await expect(confirmDelete).toBeHidden();
+    // The deleted row's button is gone: focus lands on the table, not <body>.
+    await expect(
+        page.getByRole('region', { name: 'Transactions' }),
+    ).toBeFocused();
     await expect(newRows).toHaveCount(3);
     await expect(foodRow).toContainText('680');
 

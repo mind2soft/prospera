@@ -4,6 +4,7 @@ import TextLink from '@/components/TextLink.vue';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { logout } from '@/routes';
+import { edit as accountSettings } from '@/routes/profile';
 import { send } from '@/routes/verification';
 
 defineOptions({
@@ -41,5 +42,12 @@ defineProps<{
         <TextLink :href="logout()" as="button" class="mx-auto block text-sm">
             {{ $t('auth.verifyEmail.logOut') }}
         </TextLink>
+
+        <p class="text-sm text-muted-foreground">
+            {{ $t('auth.verifyEmail.wrongEmail') }}
+            <TextLink :href="accountSettings()">
+                {{ $t('auth.verifyEmail.manageAccount') }}
+            </TextLink>
+        </p>
     </Form>
 </template>

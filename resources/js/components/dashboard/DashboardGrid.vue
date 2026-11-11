@@ -3,6 +3,7 @@ import { useElementSize } from '@vueuse/core';
 import { computed, nextTick, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import WidgetCard from '@/components/dashboard/WidgetCard.vue';
+import { moveItem } from '@/lib/list';
 import type { DashboardWidgetConfig } from '@/types';
 
 const props = defineProps<{
@@ -65,8 +66,8 @@ const onKeyboardMove = async (
     widget: DashboardWidgetConfig,
     move: 'earlier' | 'later' | 'first' | 'last',
 ): Promise<void> => {
-    const ids = props.widgets.map((w) => w.id ?? 0);
-    const from = ids.indexOf(widget.id ?? 0);
+    const ids = props.widgets.map((w) => w.id);
+    const from = ids.indexOf(widget.id);
     const last = ids.length - 1;
     const to = {
         earlier: Math.max(0, from - 1),
@@ -79,9 +80,7 @@ const onKeyboardMove = async (
         return;
     }
 
-    ids.splice(from, 1);
-    ids.splice(to, 0, widget.id ?? 0);
-    emit('reorder', ids);
+    emit('reorder', moveItem(ids, from, to));
 
     announcement.value = t('dashboard.widget.moved', {
         title: titleOf(widget),
@@ -101,7 +100,7 @@ const onKeyboardMove = async (
 const draggingId = ref<number | null>(null);
 
 const onCardDragStart = (widget: DashboardWidgetConfig): void => {
-    draggingId.value = widget.id ?? null;
+    draggingId.value = widget.id;
 };
 
 const onCardDragEnd = (): void => {
@@ -115,7 +114,7 @@ const onCardDragOver = (
     const draggedId = draggingId.value;
     const targetId = target.id;
 
-    if (draggedId === null || targetId === null || draggedId === targetId) {
+    if (draggedId === null || draggedId === targetId) {
         return;
     }
 
@@ -163,11 +162,14 @@ const onCardDragOver = (
         return;
     }
 
-    const ids = props.widgets.map((w) => w.id ?? 0);
-    ids.splice(from, 1);
-    ids.splice(targetIndex, 0, draggedId);
-
-    emit('reorder', ids);
+    emit(
+        'reorder',
+        moveItem(
+            props.widgets.map((w) => w.id),
+            from,
+            targetIndex,
+        ),
+    );
 };
 </script>
 

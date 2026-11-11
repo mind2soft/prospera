@@ -182,7 +182,7 @@ function barColors(row: DashboardSpendingRow): {
 
                 <p
                     v-else-if="!row.masked"
-                    class="text-xs text-muted-foreground/80"
+                    class="text-xs text-muted-foreground"
                 >
                     {{ $t('dashboard.widget.noBudget') }}
                 </p>

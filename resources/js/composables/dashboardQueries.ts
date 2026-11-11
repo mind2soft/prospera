@@ -3,12 +3,13 @@ import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { useMutation, useQuery } from '@/composables/query';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { dashboardApi } from '@/lib/dashboardApi';
-import type { DashboardWidgetConfig, DashboardWidgetData } from '@/types';
+import type { DashboardWidgetConfig, DashboardWidgetPayload } from '@/types';
 
 export const dashboardKeys = {
     root: ['dashboard'] as const,
     widgets: (profileId: number) =>
         ['dashboard', profileId, 'widgets'] as const,
+    dataOf: (profileId: number) => ['dashboard', profileId, 'data'] as const,
     data: (profileId: number, widgetId: number, config: string) =>
         ['dashboard', profileId, 'data', widgetId, config] as const,
 };
@@ -52,12 +53,12 @@ export function useSaveDashboardLayout() {
     return useMutation({
         mutationFn: (input: {
             profileId: number;
-            widgets: DashboardWidgetConfig[];
+            widgets: DashboardWidgetPayload[];
         }) => dashboardApi.save(input.profileId, { widgets: input.widgets }),
         onSuccess: (data, { profileId }) => {
             queryClient.setQueryData(dashboardKeys.widgets(profileId), data);
             void queryClient.invalidateQueries({
-                queryKey: ['dashboard', profileId, 'data'],
+                queryKey: dashboardKeys.dataOf(profileId),
             });
         },
     });
@@ -104,10 +105,7 @@ export function useWidgetData(
         queryFn: () => {
             const value = toValue(widget);
 
-            return dashboardApi.data(
-                toValue(profileId) ?? 0,
-                value?.id ?? 0,
-            ) as Promise<DashboardWidgetData>;
+            return dashboardApi.data(toValue(profileId) ?? 0, value?.id ?? 0);
         },
         enabled: computed(
             () => toValue(profileId) !== null && toValue(widget) !== null,

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import Icon from '@/components/Icon.vue';
+import QueryErrorState from '@/components/QueryErrorState.vue';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -47,6 +48,10 @@ const props = defineProps<{
      * empty list, the pre-`loading` heuristic).
      */
     loading?: boolean;
+    /** The members failed to load: an error with retry, never an empty list. */
+    error?: boolean;
+    /** True while a retry of the failed load is in flight. */
+    retrying?: boolean;
     currentUserId: number;
     /** True when the current user owns the resource. */
     canManage: boolean;
@@ -56,6 +61,12 @@ const props = defineProps<{
      * circle members without an explicit share row yet.
      */
     profileCircle?: ProfileMember[];
+    /**
+     * Restricts ownership transfer to these users (a draft budget can only
+     * be handed to the profile owner), explained by `transferRestriction`.
+     */
+    transferTo?: number[];
+    transferRestriction?: string;
 }>();
 
 const emit = defineEmits<{
@@ -64,6 +75,7 @@ const emit = defineEmits<{
     (e: 'revoke', userId: number): void;
     (e: 'transfer', userId: number): void;
     (e: 'grant', userId: number, permission: ResourcePermission): void;
+    (e: 'retry'): void;
 }>();
 
 const { getInitials } = useInitials();
@@ -141,17 +153,23 @@ const confirmingTransfer = ref(false);
 
 /** Transfer candidates normalized to {id, name}, whichever the source list. */
 const transferCandidates = computed((): { id: number; name: string }[] => {
-    if (props.profileCircle) {
-        return props.profileCircle
-            .filter((m) => m.id !== props.currentUserId)
-            .map((m) => ({ id: m.id, name: m.name }));
-    }
-    return props.members
-        .filter(
-            (m) =>
-                m.permission !== 'owner' && m.user_id !== props.currentUserId,
-        )
-        .map((m) => ({ id: m.user_id, name: m.name }));
+    const candidates = props.profileCircle
+        ? props.profileCircle
+              .filter((m) => m.id !== props.currentUserId)
+              .map((m) => ({ id: m.id, name: m.name }))
+        : props.members
+              .filter(
+                  (m) =>
+                      m.permission !== 'owner' &&
+                      m.user_id !== props.currentUserId,
+              )
+              .map((m) => ({ id: m.user_id, name: m.name }));
+
+    const allowed = props.transferTo;
+
+    return allowed === undefined
+        ? candidates
+        : candidates.filter((m) => allowed.includes(m.id));
 });
 
 const transferTargetName = computed(
@@ -205,8 +223,15 @@ watch(
                     {{ $t('share.drawer.people') }}
                 </p>
 
+                <QueryErrorState
+                    v-if="error && members.length === 0"
+                    :message="$t('share.drawer.loadError')"
+                    :retrying="retrying"
+                    @retry="emit('retry')"
+                />
+
                 <p
-                    v-if="props.loading ?? members.length === 0"
+                    v-else-if="props.loading ?? members.length === 0"
                     class="py-4 text-sm text-muted-foreground"
                 >
                     {{ $t('common.loading') }}
@@ -437,6 +462,14 @@ watch(
                         {{ $t('share.drawer.transferNote') }}
                     </p>
                 </div>
+
+                <p
+                    v-else-if="transferRestriction"
+                    class="text-xs text-muted-foreground"
+                    data-test="transfer-restriction"
+                >
+                    {{ transferRestriction }}
+                </p>
             </template>
 
             <div class="mt-auto pt-2">

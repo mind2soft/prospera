@@ -11,6 +11,7 @@ import {
 import type { Ledger } from '@/types';
 
 export const ledgerKeys = {
+    root: ['ledgers'] as const,
     all: (profileId: number) => ['ledgers', profileId] as const,
     detail: (id: number) => ['ledgers', 'detail', id] as const,
     transactions: (id: number) => ['ledgers', 'transactions', id] as const,
@@ -79,7 +80,7 @@ export function useCreateLedger() {
             queryClient.setQueryData(ledgerKey(data.ledger.id), {
                 ledger: data.ledger,
             });
-            void queryClient.invalidateQueries({ queryKey: ['ledgers'] });
+            void queryClient.invalidateQueries({ queryKey: ledgerKeys.root });
             invalidateDashboardData(queryClient);
         },
     });
@@ -96,7 +97,7 @@ export function useDeleteLedger() {
                 queryKey: ledgerKeys.transactions(id),
             });
             queryClient.removeQueries({ queryKey: ledgerKeys.shares(id) });
-            void queryClient.invalidateQueries({ queryKey: ['ledgers'] });
+            void queryClient.invalidateQueries({ queryKey: ledgerKeys.root });
             invalidateDashboardData(queryClient);
         },
     });
@@ -111,7 +112,7 @@ export function useCloseLedger() {
             queryClient.setQueryData(ledgerKey(data.ledger.id), {
                 ledger: data.ledger,
             });
-            void queryClient.invalidateQueries({ queryKey: ['ledgers'] });
+            void queryClient.invalidateQueries({ queryKey: ledgerKeys.root });
         },
     });
 }
@@ -125,7 +126,7 @@ export function useReopenLedger() {
             queryClient.setQueryData(ledgerKey(data.ledger.id), {
                 ledger: data.ledger,
             });
-            void queryClient.invalidateQueries({ queryKey: ['ledgers'] });
+            void queryClient.invalidateQueries({ queryKey: ledgerKeys.root });
         },
     });
 }
@@ -223,7 +224,7 @@ export function useTransferLedgerOwnership() {
             void queryClient.invalidateQueries({
                 queryKey: ledgerKeys.shares(ledger.id),
             });
-            void queryClient.invalidateQueries({ queryKey: ['ledgers'] });
+            void queryClient.invalidateQueries({ queryKey: ledgerKeys.root });
         },
     });
 }

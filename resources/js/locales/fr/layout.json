@@ -10,7 +10,6 @@
             "profiles": "Profils",
             "owned": "Possédés",
             "shared": "Partagés",
-            "default": "Par défaut",
             "defaultSuffix": "(par défaut)",
             "manageProfiles": "Gérer les profils",
             "settings": "Paramètres",
@@ -20,6 +19,11 @@
         "loading": {
             "budgets": "Chargement des budgets",
             "ledgers": "Chargement des grands livres"
+        },
+        "notifications": "Notifications",
+        "sidebar": {
+            "title": "Navigation",
+            "description": "La navigation principale de l'application."
         }
     }
 }

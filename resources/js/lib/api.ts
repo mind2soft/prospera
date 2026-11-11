@@ -1,3 +1,4 @@
+import { i18n } from '@/i18n';
 import { isClient } from '@/lib/ssr';
 import type { RouteDefinition } from '@/wayfinder';
 
@@ -16,9 +17,42 @@ export class ApiError extends Error {
         this.errors = errors;
     }
 
+    /** The first validation message, else the error's message — never empty. */
     get firstError(): string {
         const messages = Object.values(this.errors).flat();
-        return messages[0] ?? this.message;
+
+        return (
+            messages.find((message) => message.trim() !== '') ??
+            (this.message.trim() || statusMessage(this.status))
+        );
+    }
+}
+
+/**
+ * The localized, generic message of an HTTP error status. The server
+ * already sends localized messages (app/Exceptions/LocalizedJsonErrors.php);
+ * this covers an empty body, a proxy error page or a non-JSON response.
+ */
+export function statusMessage(status: number): string {
+    const { t } = i18n.global;
+
+    switch (true) {
+        case status === 401:
+            return t('common.errors.unauthenticated');
+        case status === 403:
+            return t('common.errors.forbidden');
+        case status === 404:
+            return t('common.errors.notFound');
+        case status === 419:
+            return t('common.errors.sessionExpired');
+        case status === 429:
+            return t('common.errors.tooMany');
+        case status === 503:
+            return t('common.errors.unavailable');
+        case status >= 500:
+            return t('common.errors.server');
+        default:
+            return t('common.errors.generic');
     }
 }
 
@@ -83,8 +117,11 @@ export async function api<T>(
             message?: string;
             errors?: Record<string, string[]>;
         };
+        const message =
+            typeof payload.message === 'string' ? payload.message.trim() : '';
+
         throw new ApiError(
-            payload.message ?? response.statusText,
+            message || statusMessage(response.status),
             response.status,
             payload.errors ?? {},
         );

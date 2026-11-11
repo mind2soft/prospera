@@ -3,12 +3,12 @@ import { browserTimeZone } from '@/lib/calendar';
 import * as widgets from '@/routes/api/dashboard/widgets';
 import type {
     DashboardWidget,
-    DashboardWidgetConfig,
     DashboardWidgetData,
+    DashboardWidgetPayload,
 } from '@/types';
 
 export type SaveLayoutInput = {
-    widgets: DashboardWidgetConfig[];
+    widgets: DashboardWidgetPayload[];
 };
 
 export const dashboardApi = {

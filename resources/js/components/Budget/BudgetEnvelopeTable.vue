@@ -1,6 +1,6 @@
 <!-- biome-ignore-all lint/a11y/noNoninteractiveTabindex: the table scroll region must be keyboard-focusable to scroll (WCAG 2.1.1) -->
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue';
+import { computed, reactive, useTemplateRef, watch } from 'vue';
 import Currency from '@/components/Currency.vue';
 import EnvelopeChip from '@/components/EnvelopeChip.vue';
 import Icon from '@/components/Icon.vue';
@@ -121,6 +121,14 @@ const runningLeft = computed(() => {
         return left;
     });
 });
+
+const region = useTemplateRef<HTMLElement>('region');
+
+/**
+ * Focuses the table region — the stable target once a row's delete action
+ * disappears with its row (focus would otherwise drop to the page body).
+ */
+defineExpose({ focus: () => region.value?.focus() });
 </script>
 
 <template>
@@ -161,6 +169,7 @@ const runningLeft = computed(() => {
         </div>
 
         <section
+            ref="region"
             class="overflow-x-auto rounded-lg border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             :aria-label="$t('budget.table.label')"
             tabindex="0"
@@ -260,7 +269,7 @@ const runningLeft = computed(() => {
                             <Button
                                 variant="ghost"
                                 size="icon-sm"
-                                class="text-destructive hover:bg-destructive hover:text-destructive"
+                                class="text-destructive hover:bg-destructive/10 hover:text-destructive"
                                 :aria-label="
                                     $t('budget.table.removeEnvelopeFor', {
                                         name: row.name,

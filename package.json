@@ -67,6 +67,10 @@
         "lightningcss-win32-x64-msvc": "^1.29.1"
     },
     "overrides": {
-        "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0"
+        "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
+        "stylus": {
+            ".": "^0.64.0",
+            "glob": "^14.0.4"
+        }
     }
 }

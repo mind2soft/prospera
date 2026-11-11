@@ -10,7 +10,6 @@
             "profiles": "Profiles",
             "owned": "Owned",
             "shared": "Shared",
-            "default": "Default",
             "defaultSuffix": "(default)",
             "manageProfiles": "Manage profiles",
             "settings": "Settings",
@@ -20,6 +19,11 @@
         "loading": {
             "budgets": "Loading budgets",
             "ledgers": "Loading ledgers"
+        },
+        "notifications": "Notifications",
+        "sidebar": {
+            "title": "Navigation",
+            "description": "The app's main navigation."
         }
     }
 }

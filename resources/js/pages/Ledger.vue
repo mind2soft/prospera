@@ -50,6 +50,7 @@ import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useLocale } from '@/composables/useLocale';
 import { ApiError } from '@/lib/api';
 import { formatMoney } from '@/lib/budget';
+import { formatCalendarDate } from '@/lib/calendar';
 import type {
     AddTransactionInput,
     CreateLedgerInput,
@@ -412,11 +413,11 @@ const transactionSummary = computed(() => {
     if (tx === null) {
         return '';
     }
-    const [year, month, day] = tx.event_at.split('-').map(Number);
-    const date = new Date(year, month - 1, day).toLocaleDateString(
-        locale.value,
-        { day: 'numeric', month: 'long', year: 'numeric' },
-    );
+    const date = formatCalendarDate(tx.event_at, locale.value, {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+    });
     // A masked amount is never revealed, not even in the confirmation.
     return tx.masked || tx.amount === null
         ? t('ledger.deleteTransaction.summaryMasked', {
@@ -430,6 +431,19 @@ const transactionSummary = computed(() => {
           });
 });
 
+const transactionTable =
+    useTemplateRef<InstanceType<typeof TransactionTable>>('transactionTable');
+/** The deleted row's trash button is gone: focus returns to the table. */
+let refocusTable = false;
+
+const onDeleteDialogCloseFocus = (event: Event) => {
+    if (refocusTable) {
+        refocusTable = false;
+        event.preventDefault();
+        transactionTable.value?.focus();
+    }
+};
+
 const confirmRemoveTransaction = () => {
     const tx = transactionToDelete.value;
     if (tx === null) {
@@ -440,6 +454,7 @@ const confirmRemoveTransaction = () => {
         { transactionId: tx.id },
         {
             onSuccess: () => {
+                refocusTable = true;
                 confirmingTransactionDelete.value = false;
                 toast.success(t('ledger.toast.transactionDeleted'));
             },
@@ -624,6 +639,7 @@ const confirmRemoveTransaction = () => {
                     </Card>
 
                     <TransactionTable
+                        ref="transactionTable"
                         :transactions="transactions"
                         :currency="currency"
                         :current-user-id="meId"
@@ -655,6 +671,9 @@ const confirmRemoveTransaction = () => {
             :transfer-resource="$t('ledger.share.resource')"
             :members="shareMembers"
             :loading="sharesQuery.isPending.value"
+            :error="sharesQuery.isError.value"
+            :retrying="sharesQuery.isFetching.value"
+            @retry="sharesQuery.refetch()"
             :current-user-id="meId"
             :can-manage="ledgerPermission === 'owner'"
             @update:open="showShare = $event"
@@ -667,7 +686,10 @@ const confirmRemoveTransaction = () => {
             :open="confirmingTransactionDelete"
             @update:open="confirmingTransactionDelete = $event"
         >
-            <DialogContent class="sm:max-w-md">
+            <DialogContent
+                class="sm:max-w-md"
+                @close-auto-focus="onDeleteDialogCloseFocus"
+            >
                 <DialogHeader>
                     <DialogTitle>{{
                         $t('ledger.deleteTransaction.title')

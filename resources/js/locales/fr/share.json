@@ -30,7 +30,8 @@
             "revokeFor": "Révoquer l’accès de {name}",
             "revokeTitle": "Révoquer l’accès de {name} ?",
             "revokeDescription": "{name} perdra l’accès à {resource}. Vous pourrez le lui accorder de nouveau depuis ce panneau.",
-            "revokeDescriptionMember": "{name} perdra l’accès accordé à {resource} et ne gardera que l’accès en lecture des membres du profil."
+            "revokeDescriptionMember": "{name} perdra l’accès accordé à {resource} et ne gardera que l’accès en lecture des membres du profil.",
+            "loadError": "Les personnes ayant accès n’ont pas pu être chargées."
         },
         "envelope": {
             "title": "Partager l'enveloppe",

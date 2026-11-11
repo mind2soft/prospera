@@ -31,6 +31,8 @@ class LangParityTest extends TestCase
         'This invite is invalid.',
         'This invite was issued to another email address.',
         'You are already a member of this profile.',
+        // The verified middleware's 403, translated by LocalizedJsonErrors.
+        'Your email address is not verified.',
     ];
 
     /**

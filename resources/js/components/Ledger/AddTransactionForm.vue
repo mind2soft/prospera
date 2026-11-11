@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { useLocale } from '@/composables/useLocale';
+import { formatCalendarDate } from '@/lib/calendar';
 import type { AddTransactionInput, PickerEnvelope } from '@/lib/ledgerApi';
 
 const { locale } = useLocale();
@@ -36,15 +37,13 @@ const selected = computed(
         props.envelopes.find((e) => e.envelope_id === envelopeId.value) ?? null,
 );
 
-const dateLabel = computed(() => {
-    const [year, month, day] = props.selectedDate.split('-').map(Number);
-    const date = new Date(year, month - 1, day);
-    return date.toLocaleDateString(locale.value, {
+const dateLabel = computed(() =>
+    formatCalendarDate(props.selectedDate, locale.value, {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
-    });
-});
+    }),
+);
 
 const isValidAmount = (value: string): boolean => {
     const parsed = Number(value);
