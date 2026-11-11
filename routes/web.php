@@ -7,6 +7,7 @@ use App\Http\Controllers\EnvelopeController;
 use App\Http\Controllers\FinancialProfileController;
 use App\Http\Controllers\FinancialProfileInviteController;
 use App\Http\Controllers\LedgerController;
+use App\Http\Middleware\EnsureAccountHasProfile;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Http\Controllers\RegisteredUserController;
@@ -47,7 +48,9 @@ Route::get('invites/{inviteKey}', [FinancialProfileInviteController::class, 'lan
     ->name('invites.landing')
     ->middleware('throttle:invites');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+// EnsureAccountHasProfile completes an invite grant whose verification
+// listener failed (no verified account is left without a profile).
+Route::middleware(['auth', 'verified', EnsureAccountHasProfile::class])->group(function () {
     // Accept link from the invitation email: never changes state — it lands
     // on the invite confirmation page, whose button POSTs the accept. Guests
     // are redirected to the sign-in page (the auth middleware preserves the

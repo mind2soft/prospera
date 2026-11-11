@@ -3,6 +3,7 @@
 use App\Http\Controllers\Settings\NotificationSettingsController;
 use App\Http\Controllers\Settings\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
+use App\Http\Middleware\EnsureAccountHasProfile;
 use Illuminate\Auth\Middleware\RequirePassword;
 use Illuminate\Support\Facades\Route;
 
@@ -17,8 +18,7 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('settings/account', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-Route::middleware(['auth', 'verified'])->group(function () {
-
+Route::middleware(['auth', 'verified', EnsureAccountHasProfile::class])->group(function () {
     Route::inertia('settings/profiles', 'settings/Profiles')->name('profiles.edit');
 
     Route::get('settings/notifications', [NotificationSettingsController::class, 'edit'])->name('notifications.edit');

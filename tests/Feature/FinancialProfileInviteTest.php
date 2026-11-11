@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Mail\ProfileInvite;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileInvite;
+use App\Models\FinancialProfileUser;
 use App\Models\User;
 use App\Settings\NotificationSettings;
 use Carbon\CarbonImmutable;
@@ -13,6 +14,8 @@ use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
+use RuntimeException;
 use Tests\TestCase;
 
 class FinancialProfileInviteTest extends TestCase
@@ -769,6 +772,65 @@ class FinancialProfileInviteTest extends TestCase
             'user_id' => $user->id,
             'is_owner' => true,
         ]);
+    }
+
+    public function test_a_failed_grant_on_verification_is_completed_on_the_next_request(): void
+    {
+        $invite = $this->createInvite(email: 'newbie@example.com');
+
+        $this->post('/register', [
+            'name' => 'New User',
+            'email' => 'newbie@example.com',
+            'password' => 'password',
+            'password_confirmation' => 'password',
+            'invite_key' => self::RAW_KEY,
+        ])->assertRedirect(route('dashboard', absolute: false));
+
+        $user = User::where('email', 'newbie@example.com')->firstOrFail();
+
+        // RES-7: the grant fails once (a transient DB error) while the
+        // account is already marked verified.
+        $failed = false;
+        FinancialProfileUser::creating(function () use (&$failed): void {
+            if (! $failed) {
+                $failed = true;
+
+                throw new RuntimeException('Deadlock found when trying to get lock');
+            }
+        });
+
+        $verificationUrl = URL::temporarySignedRoute(
+            'verification.verify',
+            now()->addMinutes(60),
+            ['id' => $user->id, 'hash' => sha1($user->email)],
+        );
+
+        // The verification itself still succeeds…
+        $this->actingAs($user)->get($verificationUrl)
+            ->assertRedirect(route('dashboard', absolute: false).'?verified=1');
+        $this->assertTrue($user->fresh()->hasVerifiedEmail());
+        $this->assertSame(0, $user->profiles()->count());
+        $this->assertDatabaseHas('financial_profile_invites', ['id' => $invite->id, 'pending_user_id' => $user->id]);
+
+        // …and the next authenticated request completes the grant.
+        $this->actingAs($user->fresh())->getJson('/api/profiles')
+            ->assertOk()
+            ->assertJsonPath('profiles.0.id', $this->profile->id);
+
+        $this->assertTrue($this->profile->isMember($user));
+        $this->assertTrue($this->profile->isDefaultFor($user));
+        $this->assertDatabaseMissing('financial_profile_invites', ['id' => $invite->id]);
+    }
+
+    public function test_a_verified_account_without_any_profile_gets_a_default_one_on_the_next_request(): void
+    {
+        // E.g. the listener failed and the reservation was pruned since.
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get('/dashboard')->assertOk();
+
+        $this->assertSame(1, $user->profiles()->count());
+        $this->assertTrue($user->profiles()->sole()->isDefaultFor($user));
     }
 
     public function test_an_expired_reservation_does_not_grant_membership_on_verification(): void

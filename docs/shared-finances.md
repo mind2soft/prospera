@@ -99,7 +99,13 @@ invite for an email and gets a link containing a hash key (`invite_key`).
 - The registration endpoint accepts `invite_key` alongside the normal
   registration fields.
 - On success the invite is **reserved** for the new account; it is consumed
-  and membership is created once the account verifies its email.
+  and membership is created once the account verifies its email. The grant
+  is **self-healing**: the account is already verified when the `Verified`
+  listener runs, so a failure there (e.g. a transient database error) is
+  reported without failing the verification, and the
+  `EnsureAccountHasProfile` middleware (on every authenticated, verified
+  route) completes the grant — or seeds a default profile — on the next
+  request of a verified account that has no profile.
 - The personal "Default profile" is **not** created for registrations that
   carry a usable invite: the shared profile becomes the new account's only
   profile (and therefore its default experience — the profile switcher falls
