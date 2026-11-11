@@ -2,14 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\ManagesShares;
 use App\Http\Requests\Budget\CloneBudgetRequest;
 use App\Http\Requests\Budget\PublishBudgetRequest;
 use App\Http\Requests\Budget\StoreBudgetEnvelopeRequest;
 use App\Http\Requests\Budget\StoreBudgetRequest;
 use App\Http\Requests\Budget\UpdateBudgetEnvelopeRequest;
-use App\Http\Requests\Sharing\StoreShareRequest;
-use App\Http\Requests\Sharing\TransferOwnershipRequest;
-use App\Http\Requests\Sharing\UpdateShareRequest;
 use App\Models\Budget;
 use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
@@ -17,14 +15,19 @@ use App\Models\FinancialProfile;
 use App\Models\User;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use LogicException;
 
 class BudgetController extends Controller
 {
+    /** @use ManagesShares<Budget> */
+    use ManagesShares;
+
     public function __construct(
         private readonly ResourcePermissionService $permissionService,
     ) {}
@@ -323,54 +326,50 @@ class BudgetController extends Controller
         return response()->json(status: 204);
     }
 
-    /**
-     * List the profile's members with their permission on the budget.
-     */
-    public function permissionsIndex(Budget $budget): JsonResponse
+    protected function sharedResource(Model $resource): Budget
     {
-        $this->authorize('view', $budget);
+        if (! $resource instanceof Budget) {
+            throw new LogicException('The share routes of this controller must bind a budget.');
+        }
 
-        return response()->json([
-            'shares' => $this->permissionService->profilePermissions($budget->profile, 'budget_permissions', 'budget_id', $budget->id),
-        ]);
+        return $resource;
     }
 
     /**
-     * Assign a permission to a profile member ("owner" is rejected — use
-     * transfer-ownership).
+     * @return array{string, string}
      */
-    public function addPermission(StoreShareRequest $request, Budget $budget): JsonResponse
+    protected function shareTable(): array
     {
-        $target = $this->permissionService->profileMember($budget->profile, $request->targetId());
+        return ['budget_permissions', 'budget_id'];
+    }
 
-        $this->permissionService->createPermission('budget_permissions', 'budget_id', $budget->id, $target->id, $request->permission(), __('This budget is already shared with this user.'));
-
-        return response()->json(status: 201);
+    protected function viewSharesAbility(): string
+    {
+        return 'view';
     }
 
     /**
-     * Change a member's permission ("owner" is rejected — use
-     * transfer-ownership).
+     * The profile's members with their permission on the budget.
+     *
+     * @param  Budget  $resource
+     * @return array<int, array<string, int|string|bool>>
      */
-    public function updatePermission(UpdateShareRequest $request, Budget $budget, int $userId): JsonResponse
+    protected function shareList(Model $resource, User $caller): array
     {
-        $this->permissionService->updatePermission('budget_permissions', 'budget_id', $budget->id, $userId, $request->permission());
-
-        return response()->json([
-            'shares' => $this->permissionService->profilePermissions($budget->profile, 'budget_permissions', 'budget_id', $budget->id),
-        ]);
+        return $this->permissionService->profilePermissions($resource->profile, 'budget_permissions', 'budget_id', $resource->id);
     }
 
     /**
-     * Revoke a share.
+     * @param  Budget  $resource
      */
-    public function removePermission(Budget $budget, int $userId): JsonResponse
+    protected function shareTarget(Model $resource, int $userId): User
     {
-        $this->authorize('share', $budget);
+        return $this->permissionService->profileMember($resource->profile, $userId);
+    }
 
-        $this->permissionService->deletePermission('budget_permissions', 'budget_id', $budget->id, $userId);
-
-        return response()->json(status: 204);
+    protected function alreadySharedMessage(): string
+    {
+        return __('This budget is already shared with this user.');
     }
 
     /**
@@ -379,24 +378,27 @@ class BudgetController extends Controller
      * (docs/budget.md — Ownership): publishing needs both ownerships and
      * the draft holds the profile's single draft slot, so a draft handed to
      * a collaborator could be neither published nor replaced.
+     *
+     * @param  Budget  $resource
+     * @return array<string, mixed>
      */
-    public function transferOwnership(TransferOwnershipRequest $request, Budget $budget): JsonResponse
+    protected function transferOwnershipOf(Model $resource, User $caller, int $userId): array
     {
         $target = $this->permissionService->ensureNotOwner(
-            $this->permissionService->profileMember($budget->profile, $request->targetId()),
-            $request->user(),
+            $this->permissionService->profileMember($resource->profile, $userId),
+            $caller,
             __('You already own this budget.'),
         );
 
-        if ($budget->isDraft() && ! $budget->profile->isOwner($target)) {
+        if ($resource->isDraft() && ! $resource->profile->isOwner($target)) {
             throw ValidationException::withMessages([
                 'user_id' => __('A draft budget can only be owned by the profile owner.'),
             ]);
         }
 
-        $budget->transferOwnershipTo($target);
+        $resource->transferOwnershipTo($target);
 
-        return response()->json(['budget' => $this->serializeBudget($budget->refresh(), $request->user())]);
+        return ['budget' => $this->serializeBudget($resource->refresh(), $caller)];
     }
 
     /**

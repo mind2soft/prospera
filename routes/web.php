@@ -8,6 +8,9 @@ use App\Http\Controllers\FinancialProfileController;
 use App\Http\Controllers\FinancialProfileInviteController;
 use App\Http\Controllers\LedgerController;
 use App\Http\Middleware\EnsureAccountHasProfile;
+use App\Models\Budget;
+use App\Models\Envelope;
+use App\Models\Ledger;
 use Illuminate\Support\Facades\Route;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Http\Controllers\ConfirmablePasswordController;
@@ -62,6 +65,12 @@ Route::get('api/invites/{inviteKey}', [FinancialProfileInviteController::class, 
 Route::get('invites/{inviteKey}', [FinancialProfileInviteController::class, 'landing'])
     ->name('invites.landing')
     ->middleware('throttle:invites');
+
+// The Share-drawer endpoints (ManagesShares) receive their resource as a
+// plain Model, so these parameters are bound explicitly.
+Route::model('budget', Budget::class);
+Route::model('ledger', Ledger::class);
+Route::model('envelope', Envelope::class);
 
 // EnsureAccountHasProfile completes an invite grant whose verification
 // listener failed (no verified account is left without a profile).
