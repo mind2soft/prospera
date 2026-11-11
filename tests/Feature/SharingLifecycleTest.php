@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\DashboardWidget;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
@@ -173,5 +174,49 @@ class SharingLifecycleTest extends TestCase
             'amount' => 10,
             'event_at' => now()->toDateString(),
         ])->assertCreated();
+    }
+
+    // ------------------------------------------------------------------
+    // WF-8 — a member's dashboard widgets go with the membership
+    // ------------------------------------------------------------------
+
+    private function widgetFor(User $user, FinancialProfile $profile): DashboardWidget
+    {
+        return DashboardWidget::create([
+            'user_id' => $user->id,
+            'financial_profile_id' => $profile->id,
+            'type' => 'radial',
+            'title' => null,
+            'view_type' => 'pie',
+            'column_width' => 1,
+            'period_type' => 'months',
+            'period_range' => 1,
+            'selection' => [],
+            'sort_order' => 0,
+        ]);
+    }
+
+    public function test_leaving_deletes_the_members_widgets_for_the_profile(): void
+    {
+        $leaving = $this->widgetFor($this->bob, $this->profile);
+        $ownersWidget = $this->widgetFor($this->alice, $this->profile);
+        $bobsOtherWidget = $this->widgetFor($this->bob, $this->bob->profiles()->whereKeyNot($this->profile->id)->firstOrFail());
+
+        $this->actingAs($this->bob)->deleteJson("/api/profiles/{$this->profile->id}/members/{$this->bob->id}")
+            ->assertNoContent();
+
+        $this->assertModelMissing($leaving);
+        $this->assertModelExists($ownersWidget);
+        $this->assertModelExists($bobsOtherWidget);
+    }
+
+    public function test_removing_a_member_deletes_their_widgets_for_the_profile(): void
+    {
+        $widget = $this->widgetFor($this->bob, $this->profile);
+
+        $this->actingAs($this->alice)->deleteJson("/api/profiles/{$this->profile->id}/members/{$this->bob->id}")
+            ->assertNoContent();
+
+        $this->assertModelMissing($widget);
     }
 }

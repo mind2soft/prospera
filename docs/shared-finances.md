@@ -132,6 +132,9 @@ the profile owner** when that member is removed from the profile (or leaves
 voluntarily) or when their account is deleted. Auto-transfer edge cases:
 
 - The removed member's permission rows on the profile's resources are deleted.
+- The removed member's **dashboard widgets** for the profile (their
+  per-member layout, see [Dashboard](dashboard.md)) are deleted: a member
+  re-invited later starts from an empty dashboard.
 - **Envelope grants follow the profile relationship.** Envelopes are
   user-owned, so their grants are not tied to one profile: when a member
   leaves or is removed, or a profile is deleted, the envelope grants

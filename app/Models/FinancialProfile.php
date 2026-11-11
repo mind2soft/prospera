@@ -362,6 +362,13 @@ class FinancialProfile extends Model
             $this->deleteLedgerPermissionsFor($member);
             $this->transferReferencedEnvelopesOwnedBy($member, $owner, keepSharedElsewhere: ! $accountDeletion);
 
+            // The member's dashboard layout for this profile is per-member
+            // configuration: it goes with the membership.
+            DashboardWidget::query()
+                ->where('user_id', $member->id)
+                ->where('financial_profile_id', $this->id)
+                ->delete();
+
             $this->members()->detach($member);
 
             self::pruneEnvelopeGrantsBetween($member, $remainingMembers);
