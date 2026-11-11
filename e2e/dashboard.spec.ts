@@ -174,6 +174,15 @@ test('dashboard audit', async ({ page }) => {
     });
     // Drop on the target's leading edge — the insertion point is derived
     // from the pointer half of the hovered card.
+    // The reorder is saved right away (queued behind an in-flight autosave
+    // if any): wait for the save carrying the new order before reloading.
+    const reorderSaved = page.waitForResponse(
+        (r) =>
+            r.request().method() === 'PUT' &&
+            /\/api\/dashboard\/\d+\/widgets$/.test(r.url()) &&
+            r.request().postDataJSON()?.widgets?.[0]?.type === 'radial' &&
+            r.ok(),
+    );
     await radialHandle.dragTo(firstCard, {
         targetPosition: { x: 10, y: 10 },
     });
@@ -183,6 +192,7 @@ test('dashboard audit', async ({ page }) => {
     ).toBeVisible({ timeout: 15_000 });
 
     // The reorder survives a reload (autosave persisted the new order).
+    await reorderSaved;
     await page.reload();
     await expect(
         page.locator('[data-widget-card]').first().getByText('Radial'),

@@ -175,15 +175,20 @@ watch(
 // are serialized (one in flight; a change during a save re-queues) so
 // responses can never land out of order and clobber newer edits.
 let queuedSave = false;
+// Tracked locally: the mutation's own `isPending` still reads true inside
+// its onSettled callback, which would re-queue the follow-up save forever
+// (and lose it).
+let saving = false;
 
 const saveNow = (): void => {
-    if (saveLayout.isPending.value) {
+    if (saving) {
         queuedSave = true;
 
         return;
     }
 
     queuedSave = false;
+    saving = true;
 
     saveLayout.mutate(
         {
@@ -212,6 +217,7 @@ const saveNow = (): void => {
                 );
             },
             onSettled: () => {
+                saving = false;
                 if (queuedSave) {
                     saveNow();
                 }
