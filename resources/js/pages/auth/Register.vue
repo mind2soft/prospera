@@ -27,6 +27,7 @@ import { profileKeys, useAcceptInvite } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { errorMessage } from '@/lib/api';
 import { profileApi } from '@/lib/profileApi';
+import { registerHeading } from '@/lib/registerHeading';
 import { dashboard, login, logout, privacy } from '@/routes';
 import { acceptLink } from '@/routes/invites';
 import { store } from '@/routes/register';
@@ -39,31 +40,17 @@ const props = defineProps<{
     invite?: InviteContext | null;
 }>();
 
-/**
- * The page doubles as the signed-in invite confirmation (guests only reach
- * plain registration): the layout's heading follows what the page is for.
- */
 defineOptions({
     layout: (pageProps: {
         auth?: { user: User | null };
         invite?: InviteContext | null;
     }) => {
-        if (!pageProps.auth?.user) {
-            return {
-                title: 'auth.register.layoutTitle',
-                description: 'auth.register.layoutDescription',
-            };
-        }
+        const { title, description } = registerHeading(
+            Boolean(pageProps.auth?.user),
+            Boolean(pageProps.invite),
+        );
 
-        return pageProps.invite
-            ? {
-                  title: 'auth.invite.title',
-                  description: 'auth.invite.description',
-              }
-            : {
-                  title: 'auth.register.inviteUnavailable',
-                  description: '',
-              };
+        return { title, description };
     },
 });
 
@@ -104,15 +91,9 @@ const emailMismatch = computed(
 
 const { t } = useI18n();
 
-const documentTitle = computed(() => {
-    if (!signedIn.value) {
-        return t('auth.register.title');
-    }
-
-    return props.invite
-        ? t('auth.invite.title')
-        : t('auth.register.inviteUnavailable');
-});
+const documentTitle = computed(() =>
+    t(registerHeading(signedIn.value, Boolean(props.invite)).documentTitle),
+);
 
 /**
  * A guest with an account signs in through the email's accept link: the
