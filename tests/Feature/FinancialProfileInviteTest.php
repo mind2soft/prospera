@@ -10,8 +10,10 @@ use App\Models\User;
 use App\Settings\NotificationSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Auth\Events\Verified;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\Events\TransactionBeginning;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\URL;
@@ -829,6 +831,35 @@ class FinancialProfileInviteTest extends TestCase
 
         $this->actingAs($user)->get('/dashboard')->assertOk();
 
+        $this->assertSame(1, $user->profiles()->count());
+        $this->assertTrue($user->profiles()->sole()->isDefaultFor($user));
+    }
+
+    public function test_concurrent_self_healing_requests_seed_a_single_default_profile(): void
+    {
+        // RES-R2-3: a verified account without a profile and without a
+        // reservation. Another request wins the race and seeds the default
+        // right before this one gets the account lock: under the lock, the
+        // default must be re-checked instead of seeding a second one.
+        $user = User::factory()->create();
+        $outerLevel = DB::transactionLevel();
+        $raced = false;
+
+        DB::listen(function (QueryExecuted $query) use ($user, $outerLevel, &$raced): void {
+            if ($raced
+                || DB::transactionLevel() <= $outerLevel
+                || ! str_starts_with($query->sql, 'select * from "users" where "users"."id" = ?')
+                || $query->bindings !== [$user->id]) {
+                return;
+            }
+
+            $raced = true;
+            FinancialProfile::createDefaultFor($user);
+        });
+
+        $this->actingAs($user)->getJson('/api/profiles')->assertOk();
+
+        $this->assertTrue($raced, 'The account row must be locked before the default profile is checked.');
         $this->assertSame(1, $user->profiles()->count());
         $this->assertTrue($user->profiles()->sole()->isDefaultFor($user));
     }

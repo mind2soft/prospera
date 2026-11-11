@@ -224,6 +224,14 @@ class FinancialProfileInvite extends Model
     public static function completePendingFor(User $user): void
     {
         DB::transaction(function () use ($user): void {
+            // Serialize concurrent completions for the same account (two
+            // tabs, the Verified listener racing the middleware): without a
+            // reservation the invite lock below locks nothing, and both
+            // would seed a default profile. The callers' "has no profile"
+            // check ran unlocked, so the default is re-checked under this
+            // lock by ensureDefaultFor.
+            User::query()->whereKey($user->id)->lockForUpdate()->first();
+
             /** @var self|null $invite */
             $invite = self::query()
                 ->where('pending_user_id', $user->id)
