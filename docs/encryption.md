@@ -281,35 +281,6 @@ A failing row was tampered with, corrupted or written outside Eloquent; it
 makes the pages reading it fail (HTTP 500). There is no automatic repair:
 restore the row from a backup taken with the same `APP_KEY`.
 
-#### Pre-migration backups
-
-Every deploy with pending migrations backs the database up first, with
-`php artisan db:backup` (PostgreSQL: `pg_dump --format=custom`; SQLite:
-`VACUUM INTO`), in maintenance mode right before `migrate --force`. If the
-backup fails, nothing is migrated: the deploy lifts the maintenance mode it
-turned on and fails. Backups land in `shared/backups/<release>-<UTC
-timestamp>.dump` (directory `700`, files `600`); the `KEEP_BACKUPS` newest
-(default 5, a variable of `deploy-production.sh`) are kept. They hold every
-row — amounts encrypted, their keys wrapped by the `APP_KEY` live at that
-time — so keep that `APP_KEY` escrowed as long as the backup. They sit on the
-production host: they protect against a bad migration, not against losing the
-host; keep the hosting provider's backups (or copy these off-host) too.
-
-To undo a migrating deploy (everything written since the backup is lost):
-
-1. On the host, `cd <app>/current && php artisan down` (an operator's
-   maintenance mode: deploys and rollbacks leave it on).
-2. Restore the backup taken by that deploy — PostgreSQL, with the database
-   credentials of `shared/.env`:
-   `PGPASSWORD=… pg_restore --clean --if-exists --no-owner --no-privileges --single-transaction -h <DB_HOST> -p <DB_PORT> -U <DB_USERNAME> -d <DB_DATABASE> shared/backups/<file>.dump`
-   (SQLite: copy the file over the database file).
-3. Run the `deploy` workflow with `action: rollback`, naming the release that
-   was live before that deploy (its `previous` release): it matches the
-   restored schema, and the rollback checks it against the migrations the
-   restored database ran.
-4. `php artisan amounts:verify` from `current`, with the `APP_KEY` of the
-   backup current or in `APP_PREVIOUS_KEYS`, then `php artisan up`.
-
 ### Deployments
 
 Production migrations are **forward-only**: the app prohibits destructive
@@ -353,8 +324,7 @@ scripts compare releases with the migrations the database actually ran
   connection. After a host key change, update the variable.
 - It switches to maintenance mode before running pending migrations, so the
   previous release stops accepting requests (ones already in flight may still
-  complete), then backs the database up and refuses to migrate if that fails
-  (see [Pre-migration backups](#pre-migration-backups)). `amounts:verify` must pass before the release goes live. Any
+  complete). `amounts:verify` must pass before the release goes live. Any
   failure during or after migrating — including a failed health check —
   **leaves the app in maintenance mode**: the previous release is not
   restored on the migrated schema. Recover by deploying a fix: once verified,
