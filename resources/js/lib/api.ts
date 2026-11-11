@@ -29,6 +29,18 @@ export class ApiError extends Error {
 }
 
 /**
+ * The message to show for a failed request: the API's own (validation or
+ * localized error) message, else the given, already translated fallback
+ * (network failure, unexpected exception).
+ */
+export function errorMessage<T extends string | undefined>(
+    error: unknown,
+    fallback: T,
+): string | T {
+    return error instanceof ApiError ? error.firstError : fallback;
+}
+
+/**
  * The localized, generic message of an HTTP error status. The server
  * already sends localized messages (app/Exceptions/LocalizedJsonErrors.php);
  * this covers an empty body, a proxy error page or a non-JSON response.

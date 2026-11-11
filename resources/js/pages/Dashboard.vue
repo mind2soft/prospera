@@ -31,7 +31,7 @@ import {
     useSaveDashboardLayout,
 } from '@/composables/dashboardQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
-import { ApiError } from '@/lib/api';
+import { errorMessage } from '@/lib/api';
 import { moveItem } from '@/lib/list';
 import { dashboard as dashboardRoute } from '@/routes';
 import type {
@@ -291,9 +291,7 @@ const send = (save: LayoutSave): void => {
             onSuccess: (data) => adoptIds(save, data.widgets),
             onError: (error) => {
                 toast.error(
-                    error instanceof ApiError
-                        ? error.firstError
-                        : t('dashboard.toast.saveFailed'),
+                    errorMessage(error, t('dashboard.toast.saveFailed')),
                 );
             },
             onSettled: () => {

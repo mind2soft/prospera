@@ -39,7 +39,7 @@ import {
     useTransferEnvelopeOwnership,
 } from '@/composables/envelopeQueries';
 import { useProfileCircle } from '@/composables/profileQueries';
-import { ApiError } from '@/lib/api';
+import { errorMessage } from '@/lib/api';
 import { envelopes as envelopesRoute } from '@/routes';
 import type { Envelope, ResourcePermission } from '@/types';
 
@@ -201,7 +201,7 @@ const transferOwnership = useTransferEnvelopeOwnership();
 const shareMembers = computed(() => sharesQuery.data.value ?? []);
 
 const shareFail = (e: unknown) => {
-    toast.error(e instanceof ApiError ? e.firstError : t('share.toast.failed'));
+    toast.error(errorMessage(e, t('share.toast.failed')));
 };
 
 const onSetSharePermission = (

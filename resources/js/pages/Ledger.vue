@@ -48,7 +48,7 @@ import {
 } from '@/composables/ledgerQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useLocale } from '@/composables/useLocale';
-import { ApiError } from '@/lib/api';
+import { errorMessage } from '@/lib/api';
 import { formatMoney } from '@/lib/budget';
 import { formatCalendarDate } from '@/lib/calendar';
 import type {
@@ -322,9 +322,7 @@ const onTransferOwnership = (userId: number) => {
 };
 
 const fail = (e: unknown) => {
-    toast.error(
-        e instanceof ApiError ? e.firstError : t('ledger.error.generic'),
-    );
+    toast.error(errorMessage(e, t('ledger.error.generic')));
 };
 
 const showCreate = ref(false);

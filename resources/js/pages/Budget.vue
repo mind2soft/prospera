@@ -52,7 +52,7 @@ import {
 import { useProfileMembers } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useLocale } from '@/composables/useLocale';
-import { ApiError } from '@/lib/api';
+import { errorMessage } from '@/lib/api';
 import { budgetMonthLabel } from '@/lib/budget';
 import type { AddEnvelopeInput } from '@/lib/budgetApi';
 import { currentMonth } from '@/lib/calendar';
@@ -203,9 +203,7 @@ const working = computed(
 );
 
 const fail = (e: unknown) => {
-    toast.error(
-        e instanceof ApiError ? e.firstError : t('budget.toast.failed'),
-    );
+    toast.error(errorMessage(e, t('budget.toast.failed')));
 };
 
 // --- dialogs ---------------------------------------------------------------

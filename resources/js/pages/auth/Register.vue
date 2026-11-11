@@ -25,7 +25,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { profileKeys, useAcceptInvite } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
-import { ApiError } from '@/lib/api';
+import { errorMessage } from '@/lib/api';
 import { profileApi } from '@/lib/profileApi';
 import { dashboard, login, logout, privacy } from '@/routes';
 import { acceptLink } from '@/routes/invites';
@@ -144,10 +144,7 @@ const onAccept = () => {
         },
         onError: (e) => {
             accepting.value = false;
-            acceptError.value =
-                e instanceof ApiError
-                    ? e.firstError
-                    : t('auth.register.acceptError');
+            acceptError.value = errorMessage(e, t('auth.register.acceptError'));
         },
     });
 };
@@ -165,10 +162,7 @@ const onDecline = async () => {
     } catch (e) {
         declining.value = false;
         confirmingDecline.value = false;
-        acceptError.value =
-            e instanceof ApiError
-                ? e.firstError
-                : t('auth.register.declineError');
+        acceptError.value = errorMessage(e, t('auth.register.declineError'));
         return;
     }
     confirmingDecline.value = false;

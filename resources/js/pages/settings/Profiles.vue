@@ -48,7 +48,7 @@ import {
 } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useLocale } from '@/composables/useLocale';
-import { ApiError } from '@/lib/api';
+import { errorMessage } from '@/lib/api';
 import { edit as editProfiles } from '@/routes/profiles';
 import type { FinancialProfile, ProfileInvite, ProfileMember } from '@/types';
 
@@ -86,11 +86,7 @@ const createInvite = useCreateInvite();
 const revokeInvite = useRevokeInvite();
 
 const fail = (e: unknown) => {
-    toast.error(
-        e instanceof ApiError
-            ? e.firstError
-            : t('settings.profiles.somethingWentWrong'),
-    );
+    toast.error(errorMessage(e, t('settings.profiles.somethingWentWrong')));
 };
 
 const expandedId = ref<number | null>(null);
@@ -155,8 +151,7 @@ const onCreate = () => {
             toast.success(t('settings.profiles.createdToast'));
         },
         onError: (e) => {
-            newNameError.value =
-                e instanceof ApiError ? e.firstError : undefined;
+            newNameError.value = errorMessage(e, undefined);
             fail(e);
         },
     });
@@ -328,8 +323,7 @@ const onInvite = () => {
                 toast.success(t('settings.profiles.inviteCreatedToast'));
             },
             onError: (e) => {
-                inviteError.value =
-                    e instanceof ApiError ? e.firstError : undefined;
+                inviteError.value = errorMessage(e, undefined);
                 fail(e);
             },
         },
