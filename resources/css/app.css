@@ -200,6 +200,25 @@
     }
 }
 
+/*
+  Reduced motion (docs/design-system/tokens.md → Motion): drop nonessential
+  movement everywhere. Durations go to ~0 rather than `none` so the
+  animationend/transitionend events that unmount dialogs and sheets still
+  fire.
+*/
+@media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        animation-delay: 0ms !important;
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
 /* Unovis chart surfaces — token theming (see dashboard design spec) */
 .chart-surface {
     --vis-axis-tick-label-color: var(--muted-foreground);

@@ -56,3 +56,22 @@ test('envelope options stay visible while focused', async ({ page }) => {
     await expect(options).toBeFocused();
     await expect(options).toHaveCSS('opacity', '1');
 });
+
+test('reduced motion removes interface animations', async ({ browser }) => {
+    const context = await browser.newContext({ reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    await login(page);
+    await page.goto('/budget');
+
+    await page.getByRole('button', { name: 'Budget actions' }).click();
+    await page.getByRole('menuitem', { name: 'Share' }).click();
+    const sheet = page.getByRole('dialog');
+    await expect(sheet).toBeVisible();
+    await expect(sheet).toHaveCSS('animation-duration', '1e-05s');
+
+    // The sheet still closes (its exit animation ends immediately).
+    await page.keyboard.press('Escape');
+    await expect(sheet).toBeHidden();
+
+    await context.close();
+});
