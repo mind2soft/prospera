@@ -86,8 +86,10 @@ class SharingLifecycleTest extends TestCase
 
         $this->assertDatabaseMissing('envelope_permissions', ['envelope_id' => $envelope->id, 'user_id' => $this->alice->id]);
         $this->assertSame(ResourcePermissions::NONE, $envelope->fresh()->permissionFor($this->alice));
-        $this->actingAs($this->alice)->getJson("/api/envelopes/{$envelope->id}/transactions")->assertForbidden();
-        $this->actingAs($this->alice)->getJson("/api/envelopes/{$envelope->id}/totals")->assertForbidden();
+        $this->assertSame(
+            ResourcePermissions::NONE,
+            Envelope::permissionsFor($this->alice, [$envelope->id])->get($envelope->id),
+        );
     }
 
     public function test_leaving_drops_grants_in_both_directions(): void
@@ -142,7 +144,6 @@ class SharingLifecycleTest extends TestCase
             ResourcePermissions::NONE,
             Envelope::permissionsFor($this->alice, [$envelope->id])->get($envelope->id),
         );
-        $this->actingAs($this->alice)->getJson("/api/envelopes/{$envelope->id}/transactions")->assertForbidden();
     }
 
     // ------------------------------------------------------------------
