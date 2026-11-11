@@ -1,4 +1,5 @@
 {
+    "A draft budget can only be owned by the profile owner.": "Un budget brouillon ne peut appartenir qu'au propriétaire du profil.",
     "A group needs a name.": "Un groupe doit avoir un nom.",
     "A group needs at least one envelope.": "Un groupe doit contenir au moins une enveloppe.",
     "A widget can reference at most :max envelopes.": "Un widget peut référencer au plus :max enveloppes.",

@@ -378,7 +378,10 @@ class BudgetController extends Controller
 
     /**
      * Transfer ownership to a member; the previous owner becomes a
-     * contributor.
+     * contributor. A draft only ever belongs to the profile owner
+     * (docs/budget.md — Ownership): publishing needs both ownerships and
+     * the draft holds the profile's single draft slot, so a draft handed to
+     * a collaborator could be neither published nor replaced.
      */
     public function transferOwnership(TransferOwnershipRequest $request, Budget $budget): JsonResponse
     {
@@ -387,6 +390,12 @@ class BudgetController extends Controller
             $request->user(),
             __('You already own this budget.'),
         );
+
+        if ($budget->isDraft() && ! $budget->profile->isOwner($target)) {
+            throw ValidationException::withMessages([
+                'user_id' => __('A draft budget can only be owned by the profile owner.'),
+            ]);
+        }
 
         $budget->transferOwnershipTo($target);
 
