@@ -80,8 +80,12 @@ Prospera's current typefaces are **Geist** for plain/interface text and
 **Neuton** for selected display headings (`--font-sans`, `--font-display` in
 `app.css`). This is the project's M3-style plain/brand pairing. The values
 below are a Prospera-tuned scale using M3's role taxonomy, not a claim to use
-M3's unmodified default measurements. Do not add a third family or load an
-external face for a single page without a clear need.
+M3's unmodified default measurements. Both faces are self-hosted
+(`@fontsource-variable/geist`, `@fontsource/neuton`, imported at the top of
+`app.css`): the CSP allows no font CDN. Neuton ships its 400 weight only — the
+only one the scale uses; import another weight file if a role needs it. Do not
+add a third family or load an external face for a single page without a clear
+need.
 
 | M3 role | Size / line height | Face / weight | Typical utility mapping and use |
 | --- | --- | --- | --- |

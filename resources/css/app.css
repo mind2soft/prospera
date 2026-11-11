@@ -1,4 +1,7 @@
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Neuton:ital,wght@0,200;0,300;0,400;0,700;0,800;1,400&display=swap");
+/* Self-hosted fonts (no third-party requests): Geist for the interface,
+   Neuton 400 for display headings — the only weight in use. */
+@import "@fontsource-variable/geist";
+@import "@fontsource/neuton/400.css";
 
 /*
   ---break---
@@ -15,7 +18,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+    --font-sans: "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
     --font-display: "Neuton", ui-serif, Georgia, serif;
     --color-brand: var(--brand);
     --color-brand-foreground: var(--brand-foreground);

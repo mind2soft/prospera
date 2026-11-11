@@ -15,8 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
  * carrying the per-request nonce only: Vite adds it to the tags it renders
  * (Vite::useCspNonce), and app.blade.php to its inline appearance script.
  * Styles keep 'unsafe-inline' — the UI libraries set inline styles, and a
- * nonce would disable it; resources/css/app.css imports Google Fonts, whose
- * stylesheet and font origins are allowed. Framing is denied (clickjacking).
+ * nonce would disable it. Fonts and icons are bundled (self-hosted), so no
+ * third-party origin is allowed at all. Framing is denied (clickjacking).
  * While the Vite dev server runs (public/hot), it is allowed for HMR.
  */
 class SecurityHeaders
@@ -54,12 +54,12 @@ class SecurityHeaders
     private function contentSecurityPolicy(string $nonce): string
     {
         $scripts = ["'self'", "'nonce-{$nonce}'"];
-        $styles = ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'];
-        $fonts = ["'self'", 'data:', 'https://fonts.gstatic.com'];
+        $styles = ["'self'", "'unsafe-inline'"];
+        $fonts = ["'self'", 'data:'];
         $images = ["'self'", 'data:', 'blob:'];
-        // @iconify/vue loads the icons it does not find bundled from the
-        // Iconify API (and its fallback hosts).
-        $connect = ["'self'", 'https://api.iconify.design', 'https://api2.iconify.design', 'https://api.simplesvg.com', 'https://api.unisvg.com'];
+        // Icons are a bundled subset (resources/js/lib/materialSymbols.ts):
+        // the Iconify API is never needed, so a typo can't make it phone home.
+        $connect = ["'self'"];
 
         // Dev only (public/hot is never shipped): the Vite dev server serves
         // scripts, styles and fonts, and HMR connects to it over a websocket.
