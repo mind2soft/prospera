@@ -1,4 +1,5 @@
 import { api, setResourceShare } from '@/lib/api';
+import { browserTimeZone } from '@/lib/calendar';
 import * as budgets from '@/routes/api/budgets';
 import * as budgetEnvelopes from '@/routes/api/budgets/envelopes';
 import * as budgetShares from '@/routes/api/budgets/shares';
@@ -34,8 +35,16 @@ export const budgetApi = {
     create: (input: CreateBudgetInput): Promise<{ budget: BudgetDetail }> =>
         api(budgets.store(), { body: input }),
 
-    publish: (id: number): Promise<{ budget: BudgetDetail }> =>
-        api(budgets.publish(id)),
+    /**
+     * Publishes for `month` (`Y-m`) — the month the confirmation named; the
+     * server refuses if it is not the current month in `timezone`.
+     */
+    publish: (
+        id: number,
+        month: string,
+        timezone: string | undefined = browserTimeZone(),
+    ): Promise<{ budget: BudgetDetail }> =>
+        api(budgets.publish(id), { body: { month, timezone } }),
 
     destroy: (id: number): Promise<void> => api(budgets.destroy(id)),
 

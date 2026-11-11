@@ -84,8 +84,8 @@
         },
         "confirm": {
             "publishTitle": "Publier ce budget ?",
-            "publishDescription": "La publication valide ce budget pour le mois en cours et le passe en lecture seule. Cette action est irréversible.",
-            "publishDescriptionWithReplace": "La publication valide ce budget pour le mois en cours et le passe en lecture seule. Cette action est irréversible. Un budget déjà publié pour ce mois sera remplacé.",
+            "publishDescription": "La publication valide ce budget pour {month} et le passe en lecture seule. Cette action est irréversible.",
+            "replaceWarning": "Le budget déjà publié pour {month} sera remplacé : il sera supprimé avec ses enveloppes et ses partages.",
             "deleteTitle": "Supprimer ce budget ?",
             "deleteDescription": "Cette action supprime définitivement le budget, ainsi que toutes ses assignations d'enveloppes et ses partages.",
             "publishButton": "Publier",

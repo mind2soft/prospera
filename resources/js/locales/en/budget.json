@@ -84,8 +84,8 @@
         },
         "confirm": {
             "publishTitle": "Publish this budget?",
-            "publishDescription": "Publishing stamps this budget for the current month and puts it in read-only mode. This cannot be undone.",
-            "publishDescriptionWithReplace": "Publishing stamps this budget for the current month and puts it in read-only mode. This cannot be undone. An existing published budget for this month will be replaced.",
+            "publishDescription": "Publishing stamps this budget for {month} and puts it in read-only mode. This cannot be undone.",
+            "replaceWarning": "The budget already published for {month} will be replaced: it is deleted with its envelope assignments and shares.",
             "deleteTitle": "Delete this budget?",
             "deleteDescription": "This permanently removes the budget with all of its envelope assignments and shares.",
             "publishButton": "Publish",

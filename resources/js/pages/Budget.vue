@@ -15,6 +15,7 @@ import Icon from '@/components/Icon.vue';
 import BudgetLoadingScreen from '@/components/Loading/BudgetLoadingScreen.vue';
 import QueryErrorState from '@/components/QueryErrorState.vue';
 import ShareDrawer from '@/components/share/ShareDrawer.vue';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -25,6 +26,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Spinner } from '@/components/ui/spinner';
 import {
     budgetKeys,
     useAddEnvelope,
@@ -41,8 +43,11 @@ import {
     useUpdateEnvelope,
 } from '@/composables/budgetQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
+import { useLocale } from '@/composables/useLocale';
 import { ApiError } from '@/lib/api';
+import { budgetMonthLabel } from '@/lib/budget';
 import type { AddEnvelopeInput } from '@/lib/budgetApi';
+import { currentMonth } from '@/lib/calendar';
 import { budget as budgetRoute } from '@/routes';
 import type { BudgetDetail, ResourcePermission } from '@/types';
 
@@ -53,6 +58,7 @@ defineOptions({
 });
 
 const { t } = useI18n();
+const { locale } = useLocale();
 
 const budgetsQuery = useBudgets();
 /** Draft first, then published (each newest first). */
@@ -184,23 +190,39 @@ const showCreate = ref(false);
 const showClone = ref(false);
 const showAddEnvelope = ref(false);
 const showShare = ref(false);
-const confirmKind = ref<'publish' | 'delete' | null>(null);
+// Publish and delete are confirmed in two separate dialogs, so a closing
+// dialog never flips to the other one's copy during its exit animation.
+const confirmingPublish = ref(false);
+const confirmingDelete = ref(false);
+
+/** The month the publish confirmation names, captured when it opens. */
+const publishMonth = ref(currentMonth());
+
+const askPublish = () => {
+    publishMonth.value = currentMonth();
+    confirmingPublish.value = true;
+};
+
+const publishMonthLabel = computed(() => {
+    const [year, month] = publishMonth.value.split('-').map(Number);
+    return budgetMonthLabel(year, month, locale.value);
+});
 
 /**
  * Publishing a draft for a month that already has a published budget
  * replaces it (docs/budget.md — budget lifecycle).
  */
 const replaceWarning = computed(() => {
-    if (confirmKind.value !== 'publish' || budget.value === null) {
+    if (budget.value === null) {
         return false;
     }
-    const now = new Date();
+    const [year, month] = publishMonth.value.split('-').map(Number);
     return budgets.value.some(
         (b) =>
             b.id !== budget.value?.id &&
             b.published_at !== null &&
-            b.effective_year === now.getFullYear() &&
-            b.effective_month === now.getMonth() + 1,
+            b.effective_year === year &&
+            b.effective_month === month,
     );
 });
 
@@ -250,30 +272,36 @@ const onTransferOwnership = (userId: number) => {
     );
 };
 
-const onConfirm = () => {
+const onPublish = () => {
     const id = selectedId.value ?? budget.value?.id;
     if (id === undefined) {
         return;
     }
-    const kind = confirmKind.value;
-    confirmKind.value = null;
-
-    if (kind === 'publish') {
-        publishBudget.mutate(id, {
+    publishBudget.mutate(
+        { id, month: publishMonth.value },
+        {
             onSuccess: (data) => {
+                confirmingPublish.value = false;
                 selectedId.value = data.budget.id;
                 toast.success(t('budget.toast.published'));
             },
             onError: fail,
-        });
-    } else if (kind === 'delete') {
-        deleteBudget.mutate(id, {
-            onSuccess: () => {
-                toast.success(t('budget.toast.deleted'));
-            },
-            onError: fail,
-        });
+        },
+    );
+};
+
+const onDelete = () => {
+    const id = selectedId.value ?? budget.value?.id;
+    if (id === undefined) {
+        return;
     }
+    deleteBudget.mutate(id, {
+        onSuccess: () => {
+            confirmingDelete.value = false;
+            toast.success(t('budget.toast.deleted'));
+        },
+        onError: fail,
+    });
 };
 
 const onCreate = (currency: string) => {
@@ -485,10 +513,10 @@ const onRemoveEnvelope = (envelopeId: number) => {
                 :is-profile-owner="isProfileOwner"
                 :loading="budgetsQuery.isLoading.value"
                 @update:selected-id="selectedId = $event"
-                @publish="confirmKind = 'publish'"
+                @publish="askPublish"
                 @new-budget="showClone = true"
                 @share="showShare = true"
-                @remove="confirmKind = 'delete'"
+                @remove="confirmingDelete = true"
             />
 
             <BudgetLoadingScreen
@@ -563,45 +591,69 @@ const onRemoveEnvelope = (envelopeId: number) => {
             @transfer="onTransferOwnership"
         />
 
-        <Dialog :open="confirmKind !== null" @update:open="confirmKind = null">
+        <Dialog v-model:open="confirmingPublish">
             <DialogContent class="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>{{
-                        confirmKind === 'publish'
-                            ? $t('budget.confirm.publishTitle')
-                            : $t('budget.confirm.deleteTitle')
+                        $t('budget.confirm.publishTitle', {
+                            month: publishMonthLabel,
+                        })
                     }}</DialogTitle>
                     <DialogDescription>
-                        <template v-if="confirmKind === 'publish'">
-                            {{
-                                replaceWarning
-                                    ? $t(
-                                          'budget.confirm.publishDescriptionWithReplace',
-                                      )
-                                    : $t('budget.confirm.publishDescription')
-                            }}
-                        </template>
-                        <template v-else>
-                            {{ $t('budget.confirm.deleteDescription') }}
-                        </template>
+                        {{
+                            $t('budget.confirm.publishDescription', {
+                                month: publishMonthLabel,
+                            })
+                        }}
+                    </DialogDescription>
+                </DialogHeader>
+                <Alert v-if="replaceWarning" variant="destructive">
+                    <Icon name="warning" class="size-4" aria-hidden="true" />
+                    <AlertDescription>
+                        {{
+                            $t('budget.confirm.replaceWarning', {
+                                month: publishMonthLabel,
+                            })
+                        }}
+                    </AlertDescription>
+                </Alert>
+                <DialogFooter>
+                    <Button
+                        variant="ghost"
+                        @click="confirmingPublish = false"
+                        >{{
+                            $t('common.actions.cancel')
+                        }}</Button
+                    >
+                    <Button :disabled="working" @click="onPublish">
+                        <Spinner v-if="publishBudget.isPending.value" />
+                        {{ $t('budget.confirm.publishButton') }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog v-model:open="confirmingDelete">
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{{
+                        $t('budget.confirm.deleteTitle')
+                    }}</DialogTitle>
+                    <DialogDescription>
+                        {{ $t('budget.confirm.deleteDescription') }}
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
-                    <Button variant="ghost" @click="confirmKind = null">{{
+                    <Button variant="ghost" @click="confirmingDelete = false">{{
                         $t('common.actions.cancel')
                     }}</Button>
                     <Button
-                        :variant="
-                            confirmKind === 'delete' ? 'destructive' : 'default'
-                        "
+                        variant="destructive"
                         :disabled="working"
-                        @click="onConfirm"
+                        @click="onDelete"
                     >
-                        {{
-                            confirmKind === 'publish'
-                                ? $t('budget.confirm.publishButton')
-                                : $t('budget.confirm.deleteButton')
-                        }}
+                        <Spinner v-if="deleteBudget.isPending.value" />
+                        {{ $t('budget.confirm.deleteButton') }}
                     </Button>
                 </DialogFooter>
             </DialogContent>
