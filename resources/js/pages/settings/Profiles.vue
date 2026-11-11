@@ -417,49 +417,77 @@ const joinedLabel = (joinedAt: string): string =>
                     "
                 >
                     <CardContent class="p-0">
-                        <button
-                            type="button"
-                            class="flex w-full items-center gap-3 px-4 py-3.5 text-left"
-                            @click="toggleExpanded(profile)"
-                        >
-                            <span
-                                class="grid size-9 shrink-0 place-items-center rounded-xl"
-                                :class="
-                                    profile.is_owner
-                                        ? 'bg-primary/10 text-primary'
-                                        : 'bg-muted text-muted-foreground'
-                                "
+                        <div class="flex w-full items-center gap-3 px-4 py-3.5">
+                            <div
+                                v-if="renamingId === profile.id"
+                                class="flex min-w-0 flex-1 items-center gap-3"
                             >
-                                <Icon
-                                    :name="
-                                        profile.is_owner ? 'person' : 'group'
+                                <span
+                                    class="grid size-9 shrink-0 place-items-center rounded-xl"
+                                    :class="
+                                        profile.is_owner
+                                            ? 'bg-primary/10 text-primary'
+                                            : 'bg-muted text-muted-foreground'
                                     "
-                                    class="size-5"
-                                    aria-hidden="true"
+                                >
+                                    <Icon
+                                        :name="
+                                            profile.is_owner
+                                                ? 'person'
+                                                : 'group'
+                                        "
+                                        class="size-5"
+                                        aria-hidden="true"
+                                    />
+                                </span>
+                                <Input
+                                    v-model="renameValue"
+                                    v-focus
+                                    class="h-7 max-w-56"
+                                    :aria-label="$t('settings.profiles.rename')"
+                                    @keydown.enter.prevent="
+                                        commitRename(profile)
+                                    "
+                                    @keydown.escape="cancelRename"
+                                    @blur="commitRename(profile)"
                                 />
-                            </span>
-                            <span class="min-w-0 flex-1">
-                                <span class="flex items-center gap-2">
-                                    <template v-if="renamingId === profile.id">
-                                        <Input
-                                            v-model="renameValue"
-                                            v-focus
-                                            class="h-7 max-w-56"
-                                            @click.stop
-                                            @keydown.enter.prevent="
-                                                commitRename(profile)
-                                            "
-                                            @keydown.escape="cancelRename"
-                                            @blur="commitRename(profile)"
-                                        />
-                                    </template>
-                                    <template v-else>
-                                        <span
-                                            class="truncate text-sm font-medium"
-                                        >
-                                            {{ profile.name }}
-                                        </span>
-                                    </template>
+                            </div>
+                            <!-- Disclosure: only the name area toggles the
+                                 details; the actions sit next to it (no
+                                 interactive content inside a button). -->
+                            <button
+                                v-else
+                                type="button"
+                                class="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                                :aria-expanded="expandedId === profile.id"
+                                :aria-controls="`profile-panel-${profile.id}`"
+                                data-test="profile-disclosure"
+                                @click="toggleExpanded(profile)"
+                            >
+                                <span
+                                    class="grid size-9 shrink-0 place-items-center rounded-xl"
+                                    :class="
+                                        profile.is_owner
+                                            ? 'bg-primary/10 text-primary'
+                                            : 'bg-muted text-muted-foreground'
+                                    "
+                                >
+                                    <Icon
+                                        :name="
+                                            profile.is_owner
+                                                ? 'person'
+                                                : 'group'
+                                        "
+                                        class="size-5"
+                                        aria-hidden="true"
+                                    />
+                                </span>
+                                <span
+                                    class="flex min-w-0 flex-1 items-center gap-2"
+                                >
+                                    <span class="truncate text-sm font-medium">
+                                        {{ profile.name }}
+                                    </span>
                                     <Badge
                                         v-if="!profile.is_owner"
                                         variant="secondary"
@@ -531,14 +559,24 @@ const joinedLabel = (joinedAt: string): string =>
                                         </TooltipContent>
                                     </Tooltip>
                                 </span>
-                            </span>
+                                <Icon
+                                    name="expand-more"
+                                    class="size-5 shrink-0 text-muted-foreground transition-transform"
+                                    :class="
+                                        expandedId === profile.id
+                                            ? 'rotate-180'
+                                            : ''
+                                    "
+                                    aria-hidden="true"
+                                />
+                            </button>
                             <Button
                                 v-if="profile.is_owner"
                                 variant="ghost"
                                 size="icon-sm"
                                 class="shrink-0"
                                 :aria-label="$t('settings.profiles.rename')"
-                                @click.stop="startRename(profile)"
+                                @click="startRename(profile)"
                             >
                                 <Icon
                                     name="edit"
@@ -551,7 +589,7 @@ const joinedLabel = (joinedAt: string): string =>
                                 variant="ghost"
                                 size="sm"
                                 class="shrink-0 text-xs"
-                                @click.stop="select(profile.id)"
+                                @click="select(profile.id)"
                             >
                                 {{ $t('settings.profiles.switchTo') }}
                             </Button>
@@ -564,7 +602,7 @@ const joinedLabel = (joinedAt: string): string =>
                                 :title="$t('settings.profiles.setDefault')"
                                 :disabled="setDefaultProfile.isPending.value"
                                 data-test="set-default-button"
-                                @click.stop="setDefault(profile)"
+                                @click="setDefault(profile)"
                             >
                                 <Icon
                                     name="star-outline"
@@ -572,20 +610,11 @@ const joinedLabel = (joinedAt: string): string =>
                                     aria-hidden="true"
                                 />
                             </Button>
-                            <Icon
-                                name="expand-more"
-                                class="size-5 shrink-0 text-muted-foreground transition-transform"
-                                :class="
-                                    expandedId === profile.id
-                                        ? 'rotate-180'
-                                        : ''
-                                "
-                                aria-hidden="true"
-                            />
-                        </button>
+                        </div>
 
                         <div
                             v-if="expandedId === profile.id"
+                            :id="`profile-panel-${profile.id}`"
                             class="space-y-6 border-t px-4 pt-4 pb-5"
                         >
                             <!-- Members -->
