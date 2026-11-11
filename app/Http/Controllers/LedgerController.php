@@ -289,14 +289,15 @@ class LedgerController extends Controller
                 'envelope_id' => $envelope->id,
                 'amount' => $direction->signedAmount($validated['amount']),
                 'event_at' => $eventAt,
-            ]);
+            ])->setRelation('envelope', $direction);
         });
 
         return response()->json([
             'transaction' => $this->serializeTransaction(
                 $transaction,
-                // Contributor+ (checked above): the amount is never masked.
-                $envelope->permissionFor($request->user()),
+                // Contributor+ (the `use` check above): the amount is never
+                // masked, so the permission is not resolved a second time.
+                ResourcePermissions::CONTRIBUTOR,
                 null,
                 withRemaining: false,
             ),
