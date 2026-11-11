@@ -75,6 +75,10 @@ invite for an email and gets a link containing a hash key (`invite_key`).
   expired invites are rejected with a validation error.
 - Invites can be revoked by the owner before acceptance; accepted invites are
   deleted.
+- The invitee can **decline** from the confirmation page (signed in with the
+  matching, verified account email): `POST /api/invites/{inviteKey}/decline`
+  deletes the invite, so it leaves the owner's pending list and can no longer
+  be accepted. Ignoring the invite still declines it implicitly (it expires).
 - Stale invites are pruned daily by the scheduled `php artisan invites:prune`
   command: expired unreserved invites, and reserved invites more than a week
   past expiry.
@@ -331,6 +335,7 @@ data fetching.
 | `DELETE` | `/api/profiles/{profile}/invites/{invite}`   | Revoke a pending invite                                                                                                                                                                                                                                                                                                                |
 | `GET`    | `/api/invites/{inviteKey}`                   | Public invite validation (rate-limited); `404` when invalid or reserved, `410` expired                                                                                                                                                                                                                                                 |
 | `POST`   | `/api/invites/{inviteKey}/accept`            | Accept an invite (signed-in user; the invite email must match the account email; rate-limited)                                                                                                                                                                                                                                         |
+| `POST`   | `/api/invites/{inviteKey}/decline`           | Decline an invite (signed-in, verified user; the invite email must match the account email, else `422`; reserved or unknown invites `404`) → `204`, the invite is deleted; rate-limited                                                                                                                                                |
 | `GET`    | `/invites/{inviteKey}/accept`                | Accept link from the invitation email — never changes state: signed-in + verified users land on the invite confirmation page (one click on **Accept invite** POSTs the accept); guests go to the sign-in page first; email mismatches and existing members get an error toast; rate-limited                                             |
 
 The invite link is the frontend route `/invites/{inviteKey}`: existing users

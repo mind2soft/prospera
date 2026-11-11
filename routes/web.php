@@ -57,6 +57,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('invites/{inviteKey}/accept', [FinancialProfileInviteController::class, 'accept'])
             ->name('invites.accept')
             ->middleware('throttle:invites');
+        Route::post('invites/{inviteKey}/decline', [FinancialProfileInviteController::class, 'decline'])
+            ->name('invites.decline')
+            ->middleware('throttle:invites');
 
         Route::prefix('profiles')->name('profiles.')->group(function () {
             Route::get('/', [FinancialProfileController::class, 'index'])->name('index');

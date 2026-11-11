@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { profileKeys, useAcceptInvite } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
-import { ApiError } from '@/lib/api';
+import { ApiError, api } from '@/lib/api';
 import { dashboard, login, privacy } from '@/routes';
 import { store } from '@/routes/register';
 import type { InviteContext } from '@/types';
@@ -89,7 +89,27 @@ const onAccept = () => {
     });
 };
 
-const onDecline = () => {
+// Declining deletes the invite server-side, so it leaves the owner's
+// pending list and can no longer be accepted.
+const declining = ref(false);
+
+const onDecline = async () => {
+    acceptError.value = null;
+    declining.value = true;
+    try {
+        await api(
+            `/api/invites/${encodeURIComponent(inviteKey.value)}/decline`,
+            { method: 'POST' },
+        );
+    } catch (e) {
+        declining.value = false;
+        acceptError.value =
+            e instanceof ApiError
+                ? e.firstError
+                : t('auth.register.declineError');
+        return;
+    }
+    toast.success(t('auth.register.declinedToast'));
     router.get(dashboard());
 };
 </script>
@@ -140,7 +160,7 @@ const onDecline = () => {
                 <div class="flex items-center gap-2">
                     <Button
                         class="gap-2"
-                        :disabled="accepting"
+                        :disabled="accepting || declining"
                         @click="onAccept"
                     >
                         <Spinner v-if="accepting" />
@@ -148,7 +168,7 @@ const onDecline = () => {
                     </Button>
                     <Button
                         variant="ghost"
-                        :disabled="accepting"
+                        :disabled="accepting || declining"
                         @click="onDecline"
                         >{{
                             $t('auth.register.decline')

@@ -441,6 +441,59 @@ class FinancialProfileInviteTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // Declining
+    // ------------------------------------------------------------------
+
+    public function test_declining_deletes_the_invite_and_removes_it_from_the_owners_list(): void
+    {
+        $invitee = User::factory()->create(['email' => 'invitee@example.com']);
+        $invite = $this->createInvite(email: 'Invitee@Example.com');
+
+        $this->actingAs($invitee)->postJson("/api/invites/{$this->key}/decline")->assertNoContent();
+
+        $this->assertModelMissing($invite);
+        $this->assertFalse($this->profile->isMember($invitee));
+        $this->actingAs($this->owner)->getJson("/api/profiles/{$this->profile->id}/invites")
+            ->assertOk()->assertJsonCount(0, 'invites');
+
+        // A declined invite cannot be accepted afterwards.
+        $this->actingAs($invitee)->postJson("/api/invites/{$this->key}/accept")->assertNotFound();
+    }
+
+    public function test_only_the_invited_account_can_decline(): void
+    {
+        $invite = $this->createInvite(email: 'invitee@example.com');
+
+        $this->actingAs($this->member)->postJson("/api/invites/{$this->key}/decline")
+            ->assertUnprocessable()->assertJsonValidationErrors('invite_key');
+
+        $this->assertModelExists($invite);
+    }
+
+    public function test_reserved_and_unknown_invites_cannot_be_declined(): void
+    {
+        $invitee = User::factory()->create(['email' => 'invitee@example.com']);
+        $invite = $this->createInvite(email: 'invitee@example.com');
+        $invite->forceFill(['pending_user_id' => User::factory()->unverified()->create()->id])->save();
+
+        $this->actingAs($invitee)->postJson("/api/invites/{$this->key}/decline")->assertNotFound();
+        $this->actingAs($invitee)->postJson('/api/invites/not-a-key/decline')->assertNotFound();
+
+        $this->assertModelExists($invite);
+    }
+
+    public function test_declining_requires_a_verified_account(): void
+    {
+        $unverified = User::factory()->unverified()->create(['email' => 'invitee@example.com']);
+        $invite = $this->createInvite(email: 'invitee@example.com');
+
+        $this->postJson("/api/invites/{$this->key}/decline")->assertUnauthorized();
+        $this->actingAs($unverified)->postJson("/api/invites/{$this->key}/decline")->assertForbidden();
+
+        $this->assertModelExists($invite);
+    }
+
+    // ------------------------------------------------------------------
     // One-click accept link (issue #39)
     // ------------------------------------------------------------------
 

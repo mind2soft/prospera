@@ -171,6 +171,35 @@ class FinancialProfileInviteController extends Controller
     }
 
     /**
+     * Decline an invite (authenticated, verified user whose account email
+     * matches the invite): the invite is deleted, so it leaves the owner's
+     * pending list and can no longer be accepted. Reserved invites belong to
+     * another (new) account and are treated as unknown.
+     */
+    public function decline(Request $request, string $inviteKey): JsonResponse
+    {
+        DB::transaction(function () use ($request, $inviteKey): void {
+            /** @var FinancialProfileInvite|null $invite */
+            $invite = FinancialProfileInvite::query()
+                ->where('invite_key', FinancialProfileInvite::keyHash($inviteKey))
+                ->lockForUpdate()
+                ->first();
+
+            abort_if($invite === null || $invite->isReserved(), 404);
+
+            if (mb_strtolower($invite->email) !== mb_strtolower($request->user()->email)) {
+                throw ValidationException::withMessages([
+                    'invite_key' => __('This invite was issued to another email address.'),
+                ]);
+            }
+
+            $invite->delete();
+        });
+
+        return response()->json(status: 204);
+    }
+
+    /**
      * Accept link from the invitation email (issue #39). A GET never changes
      * state (a cross-site link must not make a signed-in user join a
      * profile): the link lands on the invite confirmation page, whose
