@@ -106,14 +106,25 @@ class EnvelopeController extends Controller
 
     /**
      * List the envelope's permission rows with the owner row first (owner
-     * and profile co-members only).
+     * and profile co-members only). Envelope grants span all the owner's
+     * profiles: a co-member only sees the rows of people sharing a profile
+     * with them — never grantees of the owner's other profiles
+     * (docs/envelope.md).
      */
-    public function permissionsIndex(Envelope $envelope): JsonResponse
+    public function permissionsIndex(Request $request, Envelope $envelope): JsonResponse
     {
         $this->authorize('viewShares', $envelope);
 
+        $user = $request->user();
+
         return response()->json([
-            'shares' => $this->permissionService->explicitPermissions('envelope_permissions', 'envelope_id', $envelope->id, $envelope->user),
+            'shares' => $this->permissionService->explicitPermissions(
+                'envelope_permissions',
+                'envelope_id',
+                $envelope->id,
+                $envelope->user,
+                $envelope->isOwner($user) ? null : FinancialProfile::coMemberIdsOf($user->id),
+            ),
         ]);
     }
 
