@@ -85,6 +85,22 @@ class FinancialProfileInviteController extends Controller
             ]);
         }
 
+        // A live reservation means the invitee already registered through
+        // an invite and joins on verification: a second invite would
+        // outlive the grant in the pending list.
+        $awaitingVerification = FinancialProfileInvite::query()
+            ->where('profile_id', $profile->id)
+            ->whereRaw('lower(email) = ?', [mb_strtolower($validated['email'])])
+            ->whereNotNull('pending_user_id')
+            ->notExpired()
+            ->exists();
+
+        if ($awaitingVerification) {
+            throw ValidationException::withMessages([
+                'email' => __('This person already registered through an invite and joins the profile once they verify their email.'),
+            ]);
+        }
+
         $rawKey = FinancialProfileInvite::generateKey();
 
         $invite = DB::transaction(function () use ($profile, $validated, $rawKey, $request): FinancialProfileInvite {
@@ -257,6 +273,7 @@ class FinancialProfileInviteController extends Controller
 
                 $profile->members()->attach($user->id, $invite->membershipPivotAttributes());
                 $invite->consume();
+                FinancialProfileInvite::deleteRedundantFor($profile, $user);
 
                 return $profile;
             });

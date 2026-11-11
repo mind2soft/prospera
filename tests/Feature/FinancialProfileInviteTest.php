@@ -246,6 +246,75 @@ class FinancialProfileInviteTest extends TestCase
         Mail::assertQueued(ProfileInvite::class, 2);
     }
 
+    public function test_re_inviting_an_email_awaiting_verification_is_rejected(): void
+    {
+        // WF-R2-2: the invitee registered through the first invite; a
+        // second one would stay pending after they join.
+        $newbie = User::factory()->unverified()->create(['email' => 'newbie@example.com']);
+        $reserved = $this->createInvite(email: 'newbie@example.com');
+        $reserved->update(['pending_user_id' => $newbie->id]);
+
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'NEWBIE@example.com',
+        ])->assertUnprocessable()->assertJsonValidationErrors([
+            'email' => 'This person already registered through an invite and joins the profile once they verify their email.',
+        ]);
+
+        $this->assertSame(1, FinancialProfileInvite::query()->count());
+        Mail::assertNothingQueued();
+    }
+
+    public function test_an_email_whose_reservation_expired_can_be_re_invited(): void
+    {
+        // An expired reservation no longer grants: re-inviting is the way in.
+        $newbie = User::factory()->unverified()->create(['email' => 'newbie@example.com']);
+        $this->createInvite(email: 'newbie@example.com', expiresAt: CarbonImmutable::now()->subHour())
+            ->update(['pending_user_id' => $newbie->id]);
+
+        $this->actingAs($this->owner)->postJson("/api/profiles/{$this->profile->id}/invites", [
+            'email' => 'newbie@example.com',
+        ])->assertCreated();
+    }
+
+    public function test_joining_through_a_reservation_deletes_the_profiles_other_invites_for_the_email(): void
+    {
+        // E.g. a re-invite issued before the rule above.
+        $newbie = User::factory()->unverified()->create(['email' => 'newbie@example.com']);
+        $reserved = $this->createInvite(email: 'newbie@example.com');
+        $reserved->update(['pending_user_id' => $newbie->id]);
+        $duplicate = $this->createInvite(email: 'Newbie@example.com', key: 'other-key');
+        $otherProfile = FinancialProfile::createOwnedBy($this->member, 'Other');
+        $elsewhere = FinancialProfileInvite::create([
+            'profile_id' => $otherProfile->id,
+            'invite_key' => FinancialProfileInvite::keyHash('elsewhere-key'),
+            'email' => 'newbie@example.com',
+            'invited_by' => $this->member->id,
+            'expires_at' => now()->addHours(48),
+        ]);
+
+        $newbie->markEmailAsVerified();
+        event(new Verified($newbie));
+
+        $this->assertTrue($this->profile->isMember($newbie));
+        $this->assertModelMissing($reserved);
+        $this->assertModelMissing($duplicate);
+        $this->assertModelExists($elsewhere);
+        $this->actingAs($this->owner)->getJson("/api/profiles/{$this->profile->id}/invites")
+            ->assertOk()->assertJsonCount(0, 'invites');
+    }
+
+    public function test_accepting_deletes_the_profiles_other_invites_for_the_email(): void
+    {
+        $invitee = User::factory()->create(['email' => 'invitee@example.com']);
+        $this->createInvite(email: 'invitee@example.com');
+        $duplicate = $this->createInvite(email: 'INVITEE@example.com', key: 'other-key');
+
+        $this->actingAs($invitee)->postJson('/api/invites/'.self::RAW_KEY.'/accept')->assertOk();
+
+        $this->assertTrue($this->profile->isMember($invitee));
+        $this->assertModelMissing($duplicate);
+    }
+
     public function test_invite_emails_respect_the_notification_toggle(): void
     {
         $this->profile->members()->detach($this->member->id);

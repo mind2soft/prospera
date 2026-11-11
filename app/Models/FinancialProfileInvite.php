@@ -262,7 +262,24 @@ class FinancialProfileInvite extends Model
             }
 
             $invite->consume();
+
+            if ($invite->profile->isMember($user)) {
+                self::deleteRedundantFor($invite->profile, $user);
+            }
         });
+    }
+
+    /**
+     * Once the user is a member of the profile, the profile's other invites
+     * for their email are moot (accepting them would only answer "already a
+     * member"): they leave the owner's pending list.
+     */
+    public static function deleteRedundantFor(FinancialProfile $profile, User $user): void
+    {
+        self::query()
+            ->where('profile_id', $profile->id)
+            ->whereRaw('lower(email) = ?', [mb_strtolower($user->email)])
+            ->delete();
     }
 
     /**

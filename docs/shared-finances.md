@@ -74,7 +74,12 @@ invite for an email and gets a link containing a hash key (`invite_key`).
 - Re-inviting the same email (case-insensitive) **replaces** the previous
   unreserved invite for that profile — the raw link key is never stored, so
   this is how a lost link is re-issued. Inviting an email that already belongs
-  to a member is rejected with a validation error on `email`.
+  to a member is rejected with a validation error on `email`, and so is an
+  email with a live **reservation** (the invitee already registered through
+  an invite and joins on verification — shown as "awaiting verification" in
+  the pending list); once the reservation expired, the email can be invited
+  again. When a user joins a profile (accept or verification), the profile's
+  other invites for their email are deleted.
 - Invites expire after **48 hours** (`expires_at` = creation time + 48h);
   expired invites are rejected with a validation error.
 - Invites can be revoked by the owner before acceptance; accepted invites are
@@ -369,7 +374,7 @@ data fetching.
 | `POST`   | `/api/profiles/{profile}/transfer-ownership` | Transfer ownership to a member (`user_id`); the previous owner becomes a collaborator                                                                                                                                                                                                                                                  |
 | `POST`   | `/api/profiles/{profile}/set-default`        | Set the caller's default profile (any member; one default per user, always exactly one)                                                                                                                                                                                                                                                |
 | `GET`    | `/api/profiles/{profile}/invites`            | List pending invites (`id`, `email`, `role`, `awaiting_verification`, `expires_at`)                                                                                                                                                                                                                                                    |
-| `POST`   | `/api/profiles/{profile}/invites`            | Create an invite (`email`, optional `role` — `collaborator` by default, only `collaborator` is grantable) → returns the invite link and queues the invitation email; replaces a previous unreserved invite for the same email (case-insensitive); `422` on `email` if already a member; rate-limited per IP and per user (the endpoint triggers outbound email) |
+| `POST`   | `/api/profiles/{profile}/invites`            | Create an invite (`email`, optional `role` — `collaborator` by default, only `collaborator` is grantable) → returns the invite link and queues the invitation email; replaces a previous unreserved invite for the same email (case-insensitive); `422` on `email` if already a member or awaiting verification through a live reservation; rate-limited per IP and per user (the endpoint triggers outbound email) |
 | `DELETE` | `/api/profiles/{profile}/invites/{invite}`   | Revoke a pending invite                                                                                                                                                                                                                                                                                                                |
 | `GET`    | `/api/invites/{inviteKey}`                   | Public invite validation (rate-limited); `404` when invalid or reserved, `410` expired                                                                                                                                                                                                                                                 |
 | `POST`   | `/api/invites/{inviteKey}/accept`            | Accept an invite (signed-in user; the invite email must match the account email; rate-limited)                                                                                                                                                                                                                                         |
