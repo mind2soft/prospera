@@ -4,6 +4,7 @@ import { VisDonut, VisSingleContainer, VisTooltip } from '@unovis/vue';
 import { computed } from 'vue';
 import { useLocale } from '@/composables/useLocale';
 import { formatMoney } from '@/lib/budget';
+import { escapeHtml } from '@/lib/html';
 import { isClient } from '@/lib/ssr';
 import type { DashboardRadialRow, DashboardWidgetData } from '@/types';
 
@@ -80,7 +81,17 @@ const color = (d: DashboardRadialRow): string =>
 // arcWidth is in pixels; 0 renders a full pie.
 const arcWidth = computed(() => (props.viewType === 'donut' ? 24 : 0));
 
-const tooltipTemplate = (datum?: DashboardRadialRow): string => {
+/** The d3 pie arc Unovis hands to segment triggers (its `DonutArcDatum`). */
+type SegmentArc = { data?: DashboardRadialRow };
+
+/**
+ * Segment tooltip. Unovis passes the d3 pie arc, whose `data` is the row. The
+ * returned string is written with `innerHTML`, so every interpolated value is
+ * escaped (row names are user-provided).
+ */
+const tooltipTemplate = (arc?: SegmentArc): string => {
+    const datum = arc?.data;
+
     if (!datum) {
         return '';
     }
@@ -91,12 +102,12 @@ const tooltipTemplate = (datum?: DashboardRadialRow): string => {
             : '';
 
     return `<div style="font-size:12px">
-        <strong>${datum.name}</strong><br/>
-        <span style="font-variant-numeric:tabular-nums">${
+        <strong>${escapeHtml(datum.name)}</strong><br/>
+        <span style="font-variant-numeric:tabular-nums">${escapeHtml(
             datum.value === null
                 ? '•••'
-                : formatMoney(datum.value, props.currency)
-        }${share}</span>
+                : formatMoney(datum.value, props.currency),
+        )}${escapeHtml(share)}</span>
     </div>`;
 };
 
