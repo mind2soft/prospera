@@ -17,7 +17,8 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { profileKeys, useAcceptInvite } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
-import { ApiError, api } from '@/lib/api';
+import { ApiError } from '@/lib/api';
+import { profileApi } from '@/lib/profileApi';
 import { dashboard, login, privacy } from '@/routes';
 import { store } from '@/routes/register';
 import type { InviteContext } from '@/types';
@@ -97,10 +98,7 @@ const onDecline = async () => {
     acceptError.value = null;
     declining.value = true;
     try {
-        await api(
-            `/api/invites/${encodeURIComponent(inviteKey.value)}/decline`,
-            { method: 'POST' },
-        );
+        await profileApi.declineInvite(inviteKey.value);
     } catch (e) {
         declining.value = false;
         acceptError.value =
