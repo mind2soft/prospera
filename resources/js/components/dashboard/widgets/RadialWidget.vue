@@ -6,6 +6,7 @@ import VisTooltip from '@unovis/vue/components/tooltip';
 import VisSingleContainer from '@unovis/vue/containers/single-container';
 import { computed } from 'vue';
 import { useLocale } from '@/composables/useLocale';
+import { useChartDuration } from '@/composables/useReducedMotion';
 import { formatCompactMoney, formatMoney } from '@/lib/budget';
 import { escapeHtml } from '@/lib/html';
 import { isClient } from '@/lib/ssr';
@@ -18,6 +19,7 @@ const props = defineProps<{
 }>();
 
 const { locale } = useLocale();
+const chartDuration = useChartDuration();
 
 const rows = computed(() =>
     props.data.type === 'radial' ? props.data.rows : [],
@@ -88,10 +90,9 @@ const tooltipTemplate = (arc?: SegmentArc): string => {
         return '';
     }
 
-    const share =
-        total.value > 0 && datum.value !== null
-            ? ` (${((datum.value / total.value) * 100).toFixed(1)}%)`
-            : '';
+    // Same locale-formatted share as the legend ("12,5 %" in French).
+    const percentage = legendShare(datum);
+    const share = percentage === null ? '' : ` (${percentage})`;
 
     return `<div style="font-size:12px">
         <strong>${escapeHtml(datum.name)}</strong><br/>
@@ -134,6 +135,7 @@ function legendShare(row: DashboardRadialRow): string | null {
                 <!-- Visual only: the legend lists every row with its amount
                      and share (the text equivalent). -->
                 <VisSingleContainer
+                    :duration="chartDuration"
                     aria-hidden="true"
                     data-testid="radial-chart"
                     :data="chartRows"

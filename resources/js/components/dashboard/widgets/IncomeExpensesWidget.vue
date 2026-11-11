@@ -12,6 +12,7 @@ import VisXYContainer from '@unovis/vue/containers/xy-container';
 import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useLocale } from '@/composables/useLocale';
+import { useChartDuration } from '@/composables/useReducedMotion';
 import { formatCompactMoney, formatMoney } from '@/lib/budget';
 import { escapeHtml } from '@/lib/html';
 import { isClient } from '@/lib/ssr';
@@ -25,6 +26,7 @@ const props = defineProps<{
 
 const { t } = useI18n();
 const { locale } = useLocale();
+const chartDuration = useChartDuration();
 
 const series = computed<DashboardHistoryBucket[]>(() =>
     props.data.type === 'income_expenses' ? props.data.series : [],
@@ -146,7 +148,12 @@ const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
             class="chart-surface min-h-0 flex-1"
             aria-hidden="true"
         >
-            <VisXYContainer :data="series" :height="220" :y-domain="yDomain">
+            <VisXYContainer
+                :data="series"
+                :height="220"
+                :y-domain="yDomain"
+                :duration="chartDuration"
+            >
                 <VisStackedBar
                     v-if="viewType === 'stacked_bars'"
                     :x="x"
