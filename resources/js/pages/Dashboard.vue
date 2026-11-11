@@ -125,7 +125,7 @@ const configOf = (widget: DashboardWidgetConfig): DashboardWidgetConfig => ({
 watch(
     () => widgetsQuery.data.value,
     (data) => {
-        if (!data || saveLayout.isLoading.value) {
+        if (!data || saveLayout.isPending.value) {
             return;
         }
 
@@ -155,7 +155,7 @@ watch(
 let queuedSave = false;
 
 const saveNow = (): void => {
-    if (saveLayout.isLoading.value) {
+    if (saveLayout.isPending.value) {
         queuedSave = true;
 
         return;
@@ -385,14 +385,14 @@ const onDestroy = (): void => {
                 <DialogFooter>
                     <Button
                         variant="ghost"
-                        :disabled="removeWidget.isLoading.value"
+                        :disabled="removeWidget.isPending.value"
                         @click="confirmRemove = false"
                     >
                         {{ $t('dashboard.removeConfirm.cancel') }}
                     </Button>
                     <Button
                         variant="destructive"
-                        :disabled="removeWidget.isLoading.value"
+                        :disabled="removeWidget.isPending.value"
                         @click="onDestroy"
                     >
                         {{ $t('dashboard.removeConfirm.confirm') }}

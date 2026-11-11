@@ -138,7 +138,7 @@ the profile's budgets by default (see
 ## API
 
 All endpoints require authentication (session + CSRF). The frontend consumes them via
-**vue-query** — this is an application-wide requirement for server data fetching.
+**TanStack Query** (`@tanstack/vue-query`) — this is an application-wide requirement for server data fetching.
 
 | Method   | Path                                           | Description                                                                                                                                                  |
 | -------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |

@@ -292,7 +292,7 @@ per-resource docs.
 ## API
 
 All endpoints require authentication (session + CSRF). The frontend consumes
-them via **vue-query** — this is an application-wide requirement for server
+them via **TanStack Query** (`@tanstack/vue-query`) — this is an application-wide requirement for server
 data fetching.
 
 | Method   | Path                                         | Description                                                                                                                                                                                                                                                                                                                            |

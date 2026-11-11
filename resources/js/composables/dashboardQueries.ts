@@ -1,5 +1,5 @@
+import { useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
-import { useQueryClient } from 'vue-query';
 import { useMutation, useQuery } from '@/composables/query';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { dashboardApi } from '@/lib/dashboardApi';
@@ -49,38 +49,33 @@ export function useDashboardWidgets() {
 export function useSaveDashboardLayout() {
     const queryClient = useQueryClient();
 
-    return useMutation(
-        (input: { profileId: number; widgets: DashboardWidgetConfig[] }) =>
-            dashboardApi.save(input.profileId, { widgets: input.widgets }),
-        {
-            onSuccess: (data, { profileId }) => {
-                queryClient.setQueryData(
-                    dashboardKeys.widgets(profileId),
-                    data,
-                );
-                void queryClient.invalidateQueries({
-                    queryKey: ['dashboard', profileId, 'data'],
-                });
-            },
+    return useMutation({
+        mutationFn: (input: {
+            profileId: number;
+            widgets: DashboardWidgetConfig[];
+        }) => dashboardApi.save(input.profileId, { widgets: input.widgets }),
+        onSuccess: (data, { profileId }) => {
+            queryClient.setQueryData(dashboardKeys.widgets(profileId), data);
+            void queryClient.invalidateQueries({
+                queryKey: ['dashboard', profileId, 'data'],
+            });
         },
-    );
+    });
 }
 
 export function useRemoveDashboardWidget() {
     const queryClient = useQueryClient();
     const { profileId } = useCurrentProfile();
 
-    return useMutation(
-        (widgetId: number) =>
+    return useMutation({
+        mutationFn: (widgetId: number) =>
             dashboardApi.remove(toValue(profileId) ?? 0, widgetId),
-        {
-            onSuccess: () => {
-                void queryClient.invalidateQueries(
-                    dashboardKeys.widgets(toValue(profileId) ?? 0),
-                );
-            },
+        onSuccess: () => {
+            void queryClient.invalidateQueries({
+                queryKey: dashboardKeys.widgets(toValue(profileId) ?? 0),
+            });
         },
-    );
+    });
 }
 
 /**

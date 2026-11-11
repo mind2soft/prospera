@@ -1,133 +1,50 @@
-import { computed, type Ref, toValue } from 'vue';
 import {
-    useMutation as useVueMutation,
-    useQuery as useVueQuery,
-} from 'vue-query';
+    type DefaultError,
+    type QueryKey,
+    type UseQueryOptions,
+    useQuery as useTanstackQuery,
+} from '@tanstack/vue-query';
+import { computed, type MaybeRefOrGetter, type Ref, toValue } from 'vue';
 import { isClient } from '@/lib/ssr';
 
-export type QueryKey = readonly unknown[];
+export type { QueryKey } from '@tanstack/vue-query';
+export { useMutation } from '@tanstack/vue-query';
 
-export type QueryFnContext = {
-    readonly signal?: AbortSignal;
-};
-
-export type Query<TData, TError = Error> = {
-    data: Ref<TData | undefined>;
-    error: Ref<TError | null>;
-    isPending: Ref<boolean>;
-    isError: Ref<boolean>;
-    isLoading: Ref<boolean>;
-    refetch: () => Promise<unknown>;
-};
-
-export type MutateOptions<TData, TError, TVariables> = {
-    onSuccess?: (data: TData, variables: TVariables) => void;
-    onError?: (error: TError, variables: TVariables) => void;
-    onSettled?: (data: TData | undefined, error: TError | null) => void;
-};
-
-export type Mutation<TData, TError, TVariables> = {
-    data: Ref<TData | undefined>;
-    error: Ref<TError | null>;
-    isLoading: Ref<boolean>;
-    mutate: (
-        variables: TVariables,
-        options?: MutateOptions<TData, TError, TVariables>,
-    ) => void;
-};
-
-type QueryOptions<TQueryFnData, TData> = {
-    queryKey: QueryKey | Ref<QueryKey>;
-    queryFn: (context: QueryFnContext) => Promise<TQueryFnData>;
-    enabled?: boolean | Ref<boolean>;
-    select?: (data: TQueryFnData) => TData;
-    /**
-     * Polling interval, passed through to TanStack Query. A zero-argument
-     * function may return `false` to pause the polling (the dashboard
-     * refreshes every 15 minutes while its tab is visible).
-     */
-    refetchInterval?:
-        | number
-        | false
-        | ((data: TData | undefined, query: unknown) => number | false);
+type QueryOptions<
+    TQueryFnData,
+    TError,
+    TData,
+    TQueryKey extends QueryKey,
+> = Omit<
+    Exclude<
+        UseQueryOptions<TQueryFnData, TError, TData, TQueryFnData, TQueryKey>,
+        Ref<unknown>
+    >,
+    'enabled'
+> & {
+    enabled?: MaybeRefOrGetter<boolean>;
 };
 
 /**
- * Typed wrapper around vue-query's `useQuery`. vue-query's own result types
- * degrade to `any` (its generics are too weak to type `data`), so this
- * wrapper declares explicit result types and keeps every call site fully
- * inferred and `any`-free.
+ * `useQuery` from TanStack Query, disabled during the SSR pass.
+ *
+ * The SSR pass can never fetch successfully: there is no session cookie, no
+ * CSRF token, and Node's fetch cannot resolve relative URLs. Every query is
+ * disabled server-side so the SSR markup is the deterministic "no data yet"
+ * state (`status: 'pending'`) — the same state the client renders on its
+ * synchronous hydration pass. Templates that switch between skeletons and
+ * content must branch on `isPending` (no data yet), never on `isLoading` (a
+ * fetch is in flight): `isLoading` depends on fetch status, which diverges
+ * between the async SSR render and the hydration render.
  */
-export function useQuery<TQueryFnData, TError = Error, TData = TQueryFnData>(
-    options: QueryOptions<TQueryFnData, TData> & {
-        select: (data: TQueryFnData) => TData;
-    },
-): Query<TData, TError>;
-export function useQuery<TQueryFnData, TError = Error>(
-    options: Omit<QueryOptions<TQueryFnData, TQueryFnData>, 'select'>,
-): Query<TQueryFnData, TError>;
-export function useQuery<TQueryFnData, TError, TData>(
-    options: QueryOptions<TQueryFnData, TData>,
-): Query<TData, TError> {
-    const query = useVueQuery<TQueryFnData, TError, TData>({
-        queryKey: options.queryKey,
-        queryFn: options.queryFn,
-        select: options.select,
-        refetchInterval: options.refetchInterval,
-        // The SSR pass can never fetch successfully: there is no session
-        // cookie, no CSRF token, and Node's fetch cannot resolve relative
-        // URLs. Disable every query server-side so the SSR markup is the
-        // deterministic "no data yet" state — the same state the client
-        // renders on its synchronous hydration pass. Templates that switch
-        // between skeletons and content must branch on `isPending` (no data
-        // yet), never on `isLoading` (a fetch is in flight): `isLoading`
-        // depends on fetch status, which diverges between the async SSR
-        // render and the hydration render and was the source of the
-        // skeleton/comment hydration mismatches.
+export function useQuery<
+    TQueryFnData,
+    TError = DefaultError,
+    TData = TQueryFnData,
+    TQueryKey extends QueryKey = QueryKey,
+>(options: QueryOptions<TQueryFnData, TError, TData, TQueryKey>) {
+    return useTanstackQuery<TQueryFnData, TError, TData, TQueryKey>({
+        ...options,
         enabled: computed(() => isClient && toValue(options.enabled ?? true)),
     });
-
-    return {
-        data: query.data,
-        error: query.error,
-        // vue-query wraps TanStack v4, which has no `isPending`. Derive the
-        // hydration-safe flag locally: "no data and no error", independent
-        // of fetch status. `status` here is 'idle' (never fetched), 'loading'
-        // (fetch in flight), 'success' or 'error' — only data presence is
-        // identical between the SSR render and the client's hydration pass.
-        isPending: computed(() => {
-            const status = query.status.value;
-            return status !== 'success' && status !== 'error';
-        }),
-        isError: query.isError,
-        isLoading: query.isLoading,
-        // vue-query's ToRefs result wraps `refetch` in a Ref.
-        refetch: () => query.refetch.value(),
-    };
-}
-
-/**
- * Typed wrapper around vue-query's `useMutation` with a `mutate` that
- * contextually types inline `onSuccess` / `onError` / `onSettled` callbacks.
- */
-export function useMutation<TData, TVariables = void, TError = Error>(
-    mutationFn: (variables: TVariables) => Promise<TData>,
-    options?: MutateOptions<TData, TError, TVariables>,
-): Mutation<TData, TError, TVariables> {
-    const mutation = useVueMutation<TData, TError, TVariables, unknown>(
-        mutationFn,
-        options,
-    );
-
-    return {
-        data: mutation.data,
-        error: mutation.error,
-        isLoading: mutation.isLoading,
-        mutate: (variables, mutateOptions) =>
-            mutation.mutate(variables, {
-                onSuccess: mutateOptions?.onSuccess,
-                onError: mutateOptions?.onError,
-                onSettled: mutateOptions?.onSettled,
-            }),
-    };
 }

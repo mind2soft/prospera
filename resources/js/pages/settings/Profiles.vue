@@ -560,7 +560,7 @@ const joinedLabel = (joinedAt: string): string =>
                                 class="shrink-0"
                                 :aria-label="$t('settings.profiles.setDefault')"
                                 :title="$t('settings.profiles.setDefault')"
-                                :disabled="setDefaultProfile.isLoading.value"
+                                :disabled="setDefaultProfile.isPending.value"
                                 data-test="set-default-button"
                                 @click.stop="setDefault(profile)"
                             >
@@ -735,7 +735,7 @@ const joinedLabel = (joinedAt: string): string =>
                                             variant="outline"
                                             class="gap-2"
                                             :disabled="
-                                                createInvite.isLoading.value
+                                                createInvite.isPending.value
                                             "
                                         >
                                             <Icon
@@ -812,7 +812,7 @@ const joinedLabel = (joinedAt: string): string =>
                                                 )
                                             "
                                             :disabled="
-                                                revokeInvite.isLoading.value
+                                                revokeInvite.isPending.value
                                             "
                                             @click="revoke(invite)"
                                         >
@@ -956,7 +956,7 @@ const joinedLabel = (joinedAt: string): string =>
                     <Button
                         :disabled="
                             newName.trim() === '' ||
-                            createProfile.isLoading.value
+                            createProfile.isPending.value
                         "
                         @click="onCreate"
                         >{{
@@ -991,7 +991,7 @@ const joinedLabel = (joinedAt: string): string =>
                     }}</Button>
                     <Button
                         variant="destructive"
-                        :disabled="deleteProfile.isLoading.value"
+                        :disabled="deleteProfile.isPending.value"
                         @click="onDelete"
                         >{{
                             $t('settings.profiles.deleteProfile')
@@ -1025,7 +1025,7 @@ const joinedLabel = (joinedAt: string): string =>
                     }}</Button>
                     <Button
                         variant="destructive"
-                        :disabled="removeMember.isLoading.value"
+                        :disabled="removeMember.isPending.value"
                         @click="confirmRemove"
                         >{{
                             $t('common.actions.remove')
@@ -1056,7 +1056,7 @@ const joinedLabel = (joinedAt: string): string =>
                     }}</Button>
                     <Button
                         variant="destructive"
-                        :disabled="removeMember.isLoading.value"
+                        :disabled="removeMember.isPending.value"
                         @click="confirmLeave"
                         >{{
                             $t('settings.profiles.leaveProfile')

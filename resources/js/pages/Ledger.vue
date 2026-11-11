@@ -594,7 +594,7 @@ const onRemoveTransaction = (transactionId: number) => {
                     }}</Button>
                     <Button
                         variant="destructive"
-                        :disabled="deleteLedger.isLoading.value"
+                        :disabled="deleteLedger.isPending.value"
                         @click="onDelete"
                         >{{
                             $t('ledger.delete.confirm')

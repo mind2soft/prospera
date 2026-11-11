@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
+import { useQueryClient } from '@tanstack/vue-query';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
-import { useQueryClient } from 'vue-query';
 import { toast } from 'vue-sonner';
 import AddEnvelopeDialog from '@/components/Budget/AddEnvelopeDialog.vue';
 import BudgetEnvelopeTable from '@/components/Budget/BudgetEnvelopeTable.vue';
@@ -146,16 +146,16 @@ const transferOwnership = useTransferBudgetOwnership();
 const pendingEnvelopeId = ref<number | null>(null);
 const working = computed(
     () =>
-        createBudget.isLoading.value ||
-        publishBudget.isLoading.value ||
-        cloneBudget.isLoading.value ||
-        deleteBudget.isLoading.value ||
-        addEnvelope.isLoading.value ||
-        updateEnvelope.isLoading.value ||
-        removeEnvelope.isLoading.value ||
-        setShare.isLoading.value ||
-        revokeShare.isLoading.value ||
-        transferOwnership.isLoading.value,
+        createBudget.isPending.value ||
+        publishBudget.isPending.value ||
+        cloneBudget.isPending.value ||
+        deleteBudget.isPending.value ||
+        addEnvelope.isPending.value ||
+        updateEnvelope.isPending.value ||
+        removeEnvelope.isPending.value ||
+        setShare.isPending.value ||
+        revokeShare.isPending.value ||
+        transferOwnership.isPending.value,
 );
 
 const fail = (e: unknown) => {
@@ -363,9 +363,9 @@ const saveAmount = (
         {
             onError: (error) => {
                 fail(error);
-                void queryClient.invalidateQueries(
-                    budgetKeys.detail(budgetIdValue),
-                );
+                void queryClient.invalidateQueries({
+                    queryKey: budgetKeys.detail(budgetIdValue),
+                });
             },
         },
     );

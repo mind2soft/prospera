@@ -1,5 +1,5 @@
 import { createInertiaApp } from '@inertiajs/vue3';
-import { VueQueryPlugin } from 'vue-query';
+import { VueQueryPlugin } from '@tanstack/vue-query';
 import { initializeTheme } from '@/composables/useAppearance';
 import { initializeLocale } from '@/composables/useLocale';
 import { i18n } from '@/i18n';

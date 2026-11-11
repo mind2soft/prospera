@@ -30,8 +30,8 @@ const form = ref({
 const genericError = ref<string | null>(null);
 const fieldErrors = ref<Record<string, string[]>>({});
 
-const { mutate: submit, isLoading } = useMutation(
-    async () => {
+const { mutate: submit, isPending: isLoading } = useMutation({
+    mutationFn: async () => {
         genericError.value = null;
         fieldErrors.value = {};
 
@@ -40,36 +40,33 @@ const { mutate: submit, isLoading } = useMutation(
             body: form.value,
         });
     },
-    {
-        onSuccess: (data) => {
-            router.visit(data.redirect);
-        },
-        onError: (error) => {
-            if (error instanceof ApiError) {
-                // Field errors go under their input; anything else
-                // (cooldown, throttling, missing IP, server errors) shows
-                // as an alert.
-                const fieldKeys = new Set(['email', 'subject', 'message']);
-                fieldErrors.value = Object.fromEntries(
-                    Object.entries(error.errors).filter(([key]) =>
-                        fieldKeys.has(key),
-                    ),
-                );
-                const other = Object.entries(error.errors)
-                    .filter(([key]) => !fieldKeys.has(key))
-                    .flatMap(([, messages]) => messages);
-                genericError.value =
-                    other[0] ??
-                    (Object.keys(fieldErrors.value).length
-                        ? null
-                        : error.firstError);
-            } else {
-                genericError.value =
-                    error instanceof Error ? error.message : null;
-            }
-        },
+    onSuccess: (data) => {
+        router.visit(data.redirect);
     },
-);
+    onError: (error) => {
+        if (error instanceof ApiError) {
+            // Field errors go under their input; anything else
+            // (cooldown, throttling, missing IP, server errors) shows
+            // as an alert.
+            const fieldKeys = new Set(['email', 'subject', 'message']);
+            fieldErrors.value = Object.fromEntries(
+                Object.entries(error.errors).filter(([key]) =>
+                    fieldKeys.has(key),
+                ),
+            );
+            const other = Object.entries(error.errors)
+                .filter(([key]) => !fieldKeys.has(key))
+                .flatMap(([, messages]) => messages);
+            genericError.value =
+                other[0] ??
+                (Object.keys(fieldErrors.value).length
+                    ? null
+                    : error.firstError);
+        } else {
+            genericError.value = error instanceof Error ? error.message : null;
+        }
+    },
+});
 
 // The progress bar is a visual cue for the message length: under 2000
 // characters is green, then yellow, orange, and full red at the limit.

@@ -1,5 +1,5 @@
+import { useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
-import { useQueryClient } from 'vue-query';
 import { invalidateDashboardData } from '@/composables/dashboardQueries';
 import { useMutation, useQuery } from '@/composables/query';
 import { envelopeApi } from '@/lib/envelopeApi';
@@ -35,8 +35,8 @@ export function useEnvelopeShares(id: MaybeRefOrGetter<number | null>) {
 export function useSetEnvelopeShare() {
     const queryClient = useQueryClient();
 
-    return useMutation(
-        ({
+    return useMutation({
+        mutationFn: ({
             envelopeId,
             userId,
             permission,
@@ -45,34 +45,35 @@ export function useSetEnvelopeShare() {
             userId: number;
             permission: string;
         }) => envelopeApi.setShare(envelopeId, userId, permission),
-        {
-            onSuccess: (_data, { envelopeId }) => {
-                void queryClient.invalidateQueries(
-                    envelopeKeys.shares(envelopeId),
-                );
-                void queryClient.invalidateQueries(envelopeKeys.all);
-                invalidateDashboardData(queryClient);
-            },
+        onSuccess: (_data, { envelopeId }) => {
+            void queryClient.invalidateQueries({
+                queryKey: envelopeKeys.shares(envelopeId),
+            });
+            void queryClient.invalidateQueries({ queryKey: envelopeKeys.all });
+            invalidateDashboardData(queryClient);
         },
-    );
+    });
 }
 
 export function useRemoveEnvelopeShare() {
     const queryClient = useQueryClient();
 
-    return useMutation(
-        ({ envelopeId, userId }: { envelopeId: number; userId: number }) =>
-            envelopeApi.removeShare(envelopeId, userId),
-        {
-            onSuccess: (_data, { envelopeId }) => {
-                void queryClient.invalidateQueries(
-                    envelopeKeys.shares(envelopeId),
-                );
-                void queryClient.invalidateQueries(envelopeKeys.all);
-                invalidateDashboardData(queryClient);
-            },
+    return useMutation({
+        mutationFn: ({
+            envelopeId,
+            userId,
+        }: {
+            envelopeId: number;
+            userId: number;
+        }) => envelopeApi.removeShare(envelopeId, userId),
+        onSuccess: (_data, { envelopeId }) => {
+            void queryClient.invalidateQueries({
+                queryKey: envelopeKeys.shares(envelopeId),
+            });
+            void queryClient.invalidateQueries({ queryKey: envelopeKeys.all });
+            invalidateDashboardData(queryClient);
         },
-    );
+    });
 }
 
 export function useTransferEnvelopeOwnership() {
@@ -81,17 +82,20 @@ export function useTransferEnvelopeOwnership() {
         void queryClient.invalidateQueries();
     };
 
-    return useMutation(
-        ({ envelopeId, userId }: { envelopeId: number; userId: number }) =>
-            envelopeApi.transferOwnership(envelopeId, { user_id: userId }),
-        {
-            onSuccess: (data) => {
-                const envelope: Envelope = data.envelope;
-                void queryClient.invalidateQueries(
-                    envelopeKeys.shares(envelope.id),
-                );
-                invalidateAll();
-            },
+    return useMutation({
+        mutationFn: ({
+            envelopeId,
+            userId,
+        }: {
+            envelopeId: number;
+            userId: number;
+        }) => envelopeApi.transferOwnership(envelopeId, { user_id: userId }),
+        onSuccess: (data) => {
+            const envelope: Envelope = data.envelope;
+            void queryClient.invalidateQueries({
+                queryKey: envelopeKeys.shares(envelope.id),
+            });
+            invalidateAll();
         },
-    );
+    });
 }

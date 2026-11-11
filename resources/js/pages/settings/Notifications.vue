@@ -66,9 +66,9 @@ const TOGGLES = [
 
 const settings = ref<NotificationSettings>({ ...props.settings });
 
-const save = useMutation((next: NotificationSettings) =>
-    notificationApi.update(next),
-);
+const save = useMutation({
+    mutationFn: (next: NotificationSettings) => notificationApi.update(next),
+});
 
 // Each PATCH carries the full catalog, so concurrent saves could interleave
 // (a failing first save reverting state that a succeeding second save

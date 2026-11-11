@@ -122,7 +122,7 @@ const menuProfiles = computed(() =>
                             class="shrink-0"
                             :aria-label="$t('layout.user.setDefault')"
                             :title="$t('layout.user.setDefault')"
-                            :disabled="setDefaultProfile.isLoading.value"
+                            :disabled="setDefaultProfile.isPending.value"
                             data-test="set-default-button"
                             @click.stop="setDefault(profile)"
                         >

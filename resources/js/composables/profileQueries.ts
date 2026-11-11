@@ -1,6 +1,6 @@
 import { usePage } from '@inertiajs/vue3';
+import { useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
-import { useQueryClient } from 'vue-query';
 import { useMutation, useQuery } from '@/composables/query';
 import { profileApi } from '@/lib/profileApi';
 import type { FinancialProfile, ProfileMember } from '@/types';
@@ -97,7 +97,8 @@ function useInvalidateAll() {
 export function useCreateProfile() {
     const invalidateAll = useInvalidateAll();
 
-    return useMutation((name: string) => profileApi.create(name), {
+    return useMutation({
+        mutationFn: (name: string) => profileApi.create(name),
         onSuccess: () => invalidateAll(),
     });
 }
@@ -105,21 +106,25 @@ export function useCreateProfile() {
 export function useRenameProfile() {
     const queryClient = useQueryClient();
 
-    return useMutation(
-        ({ profileId, name }: { profileId: number; name: string }) =>
-            profileApi.rename(profileId, name),
-        {
-            onSuccess: () => {
-                void queryClient.invalidateQueries(profileKeys.all);
-            },
+    return useMutation({
+        mutationFn: ({
+            profileId,
+            name,
+        }: {
+            profileId: number;
+            name: string;
+        }) => profileApi.rename(profileId, name),
+        onSuccess: () => {
+            void queryClient.invalidateQueries({ queryKey: profileKeys.all });
         },
-    );
+    });
 }
 
 export function useDeleteProfile() {
     const invalidateAll = useInvalidateAll();
 
-    return useMutation((profileId: number) => profileApi.destroy(profileId), {
+    return useMutation({
+        mutationFn: (profileId: number) => profileApi.destroy(profileId),
         onSuccess: () => invalidateAll(),
     });
 }
@@ -127,78 +132,86 @@ export function useDeleteProfile() {
 export function useSetDefaultProfile() {
     const invalidateAll = useInvalidateAll();
 
-    return useMutation(
-        (profileId: number) => profileApi.setDefault(profileId),
-        {
-            onSuccess: () => invalidateAll(),
-        },
-    );
+    return useMutation({
+        mutationFn: (profileId: number) => profileApi.setDefault(profileId),
+        onSuccess: () => invalidateAll(),
+    });
 }
 
 export function useRemoveMember() {
     const invalidateAll = useInvalidateAll();
 
-    return useMutation(
-        ({ profileId, userId }: { profileId: number; userId: number }) =>
-            profileApi.removeMember(profileId, userId),
-        {
-            onSuccess: () => invalidateAll(),
-        },
-    );
+    return useMutation({
+        mutationFn: ({
+            profileId,
+            userId,
+        }: {
+            profileId: number;
+            userId: number;
+        }) => profileApi.removeMember(profileId, userId),
+        onSuccess: () => invalidateAll(),
+    });
 }
 
 export function useTransferProfileOwnership() {
     const invalidateAll = useInvalidateAll();
 
-    return useMutation(
-        ({ profileId, userId }: { profileId: number; userId: number }) =>
-            profileApi.transferOwnership(profileId, userId),
-        {
-            onSuccess: () => invalidateAll(),
-        },
-    );
+    return useMutation({
+        mutationFn: ({
+            profileId,
+            userId,
+        }: {
+            profileId: number;
+            userId: number;
+        }) => profileApi.transferOwnership(profileId, userId),
+        onSuccess: () => invalidateAll(),
+    });
 }
 
 export function useCreateInvite() {
     const queryClient = useQueryClient();
 
-    return useMutation(
-        ({ profileId, email }: { profileId: number; email: string }) =>
-            profileApi.createInvite(profileId, email),
-        {
-            onSuccess: (_data, { profileId }) => {
-                void queryClient.invalidateQueries(
-                    profileKeys.invites(profileId),
-                );
-            },
+    return useMutation({
+        mutationFn: ({
+            profileId,
+            email,
+        }: {
+            profileId: number;
+            email: string;
+        }) => profileApi.createInvite(profileId, email),
+        onSuccess: (_data, { profileId }) => {
+            void queryClient.invalidateQueries({
+                queryKey: profileKeys.invites(profileId),
+            });
         },
-    );
+    });
 }
 
 export function useRevokeInvite() {
     const queryClient = useQueryClient();
 
-    return useMutation(
-        ({ profileId, inviteId }: { profileId: number; inviteId: number }) =>
-            profileApi.revokeInvite(profileId, inviteId),
-        {
-            onSuccess: (_data, { profileId }) => {
-                void queryClient.invalidateQueries(
-                    profileKeys.invites(profileId),
-                );
-            },
+    return useMutation({
+        mutationFn: ({
+            profileId,
+            inviteId,
+        }: {
+            profileId: number;
+            inviteId: number;
+        }) => profileApi.revokeInvite(profileId, inviteId),
+        onSuccess: (_data, { profileId }) => {
+            void queryClient.invalidateQueries({
+                queryKey: profileKeys.invites(profileId),
+            });
         },
-    );
+    });
 }
 
 /** Accepts an invite as the signed-in user (docs — link-based invites). */
 export function useAcceptInvite() {
     const invalidateAll = useInvalidateAll();
 
-    return useMutation(
-        (inviteKey: string) => profileApi.acceptInvite(inviteKey),
-        {
-            onSuccess: () => invalidateAll(),
-        },
-    );
+    return useMutation({
+        mutationFn: (inviteKey: string) => profileApi.acceptInvite(inviteKey),
+        onSuccess: () => invalidateAll(),
+    });
 }
