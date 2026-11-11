@@ -143,6 +143,22 @@ test('an unverified account is asked to verify before accepting', async ({
     ).toBeVisible();
 });
 
+test('an unverified account on another address is told so before verifying', async ({
+    page,
+}) => {
+    await login(page, 'unverified@example.com');
+    await page.goto(`/invites/${OTHER_KEY}`);
+
+    // Verifying this address would not make the invite acceptable.
+    await expect(page.locator('[data-test="invite-mismatch"]')).toContainText(
+        'but you are signed in as unverified@example.com',
+    );
+    await expect(page.locator('[data-test="invite-verify-first"]')).toHaveCount(
+        0,
+    );
+    await expect(page.getByRole('button', { name: 'Log out' })).toBeVisible();
+});
+
 test('declining an invite asks for confirmation first', async ({ page }) => {
     seed('seed-invite-states.php');
     await login(page, 'returning@example.com');

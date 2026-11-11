@@ -189,30 +189,9 @@ const onDecline = async () => {
                     </div>
                 </div>
 
-                <!-- Unverified: the accept API would refuse (403). -->
-                <template v-if="!verified">
-                    <Alert data-test="invite-verify-first">
-                        <Icon name="mail" aria-hidden="true" />
-                        <AlertTitle>{{
-                            $t('auth.invite.verifyFirst')
-                        }}</AlertTitle>
-                        <AlertDescription>
-                            {{
-                                $t('auth.invite.verifyFirstDescription', {
-                                    email: user?.email,
-                                })
-                            }}
-                        </AlertDescription>
-                    </Alert>
-                    <Button as-child>
-                        <Link :href="notice()">
-                            {{ $t('auth.invite.goToVerification') }}
-                        </Link>
-                    </Button>
-                </template>
-
-                <!-- Another account: only the invited address can accept. -->
-                <template v-else-if="emailMismatch">
+                <!-- Another account: only the invited address can accept — checked
+                     first, verifying this address would not change it. -->
+                <template v-if="emailMismatch">
                     <Alert variant="destructive" data-test="invite-mismatch">
                         <Icon name="error" aria-hidden="true" />
                         <AlertTitle>{{
@@ -239,6 +218,28 @@ const onDecline = async () => {
                             </Link>
                         </Button>
                     </div>
+                </template>
+
+                <!-- Unverified: the accept API would refuse (403). -->
+                <template v-else-if="!verified">
+                    <Alert data-test="invite-verify-first">
+                        <Icon name="mail" aria-hidden="true" />
+                        <AlertTitle>{{
+                            $t('auth.invite.verifyFirst')
+                        }}</AlertTitle>
+                        <AlertDescription>
+                            {{
+                                $t('auth.invite.verifyFirstDescription', {
+                                    email: user?.email,
+                                })
+                            }}
+                        </AlertDescription>
+                    </Alert>
+                    <Button as-child>
+                        <Link :href="notice()">
+                            {{ $t('auth.invite.goToVerification') }}
+                        </Link>
+                    </Button>
                 </template>
 
                 <template v-else>
