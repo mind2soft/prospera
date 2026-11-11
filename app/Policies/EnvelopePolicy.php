@@ -5,6 +5,7 @@ namespace App\Policies;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\User;
+use App\Services\ResourcePermissions;
 use Illuminate\Auth\Access\Response;
 
 /**
@@ -30,6 +31,17 @@ class EnvelopePolicy
     public function transferOwnership(User $user, Envelope $envelope): Response
     {
         return $this->owner($user, $envelope);
+    }
+
+    /**
+     * Using the envelope's money: assigning it to a budget or recording
+     * transactions against it takes contributor+ on the envelope
+     * (docs/envelope.md). Callers report a refusal as a validation error on
+     * the payload's envelope_id, so it stays a plain yes/no.
+     */
+    public function use(User $user, Envelope $envelope): bool
+    {
+        return ResourcePermissions::isAtLeast($envelope->permissionFor($user), ResourcePermissions::CONTRIBUTOR);
     }
 
     /**

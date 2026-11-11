@@ -27,7 +27,6 @@ use Illuminate\Validation\ValidationException;
 class BudgetController extends Controller
 {
     public function __construct(
-        private readonly ResourcePermissions $permissions,
         private readonly ResourcePermissionService $permissionService,
     ) {}
 
@@ -240,7 +239,7 @@ class BudgetController extends Controller
         /** @var Envelope|null $envelope */
         $envelope = Envelope::query()->find($validated['envelope_id']);
 
-        if ($envelope === null || ! $this->permissions->isAtLeast($envelope->permissionFor($request->user()), ResourcePermissions::CONTRIBUTOR)) {
+        if ($envelope === null || $request->user()->cannot('use', $envelope)) {
             throw ValidationException::withMessages([
                 'envelope_id' => __('This envelope is not available.'),
             ]);

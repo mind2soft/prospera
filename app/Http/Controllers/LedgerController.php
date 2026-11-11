@@ -34,7 +34,6 @@ class LedgerController extends Controller
     public const MAX_RANGE_DAYS = 366;
 
     public function __construct(
-        private readonly ResourcePermissions $permissions,
         private readonly ResourcePermissionService $permissionService,
     ) {}
 
@@ -270,9 +269,7 @@ class LedgerController extends Controller
         /** @var Envelope|null $envelope */
         $envelope = Envelope::query()->find($validated['envelope_id']);
 
-        $envelopePermission = $envelope?->permissionFor($request->user()) ?? ResourcePermissions::NONE;
-
-        if ($envelope === null || ! $this->permissions->isAtLeast($envelopePermission, ResourcePermissions::CONTRIBUTOR)) {
+        if ($envelope === null || $request->user()->cannot('use', $envelope)) {
             throw ValidationException::withMessages([
                 'envelope_id' => __('You need contributor access to this envelope to record transactions.'),
             ]);
@@ -306,7 +303,8 @@ class LedgerController extends Controller
         return response()->json([
             'transaction' => $this->serializeTransaction(
                 $transaction,
-                $envelopePermission,
+                // Contributor+ (checked above): the amount is never masked.
+                $envelope->permissionFor($request->user()),
                 null,
                 withRemaining: false,
             ),

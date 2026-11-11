@@ -40,7 +40,7 @@ final class ResourcePermissions
     /**
      * Whether the effective permission satisfies the required minimum.
      */
-    public function isAtLeast(string $permission, string $minimum): bool
+    public static function isAtLeast(string $permission, string $minimum): bool
     {
         return self::HIERARCHY[$permission] >= self::HIERARCHY[$minimum];
     }

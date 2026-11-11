@@ -173,6 +173,20 @@ class EnvelopePermissionsTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('permission');
     }
 
+    public function test_using_an_envelope_takes_contributor_access(): void
+    {
+        $this->assertTrue($this->owner->can('use', $this->envelope));
+        // Metadata-only co-member.
+        $this->assertFalse($this->member->can('use', $this->envelope));
+
+        $share = $this->envelope->permissions()->create(['user_id' => $this->member->id, 'permission' => EnvelopePermission::PERMISSION_VIEWER]);
+        $this->assertFalse($this->member->can('use', $this->envelope->fresh()));
+
+        $share->update(['permission' => EnvelopePermission::PERMISSION_CONTRIBUTOR]);
+        $this->assertTrue($this->member->can('use', $this->envelope->fresh()));
+        $this->assertFalse($this->stranger->can('use', $this->envelope));
+    }
+
     public function test_co_members_only_see_shares_of_people_sharing_a_profile_with_them(): void
     {
         // SEC-R2-1: the owner shares the envelope with Carol, a member of
