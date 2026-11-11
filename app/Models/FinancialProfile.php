@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use LogicException;
 
@@ -212,6 +213,94 @@ class FinancialProfile extends Model
     }
 
     /**
+     * Ids of every user sharing at least one profile with the given user
+     * (the user included when they have any membership).
+     *
+     * @return Collection<int, int>
+     */
+    public static function coMemberIdsOf(int $userId): Collection
+    {
+        return DB::table('financial_profile_user')
+            ->whereIn('profile_id', DB::table('financial_profile_user')
+                ->where('user_id', $userId)
+                ->select('profile_id'))
+            ->distinct()
+            ->pluck('user_id')
+            ->map(fn (mixed $id): int => (int) $id);
+    }
+
+    /**
+     * Whether the envelope is referenced by budgets or ledger transactions
+     * of a profile the given user is a member of.
+     */
+    public static function envelopeReferencedByProfilesOf(int $envelopeId, int $userId): bool
+    {
+        $profileIds = DB::table('financial_profile_user')
+            ->where('user_id', $userId)
+            ->pluck('profile_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+
+        if ($profileIds === []) {
+            return false;
+        }
+
+        return self::referencingEnvelopes(Envelope::query()->whereKey($envelopeId), $profileIds)->exists();
+    }
+
+    /**
+     * Drop the envelope grants between the given user and each of the
+     * given former co-members they no longer share any profile with, in
+     * both directions (docs/shared-finances.md — envelope grants follow the
+     * profile relationship). Run after a membership exit or a profile
+     * deletion. Grants a co-member holds on the user's envelopes survive
+     * only while the envelope is still referenced by budgets/ledgers of a
+     * profile that co-member belongs to (the leaving member's envelope
+     * still used in the profile they left — the profile keeps working).
+     *
+     * @param  iterable<User>  $formerCoMembers
+     */
+    public static function pruneEnvelopeGrantsBetween(User $user, iterable $formerCoMembers): void
+    {
+        $stillShared = self::coMemberIdsOf($user->id);
+
+        foreach ($formerCoMembers as $other) {
+            if ($other->id === $user->id || $stillShared->contains($other->id)) {
+                continue;
+            }
+
+            self::deleteEnvelopeGrants(grantee: $user, envelopeOwner: $other);
+            self::deleteEnvelopeGrants(grantee: $other, envelopeOwner: $user);
+        }
+    }
+
+    /**
+     * Delete the grantee's share rows on the envelope owner's envelopes,
+     * except on envelopes still referenced by a profile the grantee
+     * belongs to.
+     */
+    private static function deleteEnvelopeGrants(User $grantee, User $envelopeOwner): void
+    {
+        $granteeProfileIds = DB::table('financial_profile_user')
+            ->where('user_id', $grantee->id)
+            ->pluck('profile_id')
+            ->map(fn (mixed $id): int => (int) $id)
+            ->all();
+
+        $keptEnvelopeIds = $granteeProfileIds === []
+            ? []
+            : self::referencingEnvelopes(Envelope::query()->where('user_id', $envelopeOwner->id), $granteeProfileIds)
+                ->pluck('id')
+                ->all();
+
+        DB::table('envelope_permissions')
+            ->where('user_id', $grantee->id)
+            ->whereIn('envelope_id', Envelope::query()->where('user_id', $envelopeOwner->id)->select('id'))
+            ->whereNotIn('envelope_id', $keptEnvelopeIds)
+            ->delete();
+    }
+
+    /**
      * Transfer ownership to the given member; every other owner row is
      * demoted so the profile always has exactly one owner.
      */
@@ -258,20 +347,24 @@ class FinancialProfile extends Model
      * their unreferenced envelopes. When the member is merely leaving (not
      * deleting their account), envelopes they still use in another of their
      * profiles stay theirs and the profile owner gets contributor access.
+     * Envelope grants between the member and the remaining members are
+     * dropped (both directions) once they no longer share any profile.
      */
     public function removeMember(User $member, bool $accountDeletion = false): void
     {
         DB::transaction(function () use ($member, $accountDeletion): void {
             $owner = $this->ownerUser();
+            $remainingMembers = $this->members()->whereKeyNot($member->id)->get();
 
             $this->transferBudgetsOwnedBy($member, $owner);
             $this->deleteBudgetPermissionsFor($member);
             $this->transferLedgersOwnedBy($member, $owner);
             $this->deleteLedgerPermissionsFor($member);
-            $this->deleteEnvelopePermissionsFor($member);
             $this->transferReferencedEnvelopesOwnedBy($member, $owner, keepSharedElsewhere: ! $accountDeletion);
 
             $this->members()->detach($member);
+
+            self::pruneEnvelopeGrantsBetween($member, $remainingMembers);
 
             // On account deletion the account itself goes away; otherwise a
             // member left without any profile must get its own default one.
@@ -329,20 +422,6 @@ class FinancialProfile extends Model
     {
         DB::table('ledger_permissions')
             ->whereIn('ledger_id', Ledger::query()->where('profile_id', $this->id)->select('id'))
-            ->where('user_id', $member->id)
-            ->delete();
-    }
-
-    /**
-     * Delete the member's envelope share rows that were granted by owners
-     * who are members of this profile (grants target profile members only).
-     */
-    public function deleteEnvelopePermissionsFor(User $member): void
-    {
-        DB::table('envelope_permissions')
-            ->whereIn('envelope_id', Envelope::query()
-                ->whereIn('user_id', $this->members()->select('users.id'))
-                ->select('id'))
             ->where('user_id', $member->id)
             ->delete();
     }

@@ -132,6 +132,18 @@ the profile owner** when that member is removed from the profile (or leaves
 voluntarily) or when their account is deleted. Auto-transfer edge cases:
 
 - The removed member's permission rows on the profile's resources are deleted.
+- **Envelope grants follow the profile relationship.** Envelopes are
+  user-owned, so their grants are not tied to one profile: when a member
+  leaves or is removed, or a profile is deleted, the envelope grants
+  between the departing user and each former co-member are deleted **in
+  both directions** — but only when the two users **no longer share any
+  profile**. Users who still share another profile keep their grants. The
+  single exception is a grant on an envelope still referenced by
+  budgets/ledgers of a profile the grantee belongs to (the departed
+  member's envelope still used in the profile they left — see the next
+  point): it is kept so that profile keeps working. As defence in depth,
+  `Envelope::permissionFor` resolves any other stale grant (users sharing
+  no profile) to `none`.
 - When a member **leaves or is removed** (without deleting their account),
   their envelopes referenced by this profile transfer to the profile owner,
   **except** envelopes still referenced by another profile the member belongs

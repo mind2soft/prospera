@@ -78,8 +78,16 @@ class Envelope extends Model
      * "contributor", "viewer" — or "none" (metadata-only) for users who
      * merely share a profile with the owner. Envelopes are not
      * profile-scoped, so there is no implicit viewer visibility.
+     *
+     * Defence in depth (docs/shared-finances.md): a share row only counts
+     * while the grantee still shares a profile with the owner, or while the
+     * envelope is referenced by a profile the grantee belongs to — a stale
+     * grant otherwise resolves to "none". $coMemberIds (the ids sharing a
+     * profile with $user) may be precomputed for bulk lookups.
+     *
+     * @param  Collection<int, int>|null  $coMemberIds
      */
-    public function permissionFor(User $user): string
+    public function permissionFor(User $user, ?Collection $coMemberIds = null): string
     {
         if ($this->user_id === $user->id) {
             return ResourcePermissions::OWNER;
@@ -90,11 +98,18 @@ class Envelope extends Model
             ? $this->permissions->firstWhere('user_id', $user->id)
             : $this->permissions()->where('user_id', $user->id)->first();
 
-        if ($share !== null) {
-            return $share->permission;
+        if ($share === null) {
+            return ResourcePermissions::NONE;
         }
 
-        return ResourcePermissions::NONE;
+        $coMemberIds ??= FinancialProfile::coMemberIdsOf($user->id);
+
+        if (! $coMemberIds->contains($this->user_id)
+            && ! FinancialProfile::envelopeReferencedByProfilesOf($this->id, $user->id)) {
+            return ResourcePermissions::NONE;
+        }
+
+        return $share->permission;
     }
 
     /**
@@ -188,7 +203,7 @@ class Envelope extends Model
 
     /**
      * The given user's effective permission on each of the given envelopes
-     * in two queries (instead of one per envelope), keyed by envelope id.
+     * in three queries (instead of one per envelope), keyed by envelope id.
      * Unknown ids are omitted.
      *
      * @param  array<int, int>  $envelopeIds
@@ -200,12 +215,14 @@ class Envelope extends Model
             return collect();
         }
 
+        $coMemberIds = FinancialProfile::coMemberIdsOf($user->id);
+
         return self::query()
             ->whereIn('id', $envelopeIds)
             ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
             ->get()
             ->mapWithKeys(fn (Envelope $envelope): array => [
-                $envelope->id => $envelope->permissionFor($user),
+                $envelope->id => $envelope->permissionFor($user, $coMemberIds),
             ]);
     }
 }

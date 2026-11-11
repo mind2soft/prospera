@@ -141,6 +141,10 @@ class FinancialProfileController extends Controller
 
             $profile->delete();
 
+            // Envelope grants between former co-members who no longer
+            // share any profile are dropped (both directions).
+            $members->each(fn (User $member) => FinancialProfile::pruneEnvelopeGrantsBetween($member, $members));
+
             // Deleting detaches the members (FK cascade). Affected users'
             // defaults are reassigned here (earliest created owned profile,
             // else earliest remaining membership, else a seeded default).
