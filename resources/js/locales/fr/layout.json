@@ -20,6 +20,11 @@
         "loading": {
             "budgets": "Chargement des budgets",
             "ledgers": "Chargement des grands livres"
+        },
+        "notifications": "Notifications",
+        "sidebar": {
+            "title": "Navigation",
+            "description": "La navigation principale de l'application."
         }
     }
 }

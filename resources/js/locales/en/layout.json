@@ -20,6 +20,11 @@
         "loading": {
             "budgets": "Loading budgets",
             "ledgers": "Loading ledgers"
+        },
+        "notifications": "Notifications",
+        "sidebar": {
+            "title": "Navigation",
+            "description": "The app's main navigation."
         }
     }
 }
