@@ -1,5 +1,4 @@
 <!-- biome-ignore-all lint/a11y/noHeaderScope: vue-i18n `scope` prop, not the HTML attribute -->
-<!-- biome-ignore-all lint/a11y/noPositiveTabindex: deliberate tab order for the invite page form -->
 <script setup lang="ts">
 import { Form, Head, Link, router, usePage } from '@inertiajs/vue3';
 import { useQueryClient } from '@tanstack/vue-query';
@@ -17,7 +16,8 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { profileKeys, useAcceptInvite } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
-import { ApiError, api } from '@/lib/api';
+import { ApiError } from '@/lib/api';
+import { profileApi } from '@/lib/profileApi';
 import { dashboard, login, privacy } from '@/routes';
 import { store } from '@/routes/register';
 import type { InviteContext } from '@/types';
@@ -97,10 +97,7 @@ const onDecline = async () => {
     acceptError.value = null;
     declining.value = true;
     try {
-        await api(
-            `/api/invites/${encodeURIComponent(inviteKey.value)}/decline`,
-            { method: 'POST' },
-        );
+        await profileApi.declineInvite(inviteKey.value);
     } catch (e) {
         declining.value = false;
         acceptError.value =
@@ -254,12 +251,11 @@ const onDecline = async () => {
                         type="text"
                         required
                         v-focus
-                        :tabindex="1"
                         autocomplete="name"
                         name="name"
                         :placeholder="$t('auth.register.namePlaceholder')"
                     />
-                    <InputError :message="errors.name" />
+                    <InputError for="name" :message="errors.name" />
                 </div>
 
                 <div class="grid gap-2">
@@ -268,7 +264,6 @@ const onDecline = async () => {
                         id="email"
                         type="email"
                         required
-                        :tabindex="2"
                         autocomplete="email"
                         name="email"
                         placeholder="email@example.com"
@@ -278,7 +273,7 @@ const onDecline = async () => {
                             invite ? 'bg-muted/50 text-muted-foreground' : ''
                         "
                     />
-                    <InputError :message="errors.email" />
+                    <InputError for="email" :message="errors.email" />
                 </div>
 
                 <div class="grid gap-2">
@@ -288,13 +283,12 @@ const onDecline = async () => {
                     <PasswordInput
                         id="password"
                         required
-                        :tabindex="3"
                         autocomplete="new-password"
                         name="password"
                         :placeholder="$t('common.fields.password')"
                         :passwordrules="passwordRules"
                     />
-                    <InputError :message="errors.password" />
+                    <InputError for="password" :message="errors.password" />
                 </div>
 
                 <div class="grid gap-2">
@@ -304,19 +298,20 @@ const onDecline = async () => {
                     <PasswordInput
                         id="password_confirmation"
                         required
-                        :tabindex="4"
                         autocomplete="new-password"
                         name="password_confirmation"
                         :placeholder="$t('auth.register.confirmPassword')"
                         :passwordrules="passwordRules"
                     />
-                    <InputError :message="errors.password_confirmation" />
+                    <InputError
+                        for="password_confirmation"
+                        :message="errors.password_confirmation"
+                    />
                 </div>
 
                 <Button
                     type="submit"
                     class="mt-2 w-full"
-                    tabindex="5"
                     :disabled="processing"
                     data-test="register-user-button"
                 >
@@ -336,7 +331,6 @@ const onDecline = async () => {
                 <TextLink
                     :href="login()"
                     class="underline underline-offset-4"
-                    :tabindex="6"
                     >{{
                         $t('auth.login.submit')
                     }}</TextLink
@@ -347,7 +341,6 @@ const onDecline = async () => {
                 <TextLink
                     :href="privacy()"
                     class="underline underline-offset-4"
-                    :tabindex="7"
                     data-test="privacy-link"
                     >{{
                         $t('privacy.link')

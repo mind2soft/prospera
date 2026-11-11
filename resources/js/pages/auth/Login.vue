@@ -31,7 +31,7 @@ defineProps<{
 
     <div
         v-if="status"
-        class="mb-4 text-center text-sm font-medium text-green-600"
+        class="mb-4 text-center text-sm font-medium text-success"
     >
         {{ status }}
     </div>
@@ -53,11 +53,10 @@ defineProps<{
                     name="email"
                     required
                     v-focus
-                    :tabindex="1"
                     autocomplete="email"
                     placeholder="email@example.com"
                 />
-                <InputError :message="errors.email" />
+                <InputError for="email" :message="errors.email" />
             </div>
 
             <div class="grid gap-2">
@@ -69,7 +68,6 @@ defineProps<{
                         v-if="canResetPassword"
                         :href="request()"
                         class="text-sm"
-                        :tabindex="5"
                     >
                         {{ $t('auth.login.forgotPassword') }}
                     </TextLink>
@@ -78,16 +76,15 @@ defineProps<{
                     id="password"
                     name="password"
                     required
-                    :tabindex="2"
                     autocomplete="current-password"
                     :placeholder="$t('common.fields.password')"
                 />
-                <InputError :message="errors.password" />
+                <InputError for="password" :message="errors.password" />
             </div>
 
             <div class="flex items-center justify-between">
                 <Label for="remember" class="flex items-center gap-2.5">
-                    <Checkbox id="remember" name="remember" :tabindex="3" />
+                    <Checkbox id="remember" name="remember" />
                     <span>{{ $t('auth.login.rememberMe') }}</span>
                 </Label>
             </div>
@@ -95,7 +92,6 @@ defineProps<{
             <Button
                 type="submit"
                 class="mt-2 w-full"
-                :tabindex="4"
                 :disabled="processing"
                 data-test="login-button"
             >
@@ -106,7 +102,7 @@ defineProps<{
 
         <div class="text-center text-sm text-muted-foreground">
             {{ $t('auth.login.noAccount') }}
-            <TextLink :href="register()" :tabindex="5">{{
+            <TextLink :href="register()">{{
                 $t('auth.login.signUp')
             }}</TextLink>
         </div>
@@ -115,7 +111,6 @@ defineProps<{
             <TextLink
                 :href="privacy()"
                 class="underline underline-offset-4"
-                :tabindex="6"
                 data-test="privacy-link"
                 >{{
                     $t('privacy.link')

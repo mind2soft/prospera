@@ -208,7 +208,7 @@ class LedgerController extends Controller
                     (string) $allocation->envelope_id => $allocation->amount,
                 ]);
 
-        // Resolved once for every envelope's grant check (no per-row query).
+        // Resolved once for every row's permission check (stale grants).
         $coMemberIds = FinancialProfile::coMemberIdsOf($user->id);
 
         return response()->json([

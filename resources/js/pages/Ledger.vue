@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import { computed, ref, watch } from 'vue';
+import { computed, ref, useTemplateRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import Heading from '@/components/Heading.vue';
@@ -29,6 +29,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Spinner } from '@/components/ui/spinner';
 import { useBudgets } from '@/composables/budgetQueries';
 import { useEnvelopeOptions } from '@/composables/envelopeQueries';
 import {
@@ -46,14 +47,16 @@ import {
     useTransferLedgerOwnership,
 } from '@/composables/ledgerQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
+import { useLocale } from '@/composables/useLocale';
 import { ApiError } from '@/lib/api';
+import { formatMoney } from '@/lib/budget';
 import type {
     AddTransactionInput,
     CreateLedgerInput,
     PickerEnvelope,
 } from '@/lib/ledgerApi';
 import { envelopes as envelopesRoute, ledger as ledgerRoute } from '@/routes';
-import type { ResourcePermission } from '@/types';
+import type { ResourcePermission, Transaction } from '@/types';
 
 defineOptions({
     layout: {
@@ -62,6 +65,7 @@ defineOptions({
 });
 
 const { t } = useI18n();
+const { locale } = useLocale();
 
 // --- state -----------------------------------------------------------------
 const isoToday = (): string => {
@@ -328,6 +332,7 @@ const showDelete = ref(false);
 const onCreate = (input: Omit<CreateLedgerInput, 'profile_id'>) => {
     createLedger.mutate(input, {
         onSuccess: (data) => {
+            showCreate.value = false;
             selectedLedgerId.value = data.ledger.id;
             toast.success(t('ledger.toast.ledgerCreated'));
         },
@@ -360,12 +365,19 @@ const onDelete = () => {
         return;
     }
     const id = ledgerId.value;
-    showDelete.value = false;
     deleteLedger.mutate(id, {
-        onSuccess: () => toast.success(t('ledger.toast.ledgerDeleted')),
+        onSuccess: () => {
+            showDelete.value = false;
+            toast.success(t('ledger.toast.ledgerDeleted'));
+        },
         onError: fail,
     });
 };
+
+const addTransactionForm =
+    useTemplateRef<InstanceType<typeof AddTransactionForm>>(
+        'addTransactionForm',
+    );
 
 const onAddTransaction = (input: AddTransactionInput) => {
     if (ledgerId.value === null) {
@@ -374,7 +386,10 @@ const onAddTransaction = (input: AddTransactionInput) => {
     addTransaction.mutate(
         { input },
         {
-            onSuccess: () => toast.success(t('ledger.toast.transactionAdded')),
+            onSuccess: () => {
+                addTransactionForm.value?.reset();
+                toast.success(t('ledger.toast.transactionAdded'));
+            },
             onError: fail,
         },
     );
@@ -382,11 +397,52 @@ const onAddTransaction = (input: AddTransactionInput) => {
 
 const pendingTransactionId = ref<number | null>(null);
 
+// Deleting a transaction cannot be undone: confirm it, naming the entry.
+const transactionToDelete = ref<Transaction | null>(null);
+const confirmingTransactionDelete = ref(false);
+
 const onRemoveTransaction = (transactionId: number) => {
-    pendingTransactionId.value = transactionId;
+    transactionToDelete.value =
+        transactions.value.find((tx) => tx.id === transactionId) ?? null;
+    confirmingTransactionDelete.value = transactionToDelete.value !== null;
+};
+
+const transactionSummary = computed(() => {
+    const tx = transactionToDelete.value;
+    if (tx === null) {
+        return '';
+    }
+    const [year, month, day] = tx.event_at.split('-').map(Number);
+    const date = new Date(year, month - 1, day).toLocaleDateString(
+        locale.value,
+        { day: 'numeric', month: 'long', year: 'numeric' },
+    );
+    // A masked amount is never revealed, not even in the confirmation.
+    return tx.masked || tx.amount === null
+        ? t('ledger.deleteTransaction.summaryMasked', {
+              envelope: tx.name,
+              date,
+          })
+        : t('ledger.deleteTransaction.summary', {
+              envelope: tx.name,
+              date,
+              amount: formatMoney(tx.amount, currency.value, locale.value),
+          });
+});
+
+const confirmRemoveTransaction = () => {
+    const tx = transactionToDelete.value;
+    if (tx === null) {
+        return;
+    }
+    pendingTransactionId.value = tx.id;
     deleteTransaction.mutate(
-        { transactionId },
+        { transactionId: tx.id },
         {
+            onSuccess: () => {
+                confirmingTransactionDelete.value = false;
+                toast.success(t('ledger.toast.transactionDeleted'));
+            },
             onSettled: () => {
                 pendingTransactionId.value = null;
             },
@@ -417,22 +473,13 @@ const onRemoveTransaction = (transactionId: number) => {
         <!-- No ledgers yet -->
         <Card
             v-else-if="ledgers.length === 0"
-            class="relative overflow-hidden border-sidebar-border/70 dark:border-sidebar-border"
+            class="border-sidebar-border/70 dark:border-sidebar-border"
         >
-            <div
-                class="pointer-events-none absolute inset-0 bg-linear-to-br from-primary/10 via-transparent to-primary/5"
-                aria-hidden="true"
-            />
-            <div
-                class="pointer-events-none absolute -top-24 left-1/2 h-64 w-xl -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
-                aria-hidden="true"
-            />
-
             <CardContent
-                class="relative flex flex-col items-center px-6 py-16 text-center sm:py-20"
+                class="flex flex-col items-center px-6 py-16 text-center sm:py-20"
             >
                 <div
-                    class="flex size-16 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 shadow-inner shadow-primary/10"
+                    class="flex size-16 items-center justify-center rounded-2xl bg-primary/10"
                 >
                     <Icon
                         name="receipt-long"
@@ -441,11 +488,11 @@ const onRemoveTransaction = (transactionId: number) => {
                     />
                 </div>
 
-                <h3
-                    class="mt-6 bg-linear-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
+                <h2
+                    class="mt-6 font-display text-3xl leading-9 tracking-tight text-foreground"
                 >
                     {{ $t('ledger.empty.title') }}
-                </h3>
+                </h2>
                 <p
                     class="mt-3 max-w-xl text-sm leading-relaxed text-balance text-muted-foreground sm:text-base"
                 >
@@ -455,7 +502,7 @@ const onRemoveTransaction = (transactionId: number) => {
                 <Button
                     v-if="isProfileOwner"
                     size="lg"
-                    class="mt-8 gap-2 shadow-lg shadow-primary/25"
+                    class="mt-8 gap-2"
                     @click="showCreate = true"
                 >
                     <Icon name="add" class="size-5" aria-hidden="true" />
@@ -480,8 +527,10 @@ const onRemoveTransaction = (transactionId: number) => {
                 @remove="showDelete = true"
             />
 
-            <div class="grid items-start gap-6 lg:grid-cols-[auto_1fr]">
-                <div class="sticky top-4 lg:top-8">
+            <div
+                class="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[auto_minmax(0,1fr)]"
+            >
+                <div class="lg:sticky lg:top-8">
                     <MonthCalendar
                         :selected-date="selectedDate"
                         :view-month="viewMonth"
@@ -493,13 +542,13 @@ const onRemoveTransaction = (transactionId: number) => {
                 </div>
 
                 <div class="flex flex-col gap-4">
-                    <Card v-if="isClosed" class="border-amber-500/30">
+                    <Card v-if="isClosed" class="border-warning/40">
                         <CardContent
                             class="flex items-center gap-3 px-4 py-3 text-sm"
                         >
                             <Icon
                                 name="lock"
-                                class="size-5 shrink-0 text-amber-500"
+                                class="size-5 shrink-0 text-warning"
                                 aria-hidden="true"
                             />
                             {{ $t('ledger.closedNotice') }}
@@ -511,14 +560,14 @@ const onRemoveTransaction = (transactionId: number) => {
                             !envelopesQuery.isPending.value &&
                             pickerEnvelopes.length === 0
                         "
-                        class="border-amber-500/30"
+                        class="border-warning/40"
                     >
                         <CardContent
                             class="flex items-center gap-3 px-4 py-3 text-sm"
                         >
                             <Icon
                                 name="info"
-                                class="size-5 shrink-0 text-amber-500"
+                                class="size-5 shrink-0 text-warning"
                                 aria-hidden="true"
                             />
                             <span>
@@ -539,14 +588,14 @@ const onRemoveTransaction = (transactionId: number) => {
                             !envelopesQuery.isPending.value &&
                             !canAddTransaction
                         "
-                        class="border-amber-500/30"
+                        class="border-warning/40"
                     >
                         <CardContent
                             class="flex items-center gap-3 px-4 py-3 text-sm"
                         >
                             <Icon
                                 name="info"
-                                class="size-5 shrink-0 text-amber-500"
+                                class="size-5 shrink-0 text-warning"
                                 aria-hidden="true"
                             />
                             {{ $t('ledger.permissionNotice') }}
@@ -564,7 +613,9 @@ const onRemoveTransaction = (transactionId: number) => {
                         </CardHeader>
                         <CardContent>
                             <AddTransactionForm
+                                ref="addTransactionForm"
                                 :envelopes="pickerEnvelopes"
+                                :pending="addTransaction.isPending.value"
                                 :currency="currency"
                                 :selected-date="selectedDate"
                                 @confirm="onAddTransaction"
@@ -591,7 +642,11 @@ const onRemoveTransaction = (transactionId: number) => {
             </div>
         </template>
 
-        <CreateLedgerDialog v-model:open="showCreate" @confirm="onCreate" />
+        <CreateLedgerDialog
+            v-model:open="showCreate"
+            :pending="createLedger.isPending.value"
+            @confirm="onCreate"
+        />
 
         <ShareDrawer
             v-if="ledgerId !== null"
@@ -607,6 +662,40 @@ const onRemoveTransaction = (transactionId: number) => {
             @revoke="onRevokeShare"
             @transfer="onTransferOwnership"
         />
+
+        <Dialog
+            :open="confirmingTransactionDelete"
+            @update:open="confirmingTransactionDelete = $event"
+        >
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{{
+                        $t('ledger.deleteTransaction.title')
+                    }}</DialogTitle>
+                    <DialogDescription>
+                        {{ transactionSummary }}
+                        {{ $t('ledger.deleteTransaction.description') }}
+                    </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button
+                        variant="ghost"
+                        @click="confirmingTransactionDelete = false"
+                        >{{
+                            $t('common.actions.cancel')
+                        }}</Button
+                    >
+                    <Button
+                        variant="destructive"
+                        :disabled="deleteTransaction.isPending.value"
+                        @click="confirmRemoveTransaction"
+                    >
+                        <Spinner v-if="deleteTransaction.isPending.value" />
+                        {{ $t('ledger.deleteTransaction.confirm') }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
         <Dialog :open="showDelete" @update:open="showDelete = false">
             <DialogContent class="sm:max-w-md">

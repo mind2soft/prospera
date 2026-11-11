@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,6 +16,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useLocale } from '@/composables/useLocale';
 import { budgetLabel } from '@/lib/budget';
 import type { Budget } from '@/types';
 
@@ -37,6 +39,11 @@ const emit = defineEmits<{
 
 const menuOpen = ref(false);
 
+const { t } = useI18n();
+const { locale } = useLocale();
+const label = (budget: Budget): string =>
+    budgetLabel(budget, locale.value, t('budget.label.draft'));
+
 const selected = computed(
     () => props.budgets.find((b) => b.id === props.selectedId) ?? null,
 );
@@ -44,7 +51,7 @@ const isDraft = computed(() => selected.value?.published_at === null);
 </script>
 
 <template>
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex items-center justify-between gap-2 sm:gap-4">
         <Select
             :model-value="selectedId ?? undefined"
             :disabled="loading || budgets.length < 2"
@@ -52,11 +59,14 @@ const isDraft = computed(() => selected.value?.published_at === null);
                 (value) => emit('update:selectedId', Number(value))
             "
         >
-            <SelectTrigger class="w-56">
+            <SelectTrigger
+                class="w-full min-w-0 sm:w-56"
+                :aria-label="$t('budget.selector.selectBudget')"
+            >
                 <SelectValue>
                     {{
                         selected
-                            ? budgetLabel(selected)
+                            ? label(selected)
                             : loading
                               ? $t('common.loading')
                               : $t('budget.selector.selectBudget')
@@ -65,7 +75,7 @@ const isDraft = computed(() => selected.value?.published_at === null);
             </SelectTrigger>
             <SelectContent>
                 <SelectItem v-for="b in budgets" :key="b.id" :value="b.id">
-                    {{ budgetLabel(b) }}
+                    {{ label(b) }}
                 </SelectItem>
             </SelectContent>
         </Select>
@@ -132,7 +142,7 @@ const isDraft = computed(() => selected.value?.published_at === null);
                     "
                 >
                     <Icon name="delete" class="size-4" aria-hidden="true" />
-                    {{ $t('common.actions.delete') }}
+                    {{ $t('budget.selector.delete') }}
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

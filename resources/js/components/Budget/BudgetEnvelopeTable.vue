@@ -1,9 +1,13 @@
+<!-- biome-ignore-all lint/a11y/noNoninteractiveTabindex: the table scroll region must be keyboard-focusable to scroll (WCAG 2.1.1) -->
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue';
 import Currency from '@/components/Currency.vue';
+import EnvelopeChip from '@/components/EnvelopeChip.vue';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Spinner } from '@/components/ui/spinner';
+import { useLocale } from '@/composables/useLocale';
 import { formatMoney } from '@/lib/budget';
 import type { BudgetEnvelope } from '@/types';
 
@@ -12,7 +16,11 @@ const props = defineProps<{
     currency: string;
     editable?: boolean;
     pendingId?: number | null;
+    /** Autosave status of the amount edits. */
+    saveStatus?: 'idle' | 'saving' | 'saved' | 'error';
 }>();
+
+const { locale } = useLocale();
 
 const emit = defineEmits<{
     (e: 'add'): void;
@@ -67,14 +75,19 @@ const onAmountInput = (row: BudgetEnvelope, value: string) => {
 };
 
 /**
- * On blur, revert invalid (empty / non-integer / non-positive) edits back to
- * the current amount; valid edits are already applied and being saved.
+ * An invalid edit (empty / non-integer / non-positive) is not saved: it stays
+ * in the field with an inline message until fixed; Escape restores the saved
+ * amount.
  */
-const revertIfInvalid = (row: BudgetEnvelope) => {
-    if (!isValidAmount(edits[row.envelope_id] ?? '')) {
-        edits[row.envelope_id] = String(Math.abs(row.amount));
-    }
+const isInvalid = (row: BudgetEnvelope): boolean =>
+    !isValidAmount(edits[row.envelope_id] ?? '');
+
+const revert = (row: BudgetEnvelope) => {
+    edits[row.envelope_id] = String(Math.abs(row.amount));
 };
+
+const errorId = (row: BudgetEnvelope): string =>
+    `budget-amount-${row.envelope_id}-error`;
 
 const ordered = computed(() =>
     [...props.envelopes].sort((a, b) =>
@@ -112,7 +125,30 @@ const runningLeft = computed(() => {
 
 <template>
     <section class="space-y-2">
-        <div v-if="editable" class="flex justify-end">
+        <div v-if="editable" class="flex items-center justify-end gap-3">
+            <p
+                class="mr-auto flex items-center gap-1.5 text-xs"
+                :class="
+                    saveStatus === 'error'
+                        ? 'text-destructive'
+                        : 'text-muted-foreground'
+                "
+                role="status"
+                data-testid="budget-save-status"
+            >
+                <template v-if="saveStatus === 'saving'">
+                    <Spinner class="size-3.5" aria-hidden="true" />
+                    {{ $t('budget.table.saving') }}
+                </template>
+                <template v-else-if="saveStatus === 'saved'">
+                    <Icon name="check" class="size-3.5" aria-hidden="true" />
+                    {{ $t('budget.table.saved') }}
+                </template>
+                <template v-else-if="saveStatus === 'error'">
+                    <Icon name="warning" class="size-3.5" aria-hidden="true" />
+                    {{ $t('budget.table.notSaved') }}
+                </template>
+            </p>
             <Button
                 variant="default"
                 size="sm"
@@ -124,8 +160,12 @@ const runningLeft = computed(() => {
             </Button>
         </div>
 
-        <div class="overflow-hidden rounded-lg border">
-            <table class="w-full text-sm">
+        <section
+            class="overflow-x-auto rounded-lg border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            :aria-label="$t('budget.table.label')"
+            tabindex="0"
+        >
+            <table class="w-full min-w-lg text-sm">
                 <thead>
                     <tr
                         class="border-b bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase"
@@ -156,34 +196,30 @@ const runningLeft = computed(() => {
                         class="border-b last:border-0"
                     >
                         <td class="px-4 py-2.5">
-                            <span
-                                class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
-                                :style="{
-                                    backgroundColor: `${row.color}22`,
-                                    color: row.color,
-                                }"
-                            >
-                                <Icon
-                                    :name="
-                                        row.direction === 'revenue'
-                                            ? 'north'
-                                            : 'south'
-                                    "
-                                    class="size-3"
-                                    aria-hidden="true"
-                                />
-                                {{ row.name }}
-                            </span>
+                            <EnvelopeChip
+                                :name="row.name"
+                                :color="row.color"
+                                :direction="row.direction"
+                            />
                         </td>
-                        <td
-                            class="px-4 py-2.5 text-muted-foreground capitalize"
-                        >
-                            {{ row.type }}
+                        <td class="px-4 py-2.5 text-muted-foreground">
+                            {{ $t(`budget.addEnvelope.${row.type}`) }}
                         </td>
                         <td class="px-4 py-2.5 text-right">
                             <template v-if="editable">
                                 <Input
                                     :model-value="edits[row.envelope_id]"
+                                    :aria-label="
+                                        $t('budget.table.amountFor', {
+                                            name: row.name,
+                                        })
+                                    "
+                                    :aria-invalid="isInvalid(row) || undefined"
+                                    :aria-describedby="
+                                        isInvalid(row)
+                                            ? errorId(row)
+                                            : undefined
+                                    "
                                     type="number"
                                     min="1"
                                     step="1"
@@ -191,16 +227,24 @@ const runningLeft = computed(() => {
                                     @update:model-value="
                                         onAmountInput(row, String($event))
                                     "
-                                    @blur="revertIfInvalid(row)"
+                                    @keydown.escape="revert(row)"
                                     @keydown.enter="
                                         (
                                             $event.target as HTMLInputElement
                                         ).blur()
                                     "
                                 />
+                                <p
+                                    v-if="isInvalid(row)"
+                                    :id="errorId(row)"
+                                    class="mt-1 text-xs text-destructive"
+                                    role="alert"
+                                >
+                                    {{ $t('budget.table.invalidAmount') }}
+                                </p>
                             </template>
                             <template v-else>{{
-                                formatMoney(row.amount, currency)
+                                formatMoney(row.amount, currency, locale)
                             }}</template>
                         </td>
                         <td
@@ -217,7 +261,11 @@ const runningLeft = computed(() => {
                                 variant="ghost"
                                 size="icon-sm"
                                 class="text-destructive hover:bg-destructive hover:text-destructive"
-                                :aria-label="$t('budget.table.removeEnvelope')"
+                                :aria-label="
+                                    $t('budget.table.removeEnvelopeFor', {
+                                        name: row.name,
+                                    })
+                                "
                                 :disabled="pendingId === row.envelope_id"
                                 @click="emit('remove', row.envelope_id)"
                             >
@@ -246,7 +294,7 @@ const runningLeft = computed(() => {
                                 :class="
                                     remaining < 0
                                         ? 'text-destructive'
-                                        : 'text-emerald-600 dark:text-emerald-400'
+                                        : 'text-success'
                                 "
                             >
                                 <Icon
@@ -277,7 +325,7 @@ const runningLeft = computed(() => {
                     </tr>
                 </tfoot>
             </table>
-        </div>
+        </section>
 
         <p
             v-if="hasVariable"

@@ -10,7 +10,8 @@
             "ledgerClosed": "Ledger closed.",
             "ledgerReopened": "Ledger reopened.",
             "ledgerDeleted": "Ledger deleted.",
-            "transactionAdded": "Transaction added."
+            "transactionAdded": "Transaction added.",
+            "transactionDeleted": "Transaction deleted."
         },
         "error": {
             "generic": "Something went wrong."
@@ -43,6 +44,13 @@
             "description": "This permanently removes the ledger and ALL of its transactions. This cannot be undone.",
             "confirm": "Delete ledger"
         },
+        "deleteTransaction": {
+            "title": "Delete this transaction?",
+            "summary": "{envelope} · {date} · {amount}.",
+            "summaryMasked": "{envelope} · {date}.",
+            "description": "The transaction will be permanently removed. This cannot be undone.",
+            "confirm": "Delete transaction"
+        },
         "status": {
             "open": "Open",
             "closed": "Closed"
@@ -53,7 +61,9 @@
         },
         "menu": {
             "reopen": "Reopen",
-            "share": "Share"
+            "share": "Share",
+            "close": "Close ledger",
+            "delete": "Delete ledger"
         },
         "calendar": {
             "previousMonth": "Previous month",
@@ -65,7 +75,10 @@
             "amount": "Amount",
             "amountPlaceholder": "e.g. 42",
             "eventDate": "Event date",
-            "add": "Add"
+            "add": "Add",
+            "inCurrency": "({currency})",
+            "eventDateHint": "Pick the day on the calendar.",
+            "hint": "Choose an envelope and enter a whole amount of 1 or more to add the transaction."
         },
         "direction": {
             "revenue": "revenue",
@@ -91,10 +104,13 @@
             "actions": "Actions",
             "recorded": "Recorded",
             "formerMember": "Former member",
-            "removeTransaction": "Remove transaction",
+            "deleteTransactionFor": "Delete transaction: {envelope}, {date}",
             "empty": "No transactions this month.",
             "loading": "Loading transactions…",
-            "error": "Transactions could not be loaded."
+            "error": "Transactions could not be loaded.",
+            "label": "Transactions",
+            "recordedBy": "{name}, recorded {date}",
+            "amountHidden": "Amount hidden"
         }
     }
 }

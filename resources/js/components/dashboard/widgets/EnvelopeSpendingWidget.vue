@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import Icon from '@/components/Icon.vue';
+import { useLocale } from '@/composables/useLocale';
 import { formatMoney } from '@/lib/budget';
 import type { DashboardSpendingRow, DashboardWidgetData } from '@/types';
 
@@ -8,6 +9,8 @@ const props = defineProps<{
     data: DashboardWidgetData;
     currency: string;
 }>();
+
+const { locale } = useLocale();
 
 const rows = computed(() =>
     props.data.type === 'envelope_spending' ? props.data.rows : [],
@@ -42,7 +45,7 @@ function spentLabel(row: DashboardSpendingRow): string {
         return '•••';
     }
 
-    return formatMoney(row.spent, props.currency);
+    return formatMoney(row.spent, props.currency, locale.value);
 }
 
 function allocatedLabel(row: DashboardSpendingRow): string | null {
@@ -50,7 +53,7 @@ function allocatedLabel(row: DashboardSpendingRow): string | null {
         return null;
     }
 
-    return formatMoney(row.allocated, props.currency);
+    return formatMoney(row.allocated, props.currency, locale.value);
 }
 
 /** Presentation colors derived from the envelope's hex color (RTL-safe). */
@@ -115,7 +118,7 @@ function barColors(row: DashboardSpendingRow): {
                             aria-hidden="true"
                         />
                         <span
-                            class="truncate text-[13px] font-medium text-foreground"
+                            class="truncate text-sm font-medium text-foreground"
                         >
                             {{ row.name }}
                         </span>
@@ -126,7 +129,7 @@ function barColors(row: DashboardSpendingRow): {
                             :aria-label="$t('dashboard.widget.masked')"
                         />
                     </span>
-                    <span class="shrink-0 text-[13px] leading-5 tabular-nums">
+                    <span class="shrink-0 text-sm leading-5 tabular-nums">
                         <span
                             class="font-semibold"
                             :class="
@@ -137,7 +140,12 @@ function barColors(row: DashboardSpendingRow): {
                                       : 'text-foreground'
                             "
                         >
-                            {{ spentLabel(row) }}
+                            <span :aria-hidden="row.masked || undefined">{{
+                                spentLabel(row)
+                            }}</span>
+                            <span v-if="row.masked" class="sr-only">{{
+                                $t('dashboard.widget.amountHidden')
+                            }}</span>
                         </span>
                         <template v-if="allocatedLabel(row) !== null">
                             <span class="text-muted-foreground/50"> / </span>

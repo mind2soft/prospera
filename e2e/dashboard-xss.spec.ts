@@ -33,16 +33,18 @@ test('chart tooltips render user-provided names as text, never markup', async ({
     await page.goto('/dashboard');
 
     const card = page.locator('[data-widget-card]').first();
+    // The chart is hidden from assistive tech (the legend is its text
+    // equivalent), so it is located by test id rather than by role.
     // Both segments drawn (the pie animates in).
     await expect
-        .poll(() => card.getByRole('figure').locator('path').count(), {
+        .poll(() => card.getByTestId('radial-chart').locator('path').count(), {
             timeout: 15_000,
         })
         .toBeGreaterThanOrEqual(2);
 
     // Sweep the pointer around the pie: the tooltip is rendered through
     // innerHTML, and each one must show the hovered row's name verbatim.
-    const box = await card.getByRole('figure').boundingBox();
+    const box = await card.getByTestId('radial-chart').boundingBox();
     expect(box).not.toBeNull();
 
     const cx = (box?.x ?? 0) + (box?.width ?? 0) / 2;

@@ -1,6 +1,8 @@
+<!-- biome-ignore-all lint/a11y/noNoninteractiveTabindex: the table scroll region must be keyboard-focusable to scroll (WCAG 2.1.1) -->
 <script setup lang="ts">
 import { computed } from 'vue';
 import Currency from '@/components/Currency.vue';
+import EnvelopeChip from '@/components/EnvelopeChip.vue';
 import Icon from '@/components/Icon.vue';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -90,8 +92,14 @@ const stampLabel = (createdAt: string): string =>
 </script>
 
 <template>
-    <div class="overflow-hidden rounded-lg border">
-        <table class="w-full text-sm">
+    <!-- A labelled, focusable scroll region: on narrow screens the columns
+         (including the delete action) scroll instead of being clipped. -->
+    <section
+        class="overflow-x-auto rounded-lg border focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        :aria-label="$t('ledger.table.label')"
+        tabindex="0"
+    >
+        <table class="w-full min-w-xl text-sm">
             <thead>
                 <tr
                     class="border-b bg-muted/50 text-left text-xs tracking-wide text-muted-foreground uppercase"
@@ -128,30 +136,20 @@ const stampLabel = (createdAt: string): string =>
                         {{ dayLabel(transaction.event_at) }}
                     </td>
                     <td class="px-4 py-2.5">
-                        <span
-                            class="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium"
-                            :style="{
-                                backgroundColor: `${transaction.color}22`,
-                                color: transaction.color,
-                            }"
-                        >
-                            <Icon
-                                :name="
-                                    transaction.direction === 'revenue'
-                                        ? 'north'
-                                        : 'south'
-                                "
-                                class="size-3"
-                                aria-hidden="true"
-                            />
-                            {{ transaction.name }}
-                        </span>
+                        <EnvelopeChip
+                            :name="transaction.name"
+                            :color="transaction.color"
+                            :direction="transaction.direction"
+                        />
                     </td>
                     <td class="px-4 py-2.5 text-right">
                         <span
                             v-if="transaction.masked"
                             class="text-muted-foreground"
-                            >—</span
+                            ><span aria-hidden="true">—</span
+                            ><span class="sr-only">{{
+                                $t('ledger.table.amountHidden')
+                            }}</span></span
                         >
                         <Currency
                             v-else
@@ -174,9 +172,19 @@ const stampLabel = (createdAt: string): string =>
                     <td class="px-4 py-2.5">
                         <TooltipProvider :delay-duration="0">
                             <Tooltip v-if="transaction.user.id !== null">
-                                <TooltipTrigger as-child>
-                                    <Avatar class="size-7">
-                                        <AvatarFallback class="text-[10px]">
+                                <TooltipTrigger
+                                    class="rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+                                    :aria-label="
+                                        $t('ledger.table.recordedBy', {
+                                            name: transaction.user.name,
+                                            date: stampLabel(
+                                                transaction.created_at,
+                                            ),
+                                        })
+                                    "
+                                >
+                                    <Avatar class="size-7" aria-hidden="true">
+                                        <AvatarFallback class="text-xs">
                                             {{
                                                 getInitials(
                                                     transaction.user.name,
@@ -210,7 +218,12 @@ const stampLabel = (createdAt: string): string =>
                             variant="ghost"
                             size="icon-sm"
                             class="text-destructive hover:bg-destructive hover:text-destructive"
-                            :aria-label="$t('ledger.table.removeTransaction')"
+                            :aria-label="
+                                $t('ledger.table.deleteTransactionFor', {
+                                    envelope: transaction.name,
+                                    date: dayLabel(transaction.event_at),
+                                })
+                            "
                             :disabled="pendingId === transaction.id"
                             @click="emit('remove', transaction.id)"
                         >
@@ -260,5 +273,5 @@ const stampLabel = (createdAt: string): string =>
                 </tr>
             </tbody>
         </table>
-    </div>
+    </section>
 </template>

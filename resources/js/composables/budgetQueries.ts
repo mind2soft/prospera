@@ -57,7 +57,8 @@ export function usePublishBudget() {
     const queryClient = useQueryClient();
 
     return useMutation({
-        mutationFn: (id: number) => budgetApi.publish(id),
+        mutationFn: ({ id, month }: { id: number; month: string }) =>
+            budgetApi.publish(id, month),
         onSuccess: (data) => {
             queryClient.setQueryData(budgetKey(data.budget.id), {
                 budget: data.budget,

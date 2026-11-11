@@ -79,9 +79,9 @@ export function resolveLocale(
 
 /**
  * Keep the i18n locale in sync with the user's preference and the server
- * locale shared by the backend, falling back to the browser locales. The
- * effect starts before Inertia resolves the initial page, so the props may
- * not be set yet.
+ * locale shared by the backend, falling back to the browser locales, and
+ * mirror it on `<html lang>`. The effect starts before Inertia resolves the
+ * initial page, so the props may not be set yet.
  */
 export function initializeLocale(): void {
     const page = usePage();
@@ -89,10 +89,16 @@ export function initializeLocale(): void {
     watchEffect(() => {
         const user = page.props?.auth?.user;
 
-        i18n.global.locale.value = resolveLocale(
+        const locale = resolveLocale(
             user?.locale ?? null,
             page.props?.locale ?? null,
         );
+        i18n.global.locale.value = locale;
+
+        // Screen readers and hyphenation follow the document language.
+        if (typeof document !== 'undefined') {
+            document.documentElement.lang = locale;
+        }
     });
 }
 

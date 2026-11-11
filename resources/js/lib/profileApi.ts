@@ -68,4 +68,7 @@ export const profileApi = {
 
     acceptInvite: (inviteKey: string): Promise<{ profile: FinancialProfile }> =>
         api(invites.accept(inviteKey)),
+
+    declineInvite: (inviteKey: string): Promise<void> =>
+        api(invites.decline(inviteKey)),
 };

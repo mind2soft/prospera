@@ -38,16 +38,16 @@ const positions = computed(() => {
 
 const fmt = (amount: number) =>
     props.currency
-        ? formatMoney(amount, props.currency)
+        ? formatMoney(amount, props.currency, locale.value)
         : amount.toLocaleString(locale.value);
 </script>
 
 <template>
     <section>
         <div class="mb-2 flex items-baseline justify-between gap-4">
-            <h3 class="text-sm font-medium text-muted-foreground">
+            <h2 class="text-sm font-medium text-muted-foreground">
                 {{ title }}
-            </h3>
+            </h2>
             <span class="text-sm font-medium tabular-nums">{{
                 fmt(total)
             }}</span>

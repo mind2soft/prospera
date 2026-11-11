@@ -9,7 +9,9 @@
             "confirm": "Confirmer",
             "back": "Retour",
             "retry": "Réessayer",
-            "remove": "Retirer"
+            "remove": "Retirer",
+            "toggleSidebar": "Afficher ou masquer la barre latérale",
+            "more": "Plus"
         },
         "fields": {
             "name": "Nom",
@@ -17,6 +19,7 @@
             "password": "Mot de passe"
         },
         "loading": "Chargement…",
-        "error": "Une erreur est survenue. Veuillez réessayer."
+        "error": "Une erreur est survenue. Veuillez réessayer.",
+        "breadcrumb": "Fil d’Ariane"
     }
 }

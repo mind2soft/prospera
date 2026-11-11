@@ -69,12 +69,12 @@ test('budget page audit', async ({ page }) => {
 
     // --- bars: ordering & labels -------------------------------------------
     const barLabels = await page
-        .locator("section:has(h3:text('Expenses')) li")
+        .locator("section:has(h2:text('Expenses')) li")
         .allTextContents();
     console.log('EXPENSE BAR LABELS:', barLabels);
 
     const barSegments = await page
-        .locator("section:has(h3:text('Expenses')) .h-3 > div")
+        .locator("section:has(h2:text('Expenses')) .h-3 > div")
         .evaluateAll((nodes) =>
             nodes.map((n) => (n as HTMLElement).offsetWidth),
         );

@@ -11,6 +11,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -67,21 +68,6 @@ const emit = defineEmits<{
 
 const { getInitials } = useInitials();
 
-/** Deterministic avatar background per user (Drive-style colored initials). */
-const AVATAR_COLORS = [
-    '#6366f1',
-    '#0ea5e9',
-    '#14b8a6',
-    '#10b981',
-    '#f59e0b',
-    '#f97316',
-    '#f43f5e',
-    '#8b5cf6',
-] as const;
-
-const avatarColor = (member: { user_id: number }): string =>
-    AVATAR_COLORS[member.user_id % AVATAR_COLORS.length];
-
 const permissionLabels: Record<ResourcePermission, string> = {
     owner: 'share.permission.owner',
     contributor: 'share.permission.contributor',
@@ -103,9 +89,22 @@ const grant = (): void => {
         return;
     }
     emit('grant', newUserId.value, newPermission.value);
-    newUserId.value = null;
-    newPermission.value = 'contributor';
 };
+
+// The choice is kept until the grant shows up in the list, so a failed
+// request doesn't lose it.
+watch(
+    () => props.members,
+    (members) => {
+        if (
+            newUserId.value !== null &&
+            members.some((m) => m.user_id === newUserId.value)
+        ) {
+            newUserId.value = null;
+            newPermission.value = 'contributor';
+        }
+    },
+);
 
 // --- change / revoke --------------------------------------------------------
 const onPermissionChange = (
@@ -116,6 +115,24 @@ const onPermissionChange = (
         return;
     }
     emit('set-permission', member.user_id, permission as ResourcePermission);
+};
+
+// Revoking cannot be undone from every drawer (budgets and ledgers have no
+// grant section): confirm it, naming the member.
+const revokeTarget = ref<ResourceMember | null>(null);
+const confirmingRevoke = ref(false);
+
+const askRevoke = (member: ResourceMember): void => {
+    revokeTarget.value = member;
+    confirmingRevoke.value = true;
+};
+
+const confirmRevoke = (): void => {
+    if (revokeTarget.value === null) {
+        return;
+    }
+    confirmingRevoke.value = false;
+    emit('revoke', revokeTarget.value.user_id);
 };
 
 // --- transfer ---------------------------------------------------------------
@@ -167,6 +184,7 @@ watch(
             newPermission.value = 'contributor';
             transferTarget.value = null;
             confirmingTransfer.value = false;
+            confirmingRevoke.value = false;
         }
     },
 );
@@ -202,10 +220,7 @@ watch(
                     >
                         <Avatar class="size-8 shrink-0">
                             <AvatarFallback
-                                class="text-xs font-medium text-white"
-                                :style="{
-                                    backgroundColor: avatarColor(member),
-                                }"
+                                class="bg-muted text-xs font-medium text-foreground"
                             >
                                 {{ getInitials(member.name) }}
                             </AvatarFallback>
@@ -233,7 +248,15 @@ watch(
                                     onPermissionChange(member, String(value))
                             "
                         >
-                            <SelectTrigger size="sm" class="w-32 shrink-0">
+                            <SelectTrigger
+                                size="sm"
+                                class="w-32 shrink-0"
+                                :aria-label="
+                                    $t('share.drawer.accessFor', {
+                                        name: member.name,
+                                    })
+                                "
+                            >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -271,8 +294,12 @@ watch(
                             variant="ghost"
                             size="icon-sm"
                             class="shrink-0 text-muted-foreground hover:text-destructive"
-                            :aria-label="$t('share.drawer.revoke')"
-                            @click="emit('revoke', member.user_id)"
+                            :aria-label="
+                                $t('share.drawer.revokeFor', {
+                                    name: member.name,
+                                })
+                            "
+                            @click="askRevoke(member)"
                         >
                             <Icon
                                 name="close"
@@ -288,9 +315,9 @@ watch(
                 <Separator />
 
                 <div v-if="profileCircle" class="space-y-2">
-                    <p class="text-sm font-medium">
+                    <Label for="share-grant-member">
                         {{ $t('share.drawer.grantAccess') }}
-                    </p>
+                    </Label>
                     <div class="flex items-center gap-2">
                         <Select
                             :model-value="newUserId ?? undefined"
@@ -298,7 +325,10 @@ watch(
                                 (value) => (newUserId = Number(value))
                             "
                         >
-                            <SelectTrigger class="flex-1">
+                            <SelectTrigger
+                                id="share-grant-member"
+                                class="flex-1"
+                            >
                                 <SelectValue
                                     :placeholder="
                                         $t('share.drawer.chooseMember')
@@ -316,7 +346,11 @@ watch(
                             </SelectContent>
                         </Select>
                         <Select v-model="newPermission">
-                            <SelectTrigger size="sm" class="w-32 shrink-0">
+                            <SelectTrigger
+                                size="sm"
+                                class="w-32 shrink-0"
+                                :aria-label="$t('share.drawer.accessLevel')"
+                            >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -355,9 +389,9 @@ watch(
                 </div>
 
                 <div v-if="transferCandidates.length > 0" class="space-y-2">
-                    <p class="text-sm font-medium">
+                    <Label for="share-transfer-member">
                         {{ $t('share.drawer.transferOwnership') }}
-                    </p>
+                    </Label>
                     <div class="flex items-center gap-2">
                         <Select
                             :model-value="transferTarget ?? undefined"
@@ -365,7 +399,10 @@ watch(
                                 (value) => (transferTarget = Number(value))
                             "
                         >
-                            <SelectTrigger class="flex-1">
+                            <SelectTrigger
+                                id="share-transfer-member"
+                                class="flex-1"
+                            >
                                 <SelectValue
                                     :placeholder="
                                         $t('share.drawer.chooseMember')
@@ -412,6 +449,49 @@ watch(
                     }}</Button
                 >
             </div>
+
+            <Dialog
+                :open="confirmingRevoke"
+                @update:open="confirmingRevoke = false"
+            >
+                <DialogContent class="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>{{
+                            $t('share.drawer.revokeTitle', {
+                                name: revokeTarget?.name ?? '',
+                            })
+                        }}</DialogTitle>
+                        <DialogDescription>
+                            {{
+                                profileCircle
+                                    ? $t('share.drawer.revokeDescription', {
+                                          name: revokeTarget?.name ?? '',
+                                          resource: transferResource,
+                                      })
+                                    : $t(
+                                          'share.drawer.revokeDescriptionMember',
+                                          {
+                                              name: revokeTarget?.name ?? '',
+                                              resource: transferResource,
+                                          },
+                                      )
+                            }}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="ghost"
+                            @click="confirmingRevoke = false"
+                            >{{
+                                $t('common.actions.cancel')
+                            }}</Button
+                        >
+                        <Button variant="destructive" @click="confirmRevoke">{{
+                            $t('share.drawer.revoke')
+                        }}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog
                 :open="confirmingTransfer"

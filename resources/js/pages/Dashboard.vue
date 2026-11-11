@@ -175,15 +175,20 @@ watch(
 // are serialized (one in flight; a change during a save re-queues) so
 // responses can never land out of order and clobber newer edits.
 let queuedSave = false;
+// Tracked locally: the mutation's own `isPending` still reads true inside
+// its onSettled callback, which would re-queue the follow-up save forever
+// (and lose it).
+let saving = false;
 
 const saveNow = (): void => {
-    if (saveLayout.isPending.value) {
+    if (saving) {
         queuedSave = true;
 
         return;
     }
 
     queuedSave = false;
+    saving = true;
 
     saveLayout.mutate(
         {
@@ -212,6 +217,7 @@ const saveNow = (): void => {
                 );
             },
             onSettled: () => {
+                saving = false;
                 if (queuedSave) {
                     saveNow();
                 }
@@ -289,6 +295,32 @@ const openSettings = (widget: DashboardWidgetConfig): void => {
     settingsOpen.value = true;
 };
 
+const settingsPosition = computed(() => {
+    const widget = settingsWidget.value;
+    const index = widget === null ? -1 : widgets.value.indexOf(widget);
+
+    return index === -1 ? undefined : index;
+});
+
+const onMoveFromSettings = (direction: 'earlier' | 'later'): void => {
+    const from = settingsPosition.value;
+
+    if (from === undefined) {
+        return;
+    }
+
+    const to = direction === 'earlier' ? from - 1 : from + 1;
+
+    if (to < 0 || to >= widgets.value.length) {
+        return;
+    }
+
+    const ids = widgets.value.map((w) => w.id ?? 0);
+    const [moved] = ids.splice(from, 1);
+    ids.splice(to, 0, moved);
+    onReorder(ids);
+};
+
 const onSettingsUpdate = (patch: Partial<DashboardWidgetConfig>): void => {
     if (settingsWidget.value) {
         Object.assign(settingsWidget.value, patch);
@@ -356,16 +388,9 @@ const onDestroy = (): void => {
         />
 
         <!-- Empty dashboard: no seeded widgets — the user composes their own. -->
-        <Card
-            v-else-if="widgets.length === 0"
-            class="relative overflow-hidden border-dashed"
-        >
-            <span
-                class="pointer-events-none absolute -top-24 left-1/2 size-64 -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
-                aria-hidden="true"
-            />
+        <Card v-else-if="widgets.length === 0" class="border-dashed">
             <CardContent
-                class="relative flex flex-col items-center gap-4 py-16 text-center"
+                class="flex flex-col items-center gap-4 py-16 text-center"
             >
                 <span
                     class="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary"
@@ -373,9 +398,9 @@ const onDestroy = (): void => {
                     <Icon name="dashboard" class="size-7" aria-hidden="true" />
                 </span>
                 <div class="space-y-1">
-                    <h3 class="text-lg font-semibold">
+                    <h2 class="font-display text-3xl leading-9 tracking-tight">
                         {{ $t('dashboard.empty.title') }}
-                    </h3>
+                    </h2>
                     <p class="mx-auto max-w-md text-sm text-muted-foreground">
                         {{ $t('dashboard.empty.description') }}
                     </p>
@@ -400,7 +425,10 @@ const onDestroy = (): void => {
         <WidgetSettingsSheet
             :open="settingsOpen"
             :widget="settingsWidget"
+            :position="settingsPosition"
+            :count="widgets.length"
             @update:open="settingsOpen = $event"
+            @move="onMoveFromSettings"
             @update="onSettingsUpdate"
             @remove="onRemove"
         />

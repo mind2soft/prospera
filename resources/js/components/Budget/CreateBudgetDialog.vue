@@ -9,6 +9,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -16,12 +17,17 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import { useLocale } from '@/composables/useLocale';
 import { CURRENCIES, currencyName } from '@/lib/budget';
 
 const { locale } = useLocale();
 
-const props = defineProps<{ open: boolean }>();
+const props = defineProps<{
+    open: boolean;
+    /** The create request is in flight: the parent closes on success. */
+    pending?: boolean;
+}>();
 
 const emit = defineEmits<{
     (e: 'update:open', value: boolean): void;
@@ -40,8 +46,10 @@ watch(
 );
 
 const confirm = () => {
+    if (props.pending) {
+        return;
+    }
     emit('confirm', currency.value);
-    emit('update:open', false);
 };
 </script>
 
@@ -55,30 +63,36 @@ const confirm = () => {
                 </DialogDescription>
             </DialogHeader>
 
-            <Select v-model="currency">
-                <SelectTrigger class="w-full">
-                    <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem
-                        v-for="option in CURRENCIES"
-                        :key="option.code"
-                        :value="option.code"
-                    >
-                        {{ option.code }}
-                        —
-                        {{ currencyName(option.code, locale) }}
-                    </SelectItem>
-                </SelectContent>
-            </Select>
+            <div class="grid gap-2">
+                <Label for="create-budget-currency">{{
+                    $t('budget.currency')
+                }}</Label>
+                <Select v-model="currency">
+                    <SelectTrigger id="create-budget-currency" class="w-full">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem
+                            v-for="option in CURRENCIES"
+                            :key="option.code"
+                            :value="option.code"
+                        >
+                            {{ option.code }}
+                            —
+                            {{ currencyName(option.code, locale) }}
+                        </SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
 
             <DialogFooter>
                 <Button variant="ghost" @click="emit('update:open', false)">{{
                     $t('common.actions.cancel')
                 }}</Button>
-                <Button @click="confirm">{{
-                    $t('budget.create.createDraft')
-                }}</Button>
+                <Button :disabled="pending" @click="confirm">
+                    <Spinner v-if="pending" />
+                    {{ $t('budget.create.createDraft') }}
+                </Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>

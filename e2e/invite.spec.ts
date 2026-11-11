@@ -140,10 +140,13 @@ test('a signed-in user can accept an invite from the link', async ({
 
     await page.waitForURL((url) => url.pathname.endsWith('/dashboard'));
 
-    // The joined profile shows up in the switcher as a shared profile.
+    // The joined profile shows up in the switcher as a shared profile (next
+    // to the partner's own "Default profile").
     const menu = await openProfilesMenu(page);
-    const item = menu.getByRole('menuitem', { name: /Default profile/ });
-    await expect(item).toContainText('Shared');
+    const shared = menu
+        .getByRole('menuitemradio', { name: /Default profile/ })
+        .filter({ hasText: 'Shared' });
+    await expect(shared).toHaveCount(1);
 });
 
 test('declining an invite does not grant membership', async ({ page }) => {

@@ -86,6 +86,10 @@ class SharingLifecycleTest extends TestCase
 
         $this->assertDatabaseMissing('envelope_permissions', ['envelope_id' => $envelope->id, 'user_id' => $this->alice->id]);
         $this->assertSame(ResourcePermissions::NONE, $envelope->fresh()->permissionFor($this->alice));
+        $this->assertSame(
+            ResourcePermissions::NONE,
+            Envelope::permissionsFor($this->alice, [$envelope->id])->get($envelope->id),
+        );
         $this->assertNotContains($envelope->id, $this->listedEnvelopeIds($this->alice));
     }
 

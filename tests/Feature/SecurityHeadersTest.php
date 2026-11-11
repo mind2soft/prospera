@@ -118,6 +118,17 @@ class SecurityHeadersTest extends TestCase
         $this->assertMatchesRegularExpression('#font-src [^;]* http:;#', $csp);
     }
 
+    public function test_no_third_party_origin_is_allowed(): void
+    {
+        $csp = (string) $this->get('/up')->headers->get('Content-Security-Policy');
+
+        // Fonts and icons are self-hosted / bundled.
+        $this->assertDoesNotMatchRegularExpression('#https?://#', $csp);
+        $this->assertStringContainsString("connect-src 'self';", $csp);
+        $this->assertStringContainsString("font-src 'self' data:;", $csp);
+        $this->assertStringContainsString("style-src 'self' 'unsafe-inline';", $csp);
+    }
+
     public function test_the_dev_server_is_not_allowed_otherwise(): void
     {
         $csp = (string) $this->get('/up')->headers->get('Content-Security-Policy');

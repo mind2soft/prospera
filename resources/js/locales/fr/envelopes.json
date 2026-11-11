@@ -20,9 +20,10 @@
             "viewer": "Peut consulter",
             "none": "Partagée"
         },
-        "options": "Options de l'enveloppe",
+        "optionsFor": "Options de l'enveloppe {name}",
         "menu": {
-            "share": "Partager"
+            "share": "Partager",
+            "delete": "Supprimer l’enveloppe"
         },
         "dialog": {
             "newTitle": "Nouvelle enveloppe",
@@ -55,7 +56,8 @@
         "delete": {
             "title": "Supprimer l'enveloppe ?",
             "description": "« {name} » sera retirée de vos enveloppes. Les transactions existantes ne sont pas supprimées.",
-            "failed": "Impossible de supprimer l'enveloppe."
+            "failed": "Impossible de supprimer l'enveloppe.",
+            "confirm": "Supprimer l’enveloppe"
         }
     }
 }

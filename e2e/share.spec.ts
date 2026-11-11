@@ -53,7 +53,15 @@ test('the share drawer lists profile members with their effective permission', a
     await expect(partnerRow.getByRole('combobox')).toHaveCount(1);
     await expect(partnerRow.getByRole('combobox')).toContainText('Can edit');
     await expect(
-        partnerRow.getByRole('button', { name: 'Revoke access' }),
+        partnerRow.getByRole('button', {
+            name: 'Revoke access for Partner Member',
+        }),
+    ).toBeVisible();
+    // The permission control names the member it applies to.
+    await expect(
+        partnerRow.getByRole('combobox', {
+            name: 'Partner Member: access level',
+        }),
     ).toBeVisible();
 });
 
@@ -155,7 +163,15 @@ test('the envelope share drawer grants, updates and revokes access', async ({
         .filter({ hasText: 'partner@example.com' });
     await expect(partnerRow.getByRole('combobox')).toContainText('Can edit');
     await expect(
-        partnerRow.getByRole('button', { name: 'Revoke access' }),
+        partnerRow.getByRole('button', {
+            name: 'Revoke access for Partner Member',
+        }),
+    ).toBeVisible();
+    // The permission control names the member it applies to.
+    await expect(
+        partnerRow.getByRole('combobox', {
+            name: 'Partner Member: access level',
+        }),
     ).toBeVisible();
 
     // Change the granted permission.
@@ -164,8 +180,19 @@ test('the envelope share drawer grants, updates and revokes access', async ({
     await expect(page.getByText('Access updated.')).toBeVisible();
     await expect(partnerRow.getByRole('combobox')).toContainText('Can view');
 
-    // Revoke — the row disappears, the owner row remains.
+    // Revoke asks for confirmation first — cancelling keeps the access.
     await partnerRow.getByRole('button', { name: 'Revoke access' }).click();
+    const confirm = page.getByRole('dialog', {
+        name: 'Revoke Partner Member’s access?',
+    });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(confirm).toBeHidden();
+    await expect(partnerRow).toBeVisible();
+
+    // Confirmed — the row disappears, the owner row remains.
+    await partnerRow.getByRole('button', { name: 'Revoke access' }).click();
+    await confirm.getByRole('button', { name: 'Revoke access' }).click();
     await expect(page.getByText('Access revoked.')).toBeVisible();
     await expect(
         drawer.getByRole('listitem').filter({ hasText: 'partner@example.com' }),

@@ -55,7 +55,7 @@ const label = (ledger: Ledger): string => {
 </script>
 
 <template>
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex items-center justify-between gap-2 sm:gap-4">
         <Select
             :model-value="selectedId ?? undefined"
             :disabled="loading || ledgers.length < 2"
@@ -63,7 +63,10 @@ const label = (ledger: Ledger): string => {
                 (value) => emit('update:selectedId', Number(value))
             "
         >
-            <SelectTrigger class="w-64">
+            <SelectTrigger
+                class="w-full min-w-0 sm:w-64"
+                :aria-label="$t('ledger.selector.selectLedger')"
+            >
                 <SelectValue>
                     <span
                         v-if="selected"
@@ -72,11 +75,11 @@ const label = (ledger: Ledger): string => {
                     >
                         {{ selected.name }}
                         <span
-                            class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                            class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
                             :class="
                                 isClosed
                                     ? 'bg-muted text-muted-foreground'
-                                    : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                                    : 'bg-success/10 text-success'
                             "
                         >
                             <Icon
@@ -138,7 +141,7 @@ const label = (ledger: Ledger): string => {
                         {{
                             isClosed
                                 ? $t('ledger.menu.reopen')
-                                : $t('common.actions.close')
+                                : $t('ledger.menu.close')
                         }}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
@@ -150,7 +153,7 @@ const label = (ledger: Ledger): string => {
                         "
                     >
                         <Icon name="delete" class="size-4" aria-hidden="true" />
-                        {{ $t('common.actions.delete') }}
+                        {{ $t('ledger.menu.delete') }}
                     </DropdownMenuItem>
                 </template>
                 <DropdownMenuItem

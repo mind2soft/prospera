@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useElementSize } from '@vueuse/core';
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import WidgetCard from '@/components/dashboard/WidgetCard.vue';
 import type { DashboardWidgetConfig } from '@/types';
 
@@ -51,6 +52,51 @@ const columns = computed(() => {
 /** A widget never spans more than the viewport's column count. */
 const spanOf = (widget: DashboardWidgetConfig): number =>
     Math.min(widget.column_width, columns.value);
+
+const { t } = useI18n();
+
+/** Polite announcement of keyboard moves ("Moved to position 2 of 5"). */
+const announcement = ref('');
+
+const titleOf = (widget: DashboardWidgetConfig): string =>
+    widget.title ?? t(`dashboard.widget.defaultTitle.${widget.type}`);
+
+const onKeyboardMove = async (
+    widget: DashboardWidgetConfig,
+    move: 'earlier' | 'later' | 'first' | 'last',
+): Promise<void> => {
+    const ids = props.widgets.map((w) => w.id ?? 0);
+    const from = ids.indexOf(widget.id ?? 0);
+    const last = ids.length - 1;
+    const to = {
+        earlier: Math.max(0, from - 1),
+        later: Math.min(last, from + 1),
+        first: 0,
+        last,
+    }[move];
+
+    if (from === -1 || to === from) {
+        return;
+    }
+
+    ids.splice(from, 1);
+    ids.splice(to, 0, widget.id ?? 0);
+    emit('reorder', ids);
+
+    announcement.value = t('dashboard.widget.moved', {
+        title: titleOf(widget),
+        position: to + 1,
+        count: ids.length,
+    });
+
+    // The card re-renders at its new place: keep focus on its handle.
+    await nextTick();
+    container.value
+        ?.querySelector<HTMLElement>(
+            `[data-widget-id="${widget.id}"] [data-reorder-handle]`,
+        )
+        ?.focus();
+};
 
 const draggingId = ref<number | null>(null);
 
@@ -137,6 +183,7 @@ const onCardDragOver = (
             v-for="widget in widgets"
             :key="widget.id"
             data-widget-card
+            :data-widget-id="widget.id"
             :class="widget.id === draggingId ? 'opacity-50' : ''"
             :style="{ gridColumn: `span ${spanOf(widget)}` }"
             @dragover="onCardDragOver($event, widget)"
@@ -146,6 +193,7 @@ const onCardDragOver = (
                 :widget="widget"
                 @drag-start="onCardDragStart(widget)"
                 @drag-end="onCardDragEnd"
+                @move="onKeyboardMove(widget, $event)"
                 @settings="emit('settings', widget)"
             >
                 <template #default>
@@ -154,4 +202,7 @@ const onCardDragOver = (
             </WidgetCard>
         </li>
     </ul>
+    <p class="sr-only" aria-live="polite" data-testid="reorder-announcement">
+        {{ announcement }}
+    </p>
 </template>

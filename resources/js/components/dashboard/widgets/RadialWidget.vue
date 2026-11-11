@@ -63,7 +63,7 @@ const compactMoney = (amount: number): string => {
             maximumFractionDigits: 1,
         }).format(amount);
     } catch {
-        return formatMoney(amount, props.currency);
+        return formatMoney(amount, props.currency, locale.value);
     }
 };
 
@@ -109,7 +109,7 @@ const tooltipTemplate = (arc?: SegmentArc): string => {
         <span style="font-variant-numeric:tabular-nums">${escapeHtml(
             datum.value === null
                 ? '•••'
-                : formatMoney(datum.value, props.currency),
+                : formatMoney(datum.value, props.currency, locale.value),
         )}${escapeHtml(share)}</span>
     </div>`;
 };
@@ -142,7 +142,11 @@ function legendShare(row: DashboardRadialRow): string | null {
                 v-if="isClient && chartRows.length > 0"
                 class="flex min-h-0 flex-1 items-center justify-center"
             >
+                <!-- Visual only: the legend lists every row with its amount
+                     and share (the text equivalent). -->
                 <VisSingleContainer
+                    aria-hidden="true"
+                    data-testid="radial-chart"
                     :data="chartRows"
                     :height="200"
                     class="chart-surface"
@@ -200,12 +204,23 @@ function legendShare(row: DashboardRadialRow): string | null {
                     />
                     <span class="font-medium">{{ row.name }}</span>
                     <span
+                        v-if="!row.masked && row.value !== null"
+                        class="text-foreground tabular-nums"
+                    >
+                        {{ formatMoney(row.value, currency, locale) }}
+                    </span>
+                    <span
                         v-if="legendShare(row) !== null"
                         class="text-muted-foreground tabular-nums"
                     >
-                        {{ legendShare(row) }}
+                        · {{ legendShare(row) }}
                     </span>
-                    <span v-else-if="row.masked">•••</span>
+                    <template v-else-if="row.masked">
+                        <span aria-hidden="true">•••</span>
+                        <span class="sr-only">{{
+                            $t('dashboard.widget.amountHidden')
+                        }}</span>
+                    </template>
                 </li>
             </ul>
         </template>

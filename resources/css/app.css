@@ -1,4 +1,7 @@
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Neuton:ital,wght@0,200;0,300;0,400;0,700;0,800;1,400&display=swap");
+/* Self-hosted fonts (no third-party requests): Geist for the interface,
+   Neuton 400 for display headings — the only weight in use. */
+@import "@fontsource-variable/geist";
+@import "@fontsource/neuton/400.css";
 
 /*
   ---break---
@@ -15,7 +18,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+    --font-sans:
+        "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
     --font-display: "Neuton", ui-serif, Georgia, serif;
     --color-brand: var(--brand);
     --color-brand-foreground: var(--brand-foreground);
@@ -47,6 +51,11 @@
 
     --color-destructive: var(--destructive);
     --color-destructive-foreground: var(--destructive-foreground);
+
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
 
     --color-border: var(--border);
     --color-input: var(--input);
@@ -114,11 +123,15 @@
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
+    --muted-foreground: oklch(0.54 0 0);
     --accent: oklch(0.97 0 0);
     --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
+    --destructive: oklch(0.56 0.23 27.325);
     --destructive-foreground: hsl(0 0% 98%);
+    --success: oklch(0.5 0.12 160);
+    --success-foreground: oklch(1 0 0);
+    --warning: oklch(0.55 0.14 60);
+    --warning-foreground: oklch(1 0 0);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
     --ring: oklch(0.4 0.1 165);
@@ -166,6 +179,10 @@
     --accent-foreground: oklch(0.985 0 0);
     --destructive: oklch(0.704 0.191 22.216);
     --destructive-foreground: hsl(0 0% 98%);
+    --success: oklch(0.78 0.14 160);
+    --success-foreground: oklch(0.145 0 0);
+    --warning: oklch(0.8 0.15 75);
+    --warning-foreground: oklch(0.145 0 0);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.78 0.12 165);
@@ -199,6 +216,27 @@
         @apply bg-background text-foreground;
     }
 }
+
+/*
+  Reduced motion (docs/design-system/tokens.md → Motion): drop nonessential
+  movement everywhere. Durations go to ~0 rather than `none` so the
+  animationend/transitionend events that unmount dialogs and sheets still
+  fire.
+*/
+/* biome-ignore-start lint/complexity/noImportantStyles: must beat every component's own durations */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        animation-delay: 0ms !important;
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+/* biome-ignore-end lint/complexity/noImportantStyles: must beat every component's own durations */
 
 /* Unovis chart surfaces — token theming (see dashboard design spec) */
 .chart-surface {

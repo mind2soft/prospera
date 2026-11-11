@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { RadioGroupIndicator, RadioGroupItem, RadioGroupRoot } from 'reka-ui';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
@@ -77,6 +78,11 @@ const palette = [
     { name: 'envelopes.colors.violet', value: '#8b5cf6' },
     { name: 'envelopes.colors.slate', value: '#64748b' },
 ];
+
+const typeOptions = [
+    { value: 'expense', label: 'envelopes.form.expense', icon: 'south-west' },
+    { value: 'revenue', label: 'envelopes.form.revenue', icon: 'north-east' },
+] as const;
 
 const defaults = {
     name: '',
@@ -292,22 +298,13 @@ const roleLabel: Record<string, string> = {
         <!-- Empty state -->
         <Card
             v-if="!props.envelopes.length"
-            class="relative overflow-hidden border-sidebar-border/70 dark:border-sidebar-border"
+            class="border-sidebar-border/70 dark:border-sidebar-border"
         >
-            <div
-                class="pointer-events-none absolute inset-0 bg-linear-to-br from-primary/10 via-transparent to-primary/5"
-                aria-hidden="true"
-            />
-            <div
-                class="pointer-events-none absolute -top-24 left-1/2 h-64 w-xl -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
-                aria-hidden="true"
-            />
-
             <CardContent
-                class="relative flex flex-col items-center px-6 py-16 text-center sm:py-20"
+                class="flex flex-col items-center px-6 py-16 text-center sm:py-20"
             >
                 <div
-                    class="flex size-16 items-center justify-center rounded-2xl border border-primary/20 bg-primary/10 shadow-inner shadow-primary/10"
+                    class="flex size-16 items-center justify-center rounded-2xl bg-primary/10"
                 >
                     <Icon
                         name="category"
@@ -316,22 +313,18 @@ const roleLabel: Record<string, string> = {
                     />
                 </div>
 
-                <h3
-                    class="mt-6 bg-linear-to-r from-foreground via-foreground to-primary bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl"
+                <h2
+                    class="mt-6 font-display text-3xl leading-9 tracking-tight text-foreground"
                 >
                     {{ $t('envelopes.empty.title') }}
-                </h3>
+                </h2>
                 <p
                     class="mt-3 max-w-xl text-sm leading-relaxed text-balance text-muted-foreground sm:text-base"
                 >
                     {{ $t('envelopes.empty.description') }}
                 </p>
 
-                <Button
-                    size="lg"
-                    class="mt-8 gap-2 shadow-lg shadow-primary/25"
-                    @click="openCreate"
-                >
+                <Button size="lg" class="mt-8 gap-2" @click="openCreate">
                     <Icon name="add" class="size-5" aria-hidden="true" />
                     {{ $t('envelopes.empty.create') }}
                 </Button>
@@ -355,11 +348,15 @@ const roleLabel: Record<string, string> = {
                 ]"
                 :key="group.type"
                 class="space-y-4"
+                :aria-labelledby="`envelope-group-${group.type}`"
             >
                 <div class="flex items-center gap-3">
-                    <h3 class="text-sm font-medium text-muted-foreground">
+                    <h2
+                        :id="`envelope-group-${group.type}`"
+                        class="text-sm font-medium text-muted-foreground"
+                    >
                         {{ $t(group.title) }}
-                    </h3>
+                    </h2>
                     <div
                         class="h-px flex-1 bg-linear-to-r from-border to-transparent"
                     />
@@ -382,11 +379,12 @@ const roleLabel: Record<string, string> = {
                     >
                         <CardContent class="flex items-center gap-3 p-4">
                             <div
-                                class="flex size-10 shrink-0 items-center justify-center rounded-xl text-lg font-semibold"
+                                class="flex size-10 shrink-0 items-center justify-center rounded-xl border-2 text-lg font-semibold text-foreground"
                                 :style="{
                                     backgroundColor: `${envelope.color}1a`,
-                                    color: envelope.color,
+                                    borderColor: envelope.color,
                                 }"
+                                aria-hidden="true"
                             >
                                 {{ envelope.name.charAt(0).toUpperCase() }}
                             </div>
@@ -412,10 +410,18 @@ const roleLabel: Record<string, string> = {
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        class="size-8 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
-                                        :aria-label="$t('envelopes.options')"
+                                        class="size-8 text-muted-foreground opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100 pointer-coarse:opacity-100"
+                                        :aria-label="
+                                            $t('envelopes.optionsFor', {
+                                                name: envelope.name,
+                                            })
+                                        "
                                     >
-                                        <Icon name="more-vert" class="size-4" />
+                                        <Icon
+                                            name="more-vert"
+                                            class="size-4"
+                                            aria-hidden="true"
+                                        />
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
@@ -442,7 +448,8 @@ const roleLabel: Record<string, string> = {
                                         {{ $t('envelopes.menu.share') }}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
-                                        class="gap-2 text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400"
+                                        variant="destructive"
+                                        class="gap-2"
                                         @select="confirmDelete(envelope)"
                                     >
                                         <Icon
@@ -450,7 +457,7 @@ const roleLabel: Record<string, string> = {
                                             class="size-4"
                                             aria-hidden="true"
                                         />
-                                        {{ $t('common.actions.delete') }}
+                                        {{ $t('envelopes.menu.delete') }}
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
@@ -518,72 +525,76 @@ const roleLabel: Record<string, string> = {
                             :placeholder="$t('envelopes.form.namePlaceholder')"
                             autocomplete="off"
                         />
-                        <InputError :message="form.errors.name" />
+                        <InputError
+                            for="envelope-name"
+                            :message="form.errors.name"
+                        />
                     </div>
 
                     <div class="grid gap-2">
-                        <Label>{{ $t('envelopes.form.type') }}</Label>
-                        <div
+                        <Label id="envelope-type-label" as="span">{{
+                            $t('envelopes.form.type')
+                        }}</Label>
+                        <RadioGroupRoot
+                            id="envelope-type"
+                            v-model="form.type"
+                            aria-labelledby="envelope-type-label"
+                            orientation="horizontal"
                             class="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted/40 p-1"
                         >
-                            <button
-                                type="button"
-                                class="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all"
-                                :class="
-                                    form.type === 'expense'
-                                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
-                                        : 'text-muted-foreground hover:text-foreground'
-                                "
-                                @click="form.type = 'expense'"
+                            <RadioGroupItem
+                                v-for="option in typeOptions"
+                                :key="option.value"
+                                :value="option.value"
+                                class="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-background data-[state=checked]:text-foreground data-[state=checked]:shadow-sm data-[state=checked]:ring-1 data-[state=checked]:ring-border"
                             >
                                 <Icon
-                                    name="south-west"
+                                    :name="option.icon"
                                     class="size-4"
                                     aria-hidden="true"
                                 />
-                                {{ $t('envelopes.form.expense') }}
-                            </button>
-                            <button
-                                type="button"
-                                class="flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-all"
-                                :class="
-                                    form.type === 'revenue'
-                                        ? 'bg-background text-foreground shadow-sm ring-1 ring-border'
-                                        : 'text-muted-foreground hover:text-foreground'
-                                "
-                                @click="form.type = 'revenue'"
-                            >
-                                <Icon
-                                    name="north-east"
-                                    class="size-4"
-                                    aria-hidden="true"
-                                />
-                                {{ $t('envelopes.form.revenue') }}
-                            </button>
-                        </div>
-                        <InputError :message="form.errors.type" />
+                                {{ $t(option.label) }}
+                            </RadioGroupItem>
+                        </RadioGroupRoot>
+                        <InputError
+                            for="envelope-type"
+                            :message="form.errors.type"
+                        />
                     </div>
 
                     <div class="grid gap-2">
-                        <Label>{{ $t('envelopes.form.color') }}</Label>
-                        <div class="flex flex-wrap gap-2">
-                            <button
+                        <Label id="envelope-color-label" as="span">{{
+                            $t('envelopes.form.color')
+                        }}</Label>
+                        <RadioGroupRoot
+                            id="envelope-color"
+                            v-model="form.color"
+                            aria-labelledby="envelope-color-label"
+                            orientation="horizontal"
+                            class="flex flex-wrap gap-2"
+                        >
+                            <RadioGroupItem
                                 v-for="color in palette"
                                 :key="color.value"
-                                type="button"
-                                class="size-8 rounded-full transition-transform hover:scale-110"
-                                :class="
-                                    form.color === color.value
-                                        ? 'ring-2 ring-ring ring-offset-2 ring-offset-background'
-                                        : 'ring-1 ring-border'
-                                "
+                                :value="color.value"
+                                class="grid size-8 place-items-center rounded-full ring-1 ring-border outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[state=checked]:ring-2 data-[state=checked]:ring-ring data-[state=checked]:ring-offset-2 data-[state=checked]:ring-offset-background"
                                 :style="{ backgroundColor: color.value }"
                                 :title="$t(color.name)"
                                 :aria-label="$t(color.name)"
-                                @click="form.color = color.value"
-                            />
-                        </div>
-                        <InputError :message="form.errors.color" />
+                            >
+                                <RadioGroupIndicator>
+                                    <Icon
+                                        name="check"
+                                        class="size-4 text-white drop-shadow"
+                                        aria-hidden="true"
+                                    />
+                                </RadioGroupIndicator>
+                            </RadioGroupItem>
+                        </RadioGroupRoot>
+                        <InputError
+                            for="envelope-color"
+                            :message="form.errors.color"
+                        />
                     </div>
 
                     <DialogFooter class="gap-2 pt-2">
@@ -630,7 +641,7 @@ const roleLabel: Record<string, string> = {
                         {{ $t('common.actions.cancel') }}
                     </Button>
                     <Button variant="destructive" @click="remove">
-                        {{ $t('common.actions.delete') }}
+                        {{ $t('envelopes.delete.confirm') }}
                     </Button>
                 </DialogFooter>
             </DialogContent>
