@@ -144,7 +144,7 @@ test('a signed-in user can accept an invite from the link', async ({
     // to the partner's own "Default profile").
     const menu = await openProfilesMenu(page);
     const shared = menu
-        .getByRole('menuitem', { name: /Default profile/ })
+        .getByRole('menuitemradio', { name: /Default profile/ })
         .filter({ hasText: 'Shared' });
     await expect(shared).toHaveCount(1);
 });
