@@ -53,8 +53,6 @@ class EnvelopeController extends Controller
 
     public function update(EnvelopeRequest $request, Envelope $envelope): RedirectResponse
     {
-        $this->authorize('update', $envelope);
-
         $validated = $request->validated();
 
         DB::transaction(function () use ($envelope, $validated): void {

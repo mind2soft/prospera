@@ -2,13 +2,17 @@
 
 namespace App\Http\Requests\Budget;
 
+use App\Http\Requests\Concerns\AuthorizesPayloadProfile;
 use Illuminate\Foundation\Http\FormRequest;
 
 /**
- * Profile ownership is checked by the controller once the payload is valid.
+ * A new draft in the payload's profile (profile owner only, authorized
+ * before the payload is validated).
  */
 class StoreBudgetRequest extends FormRequest
 {
+    use AuthorizesPayloadProfile;
+
     /**
      * @return array<string, list<mixed>>
      */

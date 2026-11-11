@@ -3,13 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Dashboard\SaveDashboardLayoutRequest;
+use App\Http\Requests\Dashboard\WidgetDataRequest;
 use App\Models\DashboardWidget;
 use App\Models\FinancialProfile;
 use App\Services\Dashboard\DashboardAggregator;
 use App\Services\Dashboard\DashboardLayoutValidator;
 use App\Services\Dashboard\SelectionEnvelopes;
 use App\Services\Dashboard\WidgetSelection;
-use App\Services\LocalCalendar;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -135,16 +135,14 @@ class DashboardController extends Controller
      * envelope permissions — raw amounts never reach clients that cannot
      * see them (docs/dashboard.md).
      */
-    public function data(Request $request, FinancialProfile $profile, DashboardWidget $widget): JsonResponse
+    public function data(WidgetDataRequest $request, FinancialProfile $profile, DashboardWidget $widget): JsonResponse
     {
-        $this->authorize('view', [$widget, $profile]);
-
         return response()->json(
             $this->aggregator->data(
                 $widget,
                 $profile,
                 $request->user(),
-                LocalCalendar::fromRequest($request)->today(),
+                $request->calendar()->today(),
             ),
         );
     }

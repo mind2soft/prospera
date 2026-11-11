@@ -15,7 +15,6 @@ use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\User;
-use App\Services\LocalCalendar;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -68,8 +67,7 @@ class BudgetController extends Controller
     public function store(StoreBudgetRequest $request): JsonResponse
     {
         $validated = $request->validated();
-
-        $profile = $this->authorizeProfileId((int) $validated['profile_id'], 'manage');
+        $profile = $request->profile();
 
         $budget = DB::transaction(function () use ($request, $profile, $validated): Budget {
             FinancialProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
@@ -121,7 +119,7 @@ class BudgetController extends Controller
         // The current month is the user's, not the server's (UTC): near a
         // month boundary they differ, and publishing replaces — deletes —
         // the published budget of the stamped month.
-        $today = LocalCalendar::fromRequest($request)->today();
+        $today = $request->calendar()->today();
 
         $validated = $request->validated();
 

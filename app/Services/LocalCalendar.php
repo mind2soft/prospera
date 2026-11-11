@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use Carbon\CarbonImmutable;
-use Illuminate\Http\Request;
 
 /**
  * "Today" and "the current month" as the requesting user sees them. The
@@ -17,21 +16,12 @@ final class LocalCalendar
     private function __construct(private readonly string $timezone) {}
 
     /**
-     * The calendar of the request's validated `timezone` input (422 if it is
-     * not a known IANA time zone).
+     * The calendar of an already validated IANA time zone (see
+     * ResolvesLocalCalendar), or of the application time zone without one.
      */
-    public static function fromRequest(Request $request): self
+    public static function in(?string $timezone): self
     {
-        $validated = $request->validate([
-            'timezone' => ['sometimes', 'nullable', 'string', 'timezone:all'],
-        ]);
-
-        return new self($validated['timezone'] ?? self::appTimezone());
-    }
-
-    public static function inTimezone(string $timezone): self
-    {
-        return new self($timezone);
+        return new self($timezone ?? self::appTimezone());
     }
 
     public function timezone(): string

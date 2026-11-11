@@ -220,6 +220,20 @@ class EnvelopesTest extends TestCase
         $this->assertModelExists($spent);
     }
 
+    public function test_editing_is_authorized_before_the_payload_is_validated(): void
+    {
+        // CQ-R2-3: a non-owner gets a 404 (envelopes are invisible), not
+        // the validation errors of their payload.
+        $owner = User::factory()->create();
+        $envelope = $owner->envelopes()->create(['name' => 'Rent', 'type' => 'expense']);
+
+        $this->actingAs(User::factory()->create())->put("/envelopes/{$envelope->id}", ['name' => ''])
+            ->assertNotFound();
+
+        $this->actingAs($owner)->put("/envelopes/{$envelope->id}", ['name' => ''])
+            ->assertSessionHasErrors(['name', 'type', 'color']);
+    }
+
     public function test_guests_are_redirected(): void
     {
         $this->get('/envelopes')->assertRedirect('/login');

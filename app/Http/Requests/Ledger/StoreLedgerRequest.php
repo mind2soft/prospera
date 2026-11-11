@@ -2,16 +2,19 @@
 
 namespace App\Http\Requests\Ledger;
 
+use App\Http\Requests\Concerns\AuthorizesPayloadProfile;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Profile ownership is checked by the controller once the payload is valid.
- * The starting balance is always positive; starting_balance_type selects
- * the stored sign (cash | debt).
+ * A new ledger in the payload's profile (profile owner only, authorized
+ * before the payload is validated). The starting balance is always
+ * positive; starting_balance_type selects the stored sign (cash | debt).
  */
 class StoreLedgerRequest extends FormRequest
 {
+    use AuthorizesPayloadProfile;
+
     /**
      * @return array<string, list<mixed>>
      */

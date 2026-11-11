@@ -184,6 +184,19 @@ class BudgetTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors('profile_id');
     }
 
+    public function test_store_authorizes_the_profile_before_validating_the_payload(): void
+    {
+        // CQ-R2-3: collaborators get a 403, outsiders a 404 — even with an
+        // invalid payload; a missing profile is a validation error.
+        $this->actingAs($this->member)->postJson('/api/budgets', ['profile_id' => $this->profile->id, 'currency' => 'x'])
+            ->assertForbidden();
+        $this->actingAs($this->stranger)->postJson('/api/budgets', ['profile_id' => $this->profile->id])
+            ->assertNotFound();
+        $this->actingAs($this->user)->postJson('/api/budgets', ['currency' => 'CAD'])
+            ->assertUnprocessable()->assertJsonValidationErrors('profile_id');
+        $this->assertSame(0, Budget::query()->count());
+    }
+
     public function test_store_rejects_a_second_draft_per_profile(): void
     {
         $this->createBudget($this->user);

@@ -77,8 +77,7 @@ class LedgerController extends Controller
     public function store(StoreLedgerRequest $request): JsonResponse
     {
         $validated = $request->validated();
-
-        $profile = $this->authorizeProfileId((int) $validated['profile_id'], 'manage');
+        $profile = $request->profile();
 
         $ledger = DB::transaction(function () use ($request, $profile, $validated): Ledger {
             $ledger = Ledger::create([
@@ -155,14 +154,6 @@ class LedgerController extends Controller
 
         $from = Carbon::parse($validated['from_date'])->startOfDay();
         $to = Carbon::parse($validated['to_date'])->endOfDay();
-
-        // Every row read is hydrated and decrypted: the range is bounded to
-        // a ledger's yearly span (the UI asks for one month at a time).
-        if ($from->diffInDays($to->copy()->startOfDay()) >= self::MAX_RANGE_DAYS) {
-            throw ValidationException::withMessages([
-                'to_date' => __('The date range cannot exceed :days days.', ['days' => self::MAX_RANGE_DAYS]),
-            ]);
-        }
 
         $user = $request->user();
 
@@ -263,8 +254,6 @@ class LedgerController extends Controller
                 'ledger' => __('This ledger is closed and read-only.'),
             ]);
         }
-
-        $this->authorize('record', $ledger);
 
         /** @var Envelope|null $envelope */
         $envelope = Envelope::query()->find($validated['envelope_id']);
