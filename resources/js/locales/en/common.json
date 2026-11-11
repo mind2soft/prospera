@@ -20,6 +20,17 @@
         },
         "loading": "Loading…",
         "error": "Something went wrong. Please try again.",
-        "breadcrumb": "Breadcrumb"
+        "breadcrumb": "Breadcrumb",
+        "errors": {
+            "unauthenticated": "Your session has ended. Log in again to continue.",
+            "forbidden": "You do not have permission to do this.",
+            "notFound": "This item could not be found. It may have been deleted, or you may no longer have access to it.",
+            "sessionExpired": "Your session has expired. Reload the page and try again.",
+            "tooMany": "Too many attempts. Wait a moment, then try again.",
+            "server": "Something went wrong on our side. Try again in a moment.",
+            "unavailable": "Prospera is briefly unavailable for maintenance. Try again in a few minutes.",
+            "generic": "This request could not be completed. Reload the page and try again.",
+            "network": "Prospera could not be reached. Check your connection and try again."
+        }
     }
 }
