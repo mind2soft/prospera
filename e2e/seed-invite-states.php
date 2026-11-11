@@ -15,24 +15,11 @@
  * npm run e2e:seed -- seed-invite-states.php
  */
 
-use App\Models\Budget;
-use App\Models\Envelope;
-use App\Models\EnvelopePermission;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileInvite;
-use App\Models\Ledger;
-use App\Models\Transaction;
 use App\Models\User;
 
-// Full reset (dependency order).
-Transaction::query()->delete();
-Ledger::query()->delete();
-Budget::query()->delete();
-EnvelopePermission::query()->delete();
-Envelope::query()->delete();
-FinancialProfileInvite::query()->delete();
-FinancialProfile::query()->delete();
-User::query()->delete();
+require __DIR__.'/seed-reset.php';
 
 $user = function (string $name, string $email, bool $verified = true): User {
     $user = User::create([
