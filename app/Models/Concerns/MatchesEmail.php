@@ -12,6 +12,15 @@ use Illuminate\Database\Eloquent\Builder;
 trait MatchesEmail
 {
     /**
+     * Compare email addresses without regard to case, using PHP's Unicode-aware
+     * case conversion for comparisons that happen after records are loaded.
+     */
+    public static function sameEmail(string $email, string $otherEmail): bool
+    {
+        return mb_strtolower($email, 'UTF-8') === mb_strtolower($otherEmail, 'UTF-8');
+    }
+
+    /**
      * Scope rows whose email matches the given address, ignoring case.
      *
      * @param  Builder<static>  $query

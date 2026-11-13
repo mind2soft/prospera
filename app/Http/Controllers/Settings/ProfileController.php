@@ -52,7 +52,7 @@ class ProfileController extends Controller
             // reservation is released, so the owner's pending list stops
             // showing it as awaiting verification and the original address
             // can be re-invited (WF-R3-2).
-            if (mb_strtolower($previousEmail) !== mb_strtolower($user->email)) {
+            if (! FinancialProfileInvite::sameEmail($previousEmail, $user->email)) {
                 FinancialProfileInvite::releaseReservationOf($user);
             }
         });

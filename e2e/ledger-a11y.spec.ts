@@ -109,6 +109,23 @@ test('calendar days are named, expose today/selection and use arrow keys', async
     await expect(targetDay).toHaveAttribute('aria-pressed', 'true');
 });
 
+test('calendar arrow navigation crosses month boundaries', async ({ page }) => {
+    await login(page);
+    await page.goto('/ledger');
+    await showSeededMonth(page);
+
+    const calendar = page.getByTestId('month-calendar');
+    const lastDay = calendar.locator('[data-date="2026-10-31"]');
+    await lastDay.focus();
+    await page.keyboard.press('ArrowRight');
+
+    const firstDayOfNextMonth = calendar.locator('[data-date="2026-11-01"]');
+    await expect(firstDayOfNextMonth).toBeFocused();
+
+    await page.keyboard.press('ArrowLeft');
+    await expect(lastDay).toBeFocused();
+});
+
 test('the ledger reflows at 320 px; the table scrolls in a labelled region', async ({
     page,
 }) => {

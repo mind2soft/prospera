@@ -3,7 +3,11 @@ import { computed, nextTick, ref, useId, useTemplateRef, watch } from 'vue';
 import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/composables/useLocale';
-import { formatCalendarDate, parseMonth } from '@/lib/calendar';
+import {
+    formatCalendarDate,
+    parseCalendarDate,
+    parseMonth,
+} from '@/lib/calendar';
 
 const { locale } = useLocale();
 
@@ -164,8 +168,9 @@ const focusDay = async (date: string) => {
 };
 
 const shiftDate = (date: string, days: number): string => {
-    const [year, month, day] = date.split('-').map(Number);
-    return iso(new Date(year, month - 1, day + days));
+    const shifted = parseCalendarDate(date);
+    shifted.setDate(shifted.getDate() + days);
+    return iso(shifted);
 };
 
 const KEY_STEPS: Record<string, number> = {

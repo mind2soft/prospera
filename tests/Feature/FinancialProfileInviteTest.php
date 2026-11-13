@@ -58,6 +58,13 @@ class FinancialProfileInviteTest extends TestCase
         ]);
     }
 
+    public function test_email_comparison_is_case_insensitive_for_ascii_and_unicode_addresses(): void
+    {
+        $this->assertTrue(FinancialProfileInvite::sameEmail('Jo@Example.com', 'jo@example.COM'));
+        $this->assertTrue(FinancialProfileInvite::sameEmail('Élodie@Example.com', 'élodie@example.com'));
+        $this->assertFalse(FinancialProfileInvite::sameEmail('one@example.com', 'two@example.com'));
+    }
+
     // ------------------------------------------------------------------
     // Creation & revocation
     // ------------------------------------------------------------------

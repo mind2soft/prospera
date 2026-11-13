@@ -95,6 +95,14 @@ invite for an email and gets a link containing a hash key (`invite_key`).
   the pending list); once the reservation expired, the email can be invited
   again. When a user joins a profile (accept or verification), the profile's
   other invites for their email are deleted.
+- Email comparisons performed in PHP use Unicode-aware `mb_strtolower()` via
+  `MatchesEmail::sameEmail()`. Database lookups use the indexed
+  `lower(email)` expression instead. SQLite's built-in `lower()` folds ASCII
+  only, so those indexed lookups are not Unicode case-insensitive and can fail
+  for non-ASCII email addresses even where the PHP comparison succeeds. No
+  SQLite-specific workaround is applied: lookups retain the expression index;
+  supporting Unicode case-insensitive lookup there would require a shared,
+  indexed normalized-email key rather than relying on SQLite `lower()`.
 - Invites expire after **48 hours** (`expires_at` = creation time + 48h);
   expired invites are rejected with a validation error.
 - Invites can be revoked by the owner before acceptance; accepted invites are
