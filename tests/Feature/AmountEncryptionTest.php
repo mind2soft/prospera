@@ -17,6 +17,7 @@ use App\Security\Amounts\AmountDecryptionException;
 use App\Security\Amounts\AmountKeyRing;
 use App\Security\Amounts\DataKey;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Migrations\Migration;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
@@ -84,7 +85,7 @@ class AmountEncryptionTest extends TestCase
         return $budget;
     }
 
-    private function transaction(Ledger $ledger, Envelope $envelope, int $amount, string $date = '2026-06-15'): Transaction
+    private function transaction(Ledger $ledger, Envelope $envelope, int|float $amount, string $date = '2026-06-15'): Transaction
     {
         return $ledger->transactions()->create([
             'user_id' => $this->user->id,
@@ -255,7 +256,59 @@ class AmountEncryptionTest extends TestCase
 
         $transaction = Transaction::query()->sole();
         $this->assertEncryptedAmount(Transaction::class, ['id' => $transaction->id], 'amount', -4242);
+        $context = Transaction::amountContextFor('amount', $transaction->getRawOriginal(), $this->profile->id);
+        app(AmountKeyRing::class)->rememberLedgerProfiles([$this->ledger->id], $this->profile->id);
+        $this->assertSame(-424200, app(AmountKeyRing::class)->decrypt($this->rawAmount($transaction), $context));
         $this->assertStringNotContainsString('4242', $this->rawAmount($transaction));
+    }
+
+    public function test_transaction_unit_migration_rolls_back_a_failed_chunk_and_can_be_retried(): void
+    {
+        $ring = app(AmountKeyRing::class);
+        $ring->rememberLedgerProfiles([$this->ledger->id], $this->profile->id);
+        $key = $ring->activeKey($this->profile->id);
+        $attributes = [
+            'ledger_id' => $this->ledger->id,
+            'envelope_id' => $this->rent->id,
+            'event_at' => '2026-06-15 00:00:00',
+        ];
+        $context = Transaction::amountContextFor('amount', $attributes, $this->profile->id);
+        $oldPayload = app(AmountCipher::class)->encrypt(42, $key, $context);
+        $rows = [];
+
+        for ($i = 0; $i < 501; $i++) {
+            $rows[] = $attributes + [
+                'user_id' => $this->user->id,
+                'amount' => $i === 500 ? 'tampered' : $oldPayload,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }
+
+        DB::table('transactions')->insert($rows);
+
+        /** @var Migration $migration */
+        $migration = require database_path('migrations/2026_11_12_000001_store_transaction_amounts_in_minor_units.php');
+
+        try {
+            $migration->up();
+            $this->fail('The migration accepted a malformed amount in its second chunk.');
+        } catch (AmountDecryptionException) {
+            $this->assertSame(501, DB::table('transactions')->count());
+            $this->assertSame(500, DB::table('transactions')->where('amount', $oldPayload)->count());
+            $this->assertSame(1, DB::table('transactions')->where('amount', 'tampered')->count());
+        }
+
+        DB::table('transactions')->where('amount', 'tampered')->update(['amount' => $oldPayload]);
+        $migration->up();
+
+        $this->assertSame(501, DB::table('transactions')->where('amount', '!=', $oldPayload)->count());
+        $converted = (string) DB::table('transactions')->value('amount');
+        $this->assertSame(4200, $ring->decrypt($converted, $context));
+
+        $migration->down();
+        $rolledBack = (string) DB::table('transactions')->value('amount');
+        $this->assertSame(42, $ring->decrypt($rolledBack, $context));
     }
 
     public function test_budget_assignments_are_stored_encrypted(): void
@@ -346,21 +399,21 @@ class AmountEncryptionTest extends TestCase
         $this->assertEncryptedAmount(Transaction::class, ['id' => $transaction->id, 'envelope_id' => $this->salary->id], 'amount', -321);
     }
 
-    public function test_assigning_a_ciphertext_or_a_non_integer_is_rejected(): void
+    public function test_assigning_a_ciphertext_or_an_amount_with_more_than_two_decimal_places_is_rejected(): void
     {
         $transaction = $this->transaction($this->ledger, $this->rent, -1);
 
-        foreach ([$this->rawAmount($transaction), '1.5', '', null, '1e3'] as $value) {
+        foreach ([$this->rawAmount($transaction), '1.234', '', null, '1e3'] as $value) {
             try {
                 $transaction->amount = $value;
-                $this->fail('A non-integer amount was accepted.');
+                $this->fail('An invalid transaction amount was accepted.');
             } catch (InvalidArgumentException) {
                 $this->addToAssertionCount(1);
             }
         }
 
-        $transaction->amount = '-12';
-        $this->assertSame(-12, $transaction->amount);
+        $transaction->amount = '-12.34';
+        $this->assertSame(-12.34, $transaction->amount);
     }
 
     public function test_saving_without_an_amount_fails(): void
@@ -668,7 +721,7 @@ class AmountEncryptionTest extends TestCase
     {
         $budget = $this->createBudget($this->profile);
         $budget->envelopes()->create(['envelope_id' => $this->rent->id, 'amount' => -1000, 'type' => 'fixed']);
-        $this->transaction($this->ledger, $this->rent, -100, '2026-06-03');
+        $this->transaction($this->ledger, $this->rent, -100.25, '2026-06-03');
         $this->transaction($this->ledger, $this->rent, -250, '2026-06-17');
         $this->transaction($this->ledger, $this->rent, -999, '2026-07-01'); // outside the range
         $this->transaction($this->ledger, $this->salary, 3000, '2026-06-05'); // unallocated
@@ -679,9 +732,9 @@ class AmountEncryptionTest extends TestCase
             ->json('transactions'));
 
         $this->assertCount(3, $rows);
-        $this->assertSame([-650, -650], $rows->where('envelope_id', $this->rent->id)->pluck('remaining_allocated')->all());
+        $this->assertSame([-649.75, -649.75], $rows->where('envelope_id', $this->rent->id)->pluck('remaining_allocated')->all());
         $this->assertNull($rows->firstWhere('envelope_id', $this->salary->id)['remaining_allocated']);
-        $this->assertSame([-100, 3000, -250], $rows->pluck('amount')->all());
+        $this->assertSame([-100.25, 3000, -250], $rows->pluck('amount')->all());
     }
 
     public function test_ledger_transaction_queries_do_not_grow_with_the_row_count(): void

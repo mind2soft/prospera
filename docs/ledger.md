@@ -60,11 +60,14 @@ type Transaction = {
 
 ### Amount sign convention
 
-Same as for budgets: user input is always a **positive integer**; the server
-negates amounts for envelopes with direction `expense`, so arithmetic works
-naturally. Revenues are stored positive. Transaction amounts and starting
-balances are **encrypted at rest** (see [Encryption at rest](encryption.md)):
-totals are computed in the application, never in SQL.
+The user enters a positive transaction amount with up to two decimal places;
+the server negates amounts for envelopes with direction `expense`, so
+arithmetic works naturally. Revenues are stored positive. Transaction amounts
+are encrypted as integer minor units (for example, `12.34` is stored as
+`1234`); starting balances remain whole currency units. Both are **encrypted
+at rest** (see [Encryption at rest](encryption.md)): totals are computed in the
+application, never in SQL. Budget assignments continue to use whole currency
+units.
 
 ### Starting balance
 

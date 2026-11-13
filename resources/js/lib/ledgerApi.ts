@@ -16,7 +16,7 @@ export type CreateLedgerInput = {
 
 export type AddTransactionInput = {
     envelope_id: number;
-    amount: number; // positive integer
+    amount: number; // positive currency units, up to two decimal places
     event_at: string; // ISO date ("2026-10-30")
 };
 

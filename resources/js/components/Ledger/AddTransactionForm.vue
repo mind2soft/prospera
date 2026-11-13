@@ -48,10 +48,9 @@ const dateLabel = computed(() =>
 const isValidAmount = (value: string): boolean => {
     const parsed = Number(value);
     return (
-        value !== '' &&
+        /^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/.test(value) &&
         !Number.isNaN(parsed) &&
-        Number.isInteger(parsed) &&
-        parsed >= 1
+        parsed > 0
     );
 };
 
@@ -130,8 +129,8 @@ defineExpose({ reset });
                 id="transaction-amount"
                 v-model="amount"
                 type="number"
-                min="1"
-                step="1"
+                min="0.01"
+                step="0.01"
                 :placeholder="$t('ledger.form.amountPlaceholder')"
                 class="w-28 tabular-nums"
             />

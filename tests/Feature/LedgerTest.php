@@ -379,6 +379,24 @@ class LedgerTest extends TestCase
         ], 'amount', -42); // expense envelope
     }
 
+    public function test_adding_a_transaction_preserves_two_decimal_places(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->createEnvelope();
+
+        $response = $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
+            'envelope_id' => $envelope->id,
+            'amount' => 12.34,
+            'event_at' => '2026-06-15',
+        ])->assertCreated();
+
+        $this->assertSame(-12.34, $response->json('transaction.amount'));
+        $this->assertEncryptedAmount(Transaction::class, [
+            'ledger_id' => $ledger->id,
+            'envelope_id' => $envelope->id,
+        ], 'amount', -12.34);
+    }
+
     public function test_adding_a_transaction_signs_the_amount(): void
     {
         $ledger = $this->createLedger($this->user);
@@ -417,7 +435,7 @@ class LedgerTest extends TestCase
         $budget = $this->createPublishedBudget($this->user);
         $envelope = $budget->envelopes()->first();
 
-        foreach ([-10, 0, 1.5, 'abc'] as $amount) {
+        foreach ([-10, 0, 1.234, 'abc'] as $amount) {
             $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
                 'envelope_id' => $envelope->envelope_id,
                 'amount' => $amount,

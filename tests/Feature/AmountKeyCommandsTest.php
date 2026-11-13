@@ -192,7 +192,7 @@ class AmountKeyCommandsTest extends TestCase
         // A request that loaded key v1 before the rotation writes afterwards.
         $straggler = $transactions[0];
         $context = Transaction::amountContextFor('amount', (array) DB::table('transactions')->where('id', $straggler->id)->first(), $profile->id);
-        DB::table('transactions')->where('id', $straggler->id)->update(['amount' => (new AmountCipher)->encrypt(-777, $keyV1, $context)]);
+        DB::table('transactions')->where('id', $straggler->id)->update(['amount' => (new AmountCipher)->encrypt(-77700, $keyV1, $context)]);
 
         $this->artisan('amounts:prune-keys')->assertSuccessful();
         $this->assertSame(2, FinancialProfileKey::query()->where('profile_id', $profile->id)->count());

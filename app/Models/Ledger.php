@@ -46,7 +46,7 @@ class Ledger extends Model implements HasEncryptedAmounts, HasImmutableColumns
      */
     protected function startingBalance(): Attribute
     {
-        return $this->encryptedAmount('starting_balance');
+        return $this->encryptedIntegerAmount('starting_balance');
     }
 
     public static function encryptedAmountColumns(): array

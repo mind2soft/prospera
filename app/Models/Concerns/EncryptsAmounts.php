@@ -64,14 +64,36 @@ trait EncryptsAmounts
     /**
      * Accessor/mutator for an encrypted column.
      *
-     * @return Attribute<int, mixed>
+     * @return Attribute<int|float, mixed>
      */
     protected function encryptedAmount(string $column): Attribute
+    {
+        return Attribute::make(
+            get: fn (mixed $value): int|float => $this->decodeAmount($column, $this->decryptStoredAmount($column, $value)),
+            set: fn (mixed $value): int => $this->encodeAmount($column, $value),
+        );
+    }
+
+    /** Accessor for encrypted columns whose public and stored units are equal. */
+    /** @return Attribute<int, mixed> */
+    protected function encryptedIntegerAmount(string $column): Attribute
     {
         return Attribute::make(
             get: fn (mixed $value): int => $this->decryptStoredAmount($column, $value),
             set: fn (mixed $value): int => self::plainAmount($column, $value),
         );
+    }
+
+    /** Convert the encrypted integer representation to its public value. */
+    protected function decodeAmount(string $column, int $amount): int|float
+    {
+        return $amount;
+    }
+
+    /** Convert an assigned public value to the encrypted integer representation. */
+    protected function encodeAmount(string $column, mixed $amount): int
+    {
+        return self::plainAmount($column, $amount);
     }
 
     /**

@@ -115,7 +115,7 @@ export type Transaction = {
     color: string;
     direction: 'expense' | 'revenue';
     /** null + masked: true when the envelope is metadata-only for the user. */
-    amount: number | null;
+    amount: number | null; // signed currency units, up to two decimal places
     masked: boolean;
     event_at: string; // ISO date "2026-10-15" (stored at 00:00:00)
     created_at: string;

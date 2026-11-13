@@ -12,6 +12,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Security\Amounts\AmountKeyRing;
 use App\Services\ResourcePermissions;
+use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -121,7 +122,7 @@ final class DashboardAggregator
                     'color' => $envelope->color,
                     'direction' => $envelope->type,
                     'masked' => $masked,
-                    'spent' => $masked ? null : $totals->get($envelopeId, 0),
+                    'spent' => $masked ? null : Money::fromMinorUnits($totals->get($envelopeId, 0)),
                     'allocated' => $masked ? null : $allocations->get($envelopeId),
                 ];
             } else {
@@ -134,7 +135,7 @@ final class DashboardAggregator
                 // the sum never leaks member amounts by omission.
                 $spent = $masked
                     ? null
-                    : collect($memberIds)->sum(fn (int $envelopeId): int => $totals->get($envelopeId, 0));
+                    : Money::fromMinorUnits(collect($memberIds)->sum(fn (int $envelopeId): int => $totals->get($envelopeId, 0)));
 
                 $memberAllocations = collect($memberIds)
                     ->map(fn (int $envelopeId): ?int => $allocations->get($envelopeId))
@@ -186,12 +187,12 @@ final class DashboardAggregator
         $byBucket = $transactions
             ->groupBy(fn (Transaction $transaction): string => $period->bucketKey($transaction->event_at))
             ->map(fn (Collection $group): array => [
-                'revenue' => (int) $group->filter(
+                'revenue' => Money::fromMinorUnits($group->filter(
                     fn (Transaction $transaction): bool => $transaction->amount > 0,
-                )->sum(fn (Transaction $transaction): int => $transaction->amount),
-                'expenses' => (int) $group->filter(
+                )->sum(fn (Transaction $transaction): int => Money::toMinorUnits($transaction->amount))),
+                'expenses' => Money::fromMinorUnits($group->filter(
                     fn (Transaction $transaction): bool => $transaction->amount < 0,
-                )->sum(fn (Transaction $transaction): int => $transaction->amount),
+                )->sum(fn (Transaction $transaction): int => Money::toMinorUnits($transaction->amount))),
             ]);
 
         $series = [];
@@ -252,7 +253,7 @@ final class DashboardAggregator
                     'name' => $envelope->name,
                     'color' => $envelope->color,
                     'masked' => $masked,
-                    'value' => $masked ? null : abs($totals->get($envelopeId, 0)),
+                    'value' => $masked ? null : Money::fromMinorUnits(abs($totals->get($envelopeId, 0))),
                 ];
             } else {
                 $memberIds = $item['envelope_ids'];
@@ -267,7 +268,7 @@ final class DashboardAggregator
                     'masked' => $masked,
                     'value' => $masked
                         ? null
-                        : abs(collect($memberIds)->sum(fn (int $envelopeId): int => $totals->get($envelopeId, 0))),
+                        : Money::fromMinorUnits(abs(collect($memberIds)->sum(fn (int $envelopeId): int => $totals->get($envelopeId, 0)))),
                 ];
             }
         }
@@ -341,14 +342,14 @@ final class DashboardAggregator
      * (docs/encryption.md).
      *
      * @param  Collection<int, Transaction>  $transactions
-     * @return Collection<int, int>
+     * @return Collection<int, int> Integer minor units per envelope.
      */
     private function totalsByEnvelope(Collection $transactions): Collection
     {
         return $transactions
             ->groupBy(fn (Transaction $transaction): int => $transaction->envelope_id)
             ->map(fn (Collection $group): int => (int) $group->sum(
-                fn (Transaction $transaction): int => $transaction->amount,
+                fn (Transaction $transaction): int => Money::toMinorUnits($transaction->amount),
             ));
     }
 
