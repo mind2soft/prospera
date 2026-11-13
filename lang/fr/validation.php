@@ -60,6 +60,7 @@ return [
     'extensions' => 'Le champ :attribute doit avoir une des extensions suivantes : :values.',
     'file' => 'Le champ :attribute doit être un fichier.',
     'filled' => 'Le champ :attribute doit avoir une valeur.',
+    'first_day_of_month' => 'Le champ :attribute doit être le premier jour d’un mois.',
     'gt' => [
         'array' => 'Le champ :attribute doit contenir plus de :value éléments.',
         'file' => 'Le champ :attribute doit peser plus de :value kilo-octets.',
@@ -84,6 +85,7 @@ return [
     'json' => 'Le champ :attribute doit être une chaîne JSON valide.',
     'list' => 'Le champ :attribute doit être une liste.',
     'lowercase' => 'Le champ :attribute doit être en minuscules.',
+    'last_day_of_month' => 'Le champ :attribute doit être le dernier jour d’un mois.',
     'lt' => [
         'array' => 'Le champ :attribute doit contenir moins de :value éléments.',
         'file' => 'Le champ :attribute doit peser moins de :value kilo-octets.',

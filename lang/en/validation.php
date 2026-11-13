@@ -61,6 +61,7 @@ return [
     'extensions' => 'The :attribute field must have one of the following extensions: :values.',
     'file' => 'The :attribute field must be a file.',
     'filled' => 'The :attribute field must have a value.',
+    'first_day_of_month' => 'The :attribute must be the first day of a month.',
     'gt' => [
         'array' => 'The :attribute field must have more than :value items.',
         'file' => 'The :attribute field must be greater than :value kilobytes.',
@@ -85,6 +86,7 @@ return [
     'json' => 'The :attribute field must be a valid JSON string.',
     'list' => 'The :attribute field must be a list.',
     'lowercase' => 'The :attribute field must be lowercase.',
+    'last_day_of_month' => 'The :attribute must be the last day of a month.',
     'lt' => [
         'array' => 'The :attribute field must have less than :value items.',
         'file' => 'The :attribute field must be less than :value kilobytes.',

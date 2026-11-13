@@ -170,12 +170,23 @@ data fetching.
 
 The user must create a ledger by providing:
 
-- a **starting date** (defaults to the current day),
-- an **end date** (defaults to the last day of the year),
+- a **starting month and year** (defaults to the current month and year; the
+  starting date is always the first day of the selected month),
+- an **ending month and year** (defaults to December of the current year; the
+  ending date is always the last day of the selected month),
 - a **name** (defaults to the full year),
 - a **starting balance** with a **cash/debt** selector (amounts are only
   entered as positive numbers; `0` is allowed; see
   [Starting balance](#starting-balance)).
+
+The year selectors offer the current year, the previous seven years, and the
+next three years.
+
+The start month cannot be later than the end month. If a selection would make
+the range invalid, the other endpoint moves to that month. The API enforces
+the first-of-month and last-of-month boundaries as well. Existing ledger
+periods are expanded to their containing calendar months during migration;
+balances and transactions are not changed.
 
 ### Selector row
 

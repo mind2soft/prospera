@@ -278,8 +278,8 @@ class AmountEncryptionTest extends TestCase
         $this->actingAs($this->user)->postJson('/api/ledgers', [
             'profile_id' => $this->profile->id,
             'name' => 'Debt',
-            'start_date' => '2026-01-01 00:00:00',
-            'end_date' => '2026-12-31 00:00:00',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
             'starting_balance' => 777,
             'starting_balance_type' => 'debt',
         ])->assertCreated()->assertJsonPath('ledger.starting_balance', -777);

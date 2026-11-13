@@ -182,8 +182,8 @@ class LedgerTest extends TestCase
         $response = $this->actingAs($this->user)->postJson('/api/ledgers', [
             'profile_id' => $this->profile->id,
             'name' => '2026',
-            'start_date' => '2026-01-01 00:00:00',
-            'end_date' => '2026-12-31 00:00:00',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
             'starting_balance' => 5000,
             'starting_balance_type' => 'cash',
         ]);
@@ -206,8 +206,8 @@ class LedgerTest extends TestCase
         $this->actingAs($this->user)->postJson('/api/ledgers', [
             'profile_id' => $this->profile->id,
             'name' => '2026',
-            'start_date' => '2026-01-01 00:00:00',
-            'end_date' => '2026-12-31 00:00:00',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
             'starting_balance' => 500,
             'starting_balance_type' => 'debt',
         ])->assertCreated();
@@ -220,13 +220,68 @@ class LedgerTest extends TestCase
         $this->actingAs($this->user)->postJson('/api/ledgers', [
             'profile_id' => $this->profile->id,
             'name' => '2026',
-            'start_date' => '2026-01-01 00:00:00',
-            'end_date' => '2026-12-31 00:00:00',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
             'starting_balance' => 0,
             'starting_balance_type' => 'cash',
         ])->assertCreated();
 
         $this->assertEncryptedAmount(Ledger::class, ['profile_id' => $this->profile->id], 'starting_balance', 0);
+    }
+
+    public function test_store_accepts_a_leap_year_month_as_a_ledger_period(): void
+    {
+        $this->actingAs($this->user)->postJson('/api/ledgers', [
+            'profile_id' => $this->profile->id,
+            'name' => 'February 2024',
+            'start_date' => '2024-02-01',
+            'end_date' => '2024-02-29',
+            'starting_balance' => 0,
+            'starting_balance_type' => 'cash',
+        ])->assertCreated();
+
+        $ledger = Ledger::firstOrFail();
+        $this->assertSame('2024-02-01', $ledger->start_date->toDateString());
+        $this->assertSame('2024-02-29', $ledger->end_date->toDateString());
+    }
+
+    public function test_store_requires_month_boundary_dates(): void
+    {
+        $base = [
+            'profile_id' => $this->profile->id,
+            'name' => '2026',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+            'starting_balance' => 5000,
+            'starting_balance_type' => 'cash',
+        ];
+
+        $this->actingAs($this->user)->postJson('/api/ledgers', array_merge($base, [
+            'start_date' => '2026-01-02',
+        ]))->assertUnprocessable()->assertJsonValidationErrors('start_date');
+
+        $this->actingAs($this->user)->postJson('/api/ledgers', array_merge($base, [
+            'end_date' => '2026-12-30',
+        ]))->assertUnprocessable()->assertJsonValidationErrors('end_date');
+
+        $this->actingAs($this->user)->postJson('/api/ledgers', array_merge($base, [
+            'start_date' => '2026-01-01 00:00:00',
+        ]))->assertUnprocessable()->assertJsonValidationErrors('start_date');
+    }
+
+    public function test_migration_expands_existing_ledger_periods_to_month_boundaries(): void
+    {
+        $ledger = $this->createLedger($this->user, [
+            'start_date' => '2026-01-15',
+            'end_date' => '2026-11-12',
+        ]);
+
+        $migration = require database_path('migrations/2026_11_12_000002_normalize_ledger_dates_to_month_boundaries.php');
+        $migration->up();
+
+        $ledger->refresh();
+        $this->assertSame('2026-01-01', $ledger->start_date->toDateString());
+        $this->assertSame('2026-11-30', $ledger->end_date->toDateString());
     }
 
     public function test_store_authorizes_the_profile_before_validating_the_payload(): void
@@ -250,8 +305,8 @@ class LedgerTest extends TestCase
         $base = [
             'profile_id' => $this->profile->id,
             'name' => '2026',
-            'start_date' => '2026-01-01 00:00:00',
-            'end_date' => '2026-12-31 00:00:00',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
             'starting_balance' => 5000,
             'starting_balance_type' => 'cash',
         ];
