@@ -28,6 +28,11 @@ const props = defineProps<{
     open: boolean;
     /** The create request is in flight: the parent closes on success. */
     pending?: boolean;
+    /** A preselected period when continuing a closed ledger. */
+    initialStartDate?: string;
+    initialEndDate?: string;
+    /** The follow-on ledger must remain contiguous with its predecessor. */
+    lockStartDate?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -44,9 +49,22 @@ const balance = ref('');
 const balanceType = ref<'cash' | 'debt'>('cash');
 
 const currentYear = new Date().getFullYear();
-const yearOptions = Array.from({ length: 11 }, (_, index) =>
-    String(currentYear - 7 + index),
-);
+const yearOptions = computed(() => {
+    const years = [currentYear - 7, currentYear + 3];
+
+    for (const date of [props.initialStartDate, props.initialEndDate]) {
+        if (date) {
+            years.push(Number(date.slice(0, 4)));
+        }
+    }
+
+    const firstYear = Math.min(...years);
+    const lastYear = Math.max(...years);
+
+    return Array.from({ length: lastYear - firstYear + 1 }, (_, index) =>
+        String(firstYear + index),
+    );
+});
 const monthOptions = computed(() =>
     Array.from({ length: 12 }, (_, index) => {
         const month = String(index + 1);
@@ -118,8 +136,13 @@ const updateEndPeriod = (part: 'month' | 'year', value: unknown) => {
         periodKey(endYear.value, endMonth.value) <
         periodKey(startYear.value, startMonth.value)
     ) {
-        startMonth.value = endMonth.value;
-        startYear.value = endYear.value;
+        if (props.lockStartDate) {
+            endMonth.value = startMonth.value;
+            endYear.value = startYear.value;
+        } else {
+            startMonth.value = endMonth.value;
+            startYear.value = endYear.value;
+        }
     }
 };
 
@@ -129,11 +152,19 @@ watch(
         if (open) {
             const year = String(new Date().getFullYear());
             const month = String(new Date().getMonth() + 1);
-            name.value = year;
-            startMonth.value = month;
-            startYear.value = year;
-            endMonth.value = '12';
-            endYear.value = year;
+            const [initialStartYear, initialStartMonth] =
+                props.initialStartDate?.split('-') ?? [];
+            const [initialEndYear, initialEndMonth] =
+                props.initialEndDate?.split('-') ?? [];
+            name.value = initialStartYear ?? year;
+            startMonth.value = initialStartMonth
+                ? String(Number(initialStartMonth))
+                : month;
+            startYear.value = initialStartYear ?? year;
+            endMonth.value = initialEndMonth
+                ? String(Number(initialEndMonth))
+                : '12';
+            endYear.value = initialEndYear ?? year;
             balance.value = '';
             balanceType.value = 'cash';
         }
@@ -179,7 +210,11 @@ const confirm = () => {
             <DialogHeader>
                 <DialogTitle>{{ $t('ledger.createDialog.title') }}</DialogTitle>
                 <DialogDescription>
-                    {{ $t('ledger.createDialog.description') }}
+                    {{
+                        lockStartDate
+                            ? $t('ledger.createDialog.nextDescription')
+                            : $t('ledger.createDialog.description')
+                    }}
                 </DialogDescription>
             </DialogHeader>
 
@@ -203,6 +238,7 @@ const confirm = () => {
                                 }}</Label>
                                 <Select
                                     :model-value="startMonth"
+                                    :disabled="lockStartDate"
                                     @update:model-value="
                                         updateStartPeriod('month', $event)
                                     "
@@ -230,6 +266,7 @@ const confirm = () => {
                                 }}</Label>
                                 <Select
                                     :model-value="startYear"
+                                    :disabled="lockStartDate"
                                     @update:model-value="
                                         updateStartPeriod('year', $event)
                                     "
@@ -253,7 +290,11 @@ const confirm = () => {
                             </div>
                         </div>
                         <p class="text-sm text-muted-foreground">
-                            {{ $t('ledger.createDialog.startsOnFirstDay') }}
+                            {{
+                                lockStartDate
+                                    ? $t('ledger.createDialog.startLocked')
+                                    : $t('ledger.createDialog.startsOnFirstDay')
+                            }}
                         </p>
                     </fieldset>
 

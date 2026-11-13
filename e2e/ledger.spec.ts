@@ -37,6 +37,7 @@ async function openActionMenu(page: Page): Promise<void> {
 }
 
 test('ledger page audit', async ({ page }) => {
+    const currentYear = new Date().getFullYear();
     const consoleErrors: string[] = [];
     page.on('console', (msg) => {
         if (msg.type() === 'error') {
@@ -202,6 +203,91 @@ test('ledger page audit', async ({ page }) => {
     await page.screenshot({ path: SHOT('05-ledger-closed'), fullPage: true });
 
     await openActionMenu(page);
+    await page.getByRole('menuitem', { name: 'Create next ledger' }).click();
+    const nextLedgerDialog = page.getByRole('dialog');
+    await expect(nextLedgerDialog).toBeVisible();
+    const monthSelectors = nextLedgerDialog.getByRole('combobox', {
+        name: 'Month',
+    });
+    const yearSelectors = nextLedgerDialog.getByRole('combobox', {
+        name: 'Year',
+    });
+    await expect(monthSelectors.nth(0)).toBeDisabled();
+    await expect(yearSelectors.nth(0)).toBeDisabled();
+    await expect(monthSelectors.nth(0)).toContainText('January');
+    await expect(yearSelectors.nth(0)).toContainText('2027');
+    await expect(monthSelectors.nth(1)).toContainText('December');
+    await expect(yearSelectors.nth(1)).toContainText('2027');
+    await expect(monthSelectors.nth(1)).toBeEnabled();
+
+    // Extend the first follow-on ledger to currentYear + 3, then ensure its
+    // successor exposes editable year options beyond the normal selector range.
+    const firstSuccessorEndYear = currentYear + 3;
+    await yearSelectors.nth(1).click();
+    await page
+        .getByRole('option', {
+            name: String(firstSuccessorEndYear),
+            exact: true,
+        })
+        .click();
+    await page.getByLabel('Starting balance').fill('0');
+    await page.getByRole('button', { name: 'Create ledger' }).click();
+    await expect(page.getByText('Ledger created.').last()).toBeVisible();
+    await expect(page.getByTestId('selected-ledger')).toContainText('2027');
+
+    await openActionMenu(page);
+    await page.getByRole('menuitem', { name: 'Close' }).click();
+    await openActionMenu(page);
+    await page.getByRole('menuitem', { name: 'Create next ledger' }).click();
+
+    const extendedSuccessor = page.getByRole('dialog');
+    const successorYears = extendedSuccessor.getByRole('combobox', {
+        name: 'Year',
+    });
+    const extendedStartYear = firstSuccessorEndYear + 1;
+    const firstSuccessorStartYear = 2027;
+    const successorSpanInYears =
+        firstSuccessorEndYear - firstSuccessorStartYear + 1;
+    const extendedEndYear = extendedStartYear + successorSpanInYears - 1;
+    await expect(successorYears.nth(0)).toContainText(
+        String(extendedStartYear),
+    );
+    await expect(successorYears.nth(1)).toContainText(String(extendedEndYear));
+    await successorYears.nth(1).click();
+    await page
+        .getByRole('option', {
+            name: String(extendedEndYear - 1),
+            exact: true,
+        })
+        .click();
+    await expect(successorYears.nth(1)).toContainText(
+        String(extendedEndYear - 1),
+    );
+    await page.getByLabel('Starting balance').fill('0');
+    const createSuccessorResponse = page.waitForResponse(
+        (response) =>
+            new URL(response.url()).pathname === '/api/ledgers' &&
+            response.request().method() === 'POST',
+    );
+    await page.getByRole('button', { name: 'Create ledger' }).click();
+    const createdSuccessor = await (await createSuccessorResponse).json();
+    expect(createdSuccessor.ledger.start_date).toBe(
+        `${extendedStartYear}-01-01`,
+    );
+    expect(createdSuccessor.ledger.end_date).toBe(
+        `${extendedEndYear - 1}-12-31`,
+    );
+    await expect(page.getByText('Ledger created.').last()).toBeVisible();
+
+    // Restore the known fixture before continuing with the existing reopen and
+    // delete checks; generated successor ledgers are intentionally disposable.
+    execSync('npm run e2e:seed -- seed-ledger.php', { cwd: '.' });
+    await page.reload();
+    await expect(page.getByTestId('selected-ledger')).toContainText('2026');
+    await openActionMenu(page);
+    await page.getByRole('menuitem', { name: 'Close' }).click();
+
+    await openActionMenu(page);
     console.log(
         'MENU (closed):',
         await page.getByRole('menuitem').allTextContents(),
@@ -235,7 +321,6 @@ test('ledger page audit', async ({ page }) => {
     await page.getByRole('button', { name: 'Create ledger' }).click();
     await page.screenshot({ path: SHOT('08-create-ledger-dialog') });
     await expect(page.getByRole('dialog')).toBeVisible();
-    const currentYear = new Date().getFullYear();
     const currentMonth = new Intl.DateTimeFormat('en-US', {
         month: 'long',
     }).format(new Date());

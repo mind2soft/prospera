@@ -61,6 +61,7 @@
         },
         "menu": {
             "reopen": "Reopen",
+            "createNext": "Create next ledger",
             "share": "Share",
             "close": "Close ledger",
             "delete": "Delete ledger"
@@ -87,11 +88,13 @@
         "createDialog": {
             "title": "Create a new ledger",
             "description": "A ledger keeps a yearly financial record of your transactions.",
+            "nextDescription": "The start date follows this ledger, and the suggested end date keeps the same calendar-month span. You can change the end date.",
             "startDate": "Starting date",
             "endDate": "End date",
             "month": "Month",
             "year": "Year",
             "startsOnFirstDay": "The ledger starts on the first day of this month.",
+            "startLocked": "This date is fixed to the day after the previous ledger ends.",
             "endsOnLastDay": "The ledger ends on the last day of this month.",
             "startingBalance": "Starting balance",
             "balancePlaceholder": "e.g. 1000",
