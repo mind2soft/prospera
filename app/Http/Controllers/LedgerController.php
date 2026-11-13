@@ -14,6 +14,7 @@ use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Security\Amounts\AmountKeyRing;
+use App\Services\OnboardingProgress;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
 use App\Support\Money;
@@ -76,6 +77,12 @@ class LedgerController extends Controller
     {
         $validated = $request->validated();
         $profile = $request->profile();
+
+        if (! app(OnboardingProgress::class)->forProfile($profile)['can_create_ledger']) {
+            throw ValidationException::withMessages([
+                'profile_id' => __('Create at least one revenue envelope and three expense envelopes before creating a ledger.'),
+            ]);
+        }
 
         $ledger = DB::transaction(function () use ($request, $profile, $validated): Ledger {
             $ledger = Ledger::create([

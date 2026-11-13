@@ -1,5 +1,6 @@
 {
     "A draft budget can only be owned by the profile owner.": "Un budget brouillon ne peut appartenir qu'au propriétaire du profil.",
+    "Create at least one revenue envelope and three expense envelopes before creating a ledger.": "Créez au moins une enveloppe de revenus et trois enveloppes de dépenses avant de créer un grand livre.",
     "A group needs a name.": "Un groupe doit avoir un nom.",
     "A group needs at least one envelope.": "Un groupe doit contenir au moins une enveloppe.",
     "A widget can reference at most :max envelopes.": "Un widget peut référencer au plus :max enveloppes.",
@@ -26,6 +27,7 @@
     "Profile updated.": "Profil mis à jour.",
     "Prospera is briefly unavailable for maintenance. Try again in a few minutes.": "Prospera est momentanément indisponible pour maintenance. Réessayez dans quelques minutes.",
     "Regards,": "Cordialement,",
+    "Record transactions for every envelope and build 30 days of history before creating your first budget.": "Enregistrez des transactions dans chaque enveloppe et créez 30 jours d'historique avant de créer votre premier budget.",
     "Reset Password": "Réinitialiser le mot de passe",
     "Reset your password": "Réinitialisez votre mot de passe",
     "Something went wrong on our side. Try again in a moment.": "Un problème est survenu de notre côté. Réessayez dans un instant.",

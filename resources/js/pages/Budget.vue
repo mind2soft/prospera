@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import { useQueryClient } from '@tanstack/vue-query';
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -11,6 +11,7 @@ import BudgetSelector from '@/components/Budget/BudgetSelector.vue';
 import CloneBudgetDialog from '@/components/Budget/CloneBudgetDialog.vue';
 import CreateBudgetDialog from '@/components/Budget/CreateBudgetDialog.vue';
 import Heading from '@/components/Heading.vue';
+import HelpLink from '@/components/HelpLink.vue';
 import Icon from '@/components/Icon.vue';
 import BudgetLoadingScreen from '@/components/Loading/BudgetLoadingScreen.vue';
 import QueryErrorState from '@/components/QueryErrorState.vue';
@@ -42,6 +43,7 @@ import {
     useTransferBudgetOwnership,
     useUpdateEnvelope,
 } from '@/composables/budgetQueries';
+import { useOnboardingProgress } from '@/composables/onboardingQueries';
 import { useProfileMembers } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useFlushOnLeave } from '@/composables/useFlushOnLeave';
@@ -63,6 +65,8 @@ const { t } = useI18n();
 const { locale } = useLocale();
 
 const budgetsQuery = useBudgets();
+const onboardingQuery = useOnboardingProgress();
+const onboarding = computed(() => onboardingQuery.data.value);
 /** Draft first, then published (each newest first). */
 const budgets = computed(() =>
     [...(budgetsQuery.data.value ?? [])].sort(
@@ -541,10 +545,13 @@ const onRemoveEnvelope = (envelopeId: number) => {
     <Head :title="$t('budget.title')" />
 
     <div class="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4">
-        <Heading
-            :title="$t('budget.title')"
-            :description="$t('budget.description')"
-        />
+        <div class="flex items-center gap-2">
+            <Heading
+                :title="$t('budget.title')"
+                :description="$t('budget.description')"
+            />
+            <HelpLink topic="budgets" />
+        </div>
 
         <BudgetLoadingScreen v-if="waitingForData" />
 
@@ -584,10 +591,54 @@ const onRemoveEnvelope = (envelopeId: number) => {
                     {{ $t('budget.empty.description') }}
                 </p>
 
+                <div
+                    v-if="onboarding && !onboarding.first_budget_created"
+                    class="mt-4 max-w-xl text-sm leading-6 text-muted-foreground"
+                    role="status"
+                >
+                    {{
+                        $t('budget.setupProgress', {
+                            days: onboarding.history_days_remaining,
+                            envelopes:
+                                onboarding.envelopes_missing_transactions,
+                        })
+                    }}
+                    <Link
+                        href="/onboarding"
+                        class="ml-1 font-medium text-primary underline-offset-4 hover:underline"
+                        >{{
+                            $t('budget.setupHelp')
+                        }}</Link
+                    >
+                </div>
+                <p
+                    v-else-if="!onboarding && onboardingQuery.isPending.value"
+                    class="mt-4 text-sm text-muted-foreground"
+                    role="status"
+                >
+                    {{ $t('common.loading') }}
+                </p>
+                <div
+                    v-else-if="!onboarding && onboardingQuery.isError.value"
+                    class="mt-4 flex flex-wrap items-center gap-2 text-sm text-destructive"
+                    role="alert"
+                >
+                    <span>{{ $t('budget.setupProgressError') }}</span>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        :disabled="onboardingQuery.isFetching.value"
+                        @click="onboardingQuery.refetch()"
+                    >
+                        {{ $t('common.actions.retry') }}
+                    </Button>
+                </div>
+
                 <Button
                     v-if="isProfileOwner"
                     size="lg"
                     class="mt-8 gap-2"
+                    :disabled="onboarding?.can_create_budget !== true"
                     @click="showCreate = true"
                 >
                     <Icon name="add" class="size-5" aria-hidden="true" />

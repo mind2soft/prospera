@@ -89,9 +89,13 @@ test('a signed-out member who logs in from the invite comes back to it', async (
     ).toBeEnabled();
     await page.unroute(ACCEPT_API);
 
-    // The success toast survives the visit to the dashboard.
+    // The first successful login after accepting an invite opens onboarding;
+    // the invite success toast must survive that redirect.
     await page.getByRole('button', { name: 'Accept invite' }).click();
-    await page.waitForURL((url) => url.pathname === '/dashboard');
+    await page.waitForURL((url) => url.pathname === '/onboarding');
+    await expect(
+        page.getByRole('heading', { name: 'A clear start with your money' }),
+    ).toBeVisible();
     await expect(page.getByText('You joined “Default profile”.')).toBeVisible();
 });
 

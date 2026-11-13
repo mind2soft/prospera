@@ -2,6 +2,15 @@
     "ledger": {
         "title": "Grand livre",
         "description": "Un registre financier annuel de tout ce qui entre et de tout ce qui sort.",
+        "setupProgress": "Avant de créer un grand livre, ajoutez {revenue} enveloppe(s) de revenus et {expenses} enveloppe(s) de dépenses.",
+        "setupHelp": "Consulter le guide de démarrage",
+        "setupProgressError": "Impossible de charger la progression de la configuration.",
+        "budgetReady": {
+            "title": "Vous avez maintenant un mois de recul",
+            "description": "Vous avez enregistré des transactions dans vos enveloppes et créé 30 jours d'historique. Continuez pour obtenir un portrait plus complet ou utilisez vos observations pour créer votre premier budget.",
+            "more": "Je vais ajouter d'autres transactions",
+            "create": "Créer mon premier budget"
+        },
         "toast": {
             "accessUpdated": "Accès mis à jour.",
             "accessRevoked": "Accès révoqué.",

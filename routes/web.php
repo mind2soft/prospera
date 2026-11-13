@@ -7,6 +7,7 @@ use App\Http\Controllers\EnvelopeController;
 use App\Http\Controllers\FinancialProfileController;
 use App\Http\Controllers\FinancialProfileInviteController;
 use App\Http\Controllers\LedgerController;
+use App\Http\Controllers\OnboardingController;
 use App\Http\Middleware\EnsureAccountHasProfile;
 use App\Models\Budget;
 use App\Models\Envelope;
@@ -83,7 +84,9 @@ Route::middleware(['auth', 'verified', EnsureAccountHasProfile::class])->group(f
         ->name('invites.accept-link')
         ->middleware('throttle:invites');
 
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    Route::get('dashboard', [OnboardingController::class, 'dashboard'])->name('dashboard');
+    Route::get('onboarding', [OnboardingController::class, 'show'])->name('onboarding');
+    Route::get('help/{topic}', [OnboardingController::class, 'help'])->name('help.show');
     Route::inertia('budget', 'Budget')->name('budget');
     Route::inertia('ledger', 'Ledger')->name('ledger');
     Route::get('envelopes', [EnvelopeController::class, 'index'])->name('envelopes');
@@ -92,6 +95,7 @@ Route::middleware(['auth', 'verified', EnsureAccountHasProfile::class])->group(f
     Route::delete('envelopes/{envelope}', [EnvelopeController::class, 'destroy'])->name('envelopes.destroy');
 
     Route::prefix('api')->name('api.')->group(function () {
+        Route::get('onboarding', [OnboardingController::class, 'progress'])->name('onboarding.progress');
         Route::post('invites/{inviteKey}/accept', [FinancialProfileInviteController::class, 'accept'])
             ->name('invites.accept')
             ->middleware('throttle:invites');

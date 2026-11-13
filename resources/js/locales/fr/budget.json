@@ -2,6 +2,9 @@
     "budget": {
         "title": "Budget",
         "description": "Planifiez où va votre argent avant qu'il ne parte.",
+        "setupProgress": "Votre premier budget nécessite 30 jours d'historique et au moins une transaction dans chaque enveloppe. Encore {days} jour(s) et {envelopes} enveloppe(s) à utiliser.",
+        "setupProgressError": "Impossible de charger la progression de la configuration.",
+        "setupHelp": "Consulter le guide de démarrage",
         "currency": "Devise",
         "toast": {
             "failed": "Une erreur est survenue.",

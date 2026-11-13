@@ -53,6 +53,7 @@ $mk = function (string $name, string $type, string $color) use ($u) {
 $salary = $mk('Paychecks', 'revenue', '#10b981');
 $food = $mk('Food', 'expense', '#f59e0b');
 $rent = $mk('Mortgage', 'expense', '#f43f5e');
+$mk('Utilities', 'expense', '#14b8a6');
 
 $add = function ($cat, int $amount, string $type) use ($b) {
     return $b->envelopes()->create([

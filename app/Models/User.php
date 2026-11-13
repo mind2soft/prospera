@@ -27,6 +27,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property CarbonImmutable|null $email_verified_at
  * @property string $password
  * @property string|null $locale
+ * @property CarbonImmutable|null $onboarding_seen_at
  * @property NotificationSettings $notification_settings
  * @property string|null $two_factor_secret
  * @property string|null $two_factor_recovery_codes
@@ -60,6 +61,7 @@ class User extends Authenticatable implements HasLocalePreference, MustVerifyEma
             'notification_settings' => AsNotificationSettings::class,
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'onboarding_seen_at' => 'datetime',
         ];
     }
 

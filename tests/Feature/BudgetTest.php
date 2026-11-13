@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Models\Budget;
 use App\Models\BudgetEnvelope;
 use App\Models\BudgetPermission;
+use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\ResourcePermissions;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -139,6 +141,8 @@ class BudgetTest extends TestCase
 
     public function test_store_creates_a_draft_with_owner_share(): void
     {
+        $this->createFirstBudgetReadiness();
+
         $response = $this->actingAs($this->user)->postJson('/api/budgets', [
             'profile_id' => $this->profile->id,
             'currency' => 'cad',
@@ -156,6 +160,51 @@ class BudgetTest extends TestCase
             'user_id' => $this->user->id,
             'permission' => 'owner',
         ]);
+        $this->assertSame(4, $budget->envelopes()->count());
+    }
+
+    private function createFirstBudgetReadiness(): void
+    {
+        $envelopes = collect([
+            ['name' => 'Setup salary', 'type' => 'revenue'],
+            ['name' => 'Setup housing', 'type' => 'expense'],
+            ['name' => 'Setup food', 'type' => 'expense'],
+            ['name' => 'Setup travel', 'type' => 'expense'],
+        ])->map(fn (array $attributes): Envelope => $this->user->envelopes()->create($attributes + ['color' => '#10b981']));
+        $ledger = Ledger::create([
+            'profile_id' => $this->profile->id,
+            'name' => '2026',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+            'starting_balance' => 0,
+        ]);
+        $ledger->permissions()->create(['user_id' => $this->user->id, 'permission' => 'owner']);
+
+        foreach ($envelopes as $index => $envelope) {
+            $historyDate = now()->subDays(31);
+            $historyTransaction = Transaction::create([
+                'ledger_id' => $ledger->id,
+                'envelope_id' => $envelope->id,
+                'amount' => $index === 0 ? 1000 : -100,
+                'event_at' => $historyDate,
+            ]);
+            $historyTransaction->forceFill([
+                'created_at' => $historyDate,
+                'updated_at' => $historyDate,
+            ])->saveQuietly();
+
+            $recentDate = now()->subDays(10);
+            $recentTransaction = Transaction::create([
+                'ledger_id' => $ledger->id,
+                'envelope_id' => $envelope->id,
+                'amount' => $index === 0 ? 1000 : -100,
+                'event_at' => $recentDate,
+            ]);
+            $recentTransaction->forceFill([
+                'created_at' => $recentDate,
+                'updated_at' => $recentDate,
+            ])->saveQuietly();
+        }
     }
 
     public function test_store_rejects_budgets_in_profiles_the_user_is_not_a_member_of(): void

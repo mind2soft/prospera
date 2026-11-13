@@ -4,6 +4,13 @@ A ledger provides a yearly financial record of transactions. Paired with
 budgets, it helps adjust expenses so income and spending either balance out,
 or yield dividends.
 
+Creating a ledger is part of first-run setup: the profile owner needs at least
+one revenue and three expense envelopes first. This does not change the
+separate rule that **recording transactions** only requires an envelope and
+ledger access; no budget is needed. See [Getting started](onboarding.md) for
+the 30-day first-budget checklist and [Budgets](budget.md) for the initial
+draft behavior.
+
 ## Concepts
 
 - **Ledger** — a yearly financial record spanning a `start_date` → `end_date`

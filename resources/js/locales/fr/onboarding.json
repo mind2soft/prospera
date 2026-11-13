@@ -1,0 +1,48 @@
+{
+    "onboarding": {
+        "title": "Commencez à y voir clair",
+        "intro": "Prospera vous aide à transformer vos choix financiers quotidiens en un plan fiable. Commencez simplement, créez un peu d'historique, puis préparez un budget ancré dans la réalité.",
+        "steps": {
+            "title": "Vos trois premières étapes",
+            "envelopes": "Créez au moins une enveloppe de revenus et trois enveloppes de dépenses. Commencez par de grandes catégories comme Salaire, Logement, Épicerie et Transport.",
+            "ledger": "Créez un grand livre pour noter les revenus et les dépenses. Ajoutez une transaction par enveloppe et continuez pendant 30 jours.",
+            "budget": "Après 30 jours d'historique, créez votre premier brouillon de budget. Prospera le préremplit avec l'activité nette des 30 derniers jours par enveloppe; ajustez le plan avant de le publier."
+        },
+        "help": {
+            "title": "Apprenez au fil du temps",
+            "envelopes": {
+                "title": "Créer et gérer des enveloppes",
+                "summary": "Organisez simplement l'argent qui entre et qui sort.",
+                "body": "Les enveloppes donnent un but à chaque partie de votre argent. Commencez avec quelques catégories : Salaire pour les revenus, puis Logement, Épicerie, Transport, Services et Épargne pour les dépenses.\n\nGardez des catégories générales au début. Ajoutez des détails lorsque vos relevés montrent que cela vous aiderait. Donnez un nom clair à chaque enveloppe et choisissez revenus ou dépenses.\n\nLa page Enveloppes permet d'ajouter, renommer, recolorer ou partager vos enveloppes. Leur direction ne peut plus changer après leur utilisation dans un budget ou une transaction.",
+                "action": "Ouvrir les enveloppes"
+            },
+            "ledgers": {
+                "title": "Créer et gérer des grands livres",
+                "summary": "Choisissez un solde de départ et une période claire pour noter vos mouvements.",
+                "body": "Un grand livre consigne l'argent réellement reçu ou dépensé. Le solde initial correspond à votre argent ou à vos dettes au début de la période. Choisissez une date d'ouverture et une date de clôture adaptées à votre plan.\n\nLes grands livres couvrent des mois civils complets. Beaucoup de personnes choisissent une période de 12 mois; des périodes plus courtes conviennent aussi. Gardez des périodes cohérentes pour comparer plus facilement vos prévisions et la réalité.\n\nÀ la clôture, faites le bilan. Une période équilibrée est utile; un résultat net positif donne plus de marge pour le prochain objectif. Fermez le grand livre terminé, puis créez le suivant.",
+                "action": "Ouvrir les grands livres"
+            },
+            "transactions": {
+                "title": "Créer et gérer des transactions",
+                "summary": "Associez chaque paiement ou dépôt réel à la bonne enveloppe.",
+                "body": "Une transaction représente un mouvement d'argent réel. Ajoutez la date, choisissez l'enveloppe et saisissez le montant positif; Prospera utilise le sens de l'enveloppe pour enregistrer un revenu ou une dépense.\n\nNotez régulièrement les transactions, y compris les dépôts et les achats quotidiens. Un historique régulier aide à comprendre vos habitudes, suivre les paiements et voir d'où vient l'argent et où il va.\n\nLes transactions appartiennent à un grand livre, mais ne nécessitent pas de budget. Pour corriger une entrée, supprimez-la et saisissez la bonne.",
+                "action": "Saisir des transactions"
+            },
+            "budgets": {
+                "title": "Créer et gérer des budgets",
+                "summary": "Transformez votre historique en plan mensuel, puis ajustez-le quand la vie change.",
+                "body": "Un budget est un objectif mensuel : les revenus prévus et les montants planifiés pour chaque enveloppe de dépenses. Le premier brouillon reprend l'activité nette des 30 derniers jours par enveloppe comme point de départ — ni promesse ni limite. Vérifiez et ajustez chaque montant.\n\nVous pouvez modifier un brouillon à tout moment. Lorsqu'il vous convient, publiez-le pour le mois en cours. Un budget publié est en lecture seule; créez une révision si votre plan change.\n\nLa page Budget compare votre plan aux dépenses enregistrées. Servez-vous-en pour faire des ajustements réfléchis, sans vous juger lorsqu'une facture imprévue arrive.",
+                "action": "Ouvrir le budget"
+            }
+        },
+        "readGuide": "Lire le guide",
+        "back": "Retour au guide de démarrage",
+        "progress": {
+            "title": "Votre progression",
+            "envelopes": "Encore nécessaires : {revenue} enveloppe(s) de revenus et {expenses} enveloppe(s) de dépenses.",
+            "budget": "Avant le premier budget : {days} jour(s) d'historique et des transactions dans {envelopes} autre(s) enveloppe(s).",
+            "action": "Continuer la configuration"
+        },
+        "encouragement": "De petits pas réguliers font la différence. Vous construisez une image plus claire, pas la perfection."
+    }
+}

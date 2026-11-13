@@ -2,6 +2,15 @@
 
 A budget represents expected spending and earnings for a single month.
 
+The first budget follows the setup checklist in [Getting started](onboarding.md):
+the profile needs 30 days of transaction history and at least one transaction
+in each of the profile owner's envelopes. Its initial draft is prefilled from
+the net signed activity per envelope during the trailing 30 days. Only
+envelopes with activity in that window are assigned, and assignments are
+variable so the amounts can be reviewed and adjusted before publishing. The
+sum is rounded to the nearest whole currency unit (half away from zero),
+because budget assignments do not store fractional units.
+
 ## Concepts
 
 - **Envelope** — groups transactions by purpose (e.g. mortgage, groceries); a

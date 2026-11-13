@@ -48,6 +48,9 @@ export function useCreateBudget() {
             void queryClient.invalidateQueries({
                 queryKey: ['budgets'],
             });
+            void queryClient.invalidateQueries({
+                queryKey: ['onboarding', 'progress'],
+            });
             invalidateDashboardData(queryClient);
         },
     });
@@ -92,6 +95,9 @@ export function useDeleteBudget() {
         onSuccess: (_data, id) => {
             queryClient.removeQueries({ queryKey: budgetKeys.detail(id) });
             void queryClient.invalidateQueries({ queryKey: ['budgets'] });
+            void queryClient.invalidateQueries({
+                queryKey: ['onboarding', 'progress'],
+            });
             invalidateDashboardData(queryClient);
         },
     });

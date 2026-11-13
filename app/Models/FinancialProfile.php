@@ -17,6 +17,7 @@ use LogicException;
 /**
  * @property int $id
  * @property string $name
+ * @property CarbonImmutable|null $initial_budget_created_at
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
@@ -26,7 +27,9 @@ class FinancialProfile extends Model
 
     protected $fillable = ['name'];
 
-    protected $casts = [];
+    protected $casts = [
+        'initial_budget_created_at' => 'immutable_datetime',
+    ];
 
     /**
      * Every profile gets its amount data key on creation

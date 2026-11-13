@@ -28,6 +28,16 @@ class Budget extends Model implements HasImmutableColumns
     use HasImmutableProfile;
     use HasProfilePermissions;
 
+    protected static function booted(): void
+    {
+        static::created(function (Budget $budget): void {
+            FinancialProfile::query()
+                ->whereKey($budget->profile_id)
+                ->whereNull('initial_budget_created_at')
+                ->update(['initial_budget_created_at' => now()]);
+        });
+    }
+
     protected $fillable = [
         'profile_id',
         'currency',

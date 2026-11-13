@@ -8,6 +8,7 @@ use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileInvite;
 use App\Models\Ledger;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\ResourcePermissions;
 use Illuminate\Auth\Events\Verified;
@@ -69,6 +70,40 @@ class SharingLifecycleTest extends TestCase
             'amount' => $amount,
             'event_at' => now()->startOfDay(),
         ]);
+    }
+
+    private function makeFirstBudgetReady(): void
+    {
+        $envelopes = collect([
+            ['name' => 'Setup income', 'type' => 'revenue'],
+            ['name' => 'Setup home', 'type' => 'expense'],
+            ['name' => 'Setup food', 'type' => 'expense'],
+            ['name' => 'Setup travel', 'type' => 'expense'],
+        ])->map(fn (array $attributes): Envelope => $this->alice->envelopes()->create($attributes + ['color' => '#10b981']));
+
+        $ledger = Ledger::create([
+            'profile_id' => $this->profile->id,
+            'name' => 'Setup period',
+            'start_date' => now()->startOfYear(),
+            'end_date' => now()->endOfYear(),
+            'starting_balance' => 0,
+        ]);
+        $ledger->permissions()->create(['user_id' => $this->alice->id, 'permission' => ResourcePermissions::OWNER]);
+
+        foreach ($envelopes as $envelope) {
+            foreach ([now()->subDays(31), now()->subDays(10)] as $eventAt) {
+                $transaction = Transaction::create([
+                    'ledger_id' => $ledger->id,
+                    'envelope_id' => $envelope->id,
+                    'amount' => $envelope->type === 'revenue' ? 1000 : -100,
+                    'event_at' => $eventAt,
+                ]);
+                $transaction->forceFill([
+                    'created_at' => $eventAt,
+                    'updated_at' => $eventAt,
+                ])->saveQuietly();
+            }
+        }
     }
 
     // ------------------------------------------------------------------
@@ -213,6 +248,8 @@ class SharingLifecycleTest extends TestCase
 
     public function test_the_draft_budget_follows_an_explicit_profile_transfer(): void
     {
+        $this->makeFirstBudgetReady();
+
         $draftId = $this->actingAs($this->alice)
             ->postJson('/api/budgets', ['profile_id' => $this->profile->id, 'currency' => 'CAD'])
             ->assertCreated()
@@ -232,6 +269,8 @@ class SharingLifecycleTest extends TestCase
 
     public function test_the_draft_budget_follows_the_ownership_hand_off_on_account_deletion(): void
     {
+        $this->makeFirstBudgetReady();
+
         $draftId = $this->actingAs($this->alice)
             ->postJson('/api/budgets', ['profile_id' => $this->profile->id, 'currency' => 'CAD'])
             ->assertCreated()

@@ -42,6 +42,15 @@ class LedgerTest extends TestCase
 
         $this->profile = FinancialProfile::createOwnedBy($this->user, 'Family');
         $this->profile->members()->attach($this->member->id, ['is_owner' => false]);
+
+        foreach ([
+            ['name' => 'Setup salary', 'type' => 'revenue'],
+            ['name' => 'Setup housing', 'type' => 'expense'],
+            ['name' => 'Setup food', 'type' => 'expense'],
+            ['name' => 'Setup travel', 'type' => 'expense'],
+        ] as $envelope) {
+            $this->user->envelopes()->create($envelope + ['color' => '#10b981']);
+        }
     }
 
     private function createLedger(User $user, array $attributes = []): Ledger

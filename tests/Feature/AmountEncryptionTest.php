@@ -53,6 +53,8 @@ class AmountEncryptionTest extends TestCase
         $this->ledger = $this->createLedger($this->profile);
         $this->rent = $this->user->envelopes()->create(['name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e']);
         $this->salary = $this->user->envelopes()->create(['name' => 'Salary', 'type' => 'revenue', 'color' => '#10b981']);
+        $this->user->envelopes()->create(['name' => 'Food', 'type' => 'expense', 'color' => '#10b981']);
+        $this->user->envelopes()->create(['name' => 'Utilities', 'type' => 'expense', 'color' => '#10b981']);
     }
 
     private function createLedger(FinancialProfile $profile, int $startingBalance = 5000): Ledger

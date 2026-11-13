@@ -343,6 +343,7 @@ The "Profiles" settings page shows:
 type FinancialProfile = {
     id: number; // PK
     name: string; // a descriptive label
+    initial_budget_created_at: string | null; // first-draft setup gate stays complete after deletion
     created_at: string; // ISO date time
     updated_at: string; // ISO date time
 };
