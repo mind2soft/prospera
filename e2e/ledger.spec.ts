@@ -262,6 +262,30 @@ test('ledger page audit', async ({ page }) => {
 
     const startYear = page.getByRole('combobox', { name: 'Year' }).nth(0);
     await startYear.click();
+    await expect(
+        page.getByRole('option', {
+            name: String(currentYear - 7),
+            exact: true,
+        }),
+    ).toBeVisible();
+    await expect(
+        page.getByRole('option', {
+            name: String(currentYear + 3),
+            exact: true,
+        }),
+    ).toBeVisible();
+    await expect(
+        page.getByRole('option', {
+            name: String(currentYear - 8),
+            exact: true,
+        }),
+    ).toHaveCount(0);
+    await expect(
+        page.getByRole('option', {
+            name: String(currentYear + 4),
+            exact: true,
+        }),
+    ).toHaveCount(0);
     await page
         .getByRole('option', { name: String(currentYear + 1), exact: true })
         .click();

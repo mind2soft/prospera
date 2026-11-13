@@ -179,6 +179,9 @@ The user must create a ledger by providing:
   entered as positive numbers; `0` is allowed; see
   [Starting balance](#starting-balance)).
 
+The year selectors offer the current year, the previous seven years, and the
+next three years.
+
 The start month cannot be later than the end month. If a selection would make
 the range invalid, the other endpoint moves to that month. The API enforces
 the first-of-month and last-of-month boundaries as well. Existing ledger

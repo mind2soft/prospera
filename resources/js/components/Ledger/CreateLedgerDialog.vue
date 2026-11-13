@@ -44,8 +44,8 @@ const balance = ref('');
 const balanceType = ref<'cash' | 'debt'>('cash');
 
 const currentYear = new Date().getFullYear();
-const yearOptions = Array.from({ length: 101 }, (_, index) =>
-    String(currentYear - 50 + index),
+const yearOptions = Array.from({ length: 11 }, (_, index) =>
+    String(currentYear - 7 + index),
 );
 const monthOptions = computed(() =>
     Array.from({ length: 12 }, (_, index) => {
