@@ -172,7 +172,7 @@ class FinancialProfileInvite extends Model
         return match (true) {
             $this->isExpired() => 'This invite has expired.',
             $this->isReserved() => 'This invite is invalid.',
-            mb_strtolower($this->email) !== mb_strtolower($email) => 'This invite was issued to another email address.',
+            ! self::sameEmail($this->email, $email) => 'This invite was issued to another email address.',
             default => null,
         };
     }
@@ -253,7 +253,7 @@ class FinancialProfileInvite extends Model
             // once they expire, so a grant past expiry would be invisible
             // to them.
             if (! $invite->isExpired()
-                && mb_strtolower($invite->email) === mb_strtolower($user->email)
+                && self::sameEmail($invite->email, $user->email)
                 && ! $invite->profile->isMember($user)) {
                 $invite->profile->members()->attach($user->id, $invite->membershipPivotAttributes());
 

@@ -195,7 +195,7 @@ class FinancialProfileInviteController extends Controller
 
             abort_if($invite === null || $invite->isReserved(), 404);
 
-            if (mb_strtolower($invite->email) !== mb_strtolower($request->user()->email)) {
+            if (! FinancialProfileInvite::sameEmail($invite->email, $request->user()->email)) {
                 throw ValidationException::withMessages([
                     'invite_key' => __('This invite was issued to another email address.'),
                 ]);
