@@ -24,6 +24,8 @@ const props = defineProps<{
     selectedId: number | null;
     /** Permission of the selected ledger for the current user. */
     permission: string | null;
+    /** Whether the current user can create ledgers in this profile. */
+    canCreate?: boolean;
     loading?: boolean;
 }>();
 
@@ -31,6 +33,7 @@ const emit = defineEmits<{
     (e: 'update:selectedId', value: number): void;
     (e: 'close'): void;
     (e: 'reopen'): void;
+    (e: 'create-next'): void;
     (e: 'share'): void;
     (e: 'remove'): void;
 }>();
@@ -156,6 +159,23 @@ const label = (ledger: Ledger): string => {
                         {{ $t('ledger.menu.delete') }}
                     </DropdownMenuItem>
                 </template>
+                <DropdownMenuSeparator
+                    v-if="isClosed && canCreate && !isOwner"
+                />
+                <DropdownMenuItem
+                    v-if="isClosed && canCreate"
+                    @click="
+                        menuOpen = false;
+                        emit('create-next');
+                    "
+                >
+                    <Icon
+                        name="add"
+                        class="size-4 text-muted-foreground"
+                        aria-hidden="true"
+                    />
+                    {{ $t('ledger.menu.createNext') }}
+                </DropdownMenuItem>
                 <DropdownMenuItem
                     @click="
                         menuOpen = false;

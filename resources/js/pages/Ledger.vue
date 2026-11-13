@@ -74,6 +74,9 @@ const isoToday = (): string => {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
+const isoDate = (date: Date): string =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
 const viewMonth = ref(`${isoToday().slice(0, 8)}01`); // first day of current month
 const selectedDate = ref(isoToday());
 
@@ -151,6 +154,36 @@ const ledger = computed(
 );
 const isClosed = computed(() => ledger.value?.status === 'closed');
 const ledgerPermission = computed(() => ledger.value?.permission ?? null);
+const nextLedgerPeriod = computed(() => {
+    const previous = ledger.value;
+    if (previous?.status !== 'closed') {
+        return null;
+    }
+
+    const [startYear, startMonth] = previous.start_date
+        .slice(0, 7)
+        .split('-')
+        .map(Number);
+    const [endYear, endMonth] = previous.end_date
+        .slice(0, 7)
+        .split('-')
+        .map(Number);
+    const monthSpan = (endYear - startYear) * 12 + endMonth - startMonth;
+    const [previousEndYear, previousEndMonth, previousEndDay] =
+        previous.end_date.split('-').map(Number);
+    const nextStart = new Date(
+        previousEndYear,
+        previousEndMonth - 1,
+        previousEndDay + 1,
+    );
+    const nextEnd = new Date(
+        nextStart.getFullYear(),
+        nextStart.getMonth() + monthSpan + 1,
+        0,
+    );
+
+    return { startDate: isoDate(nextStart), endDate: isoDate(nextEnd) };
+});
 
 // Point the calendar at the most recent day of the selected ledger's period:
 // today while the ledger is open, its first day when it opens in the future,
@@ -327,11 +360,27 @@ const fail = (e: unknown) => {
 
 const showCreate = ref(false);
 const showDelete = ref(false);
+const creatingNextLedger = ref(false);
+
+const onCreateNext = () => {
+    if (isProfileOwner.value && nextLedgerPeriod.value !== null) {
+        creatingNextLedger.value = true;
+        showCreate.value = true;
+    }
+};
+
+const onCreateDialogOpenChange = (open: boolean) => {
+    showCreate.value = open;
+    if (!open) {
+        creatingNextLedger.value = false;
+    }
+};
 
 const onCreate = (input: Omit<CreateLedgerInput, 'profile_id'>) => {
     createLedger.mutate(input, {
         onSuccess: (data) => {
             showCreate.value = false;
+            creatingNextLedger.value = false;
             selectedLedgerId.value = data.ledger.id;
             toast.success(t('ledger.toast.ledgerCreated'));
         },
@@ -536,6 +585,8 @@ const confirmRemoveTransaction = () => {
                 @update:selected-id="selectedLedgerId = $event"
                 @close="onClose"
                 @reopen="onReopen"
+                @create-next="onCreateNext"
+                :can-create="isProfileOwner"
                 @share="showShare = true"
                 @remove="showDelete = true"
             />
@@ -657,8 +708,16 @@ const confirmRemoveTransaction = () => {
         </template>
 
         <CreateLedgerDialog
-            v-model:open="showCreate"
+            :open="showCreate"
+            @update:open="onCreateDialogOpenChange"
             :pending="createLedger.isPending.value"
+            :initial-start-date="
+                creatingNextLedger ? nextLedgerPeriod?.startDate : undefined
+            "
+            :initial-end-date="
+                creatingNextLedger ? nextLedgerPeriod?.endDate : undefined
+            "
+            :lock-start-date="creatingNextLedger"
             @confirm="onCreate"
         />
 

@@ -61,6 +61,7 @@
         },
         "menu": {
             "reopen": "Rouvrir",
+            "createNext": "Créer le grand livre suivant",
             "share": "Partager",
             "close": "Clôturer le grand livre",
             "delete": "Supprimer le grand livre"
@@ -87,11 +88,13 @@
         "createDialog": {
             "title": "Créer un nouveau grand livre",
             "description": "Un grand livre consigne vos transactions sur une année.",
+            "nextDescription": "La date de début suit ce grand livre et la date de fin proposée conserve la même durée en mois civils. Vous pouvez modifier la date de fin.",
             "startDate": "Date de début",
             "endDate": "Date de fin",
             "month": "Mois",
             "year": "Année",
             "startsOnFirstDay": "Le grand livre commence le premier jour de ce mois.",
+            "startLocked": "Cette date est fixée au lendemain de la fin du grand livre précédent.",
             "endsOnLastDay": "Le grand livre se termine le dernier jour de ce mois.",
             "startingBalance": "Solde de départ",
             "balancePlaceholder": "p. ex. 1000",

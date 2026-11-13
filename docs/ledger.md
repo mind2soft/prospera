@@ -188,6 +188,15 @@ the first-of-month and last-of-month boundaries as well. Existing ledger
 periods are expanded to their containing calendar months during migration;
 balances and transactions are not changed.
 
+When a ledger is closed, the profile owner can choose **Create next ledger**
+from its actions menu. The new ledger starts on the day after the previous
+ledger ends (the first of the following month); that start month and year are
+locked. Its suggested end date preserves the previous ledger's inclusive
+calendar-month span and lands on the last day of a month, but can be changed
+before creation. For example, a 12-month January–December ledger is followed
+by another January–December ledger in the next year. A March–September ledger
+spans seven calendar months, so its successor defaults to October–April.
+
 ### Selector row
 
 Once a ledger is created, a dropdown shows the current and past ledgers with
@@ -195,6 +204,9 @@ their states: **Open** or **Closed**. Next to it, like for the budget
 interface, an actions menu with:
 
 - **Close / Reopen** — toggles the ledger's read-only state.
+- **Create next ledger** — shown for a closed ledger to the profile owner;
+  starts a contiguous period with the same suggested calendar-month span (see
+  [Creating a ledger](#creating-a-ledger)).
 - **Delete** — deletes the ledger (and all of its transactions); asks for
   confirmation.
 - **Share** — the unified Google Drive-like drawer (right side, not a dialog)
