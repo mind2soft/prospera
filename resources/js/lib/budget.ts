@@ -50,11 +50,12 @@ export function formatMoney(
                 style: 'currency',
                 currency,
                 currencyDisplay: 'narrowSymbol',
-                maximumFractionDigits: 0,
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2,
             });
         } catch {
             formatter = new Intl.NumberFormat(locale, {
-                maximumFractionDigits: 0,
+                maximumFractionDigits: 2,
             });
         }
         formatters.set(key, formatter);

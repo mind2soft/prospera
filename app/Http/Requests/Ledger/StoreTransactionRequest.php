@@ -27,7 +27,7 @@ class StoreTransactionRequest extends LedgerRequest
     {
         return [
             'envelope_id' => ['required', 'integer'],
-            'amount' => ['required', 'integer', 'min:1', 'max:999999999'],
+            'amount' => ['required', 'numeric', 'regex:/^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/D', 'gt:0', 'max:999999999.99'],
             'event_at' => ['required', 'date'],
         ];
     }

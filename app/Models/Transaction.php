@@ -6,17 +6,19 @@ use App\Models\Concerns\EncryptsAmounts;
 use App\Models\Contracts\HasEncryptedAmounts;
 use App\Security\Amounts\AmountContext;
 use App\Security\Amounts\AmountKeyRing;
+use App\Support\Money;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use InvalidArgumentException;
 
 /**
  * @property int $id
  * @property int $ledger_id
  * @property int|null $user_id
  * @property int $envelope_id
- * @property int $amount encrypted at rest (docs/encryption.md)
+ * @property int|float $amount currency units; encrypted as minor units at rest (docs/encryption.md)
  * @property CarbonImmutable $event_at
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
@@ -32,11 +34,25 @@ class Transaction extends Model implements HasEncryptedAmounts
     ];
 
     /**
-     * @return Attribute<int, mixed>
+     * @return Attribute<int|float, mixed>
      */
     protected function amount(): Attribute
     {
         return $this->encryptedAmount('amount');
+    }
+
+    protected function decodeAmount(string $column, int $amount): int|float
+    {
+        return $column === 'amount' ? Money::fromMinorUnits($amount) : $amount;
+    }
+
+    protected function encodeAmount(string $column, mixed $amount): int
+    {
+        if (! is_int($amount) && ! is_float($amount) && ! is_string($amount)) {
+            throw new InvalidArgumentException('Transaction amount must be a number.');
+        }
+
+        return Money::toMinorUnits($amount);
     }
 
     public static function encryptedAmountColumns(): array

@@ -70,9 +70,11 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
 ```
 
 - `pa1` — format version: AES-256-GCM (`openssl`), random 96-bit IV, 128-bit
-  tag. The plaintext is the amount as a signed 64-bit big-endian integer
+  tag. The plaintext is an amount as a signed 64-bit big-endian integer
   (`pack('J')`), so every payload has the same length (54–62 characters,
-  stored in `varchar(80)`) whatever the value or sign.
+  stored in `varchar(80)`) whatever the value or sign. Transaction amounts
+  use minor units (two decimal places); ledger starting balances and budget
+  assignments use whole currency units.
 - Additional authenticated data (AAD):
 
     ```
@@ -399,6 +401,12 @@ integers with whichever key versions exist. On PostgreSQL each direction runs
 in one transaction; on SQLite (development) it is not atomic and refuses to
 run inside a transaction, because SQLite's table rebuild would otherwise
 cascade-delete child rows.
+
+`2026_11_12_000001_store_transaction_amounts_in_minor_units` atomically
+re-encrypts existing transaction amounts multiplied by 100, preserving their
+key versions and context bindings. Its rollback refuses to round any
+transaction containing fractional currency units. Ledger balances and budget
+assignments are unchanged.
 
 ### Performance
 

@@ -38,6 +38,26 @@ test('a failed transaction keeps the entered amount', async ({ page }) => {
     await expect(amount).toHaveValue('');
 });
 
+test('transactions accept and display fractional currency amounts', async ({
+    page,
+}) => {
+    seed('seed-ledger.php');
+    await login(page);
+    await page.goto('/ledger');
+
+    await page.getByRole('combobox', { name: 'Envelope' }).click();
+    await page.getByRole('option', { name: /Food/ }).click();
+    const amount = page.getByRole('spinbutton', { name: 'Amount' });
+    await amount.fill('35.25');
+    await expect(page.getByRole('button', { name: 'Add' })).toBeEnabled();
+    await page.getByRole('button', { name: 'Add' }).click();
+
+    await expect(page.getByText('Transaction added.')).toBeVisible();
+    await expect(
+        page.getByRole('region', { name: 'Transactions' }).getByText(/35\.25/),
+    ).toBeVisible();
+});
+
 test('the create-ledger dialog stays open with its values on failure', async ({
     page,
 }) => {

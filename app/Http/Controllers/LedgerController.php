@@ -16,6 +16,7 @@ use App\Models\User;
 use App\Security\Amounts\AmountKeyRing;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -173,7 +174,9 @@ class LedgerController extends Controller
         // the rows above — amounts are encrypted at rest (docs/encryption.md).
         $totals = $transactions
             ->groupBy(fn (Transaction $transaction): string => (string) $transaction->envelope_id)
-            ->map(fn (Collection $group): int => (int) $group->sum(fn (Transaction $transaction): int => $transaction->amount));
+            ->map(fn (Collection $group): int => $group->sum(
+                fn (Transaction $transaction): int => Money::toMinorUnits($transaction->amount),
+            ));
 
         // "Remaining allocated" comes from the published budget bound to the
         // queried month (budgets are per month/year — see docs/budget.md):
@@ -221,10 +224,10 @@ class LedgerController extends Controller
      * range ("remaining allocated"). Null when the envelope has no
      * allocation (or the month has no published budget).
      *
-     * @param  Collection<int|string, int>  $allocations
+     * @param  Collection<int|string, int|float>  $allocations
      * @param  Collection<string, int>  $totals
      */
-    private function remainingAllocated(Transaction $transaction, Collection $allocations, Collection $totals): ?int
+    private function remainingAllocated(Transaction $transaction, Collection $allocations, Collection $totals): int|float|null
     {
         $allocation = $allocations->get((string) $transaction->envelope_id);
 
@@ -232,7 +235,9 @@ class LedgerController extends Controller
             return null;
         }
 
-        return (int) $allocation - $totals->get((string) $transaction->envelope_id, 0);
+        return Money::fromMinorUnits(
+            Money::toMinorUnits($allocation) - $totals->get((string) $transaction->envelope_id, 0),
+        );
     }
 
     /**
@@ -281,7 +286,7 @@ class LedgerController extends Controller
             return $ledger->transactions()->create([
                 'user_id' => $request->user()->id,
                 'envelope_id' => $envelope->id,
-                'amount' => $direction->signedAmount($validated['amount']),
+                'amount' => $direction->signedAmount((float) $validated['amount']),
                 'event_at' => $eventAt,
             ])->setRelation('envelope', $direction);
         });
@@ -413,12 +418,12 @@ class LedgerController extends Controller
      * user ("Former member" for deleted users). Rows on envelopes the user
      * lacks envelope-viewer+ permission on are masked server-side.
      *
-     * @return array<string, string|int|null|bool|array<string, string|int|null>>
+     * @return array<string, string|int|float|null|bool|array<string, string|int|float|null>>
      */
     private function serializeTransaction(
         Transaction $transaction,
         string $permission,
-        ?int $remainingAllocated,
+        int|float|null $remainingAllocated,
         bool $withRemaining = true,
     ): array {
         $transaction->loadMissing(['envelope', 'user']);

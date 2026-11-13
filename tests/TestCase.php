@@ -23,7 +23,7 @@ abstract class TestCase extends BaseTestCase
      * @param  class-string<Model>  $model
      * @param  array<string, mixed>  $where
      */
-    protected function assertEncryptedAmount(string $model, array $where, string $column, int $expected): void
+    protected function assertEncryptedAmount(string $model, array $where, string $column, int|float $expected): void
     {
         $row = $model::query()->where($where)->sole();
 

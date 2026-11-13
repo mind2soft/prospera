@@ -228,7 +228,7 @@ class Envelope extends Model
      * Sign a positive amount from the envelope's direction: expenses are
      * stored negative, revenues positive.
      */
-    public function signedAmount(int $amount): int
+    public function signedAmount(int|float $amount): int|float
     {
         return $this->type === self::DIRECTION_EXPENSE ? -$amount : $amount;
     }

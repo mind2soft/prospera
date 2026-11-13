@@ -40,7 +40,7 @@ class BudgetEnvelope extends Model implements HasEncryptedAmounts
      */
     protected function amount(): Attribute
     {
-        return $this->encryptedAmount('amount');
+        return $this->encryptedIntegerAmount('amount');
     }
 
     public static function encryptedAmountColumns(): array
