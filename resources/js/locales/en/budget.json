@@ -2,6 +2,9 @@
     "budget": {
         "title": "Budget",
         "description": "Plan where your money goes before it goes anywhere.",
+        "setupProgress": "Your first budget needs 30 days of transaction history and at least one transaction in each of your envelopes. {days} more day(s) and {envelopes} envelope(s) still need a transaction.",
+        "setupProgressError": "Setup progress could not be loaded.",
+        "setupHelp": "See the getting-started guide",
         "currency": "Currency",
         "toast": {
             "failed": "Something went wrong.",

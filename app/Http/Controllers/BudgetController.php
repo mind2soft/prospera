@@ -13,6 +13,7 @@ use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\User;
+use App\Services\OnboardingProgress;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
 use Illuminate\Database\Eloquent\Model;
@@ -77,6 +78,16 @@ class BudgetController extends Controller
 
             $this->abortIfDraftExists($profile->id);
 
+            $hasAnyBudget = Budget::query()->where('profile_id', $profile->id)->exists();
+            $needsInitialBudget = $profile->initial_budget_created_at === null && ! $hasAnyBudget;
+            $onboarding = app(OnboardingProgress::class);
+
+            if ($needsInitialBudget && ! $onboarding->forProfile($profile)['can_create_budget']) {
+                throw ValidationException::withMessages([
+                    'budget' => __('Record transactions for every envelope and build 30 days of history before creating your first budget.'),
+                ]);
+            }
+
             $budget = Budget::create([
                 'profile_id' => $profile->id,
                 'currency' => strtoupper($validated['currency']),
@@ -88,6 +99,17 @@ class BudgetController extends Controller
                 'user_id' => $request->user()->id,
                 'permission' => ResourcePermissions::OWNER,
             ]);
+
+            if ($needsInitialBudget) {
+                $amounts = $onboarding->initialBudgetAmounts($profile);
+                $budget->envelopes()->createMany($amounts->map(
+                    fn (int $amount, int|string $envelopeId): array => [
+                        'envelope_id' => (int) $envelopeId,
+                        'amount' => $amount,
+                        'type' => BudgetEnvelope::TYPE_VARIABLE,
+                    ],
+                )->values()->all());
+            }
 
             return $budget;
         });

@@ -2,6 +2,14 @@
     "envelopes": {
         "title": "Enveloppes",
         "description": "Donnez à chaque euro, dollar ou franc un toit — le système des enveloppes classique, sans le papier.",
+        "setupProgress": "Pour ouvrir un grand livre, ajoutez {revenue} enveloppe(s) de revenus et {expenses} enveloppe(s) de dépenses.",
+        "setupHelp": "Consulter le guide de démarrage",
+        "setupComplete": {
+            "title": "Vos enveloppes sont prêtes",
+            "description": "Vous avez une bonne base. Créez un grand livre lorsque vous serez prêt, ou continuez d'abord à organiser vos catégories.",
+            "more": "J'en ajouterai",
+            "ledger": "Créer un grand livre"
+        },
         "newEnvelope": "Nouvelle enveloppe",
         "empty": {
             "title": "Créez votre première enveloppe",

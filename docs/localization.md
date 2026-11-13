@@ -60,6 +60,7 @@ resources/js/locales/
     ├── dashboard.json  # dashboard page: catalog, widget settings, states
     ├── envelopes.json  # envelopes page + share drawer
     ├── ledger.json     # ledger page + calendar/tables
+    ├── onboarding.json # first-run guide + how-to pages
     ├── settings.json   # settings pages, security, two-factor, passkeys
     ├── share.json      # generic share drawer
     ├── privacy.json    # privacy page chrome (long-form copy lives in resources/content/)

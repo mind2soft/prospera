@@ -19,6 +19,9 @@ the filing cabinet.
 - **Ledger** — a running log of expenses and revenues, one line at a time
 - **Envelopes** — category envelopes (housing, groceries, fun…) with a name,
   a direction (expense/revenue) and a color. Fully CRUD-able.
+- **Getting started** — a first-login guide, live setup progress, and concise
+  help for envelopes, ledgers, transactions and budgets
+  ([docs/onboarding.md](docs/onboarding.md))
 - **Shared finances** — financial profiles shared with invited members, with
   per-resource owner/contributor/viewer permissions.
 - **Encryption at rest** — money amounts are stored encrypted with a key per
@@ -34,7 +37,8 @@ the filing cabinet.
   envelope limit exceeded are TODO (not yet implemented — their toggles are
   shown disabled, "Coming soon").
 
-Design docs live in [`docs/`](docs/): [dashboard](docs/dashboard.md),
+Design docs live in [`docs/`](docs/): [getting started](docs/onboarding.md),
+[dashboard](docs/dashboard.md),
 [budget](docs/budget.md),
 [ledger](docs/ledger.md), [envelopes](docs/envelope.md),
 [shared finances](docs/shared-finances.md),

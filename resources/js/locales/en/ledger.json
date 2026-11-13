@@ -2,6 +2,15 @@
     "ledger": {
         "title": "Ledger",
         "description": "A yearly financial record of everything that comes in and everything that goes out.",
+        "setupProgress": "Before creating a ledger, add {revenue} revenue envelope(s) and {expenses} expense envelope(s).",
+        "setupHelp": "See the getting-started guide",
+        "setupProgressError": "Setup progress could not be loaded.",
+        "budgetReady": {
+            "title": "You have built a month of insight",
+            "description": "You have recorded transactions across your envelopes and built 30 days of history. Keep going for a fuller picture, or turn what you have learned into your first budget.",
+            "more": "I’ll add more transactions",
+            "create": "Create my first budget"
+        },
         "toast": {
             "accessUpdated": "Access updated.",
             "accessRevoked": "Access revoked.",

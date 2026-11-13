@@ -4,6 +4,7 @@ import { computed, ref, useTemplateRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import Heading from '@/components/Heading.vue';
+import HelpLink from '@/components/HelpLink.vue';
 import Icon from '@/components/Icon.vue';
 import AddTransactionForm from '@/components/Ledger/AddTransactionForm.vue';
 import CreateLedgerDialog from '@/components/Ledger/CreateLedgerDialog.vue';
@@ -46,6 +47,7 @@ import {
     useSetLedgerShare,
     useTransferLedgerOwnership,
 } from '@/composables/ledgerQueries';
+import { useOnboardingProgress } from '@/composables/onboardingQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useLocale } from '@/composables/useLocale';
 import { errorMessage } from '@/lib/api';
@@ -211,6 +213,10 @@ const transactions = computed(() => transactionsQuery.data.value ?? []);
 // --- envelope context -------------------------------------------------------
 const budgetsQuery = useBudgets();
 const envelopesQuery = useEnvelopeOptions();
+const onboardingQuery = useOnboardingProgress();
+const onboarding = computed(() => onboardingQuery.data.value);
+const budgetReadyDialogOpen = ref(false);
+const awaitingBudgetReadiness = ref(false);
 
 /**
  * The transaction picker: every envelope on which the current user is owner
@@ -266,6 +272,34 @@ const {
     refetch: refetchProfiles,
 } = useCurrentProfile();
 const isProfileOwner = computed(() => currentProfile.value?.is_owner === true);
+const setupAllowsLedger = computed(
+    () => onboarding.value?.can_create_ledger === true,
+);
+
+watch(
+    () => onboarding.value?.can_create_budget,
+    (ready) => {
+        const profileId = currentProfile.value?.id;
+        if (
+            !ready ||
+            profileId === undefined ||
+            !awaitingBudgetReadiness.value
+        ) {
+            return;
+        }
+
+        awaitingBudgetReadiness.value = false;
+        const key = `prospera.onboarding.budget-ready.${profileId}`;
+        try {
+            if (window.localStorage.getItem(key) === null) {
+                window.localStorage.setItem(key, '1');
+                budgetReadyDialogOpen.value = true;
+            }
+        } catch {
+            // The congratulations dialog is a one-time, optional nudge.
+        }
+    },
+);
 
 // "No data yet, no error" — unlike `isLoading`, this state is identical
 // between the SSR render and the client's hydration pass, so the skeleton
@@ -431,6 +465,9 @@ const onAddTransaction = (input: AddTransactionInput) => {
     if (ledgerId.value === null) {
         return;
     }
+    awaitingBudgetReadiness.value =
+        (budgetsQuery.data.value?.length ?? 0) === 0 &&
+        onboarding.value?.can_create_budget === false;
     addTransaction.mutate(
         { input },
         {
@@ -439,6 +476,11 @@ const onAddTransaction = (input: AddTransactionInput) => {
                 toast.success(t('ledger.toast.transactionAdded'));
             },
             onError: fail,
+            onSettled: (_data, error) => {
+                if (error) {
+                    awaitingBudgetReadiness.value = false;
+                }
+            },
         },
     );
 };
@@ -518,10 +560,13 @@ const confirmRemoveTransaction = () => {
     <Head :title="$t('ledger.title')" />
 
     <div class="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4">
-        <Heading
-            :title="$t('ledger.title')"
-            :description="$t('ledger.description')"
-        />
+        <div class="flex items-center gap-2">
+            <Heading
+                :title="$t('ledger.title')"
+                :description="$t('ledger.description')"
+            />
+            <HelpLink topic="ledgers" />
+        </div>
 
         <LedgerLoadingScreen v-if="waitingForData" />
 
@@ -562,7 +607,7 @@ const confirmRemoveTransaction = () => {
                 </p>
 
                 <Button
-                    v-if="isProfileOwner"
+                    v-if="isProfileOwner && setupAllowsLedger"
                     size="lg"
                     class="mt-8 gap-2"
                     @click="showCreate = true"
@@ -570,7 +615,62 @@ const confirmRemoveTransaction = () => {
                     <Icon name="add" class="size-5" aria-hidden="true" />
                     {{ $t('ledger.actions.createLedger') }}
                 </Button>
-                <p v-else class="text-sm text-muted-foreground">
+                <div
+                    v-else-if="isProfileOwner && onboarding"
+                    class="mt-6 max-w-xl text-sm text-muted-foreground"
+                >
+                    <p>
+                        {{
+                            $t('ledger.setupProgress', {
+                                revenue: onboarding.missing_revenue_envelopes,
+                                expenses: onboarding.missing_expense_envelopes,
+                            })
+                        }}
+                    </p>
+                    <Link
+                        href="/envelopes"
+                        class="mt-2 inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline"
+                        >{{
+                            $t('ledger.envelopesNotice.manage')
+                        }}</Link
+                    >
+                    <span class="mx-2">·</span>
+                    <Link
+                        href="/onboarding"
+                        class="inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline"
+                        >{{
+                            $t('ledger.setupHelp')
+                        }}</Link
+                    >
+                </div>
+                <div
+                    v-else-if="isProfileOwner && onboardingQuery.isError.value"
+                    class="mt-6 flex flex-wrap items-center gap-2 text-sm text-destructive"
+                    role="alert"
+                >
+                    <span>{{ $t('ledger.setupProgressError') }}</span>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        :disabled="onboardingQuery.isFetching.value"
+                        @click="onboardingQuery.refetch()"
+                    >
+                        {{ $t('common.actions.retry') }}
+                    </Button>
+                </div>
+                <p
+                    v-else-if="
+                        isProfileOwner && onboardingQuery.isPending.value
+                    "
+                    class="mt-6 text-sm text-muted-foreground"
+                    role="status"
+                >
+                    {{ $t('common.loading') }}
+                </p>
+                <p
+                    v-else-if="!isProfileOwner"
+                    class="text-sm text-muted-foreground"
+                >
                     {{ $t('ledger.empty.onlyOwner') }}
                 </p>
             </CardContent>
@@ -586,7 +686,7 @@ const confirmRemoveTransaction = () => {
                 @close="onClose"
                 @reopen="onReopen"
                 @create-next="onCreateNext"
-                :can-create="isProfileOwner"
+                :can-create="isProfileOwner && setupAllowsLedger"
                 @share="showShare = true"
                 @remove="showDelete = true"
             />
@@ -796,6 +896,40 @@ const confirmRemoveTransaction = () => {
                             $t('ledger.delete.confirm')
                         }}</Button
                     >
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog
+            :open="budgetReadyDialogOpen"
+            @update:open="budgetReadyDialogOpen = $event"
+        >
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{{
+                        $t('ledger.budgetReady.title')
+                    }}</DialogTitle>
+                    <DialogDescription>{{
+                        $t('ledger.budgetReady.description')
+                    }}</DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button
+                        variant="outline"
+                        @click="budgetReadyDialogOpen = false"
+                        >{{
+                            $t('ledger.budgetReady.more')
+                        }}</Button
+                    >
+                    <Button as-child>
+                        <Link
+                            href="/budget"
+                            @click="budgetReadyDialogOpen = false"
+                            >{{
+                                $t('ledger.budgetReady.create')
+                            }}</Link
+                        >
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

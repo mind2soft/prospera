@@ -6,6 +6,10 @@ direction (`expense` or `revenue`) and a color.
 Envelopes are managed on the _Envelopes_ page and referenced by
 [Budgets](budget.md) and [Ledgers](ledger.md).
 
+For first-run setup, the profile owner should create at least one revenue and
+three expense envelopes before opening a ledger. The setup checklist counts
+the profile owner's account-owned envelopes; see [Getting started](onboarding.md).
+
 The app uses the "envelope" spelling consistently.
 
 ## Data Schema

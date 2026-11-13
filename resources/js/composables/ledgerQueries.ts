@@ -98,6 +98,9 @@ export function useDeleteLedger() {
             });
             queryClient.removeQueries({ queryKey: ledgerKeys.shares(id) });
             void queryClient.invalidateQueries({ queryKey: ledgerKeys.root });
+            void queryClient.invalidateQueries({
+                queryKey: ['onboarding', 'progress'],
+            });
             invalidateDashboardData(queryClient);
         },
     });
@@ -141,6 +144,9 @@ export function useAddTransaction(ledgerId: MaybeRefOrGetter<number | null>) {
             void queryClient.invalidateQueries({
                 queryKey: ledgerKeys.transactions(toValue(ledgerId) ?? 0),
             });
+            void queryClient.invalidateQueries({
+                queryKey: ['onboarding', 'progress'],
+            });
             invalidateDashboardData(queryClient);
         },
     });
@@ -157,6 +163,9 @@ export function useDeleteTransaction(
         onSuccess: () => {
             void queryClient.invalidateQueries({
                 queryKey: ledgerKeys.transactions(toValue(ledgerId) ?? 0),
+            });
+            void queryClient.invalidateQueries({
+                queryKey: ['onboarding', 'progress'],
             });
             invalidateDashboardData(queryClient);
         },

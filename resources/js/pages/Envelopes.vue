@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Head, router, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { useQueryClient } from '@tanstack/vue-query';
 import { RadioGroupIndicator, RadioGroupItem, RadioGroupRoot } from 'reka-ui';
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import {
@@ -10,6 +11,7 @@ import {
     update,
 } from '@/actions/App/Http/Controllers/EnvelopeController';
 import Heading from '@/components/Heading.vue';
+import HelpLink from '@/components/HelpLink.vue';
 import Icon from '@/components/Icon.vue';
 import InputError from '@/components/InputError.vue';
 import ShareDrawer from '@/components/share/ShareDrawer.vue';
@@ -38,7 +40,9 @@ import {
     useSetEnvelopeShare,
     useTransferEnvelopeOwnership,
 } from '@/composables/envelopeQueries';
+import { useOnboardingProgress } from '@/composables/onboardingQueries';
 import { useProfileCircle } from '@/composables/profileQueries';
+import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { errorMessage } from '@/lib/api';
 import { envelopes as envelopesRoute } from '@/routes';
 import type { Envelope, ResourcePermission } from '@/types';
@@ -63,6 +67,36 @@ type Props = {
 const props = withDefaults(defineProps<Props>(), {
     envelopes: () => [],
 });
+
+const { currentProfile } = useCurrentProfile();
+const onboardingQuery = useOnboardingProgress();
+const queryClient = useQueryClient();
+const onboarding = computed(() => onboardingQuery.data.value);
+const congratulationsOpen = ref(false);
+const shouldCongratulateAfterCreate = ref(false);
+
+watch(
+    () =>
+        [
+            currentProfile.value?.id,
+            onboarding.value?.can_create_ledger,
+        ] as const,
+    ([profileId, ready]) => {
+        if (!profileId || !ready || !shouldCongratulateAfterCreate.value)
+            return;
+        shouldCongratulateAfterCreate.value = false;
+        const key = `prospera.onboarding.envelopes-complete.${profileId}`;
+        try {
+            if (window.localStorage.getItem(key) === null) {
+                window.localStorage.setItem(key, '1');
+                congratulationsOpen.value = true;
+            }
+        } catch {
+            // The dialog is a one-time nudge, not required for setup.
+        }
+    },
+    { immediate: true },
+);
 
 const meId = computed(() => usePage().props.auth.user.id);
 
@@ -152,13 +186,21 @@ const save = () => {
             onError: failForm,
         });
     } else {
+        shouldCongratulateAfterCreate.value =
+            onboarding.value?.can_create_ledger === false;
         form.post(store.url(), {
             preserveScroll: true,
             onSuccess: () => {
                 dialogOpen.value = false;
                 form.reset();
+                void queryClient.invalidateQueries({
+                    queryKey: ['onboarding', 'progress'],
+                });
             },
-            onError: failForm,
+            onError: () => {
+                shouldCongratulateAfterCreate.value = false;
+                failForm();
+            },
         });
     }
 };
@@ -177,6 +219,9 @@ const remove = () => {
         onSuccess: () => {
             deleteDialogOpen.value = false;
             toDelete.value = null;
+            void queryClient.invalidateQueries({
+                queryKey: ['onboarding', 'progress'],
+            });
         },
         onError: () => {
             toast.error(firstPageError() ?? t('envelopes.delete.failed'));
@@ -281,10 +326,13 @@ const roleLabel: Record<string, string> = {
 
     <div class="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4">
         <div class="flex flex-wrap items-center justify-between gap-4">
-            <Heading
-                :title="$t('envelopes.title')"
-                :description="$t('envelopes.description')"
-            />
+            <div class="flex items-center gap-2">
+                <Heading
+                    :title="$t('envelopes.title')"
+                    :description="$t('envelopes.description')"
+                />
+                <HelpLink topic="envelopes" />
+            </div>
             <Button
                 v-if="props.envelopes.length"
                 class="gap-2"
@@ -294,6 +342,35 @@ const roleLabel: Record<string, string> = {
                 {{ $t('envelopes.newEnvelope') }}
             </Button>
         </div>
+
+        <Card
+            v-if="
+                onboarding &&
+                (!onboarding.can_create_ledger ||
+                    onboarding.missing_revenue_envelopes > 0 ||
+                    onboarding.missing_expense_envelopes > 0)
+            "
+            class="border-warning/40"
+        >
+            <CardContent
+                class="flex flex-col gap-2 p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
+            >
+                <p>
+                    {{
+                        $t('envelopes.setupProgress', {
+                            revenue: onboarding.missing_revenue_envelopes,
+                            expenses: onboarding.missing_expense_envelopes,
+                        })
+                    }}
+                </p>
+                <Link
+                    href="/onboarding"
+                    class="min-h-11 self-start font-medium text-primary underline-offset-4 hover:underline sm:self-auto"
+                >
+                    {{ $t('envelopes.setupHelp') }}
+                </Link>
+            </CardContent>
+        </Card>
 
         <!-- Empty state -->
         <Card
@@ -645,6 +722,36 @@ const roleLabel: Record<string, string> = {
                     </Button>
                     <Button variant="destructive" @click="remove">
                         {{ $t('envelopes.delete.confirm') }}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog v-model:open="congratulationsOpen">
+            <DialogContent class="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>{{
+                        $t('envelopes.setupComplete.title')
+                    }}</DialogTitle>
+                    <DialogDescription>{{
+                        $t('envelopes.setupComplete.description')
+                    }}</DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                    <Button
+                        variant="outline"
+                        @click="congratulationsOpen = false"
+                        >{{
+                            $t('envelopes.setupComplete.more')
+                        }}</Button
+                    >
+                    <Button as-child>
+                        <Link
+                            href="/ledger"
+                            @click="congratulationsOpen = false"
+                        >
+                            {{ $t('envelopes.setupComplete.ledger') }}
+                        </Link>
                     </Button>
                 </DialogFooter>
             </DialogContent>

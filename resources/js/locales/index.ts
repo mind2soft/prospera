@@ -13,6 +13,7 @@ import dashboard from './en/dashboard.json';
 import envelopes from './en/envelopes.json';
 import layout from './en/layout.json';
 import ledger from './en/ledger.json';
+import onboarding from './en/onboarding.json';
 import privacy from './en/privacy.json';
 import settings from './en/settings.json';
 import share from './en/share.json';
@@ -25,6 +26,7 @@ import dashboardFr from './fr/dashboard.json';
 import envelopesFr from './fr/envelopes.json';
 import layoutFr from './fr/layout.json';
 import ledgerFr from './fr/ledger.json';
+import onboardingFr from './fr/onboarding.json';
 import privacyFr from './fr/privacy.json';
 import settingsFr from './fr/settings.json';
 import shareFr from './fr/share.json';
@@ -39,6 +41,7 @@ const en = {
     ...envelopes,
     ...layout,
     ...ledger,
+    ...onboarding,
     ...privacy,
     ...settings,
     ...share,
@@ -54,6 +57,7 @@ const fr = {
     ...envelopesFr,
     ...layoutFr,
     ...ledgerFr,
+    ...onboardingFr,
     ...privacyFr,
     ...settingsFr,
     ...shareFr,
