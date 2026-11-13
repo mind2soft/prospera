@@ -19,7 +19,10 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { useLocale } from '@/composables/useLocale';
 import type { CreateLedgerInput } from '@/lib/ledgerApi';
+
+const { locale } = useLocale();
 
 const props = defineProps<{
     open: boolean;
@@ -32,25 +35,105 @@ const emit = defineEmits<{
     (e: 'confirm', input: Omit<CreateLedgerInput, 'profile_id'>): void;
 }>();
 
-const isoToday = (): string => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
 const name = ref('');
-const startDate = ref('');
-const endDate = ref('');
+const startMonth = ref('');
+const startYear = ref('');
+const endMonth = ref('');
+const endYear = ref('');
 const balance = ref('');
 const balanceType = ref<'cash' | 'debt'>('cash');
+
+const currentYear = new Date().getFullYear();
+const yearOptions = Array.from({ length: 101 }, (_, index) =>
+    String(currentYear - 50 + index),
+);
+const monthOptions = computed(() =>
+    Array.from({ length: 12 }, (_, index) => {
+        const month = String(index + 1);
+
+        return {
+            value: month,
+            label: new Date(Date.UTC(2020, index, 1)).toLocaleString(
+                locale.value,
+                { month: 'long', timeZone: 'UTC' },
+            ),
+        };
+    }),
+);
+
+const periodKey = (year: string, month: string): string =>
+    `${year}-${month.padStart(2, '0')}`;
+
+const startDate = computed(() =>
+    startYear.value && startMonth.value
+        ? `${periodKey(startYear.value, startMonth.value)}-01`
+        : '',
+);
+const endDate = computed(() => {
+    if (!endYear.value || !endMonth.value) {
+        return '';
+    }
+
+    const lastDay = new Date(
+        Number(endYear.value),
+        Number(endMonth.value),
+        0,
+    ).getDate();
+
+    return `${periodKey(endYear.value, endMonth.value)}-${String(lastDay).padStart(2, '0')}`;
+});
+
+const updateStartPeriod = (part: 'month' | 'year', value: unknown) => {
+    if (typeof value !== 'string') {
+        return;
+    }
+
+    if (part === 'month') {
+        startMonth.value = value;
+    } else {
+        startYear.value = value;
+    }
+
+    if (
+        periodKey(startYear.value, startMonth.value) >
+        periodKey(endYear.value, endMonth.value)
+    ) {
+        endMonth.value = startMonth.value;
+        endYear.value = startYear.value;
+    }
+};
+
+const updateEndPeriod = (part: 'month' | 'year', value: unknown) => {
+    if (typeof value !== 'string') {
+        return;
+    }
+
+    if (part === 'month') {
+        endMonth.value = value;
+    } else {
+        endYear.value = value;
+    }
+
+    if (
+        periodKey(endYear.value, endMonth.value) <
+        periodKey(startYear.value, startMonth.value)
+    ) {
+        startMonth.value = endMonth.value;
+        startYear.value = endYear.value;
+    }
+};
 
 watch(
     () => props.open,
     (open) => {
         if (open) {
             const year = String(new Date().getFullYear());
+            const month = String(new Date().getMonth() + 1);
             name.value = year;
-            startDate.value = isoToday();
-            endDate.value = `${year}-12-31`;
+            startMonth.value = month;
+            startYear.value = year;
+            endMonth.value = '12';
+            endYear.value = year;
             balance.value = '';
             balanceType.value = 'cash';
         }
@@ -108,23 +191,136 @@ const confirm = () => {
                     <Input id="ledger-name" v-model="name" type="text" />
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
-                    <div class="grid gap-2">
-                        <Label for="ledger-start">{{
-                            $t('ledger.createDialog.startDate')
-                        }}</Label>
-                        <Input
-                            id="ledger-start"
-                            v-model="startDate"
-                            type="date"
-                        />
-                    </div>
-                    <div class="grid gap-2">
-                        <Label for="ledger-end">{{
-                            $t('ledger.createDialog.endDate')
-                        }}</Label>
-                        <Input id="ledger-end" v-model="endDate" type="date" />
-                    </div>
+                <div class="grid gap-4">
+                    <fieldset class="grid gap-2">
+                        <legend class="text-sm font-medium">
+                            {{ $t('ledger.createDialog.startDate') }}
+                        </legend>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="grid gap-2">
+                                <Label for="ledger-start-month">{{
+                                    $t('ledger.createDialog.month')
+                                }}</Label>
+                                <Select
+                                    :model-value="startMonth"
+                                    @update:model-value="
+                                        updateStartPeriod('month', $event)
+                                    "
+                                >
+                                    <SelectTrigger
+                                        id="ledger-start-month"
+                                        class="w-full"
+                                    >
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem
+                                            v-for="month in monthOptions"
+                                            :key="month.value"
+                                            :value="month.value"
+                                        >
+                                            {{ month.label }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div class="grid gap-2">
+                                <Label for="ledger-start-year">{{
+                                    $t('ledger.createDialog.year')
+                                }}</Label>
+                                <Select
+                                    :model-value="startYear"
+                                    @update:model-value="
+                                        updateStartPeriod('year', $event)
+                                    "
+                                >
+                                    <SelectTrigger
+                                        id="ledger-start-year"
+                                        class="w-full"
+                                    >
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem
+                                            v-for="year in yearOptions"
+                                            :key="year"
+                                            :value="year"
+                                        >
+                                            {{ year }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <p class="text-sm text-muted-foreground">
+                            {{ $t('ledger.createDialog.startsOnFirstDay') }}
+                        </p>
+                    </fieldset>
+
+                    <fieldset class="grid gap-2">
+                        <legend class="text-sm font-medium">
+                            {{ $t('ledger.createDialog.endDate') }}
+                        </legend>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="grid gap-2">
+                                <Label for="ledger-end-month">{{
+                                    $t('ledger.createDialog.month')
+                                }}</Label>
+                                <Select
+                                    :model-value="endMonth"
+                                    @update:model-value="
+                                        updateEndPeriod('month', $event)
+                                    "
+                                >
+                                    <SelectTrigger
+                                        id="ledger-end-month"
+                                        class="w-full"
+                                    >
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem
+                                            v-for="month in monthOptions"
+                                            :key="month.value"
+                                            :value="month.value"
+                                        >
+                                            {{ month.label }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div class="grid gap-2">
+                                <Label for="ledger-end-year">{{
+                                    $t('ledger.createDialog.year')
+                                }}</Label>
+                                <Select
+                                    :model-value="endYear"
+                                    @update:model-value="
+                                        updateEndPeriod('year', $event)
+                                    "
+                                >
+                                    <SelectTrigger
+                                        id="ledger-end-year"
+                                        class="w-full"
+                                    >
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem
+                                            v-for="year in yearOptions"
+                                            :key="year"
+                                            :value="year"
+                                        >
+                                            {{ year }}
+                                        </SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <p class="text-sm text-muted-foreground">
+                            {{ $t('ledger.createDialog.endsOnLastDay') }}
+                        </p>
+                    </fieldset>
                 </div>
 
                 <div class="grid grid-cols-2 gap-4">

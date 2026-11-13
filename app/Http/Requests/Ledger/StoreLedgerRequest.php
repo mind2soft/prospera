@@ -23,8 +23,37 @@ class StoreLedgerRequest extends FormRequest
         return [
             'profile_id' => ['required', 'integer'],
             'name' => ['required', 'string', 'max:255'],
-            'start_date' => ['required', 'date'],
-            'end_date' => ['required', 'date', 'after_or_equal:start_date'],
+            'start_date' => [
+                'required',
+                'date_format:Y-m-d',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) !== 1) {
+                        return;
+                    }
+
+                    $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+                    if ($date !== false && $date->format('Y-m-d') === $value && $date->format('d') !== '01') {
+                        $fail(__('validation.first_day_of_month'));
+                    }
+                },
+            ],
+            'end_date' => [
+                'required',
+                'date_format:Y-m-d',
+                'after_or_equal:start_date',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! is_string($value) || preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) !== 1) {
+                        return;
+                    }
+
+                    $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+
+                    if ($date !== false && $date->format('Y-m-d') === $value && $date->format('d') !== $date->format('t')) {
+                        $fail(__('validation.last_day_of_month'));
+                    }
+                },
+            ],
             'starting_balance' => ['required', 'integer', 'min:0', 'max:999999999'],
             'starting_balance_type' => ['required', 'string', Rule::in(['cash', 'debt'])],
         ];

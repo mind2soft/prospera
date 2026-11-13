@@ -235,12 +235,61 @@ test('ledger page audit', async ({ page }) => {
     await page.getByRole('button', { name: 'Create ledger' }).click();
     await page.screenshot({ path: SHOT('08-create-ledger-dialog') });
     await expect(page.getByRole('dialog')).toBeVisible();
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Intl.DateTimeFormat('en-US', {
+        month: 'long',
+    }).format(new Date());
     const defaults = {
         name: await page.getByLabel('Name').inputValue(),
-        start: await page.getByLabel('Starting date').inputValue(),
-        end: await page.getByLabel('End date').inputValue(),
+        startMonth: await page
+            .getByRole('combobox', { name: 'Month' })
+            .nth(0)
+            .textContent(),
+        startYear: await page
+            .getByRole('combobox', { name: 'Year' })
+            .nth(0)
+            .textContent(),
+        endMonth: await page
+            .getByRole('combobox', { name: 'Month' })
+            .nth(1)
+            .textContent(),
+        endYear: await page
+            .getByRole('combobox', { name: 'Year' })
+            .nth(1)
+            .textContent(),
     };
     console.log('CREATE DEFAULTS:', JSON.stringify(defaults));
+
+    const startYear = page.getByRole('combobox', { name: 'Year' }).nth(0);
+    await startYear.click();
+    await page
+        .getByRole('option', { name: String(currentYear + 1), exact: true })
+        .click();
+    await expect(
+        page.getByRole('combobox', { name: 'Year' }).nth(1),
+    ).toContainText(String(currentYear + 1));
+    const endYear = page.getByRole('combobox', { name: 'Year' }).nth(1);
+    await endYear.click();
+    await page
+        .getByRole('option', { name: String(currentYear - 1), exact: true })
+        .click();
+    await expect(startYear).toContainText(String(currentYear - 1));
+    await startYear.click();
+    await page
+        .getByRole('option', { name: String(currentYear), exact: true })
+        .click();
+    await expect(endYear).toContainText(String(currentYear));
+
+    const endMonth = page.getByRole('combobox', { name: 'Month' }).nth(1);
+    await endMonth.click();
+    await page.getByRole('option', { name: 'December', exact: true }).click();
+
+    expect(defaults.name).toBe(String(currentYear));
+    expect(defaults.startMonth?.trim()).toBe(currentMonth);
+    expect(defaults.startYear?.trim()).toBe(String(currentYear));
+    expect(defaults.endMonth?.trim()).toBe('December');
+    expect(defaults.endYear?.trim()).toBe(String(currentYear));
+
     await page.getByLabel('Starting balance').fill('2500');
     await page.getByRole('button', { name: 'Create ledger' }).click();
     await expect(page.getByText('Ledger created.')).toBeVisible();
