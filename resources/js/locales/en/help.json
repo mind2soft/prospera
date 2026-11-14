@@ -1,0 +1,273 @@
+{
+    "help": {
+        "common": {
+            "readingTime": "{n} min read | {n} min read",
+            "inThirtySeconds": "In 30 seconds",
+            "yourChallenge": "Your challenge",
+            "do": "Do",
+            "avoid": "Avoid",
+            "previous": "Previous",
+            "next": "Next",
+            "related": "Related:",
+            "pager": "More guides",
+            "example": "Example",
+            "ownerCompletes": "The profile owner completes this step.",
+            "backToStart": "Back to getting started",
+            "gettingStarted": "Getting started",
+            "guideOf": "Guide {n} of 4",
+            "done": "Done",
+            "readyToUnlock": "Ready to unlock",
+            "notStarted": "Not started",
+            "nextGuide": "Next: {title}",
+            "tooltip": "{guide} · {n} min",
+            "dayOf": "Day {day} of {total}",
+            "unlocksAfter": "Unlocks after step {step}",
+            "progressLabel": "Your progress:",
+            "onThisPage": "Sections"
+        },
+        "envelopes": {
+            "name": "Envelopes",
+            "guideName": "Envelopes guide",
+            "linkLabel": "Read the envelopes guide",
+            "page": "Envelopes page",
+            "title": "Envelopes: give your money a home",
+            "promise": "Name where your money comes from and where it goes. Five minutes, no spreadsheets.",
+            "badge": "You: {have} of {need} envelopes",
+            "tldr": {
+                "a": "An envelope is a purpose for money: Paycheck, Rent, Groceries.",
+                "b": "Revenue envelopes fill up. Expense envelopes empty out.",
+                "c": "Start broad: 1 revenue + 3 expenses unlocks your ledger."
+            },
+            "sections": {
+                "what": {
+                    "title": "What's an envelope?",
+                    "body": "Each envelope is a label with a direction: money coming in or going out. Every transaction lands in one.",
+                    "caption": "Your paycheck flows into the envelopes you choose."
+                },
+                "starter": {
+                    "title": "A starter set that works",
+                    "body": "Pick four to begin. You can rename them later.",
+                    "caption": "Suggestions, grouped by direction."
+                },
+                "broad": {
+                    "title": "Start broad, refine later",
+                    "body": "Detail is earned. Split an envelope only when its number surprises you."
+                },
+                "yours": {
+                    "title": "Make it yours",
+                    "body": "Pick a colour to spot it at a glance on the {page}. Its direction is locked once it's used, so choose carefully.",
+                    "caption": "A colour and a direction for each envelope."
+                }
+            },
+            "dos": {
+                "a": "One “Groceries” for all food shopping",
+                "b": "One “Insurance” for home, car and life",
+                "c": "Add detail after a month of records"
+            },
+            "avoids": {
+                "a": "“Coffee” and “Lunch” on day one",
+                "b": "Thirty envelopes before your first transaction",
+                "c": "One envelope for both income and spending"
+            },
+            "challenge": {
+                "text": "Create 1 revenue and 3 expense envelopes.",
+                "cta": "Create my envelopes",
+                "done": "Your envelopes are ready."
+            }
+        },
+        "ledgers": {
+            "name": "Ledgers",
+            "guideName": "Ledgers guide",
+            "linkLabel": "Read the ledgers guide",
+            "page": "Ledger page",
+            "title": "Ledgers: set your finish line",
+            "promise": "A ledger is a commitment: where you start, when you finish, and the result you're aiming for.",
+            "badgeReady": "Ready to open",
+            "tldr": {
+                "a": "Choose a starting balance, an opening month and a closing month.",
+                "b": "At closing, break even, or better, finish ahead.",
+                "c": "Keep every ledger the same length. 12 months is typical."
+            },
+            "sections": {
+                "goal": {
+                    "title": "Your ledger is a goal",
+                    "body": "It records everything that comes in and goes out between two dates, on the {page}. The closing date is your finish line.",
+                    "caption": "Start, then close. Ending above the dotted line means you got ahead."
+                },
+                "recipe": {
+                    "title": "Three choices to open one",
+                    "caption": "What the create dialog asks for.",
+                    "balance": {
+                        "term": "Starting balance:",
+                        "text": "what you have today, as cash, or as debt if you owe."
+                    },
+                    "opening": {
+                        "term": "Opening month:",
+                        "text": "usually this month, or January."
+                    },
+                    "closing": {
+                        "term": "Closing month:",
+                        "text": "12 months later is typical. Shorter works if you keep it consistent."
+                    }
+                },
+                "example": {
+                    "title": "Example",
+                    "caption": "Example: a calendar-year ledger.",
+                    "opens": "Opens {date}",
+                    "closes": "Closes {date}",
+                    "start": "Start",
+                    "close": "Close",
+                    "ahead": "Ahead by {amount}",
+                    "periodLabel": "Example ledger period, {from} to {to}"
+                },
+                "win": {
+                    "title": "Win the period"
+                }
+            },
+            "dos": {
+                "a": "Close it when the period ends",
+                "b": "Open the next one the same length",
+                "c": "Aim for revenue ≥ expenses"
+            },
+            "avoids": {
+                "a": "Comparing a 3-month and a 12-month ledger",
+                "b": "Leaving a finished period open",
+                "c": "Expecting entries outside its dates to be accepted"
+            },
+            "unlockNote": "Your ledger unlocks after 1 revenue and 3 expense envelopes.",
+            "unlockLink": "Read the envelopes guide",
+            "challenge": {
+                "text": "Open a 12-month ledger today.",
+                "cta": "Open my ledger",
+                "lockedCta": "Create my envelopes",
+                "done": "Your ledger is open."
+            }
+        },
+        "transactions": {
+            "name": "Transactions",
+            "guideName": "Transactions guide",
+            "linkLabel": "Read the transactions guide",
+            "page": "Ledger page",
+            "title": "Transactions: draw your financial portrait",
+            "promise": "Every deposit and payment is a brushstroke. After 30 days, the picture tells you the truth.",
+            "tldr": {
+                "a": "A transaction is one real movement of money: date, envelope, amount.",
+                "b": "Enter amounts as positive. The envelope decides in or out.",
+                "c": "30 days, with every envelope used once, unlocks your first budget."
+            },
+            "sections": {
+                "flow": {
+                    "title": "In, out, recorded",
+                    "body": "Knowing where money comes from and where it goes is the start of deciding.",
+                    "caption": "Money in, money out, one record."
+                },
+                "record": {
+                    "title": "How to record one",
+                    "body": "Use the form on the {page}.",
+                    "caption": "Example",
+                    "steps": {
+                        "a": "Pick the date",
+                        "b": "Choose the envelope",
+                        "c": "Enter the amount"
+                    },
+                    "date": "Date",
+                    "envelope": "Envelope",
+                    "amount": "Amount"
+                },
+                "habit": {
+                    "title": "Make it a habit",
+                    "body": "Record the same day: receipts fade fast. Choose a moment: after dinner, on the bus.",
+                    "caption": "The clock starts with your first entry. Back-dated receipts are welcome, but they don't shorten it."
+                }
+            },
+            "dos": {
+                "a": "Record income too, not only spending",
+                "b": "Give every envelope at least one transaction",
+                "c": "Fix a mistake by deleting and re-entering it"
+            },
+            "avoids": {
+                "a": "Rounding everything",
+                "b": "Waiting until the end of the month",
+                "c": "Skipping small purchases"
+            },
+            "challenge": {
+                "first": "Record your first transaction and start the clock.",
+                "progress": "Day {day} of 30. {n} envelope still waiting for a transaction. | Day {day} of 30. {n} envelopes still waiting for a transaction.",
+                "allCovered": "Day {day} of 30. Every envelope has a transaction.",
+                "cta": "Record a transaction",
+                "noLedger": "Open my ledger",
+                "done": "Your 30 days are done."
+            }
+        },
+        "budgets": {
+            "name": "Budgets",
+            "guideName": "Budgets guide",
+            "linkLabel": "Read the budgets guide",
+            "page": "Budget page",
+            "title": "Budgets: plan the month you want",
+            "promise": "Your transactions show what happened. Your budget decides what happens next.",
+            "tldr": {
+                "a": "A budget is a monthly goal for each envelope.",
+                "b": "Your first draft is pre-filled from your last 30 days: a starting point, not a verdict.",
+                "c": "Adjust it, publish it for this month, revise when life changes."
+            },
+            "sections": {
+                "plan": {
+                    "title": "From portrait to plan",
+                    "body": "Look at what happened, then choose one thing to change.",
+                    "caption": "Example: plan versus spending.",
+                    "planned": "Plan {amount}",
+                    "spent": "Spent {amount}",
+                    "leftOver": "Left over {amount}",
+                    "over": "Over by {amount}"
+                },
+                "draft": {
+                    "title": "Your first draft, explained",
+                    "body": "Create it on the {page} once it unlocks.",
+                    "steps": {
+                        "a": "Last 30 days",
+                        "b": "Draft",
+                        "c": "Publish"
+                    },
+                    "points": {
+                        "a": "Each envelope used in the last 30 days gets its net total",
+                        "b": "Amounts are rounded to whole units",
+                        "c": "Review every line before you publish"
+                    }
+                },
+                "tune": {
+                    "title": "Fine-tune toward prosperity"
+                },
+                "unlock": {
+                    "title": "When does it unlock?",
+                    "body": "After 30 days of history and a transaction in every envelope."
+                }
+            },
+            "examples": {
+                "groceries": "Groceries",
+                "gas": "Gas",
+                "restaurants": "Restaurants"
+            },
+            "dos": {
+                "a": "Change one envelope at a time",
+                "b": "Plan savings first, like a bill",
+                "c": "Create a revision when plans change"
+            },
+            "avoids": {
+                "a": "Cutting everything at once",
+                "b": "Treating a surprise bill as failure",
+                "c": "Publishing without a review"
+            },
+            "challenge": {
+                "ready": "Your first budget is unlocked. Make it yours.",
+                "notReady": "Unlocks around {date}.",
+                "notStarted": "Unlocks 30 days after your first transaction.",
+                "waitingEnvelopes": "Give every envelope a transaction to unlock it.",
+                "done": "Review this month's plan.",
+                "createCta": "Create my first budget",
+                "recordCta": "Record a transaction",
+                "openCta": "Open my budget"
+            }
+        }
+    }
+}

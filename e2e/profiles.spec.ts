@@ -85,7 +85,7 @@ test('switching profiles scopes the data and persists across reloads', async ({
     await menu.getByRole('menuitemradio', { name: /Family/ }).click();
 
     // The shared profile has no budgets → empty state.
-    await expect(page.getByText('Create your first budget')).toBeVisible();
+    await expect(page.getByText('No budget yet')).toBeVisible();
 
     const storedAfter = await page.evaluate(
         (key) => localStorage.getItem(key),
@@ -96,7 +96,7 @@ test('switching profiles scopes the data and persists across reloads', async ({
 
     // The selection survives a full reload (resolved from localStorage).
     await page.reload();
-    await expect(page.getByText('Create your first budget')).toBeVisible();
+    await expect(page.getByText('No budget yet')).toBeVisible();
     expect(
         await page.evaluate((key) => localStorage.getItem(key), PROFILE_KEY),
     ).toBe(storedAfter);
@@ -152,7 +152,7 @@ test('the user can set a shared profile as their default from settings', async (
     await page.goto('/budget');
     await page.evaluate((key) => localStorage.removeItem(key), PROFILE_KEY);
     await page.reload();
-    await expect(page.getByText('Create your first budget')).toBeVisible();
+    await expect(page.getByText('No budget yet')).toBeVisible();
     const after = await openProfilesMenu(page);
     await expect(
         after

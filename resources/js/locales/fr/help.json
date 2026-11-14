@@ -1,0 +1,273 @@
+{
+    "help": {
+        "common": {
+            "readingTime": "{n} min de lecture | {n} min de lecture",
+            "inThirtySeconds": "En 30 secondes",
+            "yourChallenge": "Votre défi",
+            "do": "À faire",
+            "avoid": "À éviter",
+            "previous": "Précédent",
+            "next": "Suivant",
+            "related": "Voir aussi :",
+            "pager": "Autres guides",
+            "example": "Exemple",
+            "ownerCompletes": "Le propriétaire du profil s'occupe de cette étape.",
+            "backToStart": "Retour à Bien démarrer",
+            "gettingStarted": "Bien démarrer",
+            "guideOf": "Guide {n} sur 4",
+            "done": "Terminé",
+            "readyToUnlock": "Prêt à débloquer",
+            "notStarted": "Pas commencé",
+            "nextGuide": "Ensuite : {title}",
+            "tooltip": "{guide} · {n} min",
+            "dayOf": "Jour {day} sur {total}",
+            "unlocksAfter": "Débloqué après l'étape {step}",
+            "progressLabel": "Votre progression :",
+            "onThisPage": "Sections"
+        },
+        "envelopes": {
+            "name": "Enveloppes",
+            "guideName": "Guide des enveloppes",
+            "linkLabel": "Lire le guide des enveloppes",
+            "page": "page Enveloppes",
+            "title": "Enveloppes : donnez un foyer à votre argent",
+            "promise": "Nommez d'où vient votre argent et où il va. Cinq minutes, sans tableur.",
+            "badge": "Vous : {have} enveloppes sur {need}",
+            "tldr": {
+                "a": "Une enveloppe donne un but à l'argent : Salaire, Loyer, Épicerie.",
+                "b": "Les enveloppes de revenus se remplissent. Celles de dépenses se vident.",
+                "c": "Restez simple : 1 revenu + 3 dépenses débloquent votre grand livre."
+            },
+            "sections": {
+                "what": {
+                    "title": "Qu'est-ce qu'une enveloppe ?",
+                    "body": "Chaque enveloppe est une étiquette avec un sens : l'argent qui entre ou qui sort. Chaque transaction aboutit dans l'une d'elles.",
+                    "caption": "Votre salaire se répartit dans les enveloppes de votre choix."
+                },
+                "starter": {
+                    "title": "Un premier ensemble qui fonctionne",
+                    "body": "Choisissez-en quatre pour commencer. Vous pourrez les renommer plus tard.",
+                    "caption": "Suggestions, regroupées par sens."
+                },
+                "broad": {
+                    "title": "Commencez large, affinez ensuite",
+                    "body": "Le détail se mérite. Divisez une enveloppe seulement quand son montant vous surprend."
+                },
+                "yours": {
+                    "title": "Personnalisez-les",
+                    "body": "Choisissez une couleur pour la repérer d'un coup d'œil sur la {page}. Son sens est verrouillé dès qu'elle sert : choisissez bien.",
+                    "caption": "Une couleur et un sens pour chaque enveloppe."
+                }
+            },
+            "dos": {
+                "a": "Une seule « Épicerie » pour toute la nourriture",
+                "b": "Une seule « Assurances » : maison, auto et vie",
+                "c": "Ajouter du détail après un mois de relevés"
+            },
+            "avoids": {
+                "a": "« Café » et « Dîner » dès le premier jour",
+                "b": "Trente enveloppes avant la première transaction",
+                "c": "Une même enveloppe pour les revenus et les dépenses"
+            },
+            "challenge": {
+                "text": "Créez 1 enveloppe de revenus et 3 de dépenses.",
+                "cta": "Créer mes enveloppes",
+                "done": "Vos enveloppes sont prêtes."
+            }
+        },
+        "ledgers": {
+            "name": "Grands livres",
+            "guideName": "Guide des grands livres",
+            "linkLabel": "Lire le guide des grands livres",
+            "page": "page Grand livre",
+            "title": "Grands livres : fixez votre ligne d'arrivée",
+            "promise": "Un grand livre est un engagement : d'où vous partez, quand vous terminez et le résultat visé.",
+            "badgeReady": "Prêt à ouvrir",
+            "tldr": {
+                "a": "Choisissez un solde de départ, un mois d'ouverture et un mois de clôture.",
+                "b": "À la clôture, soyez à l'équilibre, ou mieux, en avance.",
+                "c": "Gardez la même durée pour chaque grand livre. 12 mois, c'est courant."
+            },
+            "sections": {
+                "goal": {
+                    "title": "Votre grand livre est un objectif",
+                    "body": "Il consigne tout ce qui entre et sort entre deux dates, sur la {page}. La date de clôture est votre ligne d'arrivée.",
+                    "caption": "Départ, puis clôture. Finir au-dessus du pointillé signifie que vous avez pris de l'avance."
+                },
+                "recipe": {
+                    "title": "Trois choix pour en ouvrir un",
+                    "caption": "Ce que demande la fenêtre de création.",
+                    "balance": {
+                        "term": "Solde de départ :",
+                        "text": "ce que vous avez aujourd'hui, en argent, ou en dette si vous devez."
+                    },
+                    "opening": {
+                        "term": "Mois d'ouverture :",
+                        "text": "souvent ce mois-ci, ou janvier."
+                    },
+                    "closing": {
+                        "term": "Mois de clôture :",
+                        "text": "12 mois plus tard, c'est courant. Plus court fonctionne si vous restez constant."
+                    }
+                },
+                "example": {
+                    "title": "Exemple",
+                    "caption": "Exemple : un grand livre sur l'année civile.",
+                    "opens": "Ouverture le {date}",
+                    "closes": "Clôture le {date}",
+                    "start": "Départ",
+                    "close": "Clôture",
+                    "ahead": "En avance de {amount}",
+                    "periodLabel": "Période d'exemple, du {from} au {to}"
+                },
+                "win": {
+                    "title": "Gagnez la période"
+                }
+            },
+            "dos": {
+                "a": "Le clôturer à la fin de la période",
+                "b": "Ouvrir le suivant sur la même durée",
+                "c": "Viser des revenus ≥ aux dépenses"
+            },
+            "avoids": {
+                "a": "Comparer un grand livre de 3 mois à un de 12",
+                "b": "Laisser ouverte une période terminée",
+                "c": "Saisir des entrées hors de ses dates"
+            },
+            "unlockNote": "Votre grand livre se débloque après 1 enveloppe de revenus et 3 de dépenses.",
+            "unlockLink": "Lire le guide des enveloppes",
+            "challenge": {
+                "text": "Ouvrez un grand livre de 12 mois dès aujourd'hui.",
+                "cta": "Ouvrir mon grand livre",
+                "lockedCta": "Créer mes enveloppes",
+                "done": "Votre grand livre est ouvert."
+            }
+        },
+        "transactions": {
+            "name": "Transactions",
+            "guideName": "Guide des transactions",
+            "linkLabel": "Lire le guide des transactions",
+            "page": "page Grand livre",
+            "title": "Transactions : dressez votre portrait financier",
+            "promise": "Chaque dépôt et chaque paiement est un coup de pinceau. Après 30 jours, le tableau dit la vérité.",
+            "tldr": {
+                "a": "Une transaction est un mouvement d'argent réel : date, enveloppe, montant.",
+                "b": "Saisissez des montants positifs. L'enveloppe décide du sens.",
+                "c": "30 jours, avec chaque enveloppe utilisée une fois, débloquent votre premier budget."
+            },
+            "sections": {
+                "flow": {
+                    "title": "Entrées, sorties, notées",
+                    "body": "Savoir d'où vient l'argent et où il va, c'est le début de la décision.",
+                    "caption": "L'argent entre, l'argent sort, un seul relevé."
+                },
+                "record": {
+                    "title": "Comment en saisir une",
+                    "body": "Utilisez le formulaire de la {page}.",
+                    "caption": "Exemple",
+                    "steps": {
+                        "a": "Choisir la date",
+                        "b": "Choisir l'enveloppe",
+                        "c": "Saisir le montant"
+                    },
+                    "date": "Date",
+                    "envelope": "Enveloppe",
+                    "amount": "Montant"
+                },
+                "habit": {
+                    "title": "Prenez l'habitude",
+                    "body": "Notez le jour même : les reçus s'effacent vite. Choisissez un moment : après le souper, dans l'autobus.",
+                    "caption": "Le compte à rebours commence à la première saisie. Les reçus antidatés sont les bienvenus, mais ils ne le raccourcissent pas."
+                }
+            },
+            "dos": {
+                "a": "Noter aussi les revenus, pas seulement les dépenses",
+                "b": "Donner au moins une transaction à chaque enveloppe",
+                "c": "Corriger une erreur en supprimant puis en ressaisissant"
+            },
+            "avoids": {
+                "a": "Tout arrondir",
+                "b": "Attendre la fin du mois",
+                "c": "Oublier les petits achats"
+            },
+            "challenge": {
+                "first": "Saisissez votre première transaction et lancez le compte à rebours.",
+                "progress": "Jour {day} sur 30. {n} enveloppe attend encore une transaction. | Jour {day} sur 30. {n} enveloppes attendent encore une transaction.",
+                "allCovered": "Jour {day} sur 30. Chaque enveloppe a une transaction.",
+                "cta": "Saisir une transaction",
+                "noLedger": "Ouvrir mon grand livre",
+                "done": "Vos 30 jours sont accomplis."
+            }
+        },
+        "budgets": {
+            "name": "Budgets",
+            "guideName": "Guide des budgets",
+            "linkLabel": "Lire le guide des budgets",
+            "page": "page Budget",
+            "title": "Budgets : planifiez le mois que vous voulez",
+            "promise": "Vos transactions montrent ce qui s'est passé. Votre budget décide de la suite.",
+            "tldr": {
+                "a": "Un budget est un objectif mensuel pour chaque enveloppe.",
+                "b": "Votre premier brouillon est prérempli avec vos 30 derniers jours : un point de départ, pas un verdict.",
+                "c": "Ajustez-le, publiez-le pour ce mois, révisez-le quand la vie change."
+            },
+            "sections": {
+                "plan": {
+                    "title": "Du portrait au plan",
+                    "body": "Regardez ce qui s'est passé, puis choisissez une seule chose à changer.",
+                    "caption": "Exemple : le plan comparé aux dépenses.",
+                    "planned": "Prévu {amount}",
+                    "spent": "Dépensé {amount}",
+                    "leftOver": "Reste {amount}",
+                    "over": "Dépassé de {amount}"
+                },
+                "draft": {
+                    "title": "Votre premier brouillon, expliqué",
+                    "body": "Créez-le sur la {page} dès qu'il est débloqué.",
+                    "steps": {
+                        "a": "30 derniers jours",
+                        "b": "Brouillon",
+                        "c": "Publication"
+                    },
+                    "points": {
+                        "a": "Chaque enveloppe utilisée sur 30 jours reçoit son total net",
+                        "b": "Les montants sont arrondis à l'unité",
+                        "c": "Relisez chaque ligne avant de publier"
+                    }
+                },
+                "tune": {
+                    "title": "Ajustez vers la prospérité"
+                },
+                "unlock": {
+                    "title": "Quand se débloque-t-il ?",
+                    "body": "Après 30 jours d'historique et une transaction dans chaque enveloppe."
+                }
+            },
+            "examples": {
+                "groceries": "Épicerie",
+                "gas": "Essence",
+                "restaurants": "Restaurants"
+            },
+            "dos": {
+                "a": "Changer une enveloppe à la fois",
+                "b": "Prévoir l'épargne d'abord, comme une facture",
+                "c": "Créer une révision quand vos plans changent"
+            },
+            "avoids": {
+                "a": "Tout couper d'un coup",
+                "b": "Voir une facture imprévue comme un échec",
+                "c": "Publier sans relire"
+            },
+            "challenge": {
+                "ready": "Votre premier budget est débloqué. Faites-le vôtre.",
+                "notReady": "Débloqué vers le {date}.",
+                "notStarted": "Débloqué 30 jours après votre première transaction.",
+                "waitingEnvelopes": "Donnez une transaction à chaque enveloppe pour le débloquer.",
+                "done": "Revoyez le plan de ce mois.",
+                "createCta": "Créer mon premier budget",
+                "recordCta": "Saisir une transaction",
+                "openCta": "Ouvrir mon budget"
+            }
+        }
+    }
+}

@@ -2,19 +2,12 @@
     "envelopes": {
         "title": "Envelopes",
         "description": "Give every euro, dollar or franc a home — the classic envelope system, minus the paper.",
-        "setupProgress": "To open a ledger, add {revenue} revenue envelope(s) and {expenses} expense envelope(s).",
-        "setupHelp": "See the getting-started guide",
-        "setupComplete": {
-            "title": "Your envelopes are ready",
-            "description": "You have a useful starting set. Add a ledger when you are ready, or keep shaping your categories first.",
-            "more": "I’ll add more",
-            "ledger": "Create a ledger"
-        },
         "newEnvelope": "New envelope",
         "empty": {
-            "title": "Create your first envelope",
-            "description": "An envelope for housing, one for groceries, one for fun — envelopes are how Prospera turns a pile of transactions into a clear picture of where your money flows.",
-            "create": "Create envelope"
+            "title": "Give your money a home",
+            "description": "Start with four: 1 for money coming in, 3 for money going out.",
+            "create": "Create envelope",
+            "guide": "Read the envelopes guide (2 min)"
         },
         "groups": {
             "expenses": "Expenses",

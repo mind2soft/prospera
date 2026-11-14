@@ -2,9 +2,6 @@
     "budget": {
         "title": "Budget",
         "description": "Plan where your money goes before it goes anywhere.",
-        "setupProgress": "Your first budget needs 30 days of transaction history and at least one transaction in each of your envelopes. {days} more day(s) and {envelopes} envelope(s) still need a transaction.",
-        "setupProgressError": "Setup progress could not be loaded.",
-        "setupHelp": "See the getting-started guide",
         "currency": "Currency",
         "toast": {
             "failed": "Something went wrong.",
@@ -20,10 +17,18 @@
         "loadError": "Your budgets could not be loaded.",
         "detailLoadError": "This budget could not be loaded.",
         "empty": {
-            "title": "Create your first budget",
+            "title": "Start a new budget",
             "description": "Start with a draft: pick your currency, add your envelopes, then publish when it feels right.",
             "create": "Create budget",
-            "onlyOwner": "Only the profile owner can create budgets."
+            "onlyOwner": "The profile owner creates budgets for this profile.",
+            "lockedTitle": "Your first budget is on its way",
+            "lockedDescription": "It unlocks after 30 days of records and a transaction in every envelope.",
+            "lockedAction": "Record a transaction",
+            "readyTitle": "Your first budget is ready to draft",
+            "readyDescription": "We'll pre-fill it from your last 30 days. You decide the rest.",
+            "readyAction": "Create my first budget",
+            "onlyOwnerTitle": "No budget yet",
+            "guide": "How budgets work"
         },
         "flow": {
             "revenues": "Revenues",

@@ -1,48 +1,186 @@
 {
     "onboarding": {
-        "title": "A clear start with your money",
-        "intro": "Prospera helps you turn everyday money choices into a plan you can trust. Start simple, build a little history, then set a budget that reflects real life.",
-        "steps": {
-            "title": "Your first three steps",
-            "envelopes": "Create at least one revenue envelope and three expense envelopes. Begin with broad categories such as Paycheck, Housing, Groceries and Transport.",
-            "ledger": "Create a ledger to record income and spending. Add one transaction for each envelope and keep recording for 30 days.",
-            "budget": "After 30 days of history, create your first draft budget. Prospera starts it with each envelope's net activity from the last 30 days; adjust the plan before publishing."
+        "title": "Getting started",
+        "hero": {
+            "notStarted": {
+                "title": "Thirty days to a plan you own.",
+                "lead": "Four steps, a few minutes a day. By the end you'll know where your money goes, and decide where it goes next.",
+                "cta": "Start: create your envelopes"
+            },
+            "inProgress": {
+                "title": "Keep going, {name}. You're on step {step} of 4."
+            },
+            "complete": {
+                "title": "You built it. Now keep the habit.",
+                "lead": "Record as you go, review each month, revise when life changes.",
+                "cta": "Go to my budget"
+            },
+            "readOnly": {
+                "title": "How Prospera works",
+                "lead": "The owner of {profile} sets up envelopes, ledgers and budgets. Here's how it all fits."
+            },
+            "dashboard": "Go to dashboard",
+            "aboutMinutes": "About 5 minutes to start",
+            "caption": "Money comes in. You give it a purpose. It goes out with intent."
         },
-        "help": {
-            "title": "Learn as you go",
-            "envelopes": {
-                "title": "Create and manage envelopes",
-                "summary": "Set up simple categories for money coming in and going out.",
-                "body": "Envelopes give each part of your money a purpose. Start with a small set: Paycheck for income, then Housing, Groceries, Transport, Utilities and Savings for expenses.\n\nKeep categories broad at first. You can add more detail when your records show that it would help. Give each envelope a clear name and choose whether it represents revenue or expense.\n\nUse the Envelopes page to add, rename, recolor or share envelopes. Each envelope keeps its direction once it is used in a budget or transaction.",
-                "action": "Open envelopes"
-            },
-            "ledgers": {
-                "title": "Create and manage ledgers",
-                "summary": "Choose a starting balance and a clear period for recording what happens.",
-                "body": "A ledger is the record of money that actually came in or went out. Its starting balance is your cash or debt at the beginning of the period. Choose an opening date and a closing date that fit your plan.\n\nLedgers use whole calendar months. Many people use a 12-month period; shorter periods can work too. Keep ledger periods consistent so it is easier to compare what you planned with what happened.\n\nAt the closing date, review the result. A balanced period is useful; a positive net result gives you more room for the next goal. Close a ledger when its period is finished, then create the next one.",
-                "action": "Open ledgers"
-            },
-            "transactions": {
-                "title": "Create and manage transactions",
-                "summary": "Record each real payment or deposit against the envelope it belongs to.",
-                "body": "A transaction is one real movement of money. Add the date, choose its envelope and enter the positive amount; Prospera uses the envelope's direction to record it as revenue or expense.\n\nRecord transactions regularly, including deposits and everyday purchases. A steady record helps you spot habits, follow payments and understand where money comes from and goes.\n\nTransactions belong to a ledger, but do not require a budget. You can correct an entry by deleting it and recording the right one.",
-                "action": "Record transactions"
-            },
-            "budgets": {
-                "title": "Create and manage budgets",
-                "summary": "Turn your transaction history into a monthly plan, then adjust it as life changes.",
-                "body": "A budget is a goal for one month: expected income and the amounts you plan for each expense envelope. The first draft uses each envelope's net transactions from the trailing 30 days as a starting point—not a promise or a limit. Review and adjust every amount.\n\nA draft can be changed as often as you need. When it reflects your plan, publish it for the current month. Published budgets are read-only; create a revision if your plan changes.\n\nThe Budget page compares your plan with recorded spending. Use it to make deliberate adjustments, not to judge yourself for an unexpected bill.",
-                "action": "Open budget"
+        "route": {
+            "title": "Your route to a first budget",
+            "stepOf": "Step {step} of {total}",
+            "dayOf": "Day {day} of {total}",
+            "unlocksAround": "Budget unlocks around {date}",
+            "unlocksAfter": "Unlocks after step {step}",
+            "done": "Done",
+            "current": "Current step",
+            "locked": "Locked",
+            "notOpened": "Not opened yet",
+            "opened": "Open",
+            "goal": "Goal",
+            "examples": "For example",
+            "guideLink": "{guide} · {minutes} min",
+            "covered": "{covered} of {n} envelope has a transaction | {covered} of {n} envelopes have a transaction",
+            "clockNotStarted": "Your 30 days start with your first transaction.",
+            "stepLabel": "Step {step}, {title}: {status}",
+            "readOnlyStatus": "Set up by the profile owner",
+            "loading": "Loading your setup progress",
+            "stages": {
+                "envelopes": {
+                    "title": "Name your envelopes",
+                    "why": "Give every part of your money a purpose.",
+                    "goal": "1 coming in, 3 going out",
+                    "cta": "Create envelopes"
+                },
+                "ledger": {
+                    "title": "Open your ledger",
+                    "why": "Set a start and a finish line.",
+                    "goal": "1 ledger, usually 12 months",
+                    "cta": "Open my ledger"
+                },
+                "challenge": {
+                    "title": "Take the 30-day challenge",
+                    "why": "Record what really happens.",
+                    "goal": "30 days · every envelope used once",
+                    "cta": "Record a transaction"
+                },
+                "budget": {
+                    "title": "Draft your first budget",
+                    "why": "Decide where your money goes next.",
+                    "goal": "Pre-filled from your last 30 days",
+                    "cta": "Create my first budget"
+                }
             }
         },
-        "readGuide": "Read the guide",
-        "back": "Back to getting started",
-        "progress": {
-            "title": "Your setup progress",
-            "envelopes": "Still needed: {revenue} revenue envelope(s) and {expenses} expense envelope(s).",
-            "budget": "For your first budget: {days} more day(s) of history and transactions in {envelopes} more envelope(s).",
-            "action": "Continue setup"
+        "journey": {
+            "label": "Your setup",
+            "routeLabel": "Setup steps",
+            "status": "Step {step} of 4 · {title}",
+            "statusShort": "Step {step} of 4",
+            "collapse": "Collapse setup steps",
+            "expand": "Expand setup steps",
+            "error": "Setup progress couldn't load.",
+            "gettingStarted": "Getting started",
+            "halfway": "Halfway there",
+            "clockRunning": "Day 1 of 30 — the clock is running.",
+            "pledgeEcho": "Your pledge: every transaction, 30 days.",
+            "newEnvelopeNeedsTransaction": "New envelope? Give it one transaction.",
+            "envelopesDone": "Envelopes done. Next: {stage}",
+            "nextStep": "Next: {stage}",
+            "budgetUnlocked": "Your first budget is unlocked.",
+            "challengeReady": "Every envelope has a transaction. Your budget unlocks once the 30 days are up.",
+            "addEnvelope": "Add envelope",
+            "addTransaction": "Add a transaction",
+            "missingTransactions": "{n} envelope still needs a transaction. | {n} envelopes still need a transaction."
         },
-        "encouragement": "Small, regular steps add up. You are building a clearer picture—not chasing perfection."
+        "slots": {
+            "comingIn": "Coming in",
+            "goingOut": "Going out",
+            "count": "{have} of {need}",
+            "revenueLabel": "Revenue envelopes: {have} of {need} needed",
+            "expenseLabel": "Expense envelopes: {have} of {need} needed",
+            "moreToUnlock": "{n} more to unlock your ledger. | {n} more to unlock your ledger.",
+            "extra": "+{n}"
+        },
+        "strip": {
+            "dayOf": "Day {day} of {total}",
+            "start": "Day 1",
+            "middle": "15",
+            "end": "30",
+            "example": "Example: day {day} of {total}"
+        },
+        "requirements": {
+            "history": "30 days of history",
+            "historyValue": "{days} of 30 days",
+            "envelopes": "A transaction in every envelope",
+            "envelopesValue": "{covered} of {n} envelope | {covered} of {n} envelopes",
+            "done": "Done",
+            "notYet": "Not yet"
+        },
+        "pledge": {
+            "title": "Make it official.",
+            "description": "Pick at least one. We'll remind you of it along the way.",
+            "legend": "Your commitments",
+            "items": {
+                "record": "I'll record every transaction for the next 30 days.",
+                "weekly": "I'll check my envelopes once a week.",
+                "budget": "I'll draft my first budget the day it unlocks."
+            },
+            "sign": "Sign my pledge",
+            "helper": "Choose at least one commitment.",
+            "signedOn": "Pledged on {date}",
+            "change": "Change my pledge",
+            "savedHere": "Your pledge is saved in this browser."
+        },
+        "guides": {
+            "title": "Field guides",
+            "description": "Short, illustrated, and to the point.",
+            "guideN": "Guide {n}",
+            "minutes": "{n} min",
+            "completed": "Completed step"
+        },
+        "milestones": {
+            "envelopesReady": {
+                "title": "Step 1, stamped.",
+                "description": "You've named {n} envelope. Next: open a ledger and set your finish line. | You've named {n} envelopes. Next: open a ledger and set your finish line.",
+                "secondary": "Keep adding envelopes",
+                "primary": "Open my ledger"
+            },
+            "budgetReady": {
+                "title": "30 days of honest records.",
+                "description": "Every envelope has a transaction and you've built a month of history. That's a habit. Turn it into a plan.",
+                "secondary": "Keep recording",
+                "primary": "Create my first budget"
+            },
+            "firstBudget": {
+                "title": "Your first plan is on the table.",
+                "description": "We pre-filled it from your last 30 days. Review each envelope, then publish it for {month}.",
+                "secondary": "Read budget tips",
+                "primary": "Review my draft"
+            }
+        },
+        "starter": {
+            "label": "Suggested envelopes",
+            "comingIn": "Coming in",
+            "goingOut": "Going out",
+            "add": "Create the {name} envelope",
+            "owned": "{name}, already created",
+            "savingsNote": "Savings goes out too: you're paying your future self first.",
+            "revenue": {
+                "paycheck": "Paycheck",
+                "sideIncome": "Side income"
+            },
+            "expense": {
+                "housing": "Rent or mortgage",
+                "groceries": "Groceries",
+                "gas": "Gas",
+                "insurance": "Insurance",
+                "phoneInternet": "Phone & internet",
+                "utilities": "Utilities",
+                "restaurants": "Restaurants",
+                "savings": "Savings"
+            }
+        },
+        "example": {
+            "currency": "USD"
+        },
+        "footer": "Come back any time: your menu → Getting started and help."
     }
 }

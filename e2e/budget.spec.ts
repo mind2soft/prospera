@@ -201,7 +201,7 @@ test('budget page audit', async ({ page }) => {
     await page.screenshot({ path: SHOT('09-empty-state'), fullPage: true });
     console.log(
         'EMPTY STATE:',
-        await page.getByText('Create your first budget').isVisible(),
+        await page.getByText('Start a new budget').isVisible(),
     );
     console.log(
         'SELECTOR VISIBLE (empty):',

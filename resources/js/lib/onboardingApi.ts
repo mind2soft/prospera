@@ -7,6 +7,7 @@ export type OnboardingProgress = {
     missing_revenue_envelopes: number;
     missing_expense_envelopes: number;
     can_create_ledger: boolean;
+    has_ledger: boolean;
     history_days: number;
     history_days_remaining: number;
     envelopes_with_transactions: number;

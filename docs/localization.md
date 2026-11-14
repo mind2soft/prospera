@@ -60,7 +60,8 @@ resources/js/locales/
     ├── dashboard.json  # dashboard page: catalog, widget settings, states
     ├── envelopes.json  # envelopes page + share drawer
     ├── ledger.json     # ledger page + calendar/tables
-    ├── onboarding.json # first-run guide + how-to pages
+    ├── onboarding.json # getting-started page, setup route, milestones, pledge
+    ├── help.json       # field guides (/help/{topic})
     ├── settings.json   # settings pages, security, two-factor, passkeys
     ├── share.json      # generic share drawer
     ├── privacy.json    # privacy page chrome (long-form copy lives in resources/content/)
@@ -69,6 +70,10 @@ resources/js/locales/
 
 Every file owns a single top-level namespace named after the domain, so the
 objects merge without collisions.
+
+Counts use vue-i18n plural forms (`"{n} envelope | {n} envelopes"`, called as
+`t(key, { n }, n)`), never "(s)". French treats 0 and 1 as singular (custom
+`pluralRules` in `resources/js/i18n.ts`).
 
 ### Server (Laravel)
 

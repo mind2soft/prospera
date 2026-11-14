@@ -109,7 +109,7 @@ test('client errors are not retried', async ({ page }) => {
     expect(widgets.count()).toBe(1);
 });
 
-test('a failed ledger list shows an error, not the "create your first ledger" state', async ({
+test('a failed ledger list shows an error, not the "no ledger yet" state', async ({
     page,
 }) => {
     await login(page);
@@ -120,7 +120,11 @@ test('a failed ledger list shows an error, not the "create your first ledger" st
     await expect(
         page.getByText('Your ledgers could not be loaded.'),
     ).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('Create your first ledger')).toHaveCount(0);
+    await expect(
+        page.getByText(
+            /Set your finish line|Your ledger opens after|No ledger yet/,
+        ),
+    ).toHaveCount(0);
 
     await page.unroute(LEDGERS);
     await page.getByRole('button', { name: 'Retry' }).click();
@@ -164,7 +168,9 @@ test('failed budget reads show errors, not the empty state', async ({
     await expect(
         page.getByText('Your budgets could not be loaded.'),
     ).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText('Create your first budget')).toHaveCount(0);
+    await expect(
+        page.getByText(/Start a new budget|Your first budget is|No budget yet/),
+    ).toHaveCount(0);
 
     // The list recovers; the selected budget's detail now fails.
     await page.unroute(BUDGETS);

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
-import { computed, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import Heading from '@/components/Heading.vue';
@@ -12,6 +12,12 @@ import LedgerSelector from '@/components/Ledger/LedgerSelector.vue';
 import MonthCalendar from '@/components/Ledger/MonthCalendar.vue';
 import TransactionTable from '@/components/Ledger/TransactionTable.vue';
 import LedgerLoadingScreen from '@/components/Loading/LedgerLoadingScreen.vue';
+import EnvelopeSlotMeter from '@/components/onboarding/EnvelopeSlotMeter.vue';
+import LedgerPeriodIllustration from '@/components/onboarding/illustrations/LedgerPeriodIllustration.vue';
+import MilestoneDialog from '@/components/onboarding/MilestoneDialog.vue';
+import OnboardingIllustration from '@/components/onboarding/OnboardingIllustration.vue';
+import SetupJourneyBar from '@/components/onboarding/SetupJourneyBar.vue';
+import TeachingEmptyState from '@/components/onboarding/TeachingEmptyState.vue';
 import QueryErrorState from '@/components/QueryErrorState.vue';
 import ShareDrawer from '@/components/share/ShareDrawer.vue';
 import { Button } from '@/components/ui/button';
@@ -50,9 +56,12 @@ import {
 import { useOnboardingProgress } from '@/composables/onboardingQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useLocale } from '@/composables/useLocale';
+import { useOnboardingJourney } from '@/composables/useOnboardingJourney';
+import { useOnceFlag } from '@/composables/useOnceFlag';
 import { errorMessage } from '@/lib/api';
 import { formatMoney } from '@/lib/budget';
 import { formatCalendarDate, parseMonth } from '@/lib/calendar';
+import { focusAnchor, stripDeepLink } from '@/lib/focusAnchor';
 import type {
     AddTransactionInput,
     CreateLedgerInput,
@@ -276,29 +285,47 @@ const setupAllowsLedger = computed(
     () => onboarding.value?.can_create_ledger === true,
 );
 
+const { journey } = useOnboardingJourney();
+const budgetReadyMilestone = useOnceFlag(() =>
+    currentProfile.value
+        ? `prospera.onboarding.budget-ready.${currentProfile.value.id}`
+        : null,
+);
+
+/**
+ * The budget-ready milestone: right after the transaction that unlocks it,
+ * or on load when the 30 days passed while the user was away.
+ */
+const maybeCelebrateBudget = (): void => {
+    const j = journey.value;
+    if (
+        j === null ||
+        !budgetReadyMilestone.loaded.value ||
+        budgetReadyMilestone.seen.value ||
+        j.current !== 'budget' ||
+        !j.canCreateBudget
+    ) {
+        return;
+    }
+    budgetReadyMilestone.markSeen();
+    budgetReadyDialogOpen.value = true;
+};
+
 watch(
     () => onboarding.value?.can_create_budget,
     (ready) => {
-        const profileId = currentProfile.value?.id;
-        if (
-            !ready ||
-            profileId === undefined ||
-            !awaitingBudgetReadiness.value
-        ) {
+        if (!ready || !awaitingBudgetReadiness.value) {
             return;
         }
-
         awaitingBudgetReadiness.value = false;
-        const key = `prospera.onboarding.budget-ready.${profileId}`;
-        try {
-            if (window.localStorage.getItem(key) === null) {
-                window.localStorage.setItem(key, '1');
-                budgetReadyDialogOpen.value = true;
-            }
-        } catch {
-            // The congratulations dialog is a one-time, optional nudge.
-        }
+        maybeCelebrateBudget();
     },
+);
+
+watch(
+    () => [journey.value?.current, budgetReadyMilestone.loaded.value] as const,
+    () => maybeCelebrateBudget(),
+    { immediate: true },
 );
 
 // "No data yet, no error" — unlike `isLoading`, this state is identical
@@ -410,6 +437,35 @@ const onCreateDialogOpenChange = (open: boolean) => {
     }
 };
 
+// Deep links (docs/onboarding.md): ?create=1 opens the create dialog once
+// setup allows it; #add-transaction focuses the transaction form.
+const pendingCreate = ref(false);
+const pendingFocus = ref(false);
+
+onMounted(() => {
+    const url = usePage().url;
+    pendingCreate.value = /[?&]create=1(?:&|#|$)/.test(url);
+    pendingFocus.value = window.location.hash === '#add-transaction';
+    if (pendingCreate.value || pendingFocus.value) {
+        stripDeepLink();
+    }
+});
+
+watch(
+    () =>
+        [
+            pendingCreate.value,
+            isProfileOwner.value,
+            setupAllowsLedger.value,
+        ] as const,
+    ([pending, owner, allowed]) => {
+        if (pending && owner && allowed) {
+            pendingCreate.value = false;
+            showCreate.value = true;
+        }
+    },
+);
+
 const onCreate = (input: Omit<CreateLedgerInput, 'profile_id'>) => {
     createLedger.mutate(input, {
         onSuccess: (data) => {
@@ -460,6 +516,24 @@ const addTransactionForm =
     useTemplateRef<InstanceType<typeof AddTransactionForm>>(
         'addTransactionForm',
     );
+
+watch(
+    () => [pendingFocus.value, addTransactionForm.value] as const,
+    async ([pending, form]) => {
+        if (pending && form) {
+            pendingFocus.value = false;
+            await nextTick();
+            focusAnchor('add-transaction');
+        }
+    },
+);
+
+/** First-run hint in the empty month while the 30-day clock hasn't started. */
+const firstTransactionHint = computed(() =>
+    journey.value?.current === 'challenge' && !journey.value.challenge.started
+        ? t('ledger.empty.firstTransaction')
+        : undefined,
+);
 
 const onAddTransaction = (input: AddTransactionInput) => {
     if (ledgerId.value === null) {
@@ -560,13 +634,20 @@ const confirmRemoveTransaction = () => {
     <Head :title="$t('ledger.title')" />
 
     <div class="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4">
-        <div class="flex items-center gap-2">
-            <Heading
-                :title="$t('ledger.title')"
-                :description="$t('ledger.description')"
-            />
-            <HelpLink topic="ledgers" />
-        </div>
+        <Heading
+            :title="$t('ledger.title')"
+            :description="$t('ledger.description')"
+        >
+            <template #title-after>
+                <HelpLink topic="ledgers" />
+            </template>
+        </Heading>
+
+        <SetupJourneyBar
+            v-if="!waitingForData && !ledgersLoadFailed"
+            page="ledger"
+            :suppress-body="ledgers.length === 0"
+        />
 
         <LedgerLoadingScreen v-if="waitingForData" />
 
@@ -577,104 +658,94 @@ const confirmRemoveTransaction = () => {
             @retry="retryLedgers"
         />
 
-        <!-- No ledgers yet -->
-        <Card
-            v-else-if="ledgers.length === 0"
-            class="border-sidebar-border/70 dark:border-sidebar-border"
+        <!-- No ledgers yet: teach the step that comes first. -->
+        <TeachingEmptyState
+            v-else-if="ledgers.length === 0 && !isProfileOwner"
+            :title="$t('ledger.empty.onlyOwnerTitle')"
+            :description="$t('ledger.empty.onlyOwner')"
         >
-            <CardContent
-                class="flex flex-col items-center px-6 py-16 text-center sm:py-20"
-            >
-                <div
-                    class="flex size-16 items-center justify-center rounded-2xl bg-primary/10"
-                >
-                    <Icon
-                        name="receipt-long"
-                        class="size-8 text-primary"
-                        aria-hidden="true"
-                    />
-                </div>
+            <template #illustration>
+                <LedgerPeriodIllustration />
+            </template>
+            <template #actions>
+                <Button variant="ghost" as-child>
+                    <Link href="/help/ledgers">{{
+                        $t('ledger.empty.guide')
+                    }}</Link>
+                </Button>
+            </template>
+        </TeachingEmptyState>
 
-                <h2
-                    class="mt-6 font-display text-3xl leading-9 tracking-tight text-foreground"
-                >
-                    {{ $t('ledger.empty.title') }}
-                </h2>
-                <p
-                    class="mt-3 max-w-xl text-sm leading-relaxed text-balance text-muted-foreground sm:text-base"
-                >
-                    {{ $t('ledger.empty.description') }}
-                </p>
+        <TeachingEmptyState
+            v-else-if="ledgers.length === 0 && onboarding && !setupAllowsLedger"
+            :title="$t('ledger.empty.lockedTitle')"
+            :description="$t('ledger.empty.lockedDescription')"
+        >
+            <template #illustration>
+                <OnboardingIllustration name="ledgerPeriod" locked />
+            </template>
+            <template #body>
+                <EnvelopeSlotMeter
+                    :revenue="onboarding.revenue_envelopes"
+                    :expense="onboarding.expense_envelopes"
+                />
+            </template>
+            <template #actions>
+                <Button as-child class="gap-2">
+                    <Link
+                        :href="
+                            onboarding.missing_revenue_envelopes > 0
+                                ? '/envelopes?new=revenue'
+                                : '/envelopes?new=expense'
+                        "
+                    >
+                        {{ $t('ledger.empty.lockedAction') }}
+                        <Icon
+                            name="arrow-forward"
+                            class="size-4 rtl:rotate-180"
+                            aria-hidden="true"
+                        />
+                    </Link>
+                </Button>
+                <Button variant="ghost" as-child>
+                    <Link href="/help/ledgers">{{
+                        $t('ledger.empty.guide')
+                    }}</Link>
+                </Button>
+            </template>
+        </TeachingEmptyState>
 
+        <TeachingEmptyState
+            v-else-if="ledgers.length === 0"
+            :title="$t('ledger.empty.title')"
+            :description="$t('ledger.empty.description')"
+        >
+            <template #illustration>
+                <LedgerPeriodIllustration />
+            </template>
+            <template #actions>
                 <Button
-                    v-if="isProfileOwner && setupAllowsLedger"
-                    size="lg"
-                    class="mt-8 gap-2"
+                    v-if="setupAllowsLedger"
+                    class="gap-2"
                     @click="showCreate = true"
                 >
-                    <Icon name="add" class="size-5" aria-hidden="true" />
+                    <Icon name="add" class="size-4" aria-hidden="true" />
                     {{ $t('ledger.actions.createLedger') }}
                 </Button>
-                <div
-                    v-else-if="isProfileOwner && onboarding"
-                    class="mt-6 max-w-xl text-sm text-muted-foreground"
-                >
-                    <p>
-                        {{
-                            $t('ledger.setupProgress', {
-                                revenue: onboarding.missing_revenue_envelopes,
-                                expenses: onboarding.missing_expense_envelopes,
-                            })
-                        }}
-                    </p>
-                    <Link
-                        href="/envelopes"
-                        class="mt-2 inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline"
-                        >{{
-                            $t('ledger.envelopesNotice.manage')
-                        }}</Link
-                    >
-                    <span class="mx-2">·</span>
-                    <Link
-                        href="/onboarding"
-                        class="inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline"
-                        >{{
-                            $t('ledger.setupHelp')
-                        }}</Link
-                    >
-                </div>
-                <div
-                    v-else-if="isProfileOwner && onboardingQuery.isError.value"
-                    class="mt-6 flex flex-wrap items-center gap-2 text-sm text-destructive"
-                    role="alert"
-                >
-                    <span>{{ $t('ledger.setupProgressError') }}</span>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        :disabled="onboardingQuery.isFetching.value"
-                        @click="onboardingQuery.refetch()"
-                    >
-                        {{ $t('common.actions.retry') }}
-                    </Button>
-                </div>
                 <p
-                    v-else-if="
-                        isProfileOwner && onboardingQuery.isPending.value
-                    "
-                    class="mt-6 text-sm text-muted-foreground"
+                    v-else-if="onboardingQuery.isPending.value"
+                    class="text-sm text-muted-foreground"
                     role="status"
                 >
                     {{ $t('common.loading') }}
                 </p>
-                <p
-                    v-else-if="!isProfileOwner"
-                    class="text-sm text-muted-foreground"
-                >
-                    {{ $t('ledger.empty.onlyOwner') }}
-                </p>
-            </CardContent>
-        </Card>
+                <Button variant="ghost" as-child>
+                    <Link href="/help/ledgers">{{
+                        $t('ledger.empty.guide')
+                    }}</Link>
+                </Button>
+            </template>
+        </TeachingEmptyState>
 
         <template v-else>
             <LedgerSelector
@@ -777,7 +848,9 @@ const confirmRemoveTransaction = () => {
                         </CardHeader>
                         <CardContent>
                             <AddTransactionForm
+                                id="add-transaction"
                                 ref="addTransactionForm"
+                                class="scroll-mt-24"
                                 :envelopes="pickerEnvelopes"
                                 :pending="addTransaction.isPending.value"
                                 :currency="currency"
@@ -800,6 +873,7 @@ const confirmRemoveTransaction = () => {
                             transactionsQuery.isError.value &&
                             transactionsQuery.data.value === undefined
                         "
+                        :empty-hint="firstTransactionHint"
                         @remove="onRemoveTransaction"
                         @retry="transactionsQuery.refetch()"
                     />
@@ -900,38 +974,15 @@ const confirmRemoveTransaction = () => {
             </DialogContent>
         </Dialog>
 
-        <Dialog
-            :open="budgetReadyDialogOpen"
-            @update:open="budgetReadyDialogOpen = $event"
-        >
-            <DialogContent class="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>{{
-                        $t('ledger.budgetReady.title')
-                    }}</DialogTitle>
-                    <DialogDescription>{{
-                        $t('ledger.budgetReady.description')
-                    }}</DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                    <Button
-                        variant="outline"
-                        @click="budgetReadyDialogOpen = false"
-                        >{{
-                            $t('ledger.budgetReady.more')
-                        }}</Button
-                    >
-                    <Button as-child>
-                        <Link
-                            href="/budget"
-                            @click="budgetReadyDialogOpen = false"
-                            >{{
-                                $t('ledger.budgetReady.create')
-                            }}</Link
-                        >
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        <MilestoneDialog
+            v-model:open="budgetReadyDialogOpen"
+            icon="event-available"
+            :title="$t('onboarding.milestones.budgetReady.title')"
+            :description="$t('onboarding.milestones.budgetReady.description')"
+            :secondary-label="$t('onboarding.milestones.budgetReady.secondary')"
+            :primary-label="$t('onboarding.milestones.budgetReady.primary')"
+            primary-href="/budget?create=1"
+            :journey="journey"
+        />
     </div>
 </template>

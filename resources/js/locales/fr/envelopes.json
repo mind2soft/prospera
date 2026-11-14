@@ -2,19 +2,12 @@
     "envelopes": {
         "title": "Enveloppes",
         "description": "Donnez à chaque euro, dollar ou franc un toit — le système des enveloppes classique, sans le papier.",
-        "setupProgress": "Pour ouvrir un grand livre, ajoutez {revenue} enveloppe(s) de revenus et {expenses} enveloppe(s) de dépenses.",
-        "setupHelp": "Consulter le guide de démarrage",
-        "setupComplete": {
-            "title": "Vos enveloppes sont prêtes",
-            "description": "Vous avez une bonne base. Créez un grand livre lorsque vous serez prêt, ou continuez d'abord à organiser vos catégories.",
-            "more": "J'en ajouterai",
-            "ledger": "Créer un grand livre"
-        },
         "newEnvelope": "Nouvelle enveloppe",
         "empty": {
-            "title": "Créez votre première enveloppe",
-            "description": "Une enveloppe pour le logement, une pour l'épicerie, une pour les loisirs — les enveloppes permettent à Prospera de transformer une pile de transactions en une image claire de vos flux d'argent.",
-            "create": "Créer une enveloppe"
+            "title": "Donnez un foyer à votre argent",
+            "description": "Commencez avec quatre : 1 pour l'argent qui entre, 3 pour l'argent qui sort.",
+            "create": "Créer une enveloppe",
+            "guide": "Lire le guide des enveloppes (2 min)"
         },
         "groups": {
             "expenses": "Dépenses",

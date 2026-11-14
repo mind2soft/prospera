@@ -48,6 +48,35 @@ class OnboardingTest extends TestCase
         $this->actingAs($user)->get('/help/unknown')->assertNotFound();
     }
 
+    public function test_the_help_index_redirects_to_the_field_guides(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->get('/help')->assertRedirect('/onboarding#guides');
+        $this->get('/help')->assertRedirect();
+    }
+
+    public function test_progress_reports_whether_the_profile_has_a_ledger(): void
+    {
+        $user = User::factory()->create();
+        $profile = FinancialProfile::createOwnedBy($user, 'Home');
+        $other = FinancialProfile::createOwnedBy($user, 'Other');
+
+        $this->actingAs($user)->getJson('/api/onboarding?profile_id='.$profile->id)
+            ->assertOk()
+            ->assertJsonPath('progress.has_ledger', false);
+
+        $this->createLedger($other, $user);
+
+        $this->actingAs($user)->getJson('/api/onboarding?profile_id='.$profile->id)
+            ->assertJsonPath('progress.has_ledger', false);
+
+        $this->createLedger($profile, $user);
+
+        $this->actingAs($user)->getJson('/api/onboarding?profile_id='.$profile->id)
+            ->assertJsonPath('progress.has_ledger', true);
+    }
+
     public function test_progress_is_profile_scoped_and_reports_remaining_setup(): void
     {
         $user = User::factory()->create();

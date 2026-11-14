@@ -2,7 +2,7 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import { useQueryClient } from '@tanstack/vue-query';
 import { RadioGroupIndicator, RadioGroupItem, RadioGroupRoot } from 'reka-ui';
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import {
@@ -14,6 +14,11 @@ import Heading from '@/components/Heading.vue';
 import HelpLink from '@/components/HelpLink.vue';
 import Icon from '@/components/Icon.vue';
 import InputError from '@/components/InputError.vue';
+import EnvelopeFlowIllustration from '@/components/onboarding/illustrations/EnvelopeFlowIllustration.vue';
+import MilestoneDialog from '@/components/onboarding/MilestoneDialog.vue';
+import SetupJourneyBar from '@/components/onboarding/SetupJourneyBar.vue';
+import StarterEnvelopeChips from '@/components/onboarding/StarterEnvelopeChips.vue';
+import TeachingEmptyState from '@/components/onboarding/TeachingEmptyState.vue';
 import ShareDrawer from '@/components/share/ShareDrawer.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -43,7 +48,10 @@ import {
 import { useOnboardingProgress } from '@/composables/onboardingQueries';
 import { useProfileCircle } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
+import { useOnboardingJourney } from '@/composables/useOnboardingJourney';
+import { useOnceFlag } from '@/composables/useOnceFlag';
 import { errorMessage } from '@/lib/api';
+import { stripDeepLink } from '@/lib/focusAnchor';
 import { envelopes as envelopesRoute } from '@/routes';
 import type { Envelope, ResourcePermission } from '@/types';
 
@@ -72,8 +80,14 @@ const { currentProfile } = useCurrentProfile();
 const onboardingQuery = useOnboardingProgress();
 const queryClient = useQueryClient();
 const onboarding = computed(() => onboardingQuery.data.value);
+const { journey } = useOnboardingJourney();
 const congratulationsOpen = ref(false);
 const shouldCongratulateAfterCreate = ref(false);
+const envelopesMilestone = useOnceFlag(() =>
+    currentProfile.value
+        ? `prospera.onboarding.envelopes-complete.${currentProfile.value.id}`
+        : null,
+);
 
 watch(
     () =>
@@ -85,14 +99,10 @@ watch(
         if (!profileId || !ready || !shouldCongratulateAfterCreate.value)
             return;
         shouldCongratulateAfterCreate.value = false;
-        const key = `prospera.onboarding.envelopes-complete.${profileId}`;
-        try {
-            if (window.localStorage.getItem(key) === null) {
-                window.localStorage.setItem(key, '1');
-                congratulationsOpen.value = true;
-            }
-        } catch {
-            // The dialog is a one-time nudge, not required for setup.
+        // The dialog is a one-time nudge, not required for setup.
+        if (!envelopesMilestone.seen.value) {
+            envelopesMilestone.markSeen();
+            congratulationsOpen.value = true;
         }
     },
     { immediate: true },
@@ -139,12 +149,38 @@ const revenueEnvelopes = computed(() =>
     props.envelopes.filter((c) => c.direction === 'revenue'),
 );
 
-const openCreate = () => {
+/** New envelopes cycle through the palette, so each starts distinct. */
+const nextColor = (): string =>
+    palette[props.envelopes.length % palette.length].value;
+
+const openCreate = (
+    prefill: { name?: string; direction?: 'expense' | 'revenue' } = {},
+) => {
     editing.value = null;
+    form.defaults({ ...defaults, color: nextColor() });
     form.reset();
-    form.defaults({ ...defaults });
+    form.name = prefill.name ?? '';
+    form.type = prefill.direction ?? defaults.type;
     dialogOpen.value = true;
 };
+
+const ownedNames = computed(() =>
+    props.envelopes
+        .filter((envelope) => envelope.permission === 'owner')
+        .map((envelope) => envelope.name),
+);
+
+// Deep link (docs/onboarding.md): /envelopes?new=revenue|expense[&name=…]
+// opens the create dialog prefilled, once.
+onMounted(() => {
+    const query = new URLSearchParams(usePage().url.split('?')[1] ?? '');
+    const direction = query.get('new');
+    if (direction !== 'revenue' && direction !== 'expense') {
+        return;
+    }
+    openCreate({ direction, name: query.get('name')?.slice(0, 255) });
+    stripDeepLink();
+});
 
 const openEdit = (envelope: Envelope) => {
     editing.value = envelope;
@@ -326,87 +362,65 @@ const roleLabel: Record<string, string> = {
 
     <div class="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4">
         <div class="flex flex-wrap items-center justify-between gap-4">
-            <div class="flex items-center gap-2">
-                <Heading
-                    :title="$t('envelopes.title')"
-                    :description="$t('envelopes.description')"
-                />
-                <HelpLink topic="envelopes" />
-            </div>
+            <Heading
+                :title="$t('envelopes.title')"
+                :description="$t('envelopes.description')"
+            >
+                <template #title-after>
+                    <HelpLink topic="envelopes" />
+                </template>
+            </Heading>
             <Button
                 v-if="props.envelopes.length"
                 class="gap-2"
-                @click="openCreate"
+                @click="openCreate()"
             >
                 <Icon name="add" class="size-5" aria-hidden="true" />
                 {{ $t('envelopes.newEnvelope') }}
             </Button>
         </div>
 
-        <Card
-            v-if="
-                onboarding &&
-                (!onboarding.can_create_ledger ||
-                    onboarding.missing_revenue_envelopes > 0 ||
-                    onboarding.missing_expense_envelopes > 0)
-            "
-            class="border-warning/40"
+        <SetupJourneyBar
+            page="envelopes"
+            :suppress-body="!props.envelopes.length"
+            :existing-names="ownedNames"
+            @pick="openCreate($event)"
         >
-            <CardContent
-                class="flex flex-col gap-2 p-4 text-sm sm:flex-row sm:items-center sm:justify-between"
-            >
-                <p>
-                    {{
-                        $t('envelopes.setupProgress', {
-                            revenue: onboarding.missing_revenue_envelopes,
-                            expenses: onboarding.missing_expense_envelopes,
-                        })
-                    }}
-                </p>
-                <Link
-                    href="/onboarding"
-                    class="min-h-11 self-start font-medium text-primary underline-offset-4 hover:underline sm:self-auto"
-                >
-                    {{ $t('envelopes.setupHelp') }}
-                </Link>
-            </CardContent>
-        </Card>
+            <template #action>
+                <Button variant="outline" class="gap-2" @click="openCreate()">
+                    <Icon name="add" class="size-4" aria-hidden="true" />
+                    {{ $t('onboarding.journey.addEnvelope') }}
+                </Button>
+            </template>
+        </SetupJourneyBar>
 
-        <!-- Empty state -->
-        <Card
+        <!-- Empty state: teaches the first step. -->
+        <TeachingEmptyState
             v-if="!props.envelopes.length"
-            class="border-sidebar-border/70 dark:border-sidebar-border"
+            :title="$t('envelopes.empty.title')"
+            :description="$t('envelopes.empty.description')"
         >
-            <CardContent
-                class="flex flex-col items-center px-6 py-16 text-center sm:py-20"
-            >
-                <div
-                    class="flex size-16 items-center justify-center rounded-2xl bg-primary/10"
-                >
-                    <Icon
-                        name="category"
-                        class="size-8 text-primary"
-                        aria-hidden="true"
-                    />
-                </div>
-
-                <h2
-                    class="mt-6 font-display text-3xl leading-9 tracking-tight text-foreground"
-                >
-                    {{ $t('envelopes.empty.title') }}
-                </h2>
-                <p
-                    class="mt-3 max-w-xl text-sm leading-relaxed text-balance text-muted-foreground sm:text-base"
-                >
-                    {{ $t('envelopes.empty.description') }}
-                </p>
-
-                <Button size="lg" class="mt-8 gap-2" @click="openCreate">
-                    <Icon name="add" class="size-5" aria-hidden="true" />
+            <template #illustration>
+                <EnvelopeFlowIllustration />
+            </template>
+            <template #body>
+                <StarterEnvelopeChips mode="emit" @pick="openCreate($event)" />
+            </template>
+            <template #actions>
+                <Button class="gap-2" @click="openCreate()">
+                    <Icon name="add" class="size-4" aria-hidden="true" />
                     {{ $t('envelopes.empty.create') }}
                 </Button>
-            </CardContent>
-        </Card>
+                <Button variant="ghost" as-child>
+                    <Link href="/help/envelopes">{{
+                        $t('envelopes.empty.guide')
+                    }}</Link>
+                </Button>
+            </template>
+            <template #tip>
+                {{ $t('onboarding.starter.savingsNote') }}
+            </template>
+        </TeachingEmptyState>
 
         <!-- Envelope groups -->
         <div v-else class="space-y-8">
@@ -727,34 +741,23 @@ const roleLabel: Record<string, string> = {
             </DialogContent>
         </Dialog>
 
-        <Dialog v-model:open="congratulationsOpen">
-            <DialogContent class="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>{{
-                        $t('envelopes.setupComplete.title')
-                    }}</DialogTitle>
-                    <DialogDescription>{{
-                        $t('envelopes.setupComplete.description')
-                    }}</DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                    <Button
-                        variant="outline"
-                        @click="congratulationsOpen = false"
-                        >{{
-                            $t('envelopes.setupComplete.more')
-                        }}</Button
-                    >
-                    <Button as-child>
-                        <Link
-                            href="/ledger"
-                            @click="congratulationsOpen = false"
-                        >
-                            {{ $t('envelopes.setupComplete.ledger') }}
-                        </Link>
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        <MilestoneDialog
+            v-model:open="congratulationsOpen"
+            icon="mail"
+            :title="$t('onboarding.milestones.envelopesReady.title')"
+            :description="
+                $t(
+                    'onboarding.milestones.envelopesReady.description',
+                    { n: ownedNames.length },
+                    ownedNames.length,
+                )
+            "
+            :secondary-label="
+                $t('onboarding.milestones.envelopesReady.secondary')
+            "
+            :primary-label="$t('onboarding.milestones.envelopesReady.primary')"
+            primary-href="/ledger?create=1"
+            :journey="journey"
+        />
     </div>
 </template>

@@ -2,9 +2,6 @@
     "budget": {
         "title": "Budget",
         "description": "Planifiez où va votre argent avant qu'il ne parte.",
-        "setupProgress": "Votre premier budget nécessite 30 jours d'historique et au moins une transaction dans chaque enveloppe. Encore {days} jour(s) et {envelopes} enveloppe(s) à utiliser.",
-        "setupProgressError": "Impossible de charger la progression de la configuration.",
-        "setupHelp": "Consulter le guide de démarrage",
         "currency": "Devise",
         "toast": {
             "failed": "Une erreur est survenue.",
@@ -20,10 +17,18 @@
         "loadError": "Vos budgets n'ont pas pu être chargés.",
         "detailLoadError": "Ce budget n'a pas pu être chargé.",
         "empty": {
-            "title": "Créez votre premier budget",
+            "title": "Commencer un nouveau budget",
             "description": "Commencez par un brouillon : choisissez votre devise, ajoutez vos enveloppes, puis publiez quand tout vous convient.",
             "create": "Créer un budget",
-            "onlyOwner": "Seul le propriétaire du profil peut créer des budgets."
+            "onlyOwner": "Le propriétaire du profil crée les budgets de ce profil.",
+            "lockedTitle": "Votre premier budget est en route",
+            "lockedDescription": "Il se débloque après 30 jours de relevés et une transaction dans chaque enveloppe.",
+            "lockedAction": "Saisir une transaction",
+            "readyTitle": "Votre premier budget est prêt à préparer",
+            "readyDescription": "Nous le préremplirons avec vos 30 derniers jours. Vous décidez du reste.",
+            "readyAction": "Créer mon premier budget",
+            "onlyOwnerTitle": "Pas encore de budget",
+            "guide": "Comment fonctionnent les budgets"
         },
         "flow": {
             "revenues": "Revenus",

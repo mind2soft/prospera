@@ -36,6 +36,8 @@ const props = defineProps<{
     loading?: boolean;
     /** The month's transactions failed to load — never shown as "no transactions". */
     error?: boolean;
+    /** Extra guidance under the empty message (first-run setup). */
+    emptyHint?: string;
 }>();
 
 const emit = defineEmits<{
@@ -277,6 +279,12 @@ defineExpose({ focus: () => region.value?.focus() });
                         class="px-4 py-8 text-center text-muted-foreground"
                     >
                         {{ $t('ledger.table.empty') }}
+                        <p
+                            v-if="emptyHint"
+                            class="mt-1 text-sm text-foreground"
+                        >
+                            {{ emptyHint }}
+                        </p>
                     </td>
                 </tr>
             </tbody>

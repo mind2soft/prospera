@@ -31,6 +31,7 @@ isolated page. Keep all foreground/background pairs legible in both themes.
 | Primary / on-primary | `--primary` / `--primary-foreground`; `bg-primary text-primary-foreground` | Highest-priority contained action and selected emphasis. |
 | Secondary / on-secondary | `--secondary` / `--secondary-foreground`; `bg-secondary text-secondary-foreground` | Lower-emphasis contained surfaces and controls. |
 | Tertiary brand accent | `--brand` / `--brand-foreground`; `bg-brand text-brand-foreground` | Prospera's green accent where the brand itself is the message; do not use as a generic replacement for `primary`. |
+| Brand container / on-brand container (custom) | `--brand-container` / `--brand-container-foreground`; `bg-brand-container text-brand-container-foreground` | Tinted surface for guided/onboarding focal areas (getting-started hero, current journey stage, guide hero, "Your challenge" band). Not for status. Secondary text on it uses the same foreground (or `muted-foreground`, ≥ 4.5:1 in both themes). |
 | Error / on-error | `--destructive` / `--destructive-foreground`; `bg-destructive text-destructive-foreground` | Errors and destructive actions only. |
 | Success (custom) | `--success` / `--success-foreground`; `text-success`, `bg-success/10` | Positive status only: a left-over budget, an open ledger, a sent confirmation. Pair with an icon or text. |
 | Warning (custom) | `--warning` / `--warning-foreground`; `text-warning`, `border-warning/40` | Cautionary notices (closed ledger, missing envelopes) and the default-profile marker. Pair with an icon or text. |
@@ -49,6 +50,12 @@ container pair or the surface-container tonal ladder). If a component needs a
 missing semantic role, first decide whether it is genuinely needed; then add a
 named light/dark token pair in `app.css`, map it into Tailwind, and document its
 purpose here. Do not substitute an unrelated role just to avoid defining one.
+
+`--brand-container-foreground` reaches about 12:1 on `--brand-container` in
+both themes; `--foreground`, `--muted-foreground` (≈ 4.6:1 light, 6:1 dark),
+`--success` and `--ring` also pass on it. `--brand` is used as text only where
+it passes (≈ 5:1 on white light, 8:1 on dark surfaces) and otherwise for
+graphics (≥ 3:1).
 
 `--success`, `--warning`, `--destructive` and `--muted-foreground` are tuned
 to reach 4.5:1 as text on both `background` and `muted` in each theme; check
@@ -148,6 +155,10 @@ shadows, or shadows as a substitute for hierarchy. Preserve the light/dark
 theme-specific values in `app.css`.
 
 ## Motion
+
+The milestone postmark (`animate-postmark`, `animate-postmark-ink` in
+`app.css`) is the one celebratory motion: a single 240 ms stamp press and
+320 ms ink stroke, never looping, static under reduced motion.
 
 Motion should clarify a state change or direct manipulation: opening a dialog,
 expanding a section, saving, or dragging a dashboard widget. Keep transitions

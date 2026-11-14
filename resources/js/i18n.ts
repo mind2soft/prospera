@@ -13,6 +13,13 @@ export const i18n = createI18n({
     locale: FALLBACK_LOCALE,
     fallbackLocale: FALLBACK_LOCALE,
     messages,
+    // French treats 0 and 1 as singular ("0 enveloppe", "1 enveloppe").
+    pluralRules: {
+        fr: (choice: number, choicesLength: number): number =>
+            choicesLength === 2
+                ? Number(Math.abs(choice) >= 2)
+                : Math.min(Math.abs(choice), choicesLength - 1),
+    },
     missingWarn: false,
     fallbackWarn: false,
 });
