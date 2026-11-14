@@ -11,7 +11,9 @@
             "ledgerReopened": "Grand livre rouvert.",
             "ledgerDeleted": "Grand livre supprimé.",
             "transactionAdded": "Transaction ajoutée.",
-            "transactionDeleted": "Transaction supprimée."
+            "transactionDeleted": "Transaction supprimée.",
+            "transactionRestored": "Transaction restaurée.",
+            "undo": "Annuler"
         },
         "error": {
             "generic": "Une erreur est survenue."
@@ -54,7 +56,7 @@
             "title": "Supprimer cette transaction ?",
             "summary": "{envelope} · {date} · {amount}.",
             "summaryMasked": "{envelope} · {date}.",
-            "description": "La transaction sera définitivement supprimée. Cette action est irréversible.",
+            "description": "La transaction sera supprimée. Vous pourrez encore annuler pendant quelques instants depuis la notification qui suit.",
             "confirm": "Supprimer la transaction"
         },
         "status": {

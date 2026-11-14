@@ -56,6 +56,7 @@ type Transaction = {
     amount: number; // same number rule as for BudgetEnvelope
     event_at: string; // ISO date time, stored at 00:00:00
     created_at: string; // ISO date time
+    deleted_at: string | null; // server-only: pending deletion, restorable for 3 minutes (docs/undoable-deletion.md)
 };
 
 // The transaction payload also carries the envelope's display info:
@@ -114,8 +115,8 @@ the server from the decrypted amounts.
 - **Closing** is a manual action (ledger actions menu). Closed ledgers are
   read-only: transactions can no longer be added or deleted. A closed ledger
   can be re-opened.
-- **Deleting a ledger deletes ALL of its transactions** (cascade). The UI
-  always warns about this.
+- **Deleting a ledger deletes ALL of its transactions** (cascade), pending
+  deletions included. The UI always warns about this.
 
 ### Ownership
 
@@ -144,7 +145,9 @@ account is deleted, the ledger auto-transfers to the profile owner (see
   non-members (or unknown profiles) get `404`.
 - **Transaction deletion** (open ledgers only): the ledger owner can delete
   any transaction; a ledger contributor can delete only their own entries;
-  viewers cannot delete.
+  viewers cannot delete. A deletion can be **undone** for 3 minutes, under
+  the same rules: the transaction is soft-deleted, then purged (see
+  [Undoable deletion](undoable-deletion.md)).
 - **Amount masking** — transaction rows on envelopes the user lacks
   envelope-`viewer`+ permission on show the envelope's metadata with masked
   amounts (`—`) and masked "remaining allocated"; the server masks them
@@ -167,7 +170,8 @@ data fetching.
 | `POST`   | `/api/ledgers/{ledger}/reopen`             | Re-open a closed ledger (owner only)                                                                                                                                                                                                           |
 | `GET`    | `/api/ledgers/{ledger}/transactions`       | Transactions filtered by `from_date` and `to_date` (query params; at most 366 days, `422` on `to_date` otherwise). Rows on envelopes the requester lacks envelope-`viewer`+ permission on are **masked server-side**: `amount: null` + `masked: true` (metadata only — name, color, direction) |
 | `POST`   | `/api/ledgers/{ledger}/transactions`       | Add a transaction (`envelope_id`, `amount`, `event_at`) — ledger owner or contributor, who must also be contributor+ on the target envelope                                                                                                    |
-| `DELETE` | `/api/transactions/{transaction}`          | Delete a transaction (open ledgers only; ledger owner: any transaction; ledger contributor: own entries only; viewer: none)                                                                                                                    |
+| `DELETE` | `/api/transactions/{transaction}`          | Delete a transaction (open ledgers only; ledger owner: any transaction; ledger contributor: own entries only; viewer: none). Soft delete: restorable for 3 minutes, then purged ([Undoable deletion](undoable-deletion.md))                    |
+| `POST`   | `/api/transactions/{transaction}/restore`  | Undo a deletion within the 3-minute window (same rules as the deletion; `422` past the window or on a closed ledger, `404` once purged)                                                                                                       |
 | `GET`    | `/api/ledgers/{ledger}/shares`             | List shares — profile members with their effective permission and an `explicit` flag (`false` = implicit viewer, not revocable)                                                                                                               |
 | `POST`   | `/api/ledgers/{ledger}/shares`             | Assign a permission to a **profile member** (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                                                                                                    |
 | `PATCH`  | `/api/ledgers/{ledger}/shares/{userId}`    | Change a member's permission (owner only; `owner` is rejected — use transfer-ownership)                                                                                                                                                        |
@@ -263,7 +267,8 @@ The table (sorted chronologically ascending) shows:
   "Former member" for deleted users,
 - a delete button to remove the transaction (open ledgers only; the ledger
   owner can delete any transaction, a ledger contributor only their own
-  entries).
+  entries). The deletion is confirmed first; the toast that follows offers
+  **Undo** for 30 seconds ([Undoable deletion](undoable-deletion.md)).
 
 ### Read-only states
 

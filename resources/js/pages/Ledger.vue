@@ -50,6 +50,7 @@ import {
     useLedgerTransactions,
     useRemoveLedgerShare,
     useReopenLedger,
+    useRestoreTransaction,
     useSetLedgerShare,
     useTransferLedgerOwnership,
 } from '@/composables/ledgerQueries';
@@ -356,6 +357,10 @@ const reopenLedger = useReopenLedger();
 const deleteLedger = useDeleteLedger();
 const addTransaction = useAddTransaction(ledgerId);
 const deleteTransaction = useDeleteTransaction(ledgerId);
+const restoreTransaction = useRestoreTransaction({
+    onSuccess: () => toast.success(t('ledger.toast.transactionRestored')),
+    onError: (e) => fail(e),
+});
 const setLedgerShare = useSetLedgerShare();
 const removeLedgerShare = useRemoveLedgerShare();
 const transferLedgerOwnership = useTransferLedgerOwnership();
@@ -561,8 +566,11 @@ const onAddTransaction = (input: AddTransactionInput) => {
 
 const pendingTransactionId = ref<number | null>(null);
 
-// Deleting a transaction cannot be undone: confirm it, naming the entry.
+// Confirm a deletion, naming the entry; it can then still be undone from the
+// toast for a while (docs/undoable-deletion.md).
 const transactionToDelete = ref<Transaction | null>(null);
+/** The undo toast stays at least 30 s; the server window is longer (3 min). */
+const UNDO_TOAST_DURATION_MS = 30_000;
 const confirmingTransactionDelete = ref(false);
 
 const onRemoveTransaction = (transactionId: number) => {
@@ -619,7 +627,17 @@ const confirmRemoveTransaction = () => {
             onSuccess: () => {
                 refocusTable = true;
                 confirmingTransactionDelete.value = false;
-                toast.success(t('ledger.toast.transactionDeleted'));
+                toast.success(t('ledger.toast.transactionDeleted'), {
+                    duration: UNDO_TOAST_DURATION_MS,
+                    action: {
+                        label: t('ledger.toast.undo'),
+                        onClick: () =>
+                            restoreTransaction.mutate({
+                                transactionId: tx.id,
+                                ledgerId: tx.ledger_id,
+                            }),
+                    },
+                });
             },
             onSettled: () => {
                 pendingTransactionId.value = null;

@@ -11,7 +11,9 @@
             "ledgerReopened": "Ledger reopened.",
             "ledgerDeleted": "Ledger deleted.",
             "transactionAdded": "Transaction added.",
-            "transactionDeleted": "Transaction deleted."
+            "transactionDeleted": "Transaction deleted.",
+            "transactionRestored": "Transaction restored.",
+            "undo": "Undo"
         },
         "error": {
             "generic": "Something went wrong."
@@ -54,7 +56,7 @@
             "title": "Delete this transaction?",
             "summary": "{envelope} · {date} · {amount}.",
             "summaryMasked": "{envelope} · {date}.",
-            "description": "The transaction will be permanently removed. This cannot be undone.",
+            "description": "The transaction will be removed. You can still undo this for a few moments from the notification that follows.",
             "confirm": "Delete transaction"
         },
         "status": {

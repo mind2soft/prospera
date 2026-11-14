@@ -164,6 +164,9 @@ Route::middleware(['auth', 'verified', EnsureAccountHasProfile::class])->group(f
 
         Route::delete('transactions/{transaction}', [LedgerController::class, 'destroyTransaction'])
             ->name('transactions.destroy')->whereNumber('transaction');
+        // Undo a deletion (issue #48): the binding must resolve pending deletions.
+        Route::post('transactions/{transaction}/restore', [LedgerController::class, 'restoreTransaction'])
+            ->name('transactions.restore')->whereNumber('transaction')->withTrashed();
 
         // Dashboard (issue #29): per-user widget configuration per profile
         // plus the server-computed aggregate data per widget.

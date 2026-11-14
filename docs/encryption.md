@@ -149,6 +149,10 @@ those stragglers. A request that loaded a row just before pruning deletes its
 key version may fail once (HTTP 500) when decrypting it; writes are not
 affected.
 
+"Every amount" includes transactions pending deletion: they can still be
+restored during their undo window, so they must stay decryptable (see
+[Undoable deletion](undoable-deletion.md)).
+
 ### Backing up `APP_KEY`
 
 **`APP_KEY` is now required to read every amount.** Losing it loses all

@@ -100,12 +100,13 @@ class Ledger extends Model implements HasEncryptedAmounts, HasImmutableColumns
     }
 
     /**
-     * Delete the ledger and all its transactions in bulk.
+     * Delete the ledger and all its transactions in bulk, pending deletions
+     * included: a deleted ledger has nothing left to undo.
      */
     public function deleteWithTransactions(): void
     {
         DB::transaction(function (): void {
-            $this->transactions()->delete();
+            $this->transactions()->withTrashed()->forceDelete();
             $this->delete();
         });
     }

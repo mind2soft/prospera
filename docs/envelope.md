@@ -140,14 +140,18 @@ data fetching.
 
 - **Deleting an envelope that is referenced by any budget or transaction is
   blocked** with a validation error (data integrity is enforced, not
-  cascaded).
+  cascaded). Transactions pending deletion (still in their undo window) do
+  not count: they are purged with the envelope (see
+  [Undoable deletion](undoable-deletion.md)).
 - **Changing the direction of an envelope that is referenced by any budget
   or transaction is blocked** with a validation error on `type`: stored
   amounts are signed from the direction at write time, so flipping it would
   mix both sign conventions. Name and color stay editable. The check runs
   with the envelope row locked; recording a transaction or assigning the
   envelope to a budget reads the direction under a shared lock, so neither
-  can race the check.
+  can race the check. Transactions pending deletion do not block the change;
+  they are purged instead, since their stored sign follows the old direction
+  (see [Undoable deletion](undoable-deletion.md)).
 - `name` must be unique per owner. On auto-transfer, a collision with the new
   owner's existing names is resolved by appending ` (imported)`.
 - Ownership transfer follows the shared rule: ownership can be transferred

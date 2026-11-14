@@ -11,6 +11,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use InvalidArgumentException;
 
 /**
@@ -22,10 +23,19 @@ use InvalidArgumentException;
  * @property CarbonImmutable $event_at
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
+ * @property CarbonImmutable|null $deleted_at pending deletion, restorable within the undo window
  */
 class Transaction extends Model implements HasEncryptedAmounts
 {
     use EncryptsAmounts;
+    use SoftDeletes;
+
+    /**
+     * How long a deleted transaction stays restorable before
+     * `transactions:purge-deleted` removes it for good
+     * (docs/undoable-deletion.md).
+     */
+    public const UNDO_WINDOW_SECONDS = 180;
 
     protected $fillable = ['ledger_id', 'user_id', 'envelope_id', 'amount', 'event_at'];
 
@@ -53,6 +63,42 @@ class Transaction extends Model implements HasEncryptedAmounts
         }
 
         return Money::toMinorUnits($amount);
+    }
+
+    /**
+     * Whether this pending deletion can still be undone.
+     */
+    public function isRestorable(): bool
+    {
+        return $this->deleted_at !== null
+            && $this->deleted_at->greaterThan(now()->subSeconds(self::UNDO_WINDOW_SECONDS));
+    }
+
+    /**
+     * Permanently delete the pending deletions past the undo window. Returns
+     * the number of purged rows.
+     */
+    public static function purgeExpiredDeletions(): int
+    {
+        return static::onlyTrashed()
+            ->where('deleted_at', '<=', now()->subSeconds(self::UNDO_WINDOW_SECONDS))
+            ->forceDelete();
+    }
+
+    /**
+     * Permanently delete the pending deletions on the given envelopes, before
+     * a change that a restored row would contradict: the envelope's deletion
+     * (restrictive foreign key) or a direction change (stored sign).
+     *
+     * @param  array<int, int>  $envelopeIds
+     */
+    public static function purgeDeletionsOnEnvelopes(array $envelopeIds): int
+    {
+        if ($envelopeIds === []) {
+            return 0;
+        }
+
+        return static::onlyTrashed()->whereIn('envelope_id', $envelopeIds)->forceDelete();
     }
 
     public static function encryptedAmountColumns(): array

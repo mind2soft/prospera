@@ -561,7 +561,9 @@ class LedgerTest extends TestCase
         $this->actingAs($this->user)->deleteJson("/api/transactions/{$transaction->id}")
             ->assertNoContent();
 
-        $this->assertDatabaseMissing('transactions', ['id' => $transaction->id]);
+        // Soft-deleted: restorable during the undo window, then purged
+        // (issue #48, TransactionUndoTest).
+        $this->assertSoftDeleted('transactions', ['id' => $transaction->id]);
     }
 
     public function test_transaction_deletion_rules_per_permission(): void

@@ -172,6 +172,41 @@ export function useDeleteTransaction(
     });
 }
 
+/**
+ * Undo a transaction deletion. The undo toast outlives the page that raised
+ * it (the toaster is app-wide), and TanStack only runs per-call `mutate()`
+ * callbacks while the component is mounted: the feedback is passed here, at
+ * the mutation level, so it still fires after navigating away.
+ */
+export function useRestoreTransaction(
+    feedback: {
+        onSuccess?: () => void;
+        onError?: (error: unknown) => void;
+    } = {},
+) {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({
+            transactionId,
+        }: {
+            transactionId: number;
+            ledgerId: number;
+        }) => ledgerApi.restoreTransaction(transactionId),
+        onSuccess: (_data, { ledgerId }) => {
+            void queryClient.invalidateQueries({
+                queryKey: ledgerKeys.transactions(ledgerId),
+            });
+            void queryClient.invalidateQueries({
+                queryKey: ['onboarding', 'progress'],
+            });
+            invalidateDashboardData(queryClient);
+            feedback.onSuccess?.();
+        },
+        onError: (error) => feedback.onError?.(error),
+    });
+}
+
 // --- sharing (profile members only) -----------------------------------------
 
 export function useSetLedgerShare() {

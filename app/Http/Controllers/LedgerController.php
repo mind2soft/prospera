@@ -312,9 +312,60 @@ class LedgerController extends Controller
 
     /**
      * Delete a transaction (open ledgers only; ledger owner: any; ledger
-     * contributor: own entries only; viewers: none).
+     * contributor: own entries only; viewers: none). The row is soft-deleted:
+     * it disappears everywhere at once, but stays restorable during the undo
+     * window before `transactions:purge-deleted` removes it for good
+     * (docs/undoable-deletion.md).
      */
     public function destroyTransaction(Transaction $transaction): JsonResponse
+    {
+        $this->authorizeTransactionChange($transaction, 'delete');
+
+        $transaction->delete();
+
+        return response()->json(status: 204);
+    }
+
+    /**
+     * Undo a transaction deletion, within the undo window. Same rules as the
+     * deletion; restoring an entry that is not deleted is a no-op.
+     */
+    public function restoreTransaction(Transaction $transaction): JsonResponse
+    {
+        $this->authorizeTransactionChange($transaction, 'restore');
+
+        DB::transaction(function () use ($transaction): void {
+            // The shared lock serializes with the envelope's deletion or
+            // direction change, which purge its pending deletions: the row
+            // is re-read under it (docs/undoable-deletion.md).
+            Envelope::query()->whereKey($transaction->envelope_id)->sharedLock()->first();
+
+            $pending = Transaction::onlyTrashed()->whereKey($transaction->id)->lockForUpdate()->first();
+
+            if ($pending === null) {
+                // Already restored, or purged in the meantime.
+                abort_if(! Transaction::query()->whereKey($transaction->id)->exists(), 404);
+
+                return;
+            }
+
+            if (! $pending->isRestorable()) {
+                throw ValidationException::withMessages([
+                    'transaction' => __('This transaction can no longer be restored.'),
+                ]);
+            }
+
+            $pending->restore();
+        });
+
+        return response()->json(status: 204);
+    }
+
+    /**
+     * Deleting and restoring entries: the ledger must be visible (404
+     * otherwise) and open, then the transaction policy decides.
+     */
+    private function authorizeTransactionChange(Transaction $transaction, string $ability): void
     {
         $ledger = $transaction->ledger;
 
@@ -326,11 +377,7 @@ class LedgerController extends Controller
             ]);
         }
 
-        $this->authorize('delete', $transaction);
-
-        $transaction->delete();
-
-        return response()->json(status: 204);
+        $this->authorize($ability, $transaction);
     }
 
     protected function sharedResource(Model $resource): Ledger

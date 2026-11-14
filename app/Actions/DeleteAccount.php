@@ -3,6 +3,7 @@
 namespace App\Actions;
 
 use App\Models\FinancialProfileInvite;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -51,6 +52,11 @@ class DeleteAccount
             // envelopes are deleted with the account (cascade).
             $this->transferReferencedEnvelopes($user);
 
+            // The envelopes left are deleted with the account: pending
+            // transaction deletions on them would trip the restrictive
+            // foreign key (docs/undoable-deletion.md).
+            Transaction::purgeDeletionsOnEnvelopes($user->envelopes()->pluck('id')->all());
+
             // Pending invites the user issued on surviving profiles stay
             // valid, re-attributed to the profile's new owner.
             FinancialProfileInvite::reassignIssuedBy($user);
@@ -89,6 +95,7 @@ class DeleteAccount
                 DB::table('transactions')
                     ->join('ledgers', 'ledgers.id', '=', 'transactions.ledger_id')
                     ->whereIn('transactions.envelope_id', $envelopes->modelKeys())
+                    ->whereNull('transactions.deleted_at')
                     ->select('transactions.envelope_id', 'ledgers.profile_id'),
             )
             ->get();
