@@ -269,7 +269,7 @@ The table (sorted chronologically ascending) shows:
   "Former member" for deleted users,
 - a delete button to remove the transaction (open ledgers only; the ledger
   owner can delete any transaction, a ledger contributor only their own
-  entries). The deletion is confirmed first; the toast that follows offers
+  entries). The deletion runs at once, without confirmation; the toast offers
   **Undo** for 30 seconds ([Undoable deletion](undoable-deletion.md)).
 
 ### Read-only states
@@ -287,4 +287,5 @@ The table (sorted chronologically ascending) shows:
 
 Same as the budget page: reusable shadcn-vue components, Iconify (Material
 Symbols) icons, automatic saving, and confirmation before irreversible
-changes (ledger deletion).
+changes (ledger deletion). Undoable changes (transaction deletion) run at once
+and offer an undo instead ([Undoable deletion](undoable-deletion.md)).

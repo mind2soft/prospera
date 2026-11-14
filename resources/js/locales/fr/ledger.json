@@ -53,13 +53,6 @@
             "description": "Cette action supprime définitivement le grand livre et TOUTES ses transactions. Cette action est irréversible.",
             "confirm": "Supprimer le grand livre"
         },
-        "deleteTransaction": {
-            "title": "Supprimer cette transaction ?",
-            "summary": "{envelope} · {date} · {amount}.",
-            "summaryMasked": "{envelope} · {date}.",
-            "description": "La transaction sera supprimée. Vous pourrez encore annuler pendant quelques instants depuis la notification qui suit.",
-            "confirm": "Supprimer la transaction"
-        },
         "status": {
             "open": "Ouvert",
             "closed": "Clôturé"

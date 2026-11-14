@@ -53,13 +53,6 @@
             "description": "This permanently removes the ledger and ALL of its transactions. This cannot be undone.",
             "confirm": "Delete ledger"
         },
-        "deleteTransaction": {
-            "title": "Delete this transaction?",
-            "summary": "{envelope} · {date} · {amount}.",
-            "summaryMasked": "{envelope} · {date}.",
-            "description": "The transaction will be removed. You can still undo this for a few moments from the notification that follows.",
-            "confirm": "Delete transaction"
-        },
         "status": {
             "open": "Open",
             "closed": "Closed"

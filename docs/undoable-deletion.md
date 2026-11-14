@@ -21,7 +21,8 @@ that keep it consistent.
 
 Workflow:
 
-1. **Delete.** After the user confirms, `DELETE /api/transactions/{id}` sets
+1. **Delete.** The delete button calls `DELETE /api/transactions/{id}` right
+   away, without a confirmation dialog. It sets
    `transactions.deleted_at`. From then on, the row is excluded from every
    Eloquent query: the ledger list, the totals and "remaining allocated", the
    dashboard aggregates, the onboarding progress and the envelope reference
@@ -99,8 +100,9 @@ gone. Every new use of the pattern must check the following:
 
 ## Frontend
 
-- The deletion confirmation dialog stays in place. The undo is a second safety
-  net and does not replace it.
+- **Undo replaces the confirmation dialog.** An undoable deletion runs at once:
+  asking first would only add a step. Keep confirmation dialogs for
+  deletions that cannot be undone, such as deleting a ledger.
 - The undo toast uses vue-sonner's `action` (`toast.success(message,
   { duration, action })`).
 - The toaster is app-wide, so the toast can outlive the page that raised it.
