@@ -119,7 +119,10 @@ class EnsureAppKey extends Command
             // Resolved through the connection manager at call time — not the
             // `Schema` facade, whose singleton pins whatever connection
             // resolved it first (e.g. the test runner's in-memory database).
-            return ! DB::connection()->getSchemaBuilder()->hasTable((string) config('database.migrations.table', 'migrations'));
+            $migrations = config('database.migrations');
+            $table = is_array($migrations) ? (string) ($migrations['table'] ?? 'migrations') : 'migrations';
+
+            return ! DB::connection()->getSchemaBuilder()->hasTable($table);
         } catch (QueryException|PDOException $exception) {
             $this->error('Refusing to generate an APP_KEY: the configured database could not be inspected ('.$exception->getMessage().').');
             $this->line('No files were changed. An unreadable database is not proof of a fresh installation — check the DB_* settings in .env and rerun `composer setup`.');
@@ -141,8 +144,8 @@ class EnsureAppKey extends Command
         $path = $this->envFilePath();
         $contents = is_file($path) ? (string) file_get_contents($path) : '';
 
-        if (preg_match('/^\s*(?:export\s+)?APP_KEY=/m', $contents) === 1) {
-            $updated = (string) preg_replace('/^\s*(?:export\s+)?APP_KEY=.*$/m', 'APP_KEY='.$key, $contents);
+        if (preg_match('/^[ \t]*(?:export[ \t]+)?APP_KEY=/m', $contents) === 1) {
+            $updated = (string) preg_replace('/^[ \t]*(?:export[ \t]+)?APP_KEY=.*$/m', 'APP_KEY='.$key, $contents);
         } else {
             $updated = $contents === '' ? '' : $contents.(str_ends_with($contents, "\n") ? '' : "\n");
 
