@@ -213,6 +213,7 @@ class TransactionUndoTest extends TestCase
         $this->assertNotNull($purge, 'transactions:purge-deleted is not scheduled');
         $this->assertSame('* * * * *', $purge->expression);
         $this->assertTrue($purge->withoutOverlapping);
+        $this->assertSame(5, $purge->expiresAt);
         $this->assertTrue($purge->onOneServer);
     }
 

@@ -113,7 +113,7 @@ class Transaction extends Model implements HasEncryptedAmounts
     {
         // Serializes with a concurrent restore, which reads the envelope
         // under a shared lock.
-        Envelope::query()->where('user_id', $member->id)->lockForUpdate()->get(['id']);
+        Envelope::query()->where('user_id', $member->id)->orderBy('id')->lockForUpdate()->get(['id']);
 
         return static::onlyTrashed()
             ->whereIn('ledger_id', Ledger::query()->where('profile_id', $profile->id)->select('id'))

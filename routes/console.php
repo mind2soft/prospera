@@ -20,8 +20,9 @@ Schedule::command('users:prune-unverified')->daily()->withoutOverlapping()->onOn
 
 // Undoable transaction deletion (issue #48, docs/undoable-deletion.md):
 // deleted transactions stay restorable for Transaction::UNDO_WINDOW_SECONDS
-// (3 minutes), then this sweep removes them for good.
-Schedule::command('transactions:purge-deleted')->everyMinute()->withoutOverlapping()->onOneServer();
+// (3 minutes), then this sweep removes them for good. The overlap lock expires
+// after 5 minutes should a run be killed, so the sweep never stalls for long.
+Schedule::command('transactions:purge-deleted')->everyMinute()->withoutOverlapping(5)->onOneServer();
 
 // Encryption at rest (docs/encryption.md): monthly data-key rotation; retired
 // key versions are deleted after their grace period. The daily verify catches

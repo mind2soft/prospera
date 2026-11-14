@@ -585,9 +585,16 @@ const onRemoveTransaction = (transactionId: number) => {
         { transactionId: tx.id },
         {
             onSuccess: () => {
-                // The deleted row's trash button is gone: focus returns to
-                // the table, not <body>.
-                transactionTable.value?.focus();
+                // The deleted row's trash button goes away: focus returns to
+                // the table, not <body>, unless the user already moved on.
+                const active = document.activeElement;
+                if (
+                    active === null ||
+                    active === document.body ||
+                    transactionTable.value?.contains(active)
+                ) {
+                    transactionTable.value?.focus();
+                }
                 toast.success(t('ledger.toast.transactionDeleted'), {
                     duration: UNDO_TOAST_DURATION_MS,
                     action: {
