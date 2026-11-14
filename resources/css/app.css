@@ -23,6 +23,8 @@
     --font-display: "Neuton", ui-serif, Georgia, serif;
     --color-brand: var(--brand);
     --color-brand-foreground: var(--brand-foreground);
+    --color-brand-container: var(--brand-container);
+    --color-brand-container-foreground: var(--brand-container-foreground);
 
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
@@ -112,6 +114,8 @@
 :root {
     --brand: oklch(0.52 0.12 165);
     --brand-foreground: oklch(0.99 0.01 165);
+    --brand-container: oklch(0.965 0.025 165);
+    --brand-container-foreground: oklch(0.3 0.06 165);
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -163,6 +167,8 @@
 .dark {
     --brand: oklch(0.72 0.13 165);
     --brand-foreground: oklch(0.2 0.03 165);
+    --brand-container: oklch(0.255 0.035 165);
+    --brand-container-foreground: oklch(0.9 0.05 165);
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.205 0 0);
@@ -215,6 +221,36 @@
     body {
         @apply bg-background text-foreground;
     }
+}
+
+/*
+  Milestone postmark (docs/onboarding.md): a single stamp press and ink
+  stroke, never looping. Reduced motion collapses both to the end state.
+*/
+@keyframes postmark-press {
+    from {
+        opacity: 0;
+        transform: rotate(-6deg) scale(1.18);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+@keyframes postmark-ink {
+    from {
+        stroke-dashoffset: 64;
+    }
+    to {
+        stroke-dashoffset: 0;
+    }
+}
+@utility animate-postmark {
+    animation: postmark-press 240ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@utility animate-postmark-ink {
+    stroke-dasharray: 64;
+    animation: postmark-ink 320ms ease-out 140ms both;
 }
 
 /*

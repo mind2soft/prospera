@@ -100,7 +100,7 @@ test('empty-state headlines are solid text, not gradient-clipped', async ({
     await page.goto('/ledger');
 
     const headline = page.getByRole('heading', {
-        name: 'Create your first ledger',
+        name: 'Set your finish line',
     });
     await expect(headline).toBeVisible();
     await expect(headline).not.toHaveCSS('color', 'rgba(0, 0, 0, 0)');

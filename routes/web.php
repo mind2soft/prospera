@@ -86,6 +86,7 @@ Route::middleware(['auth', 'verified', EnsureAccountHasProfile::class])->group(f
 
     Route::get('dashboard', [OnboardingController::class, 'dashboard'])->name('dashboard');
     Route::get('onboarding', [OnboardingController::class, 'show'])->name('onboarding');
+    Route::redirect('help', '/onboarding#guides')->name('help');
     Route::get('help/{topic}', [OnboardingController::class, 'help'])->name('help.show');
     Route::inertia('budget', 'Budget')->name('budget');
     Route::inertia('ledger', 'Ledger')->name('ledger');

@@ -72,6 +72,7 @@ final class OnboardingProgress
             'missing_revenue_envelopes' => $missingRevenue,
             'missing_expense_envelopes' => $missingExpenses,
             'can_create_ledger' => $missingRevenue === 0 && $missingExpenses === 0,
+            'has_ledger' => $ledgerIds->isNotEmpty(),
             'history_days' => $daysOfHistory,
             'history_days_remaining' => self::REQUIRED_HISTORY_DAYS - $daysOfHistory,
             'envelopes_with_transactions' => $envelopeIds->count() - $missingEnvelopeTransactions,

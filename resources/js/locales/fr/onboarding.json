@@ -1,48 +1,186 @@
 {
     "onboarding": {
-        "title": "Commencez à y voir clair",
-        "intro": "Prospera vous aide à transformer vos choix financiers quotidiens en un plan fiable. Commencez simplement, créez un peu d'historique, puis préparez un budget ancré dans la réalité.",
-        "steps": {
-            "title": "Vos trois premières étapes",
-            "envelopes": "Créez au moins une enveloppe de revenus et trois enveloppes de dépenses. Commencez par de grandes catégories comme Salaire, Logement, Épicerie et Transport.",
-            "ledger": "Créez un grand livre pour noter les revenus et les dépenses. Ajoutez une transaction par enveloppe et continuez pendant 30 jours.",
-            "budget": "Après 30 jours d'historique, créez votre premier brouillon de budget. Prospera le préremplit avec l'activité nette des 30 derniers jours par enveloppe; ajustez le plan avant de le publier."
+        "title": "Bien démarrer",
+        "hero": {
+            "notStarted": {
+                "title": "Trente jours pour un plan bien à vous.",
+                "lead": "Quatre étapes, quelques minutes par jour. Au bout du compte, vous saurez où va votre argent, et vous déciderez où il ira ensuite.",
+                "cta": "Commencer : créer vos enveloppes"
+            },
+            "inProgress": {
+                "title": "Continuez, {name}. Vous êtes à l'étape {step} sur 4."
+            },
+            "complete": {
+                "title": "C'est fait. Gardez maintenant l'habitude.",
+                "lead": "Notez au fil de l'eau, faites le point chaque mois, ajustez quand la vie change.",
+                "cta": "Voir mon budget"
+            },
+            "readOnly": {
+                "title": "Comment fonctionne Prospera",
+                "lead": "Le propriétaire de {profile} crée les enveloppes, les grands livres et les budgets. Voici comment tout s'articule."
+            },
+            "dashboard": "Aller au tableau de bord",
+            "aboutMinutes": "Environ 5 minutes pour commencer",
+            "caption": "L'argent arrive. Vous lui donnez un but. Il repart avec intention."
         },
-        "help": {
-            "title": "Apprenez au fil du temps",
-            "envelopes": {
-                "title": "Créer et gérer des enveloppes",
-                "summary": "Organisez simplement l'argent qui entre et qui sort.",
-                "body": "Les enveloppes donnent un but à chaque partie de votre argent. Commencez avec quelques catégories : Salaire pour les revenus, puis Logement, Épicerie, Transport, Services et Épargne pour les dépenses.\n\nGardez des catégories générales au début. Ajoutez des détails lorsque vos relevés montrent que cela vous aiderait. Donnez un nom clair à chaque enveloppe et choisissez revenus ou dépenses.\n\nLa page Enveloppes permet d'ajouter, renommer, recolorer ou partager vos enveloppes. Leur direction ne peut plus changer après leur utilisation dans un budget ou une transaction.",
-                "action": "Ouvrir les enveloppes"
-            },
-            "ledgers": {
-                "title": "Créer et gérer des grands livres",
-                "summary": "Choisissez un solde de départ et une période claire pour noter vos mouvements.",
-                "body": "Un grand livre consigne l'argent réellement reçu ou dépensé. Le solde initial correspond à votre argent ou à vos dettes au début de la période. Choisissez une date d'ouverture et une date de clôture adaptées à votre plan.\n\nLes grands livres couvrent des mois civils complets. Beaucoup de personnes choisissent une période de 12 mois; des périodes plus courtes conviennent aussi. Gardez des périodes cohérentes pour comparer plus facilement vos prévisions et la réalité.\n\nÀ la clôture, faites le bilan. Une période équilibrée est utile; un résultat net positif donne plus de marge pour le prochain objectif. Fermez le grand livre terminé, puis créez le suivant.",
-                "action": "Ouvrir les grands livres"
-            },
-            "transactions": {
-                "title": "Créer et gérer des transactions",
-                "summary": "Associez chaque paiement ou dépôt réel à la bonne enveloppe.",
-                "body": "Une transaction représente un mouvement d'argent réel. Ajoutez la date, choisissez l'enveloppe et saisissez le montant positif; Prospera utilise le sens de l'enveloppe pour enregistrer un revenu ou une dépense.\n\nNotez régulièrement les transactions, y compris les dépôts et les achats quotidiens. Un historique régulier aide à comprendre vos habitudes, suivre les paiements et voir d'où vient l'argent et où il va.\n\nLes transactions appartiennent à un grand livre, mais ne nécessitent pas de budget. Pour corriger une entrée, supprimez-la et saisissez la bonne.",
-                "action": "Saisir des transactions"
-            },
-            "budgets": {
-                "title": "Créer et gérer des budgets",
-                "summary": "Transformez votre historique en plan mensuel, puis ajustez-le quand la vie change.",
-                "body": "Un budget est un objectif mensuel : les revenus prévus et les montants planifiés pour chaque enveloppe de dépenses. Le premier brouillon reprend l'activité nette des 30 derniers jours par enveloppe comme point de départ — ni promesse ni limite. Vérifiez et ajustez chaque montant.\n\nVous pouvez modifier un brouillon à tout moment. Lorsqu'il vous convient, publiez-le pour le mois en cours. Un budget publié est en lecture seule; créez une révision si votre plan change.\n\nLa page Budget compare votre plan aux dépenses enregistrées. Servez-vous-en pour faire des ajustements réfléchis, sans vous juger lorsqu'une facture imprévue arrive.",
-                "action": "Ouvrir le budget"
+        "route": {
+            "title": "Votre parcours vers un premier budget",
+            "stepOf": "Étape {step} sur {total}",
+            "dayOf": "Jour {day} sur {total}",
+            "unlocksAround": "Budget débloqué vers le {date}",
+            "unlocksAfter": "Débloquée après l'étape {step}",
+            "done": "Terminée",
+            "current": "Étape en cours",
+            "locked": "Verrouillée",
+            "notOpened": "Pas encore ouvert",
+            "opened": "Ouvert",
+            "goal": "Objectif",
+            "examples": "Par exemple",
+            "guideLink": "{guide} · {minutes} min",
+            "covered": "{covered} enveloppe sur {n} a une transaction | {covered} enveloppes sur {n} ont une transaction",
+            "clockNotStarted": "Vos 30 jours commencent avec votre première transaction.",
+            "stepLabel": "Étape {step}, {title} : {status}",
+            "readOnlyStatus": "Configurée par le propriétaire du profil",
+            "loading": "Chargement de votre progression",
+            "stages": {
+                "envelopes": {
+                    "title": "Nommez vos enveloppes",
+                    "why": "Donnez un but à chaque part de votre argent.",
+                    "goal": "1 pour les entrées, 3 pour les sorties",
+                    "cta": "Créer des enveloppes"
+                },
+                "ledger": {
+                    "title": "Ouvrez votre grand livre",
+                    "why": "Fixez un départ et une ligne d'arrivée.",
+                    "goal": "1 grand livre, souvent sur 12 mois",
+                    "cta": "Ouvrir mon grand livre"
+                },
+                "challenge": {
+                    "title": "Relevez le défi des 30 jours",
+                    "why": "Notez ce qui se passe vraiment.",
+                    "goal": "30 jours · chaque enveloppe utilisée une fois",
+                    "cta": "Saisir une transaction"
+                },
+                "budget": {
+                    "title": "Préparez votre premier budget",
+                    "why": "Décidez où ira votre argent.",
+                    "goal": "Prérempli avec vos 30 derniers jours",
+                    "cta": "Créer mon premier budget"
+                }
             }
         },
-        "readGuide": "Lire le guide",
-        "back": "Retour au guide de démarrage",
-        "progress": {
-            "title": "Votre progression",
-            "envelopes": "Encore nécessaires : {revenue} enveloppe(s) de revenus et {expenses} enveloppe(s) de dépenses.",
-            "budget": "Avant le premier budget : {days} jour(s) d'historique et des transactions dans {envelopes} autre(s) enveloppe(s).",
-            "action": "Continuer la configuration"
+        "journey": {
+            "label": "Votre configuration",
+            "routeLabel": "Étapes de configuration",
+            "status": "Étape {step} sur 4 · {title}",
+            "statusShort": "Étape {step} sur 4",
+            "collapse": "Replier les étapes de configuration",
+            "expand": "Déplier les étapes de configuration",
+            "error": "Impossible de charger votre progression.",
+            "gettingStarted": "Bien démarrer",
+            "halfway": "À mi-parcours",
+            "clockRunning": "Jour 1 sur 30 — le compte à rebours est lancé.",
+            "pledgeEcho": "Votre engagement : chaque transaction, 30 jours.",
+            "newEnvelopeNeedsTransaction": "Nouvelle enveloppe ? Donnez-lui une transaction.",
+            "envelopesDone": "Enveloppes prêtes. Ensuite : {stage}",
+            "nextStep": "Ensuite : {stage}",
+            "budgetUnlocked": "Votre premier budget est débloqué.",
+            "challengeReady": "Chaque enveloppe a une transaction. Votre budget se débloque à la fin des 30 jours.",
+            "addEnvelope": "Ajouter une enveloppe",
+            "addTransaction": "Ajouter une transaction",
+            "missingTransactions": "{n} enveloppe attend encore une transaction. | {n} enveloppes attendent encore une transaction."
         },
-        "encouragement": "De petits pas réguliers font la différence. Vous construisez une image plus claire, pas la perfection."
+        "slots": {
+            "comingIn": "Entrées",
+            "goingOut": "Sorties",
+            "count": "{have} sur {need}",
+            "revenueLabel": "Enveloppes de revenus : {have} sur {need} requises",
+            "expenseLabel": "Enveloppes de dépenses : {have} sur {need} requises",
+            "moreToUnlock": "Encore {n} pour débloquer votre grand livre. | Encore {n} pour débloquer votre grand livre.",
+            "extra": "+{n}"
+        },
+        "strip": {
+            "dayOf": "Jour {day} sur {total}",
+            "start": "Jour 1",
+            "middle": "15",
+            "end": "30",
+            "example": "Exemple : jour {day} sur {total}"
+        },
+        "requirements": {
+            "history": "30 jours d'historique",
+            "historyValue": "{days} jours sur 30",
+            "envelopes": "Une transaction dans chaque enveloppe",
+            "envelopesValue": "{covered} enveloppe sur {n} | {covered} enveloppes sur {n}",
+            "done": "Fait",
+            "notYet": "Pas encore"
+        },
+        "pledge": {
+            "title": "Engagez-vous.",
+            "description": "Choisissez-en au moins un. Nous vous le rappellerons en chemin.",
+            "legend": "Vos engagements",
+            "items": {
+                "record": "Je noterai chaque transaction pendant les 30 prochains jours.",
+                "weekly": "Je ferai le point sur mes enveloppes une fois par semaine.",
+                "budget": "Je préparerai mon premier budget dès qu'il sera débloqué."
+            },
+            "sign": "Signer mon engagement",
+            "helper": "Choisissez au moins un engagement.",
+            "signedOn": "Engagement pris le {date}",
+            "change": "Modifier mon engagement",
+            "savedHere": "Votre engagement est enregistré dans ce navigateur."
+        },
+        "guides": {
+            "title": "Guides pratiques",
+            "description": "Courts, illustrés, droit au but.",
+            "guideN": "Guide {n}",
+            "minutes": "{n} min",
+            "completed": "Étape terminée"
+        },
+        "milestones": {
+            "envelopesReady": {
+                "title": "Étape 1, tamponnée.",
+                "description": "Vous avez nommé {n} enveloppe. Ensuite : ouvrez un grand livre et fixez votre ligne d'arrivée. | Vous avez nommé {n} enveloppes. Ensuite : ouvrez un grand livre et fixez votre ligne d'arrivée.",
+                "secondary": "Ajouter d'autres enveloppes",
+                "primary": "Ouvrir mon grand livre"
+            },
+            "budgetReady": {
+                "title": "30 jours de relevés honnêtes.",
+                "description": "Chaque enveloppe a une transaction et vous avez bâti un mois d'historique. C'est une habitude. Faites-en un plan.",
+                "secondary": "Continuer à noter",
+                "primary": "Créer mon premier budget"
+            },
+            "firstBudget": {
+                "title": "Votre premier plan est sur la table.",
+                "description": "Nous l'avons prérempli avec vos 30 derniers jours. Passez chaque enveloppe en revue, puis publiez-le pour {month}.",
+                "secondary": "Lire les conseils budget",
+                "primary": "Revoir mon brouillon"
+            }
+        },
+        "starter": {
+            "label": "Enveloppes suggérées",
+            "comingIn": "Entrées",
+            "goingOut": "Sorties",
+            "add": "Créer l'enveloppe {name}",
+            "owned": "{name}, déjà créée",
+            "savingsNote": "L'épargne est aussi une sortie : vous vous payez en premier.",
+            "revenue": {
+                "paycheck": "Salaire",
+                "sideIncome": "Revenus d'appoint"
+            },
+            "expense": {
+                "housing": "Loyer ou hypothèque",
+                "groceries": "Épicerie",
+                "gas": "Essence",
+                "insurance": "Assurances",
+                "phoneInternet": "Téléphone et Internet",
+                "utilities": "Services publics",
+                "restaurants": "Restaurants",
+                "savings": "Épargne"
+            }
+        },
+        "example": {
+            "currency": "EUR"
+        },
+        "footer": "Revenez quand vous voulez : votre menu → Démarrage et aide."
     }
 }

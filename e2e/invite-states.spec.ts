@@ -94,7 +94,10 @@ test('a signed-out member who logs in from the invite comes back to it', async (
     await page.getByRole('button', { name: 'Accept invite' }).click();
     await page.waitForURL((url) => url.pathname === '/onboarding');
     await expect(
-        page.getByRole('heading', { name: 'A clear start with your money' }),
+        page.getByRole('heading', {
+            level: 1,
+            name: /Thirty days to a plan you own\.|How Prospera works/,
+        }),
     ).toBeVisible();
     await expect(page.getByText('You joined “Default profile”.')).toBeVisible();
 });

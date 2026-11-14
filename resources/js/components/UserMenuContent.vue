@@ -54,7 +54,7 @@ const menuProfiles = computed(() =>
     <DropdownMenuGroup>
         <DropdownMenuItem :as-child="true">
             <Link class="block w-full cursor-pointer" href="/onboarding">
-                <Icon name="info" class="size-4" aria-hidden="true" />
+                <Icon name="menu-book" class="size-4" aria-hidden="true" />
                 {{ $t('layout.user.gettingStarted') }}
             </Link>
         </DropdownMenuItem>

@@ -9,6 +9,7 @@ import WidgetCatalog from '@/components/dashboard/WidgetCatalog.vue';
 import WidgetSettingsSheet from '@/components/dashboard/WidgetSettingsSheet.vue';
 import Heading from '@/components/Heading.vue';
 import Icon from '@/components/Icon.vue';
+import DashboardJourney from '@/components/onboarding/DashboardJourney.vue';
 import QueryErrorState from '@/components/QueryErrorState.vue';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -228,6 +229,8 @@ const onDestroy = (): void => {
 
             <WidgetCatalog :disabled="!layoutLoaded" @add="onAdd" />
         </header>
+
+        <DashboardJourney />
 
         <!-- Loading -->
         <div

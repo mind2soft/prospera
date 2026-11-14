@@ -2,15 +2,6 @@
     "ledger": {
         "title": "Grand livre",
         "description": "Un registre financier annuel de tout ce qui entre et de tout ce qui sort.",
-        "setupProgress": "Avant de créer un grand livre, ajoutez {revenue} enveloppe(s) de revenus et {expenses} enveloppe(s) de dépenses.",
-        "setupHelp": "Consulter le guide de démarrage",
-        "setupProgressError": "Impossible de charger la progression de la configuration.",
-        "budgetReady": {
-            "title": "Vous avez maintenant un mois de recul",
-            "description": "Vous avez enregistré des transactions dans vos enveloppes et créé 30 jours d'historique. Continuez pour obtenir un portrait plus complet ou utilisez vos observations pour créer votre premier budget.",
-            "more": "Je vais ajouter d'autres transactions",
-            "create": "Créer mon premier budget"
-        },
         "toast": {
             "accessUpdated": "Accès mis à jour.",
             "accessRevoked": "Accès révoqué.",
@@ -27,9 +18,15 @@
         },
         "loadError": "Vos grands livres n'ont pas pu être chargés.",
         "empty": {
-            "title": "Créez votre premier grand livre",
-            "description": "Un grand livre consigne vos transactions sur une année. Créez-en un pour commencer à enregistrer vos dépenses et vos revenus.",
-            "onlyOwner": "Seul le propriétaire du profil peut créer des grands livres."
+            "title": "Fixez votre ligne d'arrivée",
+            "description": "Choisissez un solde de départ et une période. La plupart choisissent 12 mois.",
+            "onlyOwner": "Seul le propriétaire du profil peut créer des grands livres.",
+            "lockedTitle": "Votre grand livre s'ouvre après vos enveloppes",
+            "lockedDescription": "Nommez d'abord 1 enveloppe de revenus et 3 de dépenses. Fixez ensuite votre ligne d'arrivée.",
+            "lockedAction": "Aller aux enveloppes",
+            "onlyOwnerTitle": "Pas encore de grand livre",
+            "guide": "Comment fonctionnent les grands livres",
+            "firstTransaction": "Le jour 1 commence avec votre première transaction. Ajoutez-en une pour chaque enveloppe."
         },
         "actions": {
             "createLedger": "Créer un grand livre"

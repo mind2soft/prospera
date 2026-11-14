@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { useQueryClient } from '@tanstack/vue-query';
-import { computed, nextTick, ref, useTemplateRef, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import AddEnvelopeDialog from '@/components/Budget/AddEnvelopeDialog.vue';
@@ -14,11 +14,15 @@ import Heading from '@/components/Heading.vue';
 import HelpLink from '@/components/HelpLink.vue';
 import Icon from '@/components/Icon.vue';
 import BudgetLoadingScreen from '@/components/Loading/BudgetLoadingScreen.vue';
+import MilestoneDialog from '@/components/onboarding/MilestoneDialog.vue';
+import OnboardingIllustration from '@/components/onboarding/OnboardingIllustration.vue';
+import RequirementList from '@/components/onboarding/RequirementList.vue';
+import SetupJourneyBar from '@/components/onboarding/SetupJourneyBar.vue';
+import TeachingEmptyState from '@/components/onboarding/TeachingEmptyState.vue';
 import QueryErrorState from '@/components/QueryErrorState.vue';
 import ShareDrawer from '@/components/share/ShareDrawer.vue';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import {
     Dialog,
     DialogContent,
@@ -48,10 +52,13 @@ import { useProfileMembers } from '@/composables/profileQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useFlushOnLeave } from '@/composables/useFlushOnLeave';
 import { useLocale } from '@/composables/useLocale';
+import { useOnboardingJourney } from '@/composables/useOnboardingJourney';
+import { useOnceFlag } from '@/composables/useOnceFlag';
 import { errorMessage } from '@/lib/api';
 import { budgetMonthLabel } from '@/lib/budget';
 import type { AddEnvelopeInput } from '@/lib/budgetApi';
 import { currentMonth, parseMonth } from '@/lib/calendar';
+import { stripDeepLink } from '@/lib/focusAnchor';
 import { budget as budgetRoute } from '@/routes';
 import type { BudgetDetail, ResourcePermission } from '@/types';
 
@@ -348,16 +355,138 @@ const onDelete = () => {
     });
 };
 
+// --- first-run setup (docs/onboarding.md) ----------------------------------
+const { journey } = useOnboardingJourney();
+const profileKey = (name: string) => () =>
+    currentProfile.value
+        ? `prospera.onboarding.${name}.${currentProfile.value.id}`
+        : null;
+const budgetReadyMilestone = useOnceFlag(profileKey('budget-ready'));
+const firstBudgetMilestone = useOnceFlag(profileKey('first-budget'));
+const budgetReadyOpen = ref(false);
+const firstBudgetOpen = ref(false);
+
+/** The first budget was never created and nothing gates it any more. */
+const firstBudgetReady = computed(
+    () => journey.value?.current === 'budget' && journey.value.canCreateBudget,
+);
+
+// The 30 days may have passed while the user was away: celebrate on load.
+watch(
+    () => [firstBudgetReady.value, budgetReadyMilestone.loaded.value] as const,
+    ([ready, loaded]) => {
+        if (ready && loaded && !budgetReadyMilestone.seen.value) {
+            budgetReadyMilestone.markSeen();
+            budgetReadyOpen.value = true;
+        }
+    },
+    { immediate: true },
+);
+
+const openCreateFromMilestone = (): void => {
+    budgetReadyOpen.value = false;
+    showCreate.value = true;
+};
+
+// Deep link: ?create=1 opens the create dialog once creation is allowed.
+const pendingCreate = ref(false);
+onMounted(() => {
+    pendingCreate.value = /[?&]create=1(?:&|#|$)/.test(usePage().url);
+    if (pendingCreate.value) {
+        stripDeepLink();
+    }
+});
+watch(
+    () =>
+        [
+            pendingCreate.value,
+            isProfileOwner.value,
+            onboarding.value?.can_create_budget === true ||
+                budgets.value.length > 0,
+        ] as const,
+    ([pending, owner, allowed]) => {
+        if (pending && owner && allowed) {
+            pendingCreate.value = false;
+            // The budget-ready milestone would only repeat what the dialog does.
+            if (!budgetReadyMilestone.seen.value) {
+                budgetReadyMilestone.markSeen();
+            }
+            budgetReadyOpen.value = false;
+            showCreate.value = true;
+        }
+    },
+);
+
+const publishMonthName = computed(() => {
+    const [year, month] = parseMonth(currentMonth());
+    return budgetMonthLabel(year, month, locale.value);
+});
+
 const onCreate = (currency: string) => {
+    const wasFirst =
+        journey.value !== null && journey.value.current === 'budget';
     createBudget.mutate(currency, {
         onSuccess: (data) => {
             showCreate.value = false;
             selectedId.value = data.budget.id;
             toast.success(t('budget.toast.draftCreated'));
+            if (wasFirst && !firstBudgetMilestone.seen.value) {
+                firstBudgetMilestone.markSeen();
+                firstBudgetOpen.value = true;
+            }
         },
         onError: fail,
     });
 };
+
+const budgetRequirements = computed(() => {
+    const c = journey.value?.challenge;
+    if (!c) {
+        return [];
+    }
+    return [
+        {
+            label: t('onboarding.requirements.history'),
+            value: t('onboarding.requirements.historyValue', { days: c.days }),
+            done: c.days >= c.total,
+        },
+        {
+            label: t('onboarding.requirements.envelopes'),
+            value: t(
+                'onboarding.requirements.envelopesValue',
+                { covered: c.covered, n: c.totalEnvelopes },
+                c.totalEnvelopes,
+            ),
+            done: c.missing === 0 && c.totalEnvelopes > 0,
+        },
+    ];
+});
+
+const unlockDate = computed(() => {
+    const date = journey.value?.challenge.unlockDate;
+    return date
+        ? new Intl.DateTimeFormat(locale.value, {
+              month: 'long',
+              day: 'numeric',
+          }).format(date)
+        : null;
+});
+
+/** Which empty state to teach with (owner, before any budget). */
+const emptyState = computed(() => {
+    if (!isProfileOwner.value) {
+        return 'notOwner';
+    }
+    const progress = onboarding.value;
+    if (progress === undefined) {
+        // Progress failed to load: the server still enforces the gate.
+        return onboardingQuery.isError.value ? 'again' : 'pending';
+    }
+    if (progress.first_budget_created) {
+        return 'again';
+    }
+    return progress.can_create_budget ? 'ready' : 'locked';
+});
 
 const onClone = (currency: string) => {
     const id = selectedId.value ?? budget.value?.id;
@@ -545,13 +674,20 @@ const onRemoveEnvelope = (envelopeId: number) => {
     <Head :title="$t('budget.title')" />
 
     <div class="flex h-full flex-1 flex-col gap-6 overflow-x-auto p-4">
-        <div class="flex items-center gap-2">
-            <Heading
-                :title="$t('budget.title')"
-                :description="$t('budget.description')"
-            />
-            <HelpLink topic="budgets" />
-        </div>
+        <Heading
+            :title="$t('budget.title')"
+            :description="$t('budget.description')"
+        >
+            <template #title-after>
+                <HelpLink topic="budgets" />
+            </template>
+        </Heading>
+
+        <SetupJourneyBar
+            v-if="!waitingForData && !budgetsLoadFailed"
+            page="budget"
+            :suppress-body="budgets.length === 0"
+        />
 
         <BudgetLoadingScreen v-if="waitingForData" />
 
@@ -562,93 +698,102 @@ const onRemoveEnvelope = (envelopeId: number) => {
             @retry="retryBudgets"
         />
 
-        <!-- No budgets yet -->
-        <Card
-            v-else-if="budgets.length === 0"
-            class="border-sidebar-border/70 dark:border-sidebar-border"
+        <!-- No budgets yet: what unlocks the first one, or how to start. -->
+        <TeachingEmptyState
+            v-else-if="budgets.length === 0 && emptyState === 'locked'"
+            :title="$t('budget.empty.lockedTitle')"
+            :description="$t('budget.empty.lockedDescription')"
         >
-            <CardContent
-                class="flex flex-col items-center px-6 py-16 text-center sm:py-20"
-            >
-                <div
-                    class="flex size-16 items-center justify-center rounded-2xl bg-primary/10"
-                >
-                    <Icon
-                        name="savings"
-                        class="size-8 text-primary"
-                        aria-hidden="true"
-                    />
+            <template #illustration>
+                <OnboardingIllustration name="budgetDial" locked />
+            </template>
+            <template #body>
+                <div class="grid gap-3">
+                    <RequirementList :items="budgetRequirements" />
+                    <p v-if="unlockDate" class="text-sm text-muted-foreground">
+                        {{
+                            $t('onboarding.route.unlocksAround', {
+                                date: unlockDate,
+                            })
+                        }}
+                    </p>
                 </div>
+            </template>
+            <template #actions>
+                <Button as-child class="gap-2">
+                    <Link href="/ledger#add-transaction">
+                        {{ $t('budget.empty.lockedAction') }}
+                        <Icon
+                            name="arrow-forward"
+                            class="size-4 rtl:rotate-180"
+                            aria-hidden="true"
+                        />
+                    </Link>
+                </Button>
+                <Button variant="ghost" as-child>
+                    <Link href="/help/budgets">{{
+                        $t('budget.empty.guide')
+                    }}</Link>
+                </Button>
+            </template>
+        </TeachingEmptyState>
 
-                <h2
-                    class="mt-6 font-display text-3xl leading-9 tracking-tight text-foreground"
-                >
-                    {{ $t('budget.empty.title') }}
-                </h2>
-                <p
-                    class="mt-3 max-w-xl text-sm leading-relaxed text-balance text-muted-foreground sm:text-base"
-                >
-                    {{ $t('budget.empty.description') }}
-                </p>
+        <TeachingEmptyState
+            v-else-if="budgets.length === 0 && emptyState === 'notOwner'"
+            :title="$t('budget.empty.onlyOwnerTitle')"
+            :description="$t('budget.empty.onlyOwner')"
+        >
+            <template #illustration>
+                <OnboardingIllustration name="budgetDial" />
+            </template>
+            <template #actions>
+                <Button variant="ghost" as-child>
+                    <Link href="/help/budgets">{{
+                        $t('budget.empty.guide')
+                    }}</Link>
+                </Button>
+            </template>
+        </TeachingEmptyState>
 
-                <div
-                    v-if="onboarding && !onboarding.first_budget_created"
-                    class="mt-4 max-w-xl text-sm leading-6 text-muted-foreground"
-                    role="status"
-                >
-                    {{
-                        $t('budget.setupProgress', {
-                            days: onboarding.history_days_remaining,
-                            envelopes:
-                                onboarding.envelopes_missing_transactions,
-                        })
-                    }}
-                    <Link
-                        href="/onboarding"
-                        class="ml-1 font-medium text-primary underline-offset-4 hover:underline"
-                        >{{
-                            $t('budget.setupHelp')
-                        }}</Link
-                    >
-                </div>
-                <p
-                    v-else-if="!onboarding && onboardingQuery.isPending.value"
-                    class="mt-4 text-sm text-muted-foreground"
-                    role="status"
-                >
-                    {{ $t('common.loading') }}
-                </p>
-                <div
-                    v-else-if="!onboarding && onboardingQuery.isError.value"
-                    class="mt-4 flex flex-wrap items-center gap-2 text-sm text-destructive"
-                    role="alert"
-                >
-                    <span>{{ $t('budget.setupProgressError') }}</span>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        :disabled="onboardingQuery.isFetching.value"
-                        @click="onboardingQuery.refetch()"
-                    >
-                        {{ $t('common.actions.retry') }}
-                    </Button>
-                </div>
-
+        <TeachingEmptyState
+            v-else-if="budgets.length === 0"
+            :title="
+                emptyState === 'ready'
+                    ? $t('budget.empty.readyTitle')
+                    : $t('budget.empty.title')
+            "
+            :description="
+                emptyState === 'ready'
+                    ? $t('budget.empty.readyDescription')
+                    : $t('budget.empty.description')
+            "
+        >
+            <template #illustration>
+                <OnboardingIllustration name="budgetDial" />
+            </template>
+            <template #actions>
                 <Button
-                    v-if="isProfileOwner"
-                    size="lg"
-                    class="mt-8 gap-2"
-                    :disabled="onboarding?.can_create_budget !== true"
+                    v-if="emptyState !== 'pending'"
+                    class="gap-2"
                     @click="showCreate = true"
                 >
-                    <Icon name="add" class="size-5" aria-hidden="true" />
-                    {{ $t('budget.empty.create') }}
+                    <Icon name="add" class="size-4" aria-hidden="true" />
+                    {{
+                        emptyState === 'ready'
+                            ? $t('budget.empty.readyAction')
+                            : $t('budget.empty.create')
+                    }}
                 </Button>
-                <p v-else class="text-sm text-muted-foreground">
-                    {{ $t('budget.empty.onlyOwner') }}
+                <p v-else class="text-sm text-muted-foreground" role="status">
+                    {{ $t('common.loading') }}
                 </p>
-            </CardContent>
-        </Card>
+                <Button variant="ghost" as-child>
+                    <Link href="/help/budgets">{{
+                        $t('budget.empty.guide')
+                    }}</Link>
+                </Button>
+            </template>
+        </TeachingEmptyState>
 
         <template v-else>
             <BudgetSelector
@@ -740,6 +885,33 @@ const onRemoveEnvelope = (envelopeId: number) => {
             @set-permission="onSetSharePermission"
             @revoke="onRevokeShare"
             @transfer="onTransferOwnership"
+        />
+
+        <MilestoneDialog
+            v-model:open="budgetReadyOpen"
+            icon="event-available"
+            :title="$t('onboarding.milestones.budgetReady.title')"
+            :description="$t('onboarding.milestones.budgetReady.description')"
+            :secondary-label="$t('onboarding.milestones.budgetReady.secondary')"
+            secondary-href="/ledger"
+            :primary-label="$t('onboarding.milestones.budgetReady.primary')"
+            :journey="journey"
+            @primary="openCreateFromMilestone"
+        />
+
+        <MilestoneDialog
+            v-model:open="firstBudgetOpen"
+            icon="flag"
+            :title="$t('onboarding.milestones.firstBudget.title')"
+            :description="
+                $t('onboarding.milestones.firstBudget.description', {
+                    month: publishMonthName,
+                })
+            "
+            :secondary-label="$t('onboarding.milestones.firstBudget.secondary')"
+            secondary-href="/help/budgets"
+            :primary-label="$t('onboarding.milestones.firstBudget.primary')"
+            @primary="firstBudgetOpen = false"
         />
 
         <Dialog v-model:open="confirmingPublish">

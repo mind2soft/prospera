@@ -311,7 +311,7 @@ test('ledger page audit', async ({ page }) => {
     await openActionMenu(page);
     await page.getByRole('menuitem', { name: 'Delete' }).click();
     await page.getByRole('button', { name: 'Delete ledger' }).click();
-    await expect(page.getByText('Create your first ledger')).toBeVisible();
+    await expect(page.getByText('Set your finish line')).toBeVisible();
     await page.screenshot({
         path: SHOT('07-ledger-empty-state'),
         fullPage: true,

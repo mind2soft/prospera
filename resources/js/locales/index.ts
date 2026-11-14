@@ -11,6 +11,7 @@ import common from './en/common.json';
 import contact from './en/contact.json';
 import dashboard from './en/dashboard.json';
 import envelopes from './en/envelopes.json';
+import help from './en/help.json';
 import layout from './en/layout.json';
 import ledger from './en/ledger.json';
 import onboarding from './en/onboarding.json';
@@ -24,6 +25,7 @@ import commonFr from './fr/common.json';
 import contactFr from './fr/contact.json';
 import dashboardFr from './fr/dashboard.json';
 import envelopesFr from './fr/envelopes.json';
+import helpFr from './fr/help.json';
 import layoutFr from './fr/layout.json';
 import ledgerFr from './fr/ledger.json';
 import onboardingFr from './fr/onboarding.json';
@@ -39,6 +41,7 @@ const en = {
     ...contact,
     ...dashboard,
     ...envelopes,
+    ...help,
     ...layout,
     ...ledger,
     ...onboarding,
@@ -55,6 +58,7 @@ const fr = {
     ...contactFr,
     ...dashboardFr,
     ...envelopesFr,
+    ...helpFr,
     ...layoutFr,
     ...ledgerFr,
     ...onboardingFr,
