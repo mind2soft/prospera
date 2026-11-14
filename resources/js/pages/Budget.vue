@@ -641,15 +641,18 @@ const onEditAmount = (envelopeId: number, amount: number) => {
 };
 
 /**
- * Sends every debounced amount edit now and waits for all saves to land;
- * false when one of them failed.
+ * Sends every debounced amount edit of the selected budget now and waits
+ * for all saves to land; false when one of them failed.
  */
 const flushAmountSaves = async (): Promise<boolean> =>
     budgetSaveQueue.flush(budgetId.value ?? undefined);
 
-// Leaving the page (or unloading it) sends the debounced edits right away.
+// Leaving the page (or unloading it) sends every budget's debounced edits
+// right away: edits queued for a budget the user has already left are still
+// pending in the module-level queue, and on `pagehide` their debounce timer
+// would never fire (#79).
 useFlushOnLeave(() => {
-    void flushAmountSaves();
+    void budgetSaveQueue.flush();
 });
 
 const envelopeTable =
@@ -844,8 +847,14 @@ const onRemoveEnvelope = (envelopeId: number) => {
                     :currency="budget.currency"
                 />
 
+                <!-- Keyed by budget: the table's local edit buffer is keyed
+                     by envelope id only, and the same user-owned envelope can
+                     be assigned to drafts in two profiles (or twice in one) —
+                     a remount is what keeps one budget's unsaved text out of
+                     the other's inputs (#79). -->
                 <BudgetEnvelopeTable
                     ref="envelopeTable"
+                    :key="budgetId"
                     :envelopes="budget.envelopes"
                     :currency="budget.currency"
                     :editable="canEdit"
