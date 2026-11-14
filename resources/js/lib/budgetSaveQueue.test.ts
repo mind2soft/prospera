@@ -307,6 +307,85 @@ describe('BudgetSaveQueue', () => {
         expect(queue.status(20)).toBe('saved');
     });
 
+    it('keeps different budgets independent within the debounce', async () => {
+        // #79: the same envelope can be assigned to drafts in two profiles.
+        // Editing it in budget 20 within budget 10's debounce window must
+        // not cancel budget 10's pending save.
+        const transport = new DeferredTransport();
+        const { queue, clock } = configuredQueue(transport.send, {
+            revisions: new Map([['b:7', 1]]),
+        });
+
+        queue.queue(10, 7, 100);
+        queue.queue(20, 7, 200); // another budget's edit, same envelope
+        expect(clock.size).toBe(2); // one debounce per identity
+
+        clock.advance();
+        expect(transport.requests.map((r) => [r.budgetId, r.amount])).toEqual([
+            [10, 100],
+            [20, 200],
+        ]);
+
+        transport.requests[0]?.settle(2);
+        transport.requests[1]?.settle(3);
+        await flushMicrotasks();
+        expect(queue.status(10)).toBe('saved');
+        expect(queue.status(20)).toBe('saved');
+    });
+
+    it('an old budget save settling does not disturb a newer budget edit', async () => {
+        const transport = new DeferredTransport();
+        const { queue, clock } = configuredQueue(transport.send, {
+            revisions: new Map([['b:7', 1]]),
+        });
+
+        queue.queue(10, 7, 300);
+        clock.advance(); // budget 10's save is in flight
+        queue.queue(20, 7, 400); // budget 20's edit queued meanwhile
+
+        transport.requests[0]?.settle(2); // the old budget's save lands
+        await flushMicrotasks();
+        expect(queue.status(10)).toBe('saved');
+        expect(queue.hasPending(10)).toBe(false);
+
+        // Budget 20's edit is untouched by budget 10's acknowledgment.
+        expect(queue.status(20)).toBe('saving');
+        expect(queue.hasPending(20)).toBe(true);
+        expect(clock.size).toBe(1);
+        clock.advance();
+        expect(transport.requests[1]).toMatchObject({
+            budgetId: 20,
+            envelopeId: 7,
+            amount: 400,
+            revision: 1,
+        });
+    });
+
+    it('flush without a scope drains every budget and reports any failure', async () => {
+        const transport = new DeferredTransport();
+        const { queue, clock } = configuredQueue(transport.send, {
+            revisions: new Map([
+                ['b:1', 1],
+                ['b:2', 1],
+            ]),
+        });
+
+        queue.queue(10, 1, 100);
+        queue.queue(20, 2, 200);
+        const flushed = queue.flush();
+        expect(clock.size).toBe(0);
+        expect(transport.requests).toHaveLength(2);
+
+        transport.requests[0]?.settle(2);
+        transport.requests[1]?.fail();
+        await flushMicrotasks();
+        // A failure in any flushed budget refuses the flush — e.g. a page
+        // leave cannot claim every pending edit was saved.
+        expect(await flushed).toBe(false);
+        expect(queue.status(10)).toBe('saved');
+        expect(queue.status(20)).toBe('error');
+    });
+
     it('reports each state transition to subscribers', async () => {
         const transport = new DeferredTransport();
         const { queue, clock } = configuredQueue(transport.send, {
