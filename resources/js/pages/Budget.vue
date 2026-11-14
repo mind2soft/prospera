@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { useQueryClient } from '@tanstack/vue-query';
-import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue';
+import {
+    computed,
+    nextTick,
+    onMounted,
+    onUnmounted,
+    ref,
+    useTemplateRef,
+    watch,
+} from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import AddEnvelopeDialog from '@/components/Budget/AddEnvelopeDialog.vue';
@@ -542,8 +550,21 @@ watch(budgetId, () => {
     saveStatus.value = budgetSaveQueue.status(budgetId.value ?? 0);
 });
 
-budgetSaveQueue.subscribe(() => {
+const unsubscribe = budgetSaveQueue.subscribe(() => {
     saveStatus.value = budgetSaveQueue.status(budgetId.value ?? 0);
+});
+onUnmounted(unsubscribe);
+
+/**
+ * Fresh data from a load or refetch (e.g. after another tab saved): queued
+ * saves edit against the new revisions — but only while this tab has
+ * nothing dirty, so an optimistic value is never rebased mid-save.
+ */
+watch(budget, (data) => {
+    const id = budgetId.value;
+    if (data && id !== null && !budgetSaveQueue.hasPending(id)) {
+        budgetSaveQueue.syncRevisions(id, data.envelopes);
+    }
 });
 
 /** The revision each assignment was last known to have (optimistic cache included). */
@@ -566,11 +587,17 @@ budgetSaveQueue.configure({
             return envelope.revision;
         } catch (error) {
             fail(error);
-            // Re-read the assignment: a conflict must not keep queueing
-            // against the revision that was refused.
-            void queryClient
-                .invalidateQueries({ queryKey: budgetKeys.detail(budgetId) })
-                .then(() => {
+            // Re-read the assignment — but only once this budget's queue has
+            // drained: a refetch while other edits are queued or in flight
+            // would stomp their optimistic values. A conflicted save is not
+            // retried here (the user reconciles with a fresh edit).
+            void budgetSaveQueue
+                .flush(budgetId)
+                .catch(() => false)
+                .then(async () => {
+                    await queryClient.invalidateQueries({
+                        queryKey: budgetKeys.detail(budgetId),
+                    });
                     const fresh = queryClient.getQueryData<{
                         budget: BudgetDetail;
                     }>(budgetKeys.detail(budgetId));

@@ -65,6 +65,12 @@ type IdentityState = {
     active: boolean;
     /** True when the latest desired amount failed and was not retried. */
     failed: boolean;
+    /**
+     * True when the failure was a conflict (409): the server holds a
+     * different value. A conflict is never retried automatically — the user
+     * re-edits to reconcile, so the other tab's change is not overwritten.
+     */
+    conflicted: boolean;
     timer: unknown;
     /** Settles when the identity has drained all work queued when read. */
     drained: Promise<void>;
@@ -137,6 +143,7 @@ export class BudgetSaveQueue {
             revision: this.revisionProvider(budgetId, envelopeId) ?? 0,
             active: false,
             failed: false,
+            conflicted: false,
             timer: null,
             drained: Promise.resolve(),
         };
@@ -144,6 +151,7 @@ export class BudgetSaveQueue {
         this.clock.cancel(state.timer);
         state.desired = amount;
         state.failed = false;
+        state.conflicted = false;
         state.timer = this.clock.schedule(() => this.send(state), this.delayMs);
         this.identities.set(identityKey(budgetId, envelopeId), state);
         this.emit();
@@ -191,12 +199,18 @@ export class BudgetSaveQueue {
                 }
                 this.emit();
             },
-            () => {
+            (error: unknown) => {
                 if (state.desired === amount) {
                     // The newest value did not land: keep it dirty. The
                     // revision is only refreshed once the app's cache has
                     // re-read the assignment (syncRevisions).
                     state.failed = true;
+                    // A conflict (409, another writer won the
+                    // compare-and-write) must be reconciled by the user:
+                    // resending would silently overwrite the other tab.
+                    state.conflicted =
+                        (error as { status?: unknown } | undefined)?.status ===
+                        409;
                     this.emit();
                 }
             },
@@ -235,7 +249,10 @@ export class BudgetSaveQueue {
         );
         for (const state of states) {
             this.clock.cancel(state.timer);
-            if (!state.active && state.desired !== state.acknowledged) {
+            // A conflicted save is never resent by an automatic flush: the
+            // user re-edits to reconcile (the other tab's value must not be
+            // overwritten silently). Publish still refuses via `failed`.
+            if (!state.active && !state.conflicted) {
                 this.send(state);
             }
         }
@@ -261,6 +278,34 @@ export class BudgetSaveQueue {
                     state.desired !== state.acknowledged ||
                     state.failed),
         );
+    }
+
+    /**
+     * Like `hasPending`, but the save currently being acknowledged does not
+     * count: TanStack runs the mutation's `onSuccess` before `mutateAsync`
+     * resolves, and the queue records the acknowledgment only after — so at
+     * `onSuccess` time that one save still looks pending, although it
+     * carries exactly `saved.amount`. A newer generation for that identity
+     * (desired has moved on) still counts, so a refetch cannot stomp it.
+     */
+    hasPendingEdits(
+        budgetId: number,
+        saved?: { envelopeId: number; amount: number },
+    ): boolean {
+        return [...this.identities.values()].some((state) => {
+            if (state.budgetId !== budgetId) {
+                return false;
+            }
+            if (
+                saved !== undefined &&
+                state.envelopeId === saved.envelopeId &&
+                state.desired === saved.amount
+            ) {
+                return false;
+            }
+
+            return state.desired !== state.acknowledged;
+        });
     }
 
     /** The save status of one budget's identities, for the page's indicator. */

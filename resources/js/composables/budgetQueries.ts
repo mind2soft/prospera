@@ -143,10 +143,18 @@ export function useUpdateEnvelope() {
                 amount,
                 expected_revision: expectedRevision,
             }),
-        onSuccess: (_data, { budgetId }) => {
-            // A queued or in-flight newer amount must survive this older
-            // save's refetch: only resync once the save queue drained.
-            if (budgetSaveQueue.hasPending(budgetId)) {
+        onSuccess: (_data, { budgetId, envelopeId, amount }) => {
+            // TanStack runs this onSuccess before `mutateAsync` resolves, and
+            // the queue records the acknowledgment only after — so this save
+            // still reports itself as pending at this point. Ask the queue
+            // whether anything besides it is unsaved: a queued or in-flight
+            // newer amount must survive this older save's refetch.
+            if (
+                budgetSaveQueue.hasPendingEdits(budgetId, {
+                    envelopeId,
+                    amount,
+                })
+            ) {
                 return;
             }
             void queryClient.invalidateQueries({

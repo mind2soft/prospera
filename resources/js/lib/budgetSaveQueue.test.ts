@@ -15,7 +15,8 @@ type TrackedRequest = {
     amount: number;
     revision: number;
     settle: (revision: number) => void;
-    fail: () => void;
+    /** Rejects the request; a status marks the error like an ApiError. */
+    fail: (status?: number) => void;
 };
 
 class DeferredTransport {
@@ -33,11 +34,17 @@ class DeferredTransport {
                     );
                     resolve(revision);
                 },
-                fail: () => {
+                fail: (status?: number) => {
                     this.calls.push(
                         `fail ${request.budgetId}:${request.envelopeId}=${request.amount}`,
                     );
-                    reject(new Error('save failed'));
+                    const error: Error & { status?: number } = new Error(
+                        'save failed',
+                    );
+                    if (status !== undefined) {
+                        error.status = status;
+                    }
+                    reject(error);
                 },
             });
             this.calls.push(
@@ -319,5 +326,65 @@ describe('BudgetSaveQueue', () => {
         transport.requests[0]?.settle(2);
         await flushMicrotasks();
         expect(queue.status(10)).toBe('saved');
+    });
+
+    it('a conflicted save is retained and never resent by an automatic flush', async () => {
+        const transport = new DeferredTransport();
+        const { queue, clock } = configuredQueue(transport.send, {
+            revisions: new Map([['b:7', 1]]),
+        });
+
+        queue.queue(10, 7, 300);
+        clock.advance();
+        transport.requests[0]?.fail(409); // another writer won the revision
+        await flushMicrotasks();
+        expect(queue.status(10)).toBe('error');
+        expect(queue.hasPending(10)).toBe(true);
+
+        // Neither a publish flush nor a page-leave flush may silently
+        // rebase and overwrite the other tab's value.
+        expect(await queue.flush(10)).toBe(false);
+        expect(transport.requests).toHaveLength(1);
+
+        // An explicit re-edit reconciles: it clears the conflict and saves
+        // against the revision the app re-read.
+        queue.queue(10, 7, 350);
+        expect(queue.status(10)).toBe('saving');
+        clock.advance();
+        expect(transport.requests).toHaveLength(2);
+        expect(transport.requests[1]?.amount).toBe(350);
+        transport.requests[1]?.settle(2);
+        await flushMicrotasks();
+        expect(queue.status(10)).toBe('saved');
+    });
+
+    it('hasPendingEdits excludes the save being acknowledged', async () => {
+        const transport = new DeferredTransport();
+        const { queue, clock } = configuredQueue(transport.send, {
+            revisions: new Map([['b:7', 1]]),
+        });
+
+        queue.queue(10, 7, 300);
+        clock.advance(); // the save is in flight
+        // TanStack runs the mutation's onSuccess before mutateAsync
+        // resolves: at that moment the save still looks pending, but it is
+        // exactly the one being acknowledged.
+        expect(queue.hasPendingEdits(10)).toBe(true);
+        expect(queue.hasPendingEdits(10, { envelopeId: 7, amount: 300 })).toBe(
+            false,
+        );
+
+        transport.requests[0]?.settle(2);
+        await flushMicrotasks();
+        expect(queue.hasPendingEdits(10, { envelopeId: 7, amount: 300 })).toBe(
+            false,
+        );
+        expect(queue.hasPendingEdits(10)).toBe(false);
+
+        // A newer generation for the same identity counts again.
+        queue.queue(10, 7, 400);
+        expect(queue.hasPendingEdits(10, { envelopeId: 7, amount: 300 })).toBe(
+            true,
+        );
     });
 });

@@ -110,10 +110,11 @@ test('a newer edit is sent after an older save in flight, never before it', asyn
     await page.waitForTimeout(700);
     expect(bodies).toHaveLength(1);
 
-    // A newer edit is queued, but no second request may start while the
-    // older one is in flight — the newest amount must be sent after it.
+    // A newer edit is queued. A full debounce window passes while the older
+    // save is still in flight: no second request may start (an unserialized
+    // implementation would have sent — and completed — the 400 here).
     await amount.fill('400');
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(700);
     expect(bodies).toHaveLength(1);
 
     releaseFirst();

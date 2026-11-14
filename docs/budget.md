@@ -105,7 +105,10 @@ told and can reconcile. The client keeps one serialized save per
 is in flight, no second request for that assignment is started, and only the
 newest typed amount is sent when it settles. A failed save is retained until
 it is confirmed or re-edited, and publishing waits for the queue — a budget
-is never published while an amount edit failed.
+is never published while an amount edit failed. A conflicted save (`409`)
+is never resent by an automatic flush (publish confirmation, page leave) —
+the user reconciles by editing the amount again, so the other tab's value
+is not silently overwritten.
 
 ### Budget lifecycle
 
