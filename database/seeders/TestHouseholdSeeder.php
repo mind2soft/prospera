@@ -218,7 +218,7 @@ class TestHouseholdSeeder extends Seeder
             $envelope = $envelopes[$plan['name']];
 
             if ($plan['direction'] === Envelope::DIRECTION_REVENUE) {
-                $this->record($ledger, $user, $envelope, $plan['amount'], $month, min($plan['day'], $daysInMonth));
+                $this->record($ledger, $user, $envelope, $plan['amount'], $month, min($plan['day'] ?? 1, $daysInMonth));
 
                 continue;
             }
@@ -246,7 +246,7 @@ class TestHouseholdSeeder extends Seeder
                     : (int) round($plan['amount'] * 0.75);
             }
 
-            foreach ($this->splitAmount($total, $plan['split'], $daysInMonth) as $day => $amount) {
+            foreach ($this->splitAmount($total, $plan['split'] ?? 1, $daysInMonth) as $day => $amount) {
                 $amount = (int) round($amount * ($seasonal !== null ? $seasonal[$month] : 1));
 
                 $this->record($ledger, $user, $envelope, max($amount, 1), $month, min($day, $daysInMonth));
