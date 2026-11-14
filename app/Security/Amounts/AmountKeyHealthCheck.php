@@ -15,7 +15,7 @@ use RuntimeException;
 final class AmountKeyHealthCheck
 {
     private const MESSAGE = <<<'TXT'
-        Encrypted amounts cannot be decrypted: the application key (APP_KEY) no longer unwraps the amount data keys. This usually means APP_KEY was regenerated (e.g. `composer setup` or `php artisan key:generate`) without keeping the previous key — recovery is impossible without it. Restore the previous APP_KEY from your backup (see README, "Encryption at rest"), or, if the rotation was intentional, list the old key in APP_PREVIOUS_KEYS and run `php artisan amounts:rewrap-keys`.
+        Encrypted amounts cannot be decrypted: the application key (APP_KEY) no longer unwraps the amount data keys. This usually means APP_KEY was regenerated (e.g. a bare `php artisan key:generate` — composer setup refuses to rotate) without keeping the previous key — recovery is impossible without it. Restore the previous APP_KEY from your backup (see README, "Encryption at rest"), or, if the rotation was intentional, list the old key in APP_PREVIOUS_KEYS and run `php artisan amounts:rewrap-keys`.
         TXT;
 
     /**
