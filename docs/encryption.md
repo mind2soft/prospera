@@ -164,9 +164,11 @@ without following the rotation procedure below.
 ### Detecting a broken `APP_KEY`
 
 A rotated `APP_KEY` without `APP_PREVIOUS_KEYS` breaks every wrapped amount
-key at once (e.g. `composer setup`, which runs `key:generate`
-unconditionally). Instead of scattered `AmountDecryptionException` 500s, two
-safeguards report it explicitly (issue #36):
+key at once (e.g. a bare `php artisan key:generate` on an existing
+installation — `composer setup` refuses to rotate: it only generates a key
+for a confirmed fresh installation). Instead of scattered
+`AmountDecryptionException` 500s, two safeguards report it explicitly
+(issue #36):
 
 - **Boot-time smoke check** — on every production HTTP request, a single
   amount key (the most recently created active one) is unwrapped — a

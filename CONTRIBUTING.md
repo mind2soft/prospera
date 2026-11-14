@@ -50,7 +50,7 @@ In addition:
     enforced, not assumed (`e2e/guard-e2e-env.sh`, sourced by both the
     server and the seeder): a `.env.e2e` pointing at anything but
     `database/e2e.sqlite` is refused, and a stale one (its `APP_KEY`
-    diverged from `.env` — e.g. after `composer setup` regenerated the key)
+    diverged from `.env` — e.g. after an intentional `APP_KEY` rotation)
     is re-derived automatically, since the e2e database is wiped on every
     boot anyway. The server it boots (`e2e/serve.sh`) rebuilds the frontend
     assets (`npm run build`) first — the suite always runs against the
