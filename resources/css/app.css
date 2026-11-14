@@ -10,7 +10,8 @@
 @import "tailwindcss";
 
 @import "tw-animate-css";
-@import "shadcn-vue/tailwind.css";
+/* Vendored from shadcn-vue@2.9.0 dist/tailwind.css (the package is CLI-only now) */
+@import "./shadcn-vue.css";
 
 @source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
 @source "../../storage/framework/views/*.php";
