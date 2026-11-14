@@ -40,6 +40,7 @@ class Transaction extends Model implements HasEncryptedAmounts
     protected $fillable = ['ledger_id', 'user_id', 'envelope_id', 'amount', 'event_at'];
 
     protected $casts = [
+        'user_id' => 'integer',
         'event_at' => 'datetime',
     ];
 
@@ -110,6 +111,10 @@ class Transaction extends Model implements HasEncryptedAmounts
      */
     public static function purgeDeletionsOnMemberEnvelopes(FinancialProfile $profile, User $member): int
     {
+        // Serializes with a concurrent restore, which reads the envelope
+        // under a shared lock.
+        Envelope::query()->where('user_id', $member->id)->lockForUpdate()->get(['id']);
+
         return static::onlyTrashed()
             ->whereIn('ledger_id', Ledger::query()->where('profile_id', $profile->id)->select('id'))
             ->whereIn('envelope_id', Envelope::query()->where('user_id', $member->id)->select('id'))

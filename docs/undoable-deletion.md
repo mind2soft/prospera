@@ -70,7 +70,9 @@ gone. Every new use of the pattern must check the following:
   their account), `FinancialProfile::removeMember()` purges the pending
   deletions in the profile's ledgers on the member's envelopes. It does this
   before it hands the envelopes still in use over to the profile owner and
-  prunes the envelope grants.
+  prunes the envelope grants. This includes envelopes the member keeps
+  because another profile still uses them: leaving at most drops a pending
+  undo.
 - **Encryption at rest.** Key rotation, key pruning and `amounts:verify` must
   include pending deletions (`withTrashed()` in `AmountKeyManager::sources()`).
   Otherwise, a key version could be pruned while a restorable row still uses
