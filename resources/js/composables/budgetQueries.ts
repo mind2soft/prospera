@@ -4,6 +4,7 @@ import { invalidateDashboardData } from '@/composables/dashboardQueries';
 import { type QueryKey, useMutation, useQuery } from '@/composables/query';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { type AddEnvelopeInput, budgetApi } from '@/lib/budgetApi';
+import { budgetSaveQueue } from '@/lib/budgetSaveQueue';
 
 export const budgetKeys = {
     all: (profileId: number) => ['budgets', profileId] as const,
@@ -131,12 +132,23 @@ export function useUpdateEnvelope() {
             budgetId,
             envelopeId,
             amount,
+            expectedRevision,
         }: {
             budgetId: number;
             envelopeId: number;
             amount: number;
-        }) => budgetApi.updateEnvelope(budgetId, envelopeId, { amount }),
+            expectedRevision: number;
+        }) =>
+            budgetApi.updateEnvelope(budgetId, envelopeId, {
+                amount,
+                expected_revision: expectedRevision,
+            }),
         onSuccess: (_data, { budgetId }) => {
+            // A queued or in-flight newer amount must survive this older
+            // save's refetch: only resync once the save queue drained.
+            if (budgetSaveQueue.hasPending(budgetId)) {
+                return;
+            }
             void queryClient.invalidateQueries({
                 queryKey: budgetKeys.detail(budgetId),
             });

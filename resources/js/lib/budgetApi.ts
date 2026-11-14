@@ -62,7 +62,7 @@ export const budgetApi = {
     updateEnvelope: (
         id: number,
         envelopeId: number,
-        input: { amount: number },
+        input: { amount: number; expected_revision: number },
     ): Promise<{ envelope: BudgetEnvelope }> =>
         // keepalive: the budget page flushes its amount edits while unloading.
         api(budgetEnvelopes.update({ budget: id, envelopeId }), {
