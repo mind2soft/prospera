@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { Head, Link, usePage } from '@inertiajs/vue3';
 import { useQueryClient } from '@tanstack/vue-query';
-import { computed, nextTick, onMounted, ref, useTemplateRef, watch } from 'vue';
+import {
+    computed,
+    nextTick,
+    onMounted,
+    onUnmounted,
+    ref,
+    useTemplateRef,
+    watch,
+} from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import AddEnvelopeDialog from '@/components/Budget/AddEnvelopeDialog.vue';
@@ -57,6 +65,7 @@ import { useOnceFlag } from '@/composables/useOnceFlag';
 import { errorMessage } from '@/lib/api';
 import { budgetMonthLabel } from '@/lib/budget';
 import type { AddEnvelopeInput } from '@/lib/budgetApi';
+import { type BudgetSaveStatus, budgetSaveQueue } from '@/lib/budgetSaveQueue';
 import { currentMonth, parseMonth } from '@/lib/calendar';
 import { stripDeepLink } from '@/lib/focusAnchor';
 import { budget as budgetRoute } from '@/routes';
@@ -527,32 +536,84 @@ const onAddEnvelope = (input: AddEnvelopeInput) => {
  * Live amount editing: every valid change is applied to the budget in the
  * query cache immediately (bars, table and totals update as you type), then
  * persisted with a debounce — changes save automatically, no save buttons.
+ *
+ * Saving goes through the module-level save queue (`lib/budgetSaveQueue.ts`):
+ * one request per `(budget, envelope)` at a time, the newest amount sent
+ * next, failures retained until re-saved — publishing waits for it.
  */
 const SAVE_DELAY_MS = 600;
 
-const pendingSaves = new Map<
-    number,
-    { timer: ReturnType<typeof setTimeout>; budgetId: number; amount: number }
->();
-
-/**
- * Autosave status shown next to the table: debounced or in-flight edits are
- * "saving", a failed one is "error" until the next successful save.
- */
-const saveStatus = ref<'idle' | 'saving' | 'saved' | 'error'>('idle');
-const inFlightSaves = ref(0);
+/** Autosave status shown next to the table. */
+const saveStatus = ref<BudgetSaveStatus>('idle');
 
 watch(budgetId, () => {
-    saveStatus.value = 'idle';
+    saveStatus.value = budgetSaveQueue.status(budgetId.value ?? 0);
 });
 
-const settleSaveStatus = () => {
-    if (pendingSaves.size === 0 && inFlightSaves.value === 0) {
-        if (saveStatus.value === 'saving') {
-            saveStatus.value = 'saved';
-        }
+const unsubscribe = budgetSaveQueue.subscribe(() => {
+    saveStatus.value = budgetSaveQueue.status(budgetId.value ?? 0);
+});
+onUnmounted(unsubscribe);
+
+/**
+ * Fresh data from a load or refetch (e.g. after another tab saved): queued
+ * saves edit against the new revisions — but only while this tab has
+ * nothing dirty, so an optimistic value is never rebased mid-save.
+ */
+watch(budget, (data) => {
+    const id = budgetId.value;
+    if (data && id !== null && !budgetSaveQueue.hasPending(id)) {
+        budgetSaveQueue.syncRevisions(id, data.envelopes);
     }
-};
+});
+
+/** The revision each assignment was last known to have (optimistic cache included). */
+const revisionFromCache = (id: number, envelopeId: number): number =>
+    queryClient
+        .getQueryData<{ budget: BudgetDetail }>(budgetKeys.detail(id))
+        ?.budget.envelopes.find((e) => e.envelope_id === envelopeId)
+        ?.revision ?? 0;
+
+budgetSaveQueue.configure({
+    transport: async ({ budgetId, envelopeId, amount, revision }) => {
+        try {
+            const { envelope } = await updateEnvelope.mutateAsync({
+                budgetId,
+                envelopeId,
+                amount,
+                expectedRevision: revision,
+            });
+
+            return envelope.revision;
+        } catch (error) {
+            fail(error);
+            // Re-read the assignment — but only once this budget's queue has
+            // drained: a refetch while other edits are queued or in flight
+            // would stomp their optimistic values. A conflicted save is not
+            // retried here (the user reconciles with a fresh edit).
+            void budgetSaveQueue
+                .flush(budgetId)
+                .catch(() => false)
+                .then(async () => {
+                    await queryClient.invalidateQueries({
+                        queryKey: budgetKeys.detail(budgetId),
+                    });
+                    const fresh = queryClient.getQueryData<{
+                        budget: BudgetDetail;
+                    }>(budgetKeys.detail(budgetId));
+                    if (fresh) {
+                        budgetSaveQueue.syncRevisions(
+                            budgetId,
+                            fresh.budget.envelopes,
+                        );
+                    }
+                });
+            throw error;
+        }
+    },
+    revisionProvider: revisionFromCache,
+    delayMs: SAVE_DELAY_MS,
+});
 
 const onEditAmount = (envelopeId: number, amount: number) => {
     const id = budgetId.value;
@@ -576,67 +637,15 @@ const onEditAmount = (envelopeId: number, amount: number) => {
     });
 
     saveStatus.value = 'saving';
-    const existing = pendingSaves.get(envelopeId);
-    if (existing !== undefined) {
-        clearTimeout(existing.timer);
-    }
-    pendingSaves.set(envelopeId, {
-        timer: setTimeout(
-            () => saveAmount(envelopeId, id, amount),
-            SAVE_DELAY_MS,
-        ),
-        budgetId: id,
-        amount,
-    });
-};
-
-/** In-flight amount saves, so publishing can wait for them. */
-const inFlightRequests = new Set<Promise<boolean>>();
-
-const saveAmount = (
-    envelopeId: number,
-    budgetIdValue: number,
-    amount: number,
-) => {
-    pendingSaves.delete(envelopeId);
-    inFlightSaves.value += 1;
-    // `mutateAsync`, not `mutate` callbacks: those only fire for the latest
-    // of several concurrent calls, which would leave a save counted forever.
-    const request: Promise<boolean> = updateEnvelope
-        .mutateAsync({ budgetId: budgetIdValue, envelopeId, amount })
-        .then(
-            () => true,
-            (error: unknown) => {
-                saveStatus.value = 'error';
-                fail(error);
-                void queryClient.invalidateQueries({
-                    queryKey: budgetKeys.detail(budgetIdValue),
-                });
-
-                return false;
-            },
-        )
-        .finally(() => {
-            inFlightSaves.value -= 1;
-            inFlightRequests.delete(request);
-            settleSaveStatus();
-        });
-    inFlightRequests.add(request);
+    budgetSaveQueue.queue(id, envelopeId, amount);
 };
 
 /**
  * Sends every debounced amount edit now and waits for all saves to land;
  * false when one of them failed.
  */
-const flushAmountSaves = async (): Promise<boolean> => {
-    for (const [envelopeId, pending] of pendingSaves) {
-        clearTimeout(pending.timer);
-        saveAmount(envelopeId, pending.budgetId, pending.amount);
-    }
-    const results = await Promise.all([...inFlightRequests]);
-
-    return results.every(Boolean);
-};
+const flushAmountSaves = async (): Promise<boolean> =>
+    budgetSaveQueue.flush(budgetId.value ?? undefined);
 
 // Leaving the page (or unloading it) sends the debounced edits right away.
 useFlushOnLeave(() => {

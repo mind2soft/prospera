@@ -18,6 +18,7 @@ use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -315,10 +316,23 @@ class BudgetController extends Controller
                 ->where('envelope_id', $envelopeId)
                 ->firstOrFail();
 
+            // Compare-and-write: two tabs (or a stale autosave racing a newer
+            // edit) must not apply an older amount over a newer one. The
+            // first writer wins; every other writer is refused with the
+            // current data so it can reconcile instead of silently
+            // overwriting (docs/ledger.md, last-write-wins is not enough).
+            if ($assignment->revision !== $validated['expected_revision']) {
+                throw new HttpResponseException(response()->json([
+                    'message' => __('This amount was changed elsewhere while you were editing. Reload the budget to see the latest amounts.'),
+                    'envelope' => $this->serializeEnvelope($assignment),
+                ], 409));
+            }
+
             $assignment->update([
                 'amount' => $assignment->envelope->signedAmount($validated['amount']),
                 'type' => $validated['type'] ?? $assignment->type,
             ]);
+            $assignment->increment('revision');
 
             return $assignment;
         });
@@ -499,6 +513,7 @@ class BudgetController extends Controller
             'direction' => $assignment->envelope->type,
             'amount' => $assignment->amount,
             'type' => $assignment->type,
+            'revision' => $assignment->revision,
         ];
     }
 }

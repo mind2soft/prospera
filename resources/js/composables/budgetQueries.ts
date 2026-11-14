@@ -4,6 +4,7 @@ import { invalidateDashboardData } from '@/composables/dashboardQueries';
 import { type QueryKey, useMutation, useQuery } from '@/composables/query';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { type AddEnvelopeInput, budgetApi } from '@/lib/budgetApi';
+import { budgetSaveQueue } from '@/lib/budgetSaveQueue';
 
 export const budgetKeys = {
     all: (profileId: number) => ['budgets', profileId] as const,
@@ -131,12 +132,31 @@ export function useUpdateEnvelope() {
             budgetId,
             envelopeId,
             amount,
+            expectedRevision,
         }: {
             budgetId: number;
             envelopeId: number;
             amount: number;
-        }) => budgetApi.updateEnvelope(budgetId, envelopeId, { amount }),
-        onSuccess: (_data, { budgetId }) => {
+            expectedRevision: number;
+        }) =>
+            budgetApi.updateEnvelope(budgetId, envelopeId, {
+                amount,
+                expected_revision: expectedRevision,
+            }),
+        onSuccess: (_data, { budgetId, envelopeId, amount }) => {
+            // TanStack runs this onSuccess before `mutateAsync` resolves, and
+            // the queue records the acknowledgment only after — so this save
+            // still reports itself as pending at this point. Ask the queue
+            // whether anything besides it is unsaved: a queued or in-flight
+            // newer amount must survive this older save's refetch.
+            if (
+                budgetSaveQueue.hasPendingEdits(budgetId, {
+                    envelopeId,
+                    amount,
+                })
+            ) {
+                return;
+            }
             void queryClient.invalidateQueries({
                 queryKey: budgetKeys.detail(budgetId),
             });

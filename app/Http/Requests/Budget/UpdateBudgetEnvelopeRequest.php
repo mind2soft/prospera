@@ -26,6 +26,9 @@ class UpdateBudgetEnvelopeRequest extends BudgetRequest
         return [
             'amount' => ['required', 'integer', 'min:1', 'max:999999999'],
             'type' => ['sometimes', 'string', Rule::in(BudgetEnvelope::TYPES)],
+            // The assignment revision the client edited against (multi-tab
+            // protection): a stale value is refused without changing data.
+            'expected_revision' => ['required', 'integer', 'min:1'],
         ];
     }
 }

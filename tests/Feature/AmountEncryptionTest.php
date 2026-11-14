@@ -323,7 +323,7 @@ class AmountEncryptionTest extends TestCase
         $this->assertEncryptedAmount(BudgetEnvelope::class, ['budget_id' => $budget->id], 'amount', -1300);
 
         $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$this->rent->id}", [
-            'type' => 'variable', 'amount' => 250,
+            'type' => 'variable', 'amount' => 250, 'expected_revision' => 1,
         ])->assertOk()->assertJsonPath('envelope.amount', -250);
         $this->assertEncryptedAmount(BudgetEnvelope::class, ['budget_id' => $budget->id], 'amount', -250);
     }

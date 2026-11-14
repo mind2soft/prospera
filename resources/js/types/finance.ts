@@ -83,6 +83,8 @@ export type BudgetEnvelope = {
     direction: 'expense' | 'revenue';
     amount: number; // signed: positive for revenue, negative for expense
     type: BudgetEnvelopeType;
+    /** Bumped on every update; edits PATCH the value they were made against. */
+    revision: number;
 };
 
 export type BudgetDetail = Budget & {

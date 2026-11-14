@@ -72,6 +72,7 @@
             "Composer\\Config::disableProcessTimeout",
             "npm run check",
             "npm run types:check",
+            "npm run test",
             "sh scripts/ci/tests/deploy-scripts.test.sh",
             "sh scripts/ci/tests/e2e-guard.test.sh",
             "@test"

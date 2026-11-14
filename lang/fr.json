@@ -70,6 +70,7 @@
     "This person already registered through an invite and joins the profile once they verify their email.": "Cette personne s'est déjà inscrite avec une invitation et rejoindra le profil dès qu'elle aura vérifié son adresse courriel.",
     "This profile already has a draft budget. Publish it before creating a new one.": "Ce profil a déjà un budget en brouillon. Publiez-le avant d'en créer un nouveau.",
     "This profile still has budgets or ledgers.": "Ce profil a encore des budgets ou des grands livres.",
+    "This amount was changed elsewhere while you were editing. Reload the budget to see the latest amounts.": "Ce montant a été modifié ailleurs pendant que vous éditiez. Rechargez le budget pour voir les derniers montants.",
     "This request could not be completed. Reload the page and try again.": "Cette requête n'a pas pu aboutir. Rechargez la page et réessayez.",
     "This transaction can no longer be restored.": "Cette transaction ne peut plus être restaurée.",
     "This user already owns this envelope.": "Cet utilisateur est déjà propriétaire de cette enveloppe.",

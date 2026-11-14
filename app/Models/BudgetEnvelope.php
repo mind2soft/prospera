@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $envelope_id
  * @property int $amount encrypted at rest (docs/encryption.md)
  * @property string $type
+ * @property int $revision bumped on every update: stale compare-and-write edits are rejected
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */

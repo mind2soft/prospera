@@ -87,6 +87,29 @@ from the decrypted amounts, never in SQL.
 The sign is derived from the envelope's direction — the client never sends a negative
 number; the server negates expense amounts on write.
 
+### Assignment revisions
+
+Every envelope assignment carries an unsigned integer `revision` (default 1,
+never encrypted — it never hides an amount). Amount edits PATCH the
+`expected_revision` they were made against:
+
+- the write is accepted only while the stored revision matches; the update
+  bumps it;
+- a stale revision is refused with `409` (and the current assignment in the
+  response) instead of silently overwriting newer data.
+
+This protects against two tabs editing the same draft, and against a stale
+autosave racing a newer edit: the first writer wins, every other writer is
+told and can reconcile. The client keeps one serialized save per
+`(budget, envelope)` (`resources/js/lib/budgetSaveQueue.ts`): while a request
+is in flight, no second request for that assignment is started, and only the
+newest typed amount is sent when it settles. A failed save is retained until
+it is confirmed or re-edited, and publishing waits for the queue — a budget
+is never published while an amount edit failed. A conflicted save (`409`)
+is never resent by an automatic flush (publish confirmation, page leave) —
+the user reconciles by editing the amount again, so the other tab's value
+is not silently overwritten.
+
 ### Budget lifecycle
 
 - There can only be **one draft budget** at a time (per profile).
@@ -186,7 +209,7 @@ All endpoints require authentication (session + CSRF). The frontend consumes the
 | `POST`   | `/api/budgets/{budget}/publish`                | Publish draft (budget owner **and** profile owner); optional `timezone` (IANA) and `month` (`Y-m`, must be the current month there) — see Budget lifecycle  |
 | `POST`   | `/api/budgets/{budget}/clone`                  | Clone published budget into a draft (profile owner; `viewer`+ on the budget)                                                                                 |
 | `POST`   | `/api/budgets/{budget}/envelopes`              | Assign an envelope (`envelope_id`, `type`, `amount`) to a draft — requires `contributor`+ on the envelope (`none`/`viewer` → `422` on `envelope_id`)         |
-| `PATCH`  | `/api/budgets/{budget}/envelopes/{envelopeId}` | Update amount (and type)                                                                                                                                     |
+| `PATCH`  | `/api/budgets/{budget}/envelopes/{envelopeId}` | Update amount (and type) of a draft — requires `expected_revision` (see Assignment revisions); a stale revision is refused with `409` |
 | `DELETE` | `/api/budgets/{budget}/envelopes/{envelopeId}` | Remove an assignment                                                                                                                                         |
 | `GET`    | `/api/budgets/{budget}/shares`                 | List shares — profile members with their effective permission and an `explicit` flag (`false` = implicit viewer, not revocable)                              |
 | `POST`   | `/api/budgets/{budget}/shares`                 | Assign a permission to a **profile member** (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                  |

@@ -80,6 +80,54 @@ test('an invalid amount is explained inline instead of silently reverted', async
     await expect(amount).not.toHaveAttribute('aria-invalid', 'true');
 });
 
+test('a newer edit is sent after an older save in flight, never before it', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/budget');
+
+    // Hold the first save in flight while the user types a newer amount.
+    const bodies: { amount: number }[] = [];
+    let releaseFirst: () => void = () => {};
+    const firstHeld = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+    });
+    await page.route(/\/api\/budgets\/\d+\/envelopes\/\d+$/, async (route) => {
+        if (route.request().method() !== 'PATCH') {
+            return route.fallback();
+        }
+        bodies.push(route.request().postDataJSON() as { amount: number });
+        if (bodies.length === 1) {
+            await firstHeld;
+        }
+
+        return route.continue();
+    });
+
+    const amount = page.getByRole('spinbutton', { name: 'Food amount' });
+    await amount.fill('300');
+    // The autosave debounce elapses: the first save is captured and held.
+    await page.waitForTimeout(700);
+    expect(bodies).toHaveLength(1);
+
+    // A newer edit is queued. A full debounce window passes while the older
+    // save is still in flight: no second request may start (an unserialized
+    // implementation would have sent — and completed — the 400 here).
+    await amount.fill('400');
+    await page.waitForTimeout(700);
+    expect(bodies).toHaveLength(1);
+
+    releaseFirst();
+    await page.waitForTimeout(700);
+    expect(bodies.map((body) => body.amount)).toEqual([300, 400]);
+
+    // The newer amount is what actually persisted.
+    await page.reload();
+    await expect(
+        page.getByRole('spinbutton', { name: 'Food amount' }),
+    ).toHaveValue('400');
+});
+
 test('publishing waits for a pending amount edit to be saved', async ({
     page,
 }) => {

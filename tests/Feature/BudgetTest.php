@@ -511,7 +511,7 @@ class BudgetTest extends TestCase
         Budget::flushEventListeners();
         $this->publishConcurrentlyAfterRouteBinding($budget);
         $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$rent->id}", [
-            'amount' => 999,
+            'amount' => 999, 'expected_revision' => 1,
         ])->assertUnprocessable()->assertJsonValidationErrors('budget');
         $this->assertEncryptedAmount(BudgetEnvelope::class, ['envelope_id' => $rent->id], 'amount', -100);
 
@@ -566,9 +566,78 @@ class BudgetTest extends TestCase
 
         $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$envelope->id}", [
             'amount' => 250,
-        ])->assertOk()->assertJsonPath('envelope.amount', -250);
+            'expected_revision' => 1,
+        ])->assertOk()->assertJsonPath('envelope.amount', -250)
+            ->assertJsonPath('envelope.revision', 2);
 
         $this->assertEncryptedAmount(BudgetEnvelope::class, ['envelope_id' => $envelope->id], 'amount', -250);
+    }
+
+    public function test_update_envelope_requires_the_revision_the_edit_was_made_against(): void
+    {
+        $budget = $this->createBudget($this->user);
+        $envelope = $this->user->envelopes()->create([
+            'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
+        ]);
+        $budget->envelopes()->create([
+            'envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed',
+        ]);
+
+        $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$envelope->id}", [
+            'amount' => 250,
+        ])->assertUnprocessable()->assertJsonValidationErrors('expected_revision');
+    }
+
+    /**
+     * Two writers editing against the same revision (two tabs, or a stale
+     * autosave racing a newer edit): the first wins, the second is refused
+     * without changing data instead of silently overwriting it (#78).
+     */
+    public function test_update_envelope_refuses_a_stale_revision(): void
+    {
+        $budget = $this->createBudget($this->user);
+        $envelope = $this->user->envelopes()->create([
+            'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
+        ]);
+        $assignment = $budget->envelopes()->create([
+            'envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed',
+        ]);
+
+        // The first writer lands: the assignment now lives at revision 2.
+        $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$envelope->id}", [
+            'amount' => 250, 'expected_revision' => 1,
+        ])->assertOk()->assertJsonPath('envelope.revision', 2);
+
+        // The second writer still edits against revision 1: refused, with
+        // the current assignment in the response so it can reconcile.
+        $response = $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$envelope->id}", [
+            'amount' => 999, 'expected_revision' => 1,
+        ]);
+        $response->assertStatus(409)
+            ->assertJsonPath('envelope.amount', -250)
+            ->assertJsonPath('envelope.revision', 2);
+
+        $this->assertEncryptedAmount(BudgetEnvelope::class, ['envelope_id' => $envelope->id], 'amount', -250);
+        $this->assertSame(2, $assignment->fresh()->revision);
+    }
+
+    public function test_update_envelope_rejects_nonsense_revisions(): void
+    {
+        $budget = $this->createBudget($this->user);
+        $envelope = $this->user->envelopes()->create([
+            'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
+        ]);
+        $budget->envelopes()->create([
+            'envelope_id' => $envelope->id, 'amount' => -100, 'type' => 'fixed',
+        ]);
+
+        $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$envelope->id}", [
+            'amount' => 250, 'expected_revision' => 0,
+        ])->assertUnprocessable()->assertJsonValidationErrors('expected_revision');
+
+        $this->actingAs($this->user)->patchJson("/api/budgets/{$budget->id}/envelopes/{$envelope->id}", [
+            'amount' => 250, 'expected_revision' => 'two',
+        ])->assertUnprocessable()->assertJsonValidationErrors('expected_revision');
     }
 
     public function test_remove_envelope(): void
