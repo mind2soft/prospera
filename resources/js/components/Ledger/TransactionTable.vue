@@ -97,7 +97,12 @@ const region = useTemplateRef<HTMLElement>('region');
  * Focuses the table region — the stable target once a row's delete action
  * disappears with its row (focus would otherwise drop to the page body).
  */
-defineExpose({ focus: () => region.value?.focus() });
+defineExpose({
+    focus: () => region.value?.focus(),
+    /** Whether the element is the table region or inside it. */
+    contains: (element: Element | null): boolean =>
+        element !== null && (region.value?.contains(element) ?? false),
+});
 </script>
 
 <template>

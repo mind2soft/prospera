@@ -43,7 +43,8 @@ Design docs live in [`docs/`](docs/): [getting started](docs/onboarding.md),
 [ledger](docs/ledger.md), [envelopes](docs/envelope.md),
 [shared finances](docs/shared-finances.md),
 [encryption at rest](docs/encryption.md),
-[notifications](docs/notifications.md) and
+[notifications](docs/notifications.md),
+[undoable deletion](docs/undoable-deletion.md) and
 [localization](docs/localization.md) (long-form content such as the
 [privacy policy](resources/content/privacy.en.md) is documented there too).
 
@@ -140,7 +141,10 @@ contact-form submission log is pruned daily (`php artisan contact:prune`,
 retention configurable via `CONTACT_LOG_RETENTION_DAYS`), amount encryption
 keys are rotated monthly (`php artisan amounts:rotate-keys --all`),
 retired keys pruned daily (`php artisan amounts:prune-keys`), a daily
-`php artisan amounts:verify` re-checks that every amount still decrypts, and
+`php artisan amounts:verify` re-checks that every amount still decrypts,
+deleted transactions are purged every minute once their 3-minute undo window
+has passed (`php artisan transactions:purge-deleted` — see
+[docs/undoable-deletion.md](docs/undoable-deletion.md)), and
 unverified accounts left untouched that hold no data are deleted daily
 (`php artisan users:prune-unverified`, retention configurable via
 `UNVERIFIED_ACCOUNT_RETENTION_DAYS`, default 30 days — see

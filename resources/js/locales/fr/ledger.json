@@ -11,10 +11,13 @@
             "ledgerReopened": "Grand livre rouvert.",
             "ledgerDeleted": "Grand livre supprimé.",
             "transactionAdded": "Transaction ajoutée.",
-            "transactionDeleted": "Transaction supprimée."
+            "transactionDeleted": "Transaction supprimée.",
+            "transactionRestored": "Transaction restaurée.",
+            "undo": "Annuler"
         },
         "error": {
-            "generic": "Une erreur est survenue."
+            "generic": "Une erreur est survenue.",
+            "restoreExpired": "Cette transaction ne peut plus être restaurée."
         },
         "loadError": "Vos grands livres n'ont pas pu être chargés.",
         "empty": {
@@ -49,13 +52,6 @@
             "title": "Supprimer ce grand livre ?",
             "description": "Cette action supprime définitivement le grand livre et TOUTES ses transactions. Cette action est irréversible.",
             "confirm": "Supprimer le grand livre"
-        },
-        "deleteTransaction": {
-            "title": "Supprimer cette transaction ?",
-            "summary": "{envelope} · {date} · {amount}.",
-            "summaryMasked": "{envelope} · {date}.",
-            "description": "La transaction sera définitivement supprimée. Cette action est irréversible.",
-            "confirm": "Supprimer la transaction"
         },
         "status": {
             "open": "Ouvert",

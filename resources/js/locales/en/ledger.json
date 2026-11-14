@@ -11,10 +11,13 @@
             "ledgerReopened": "Ledger reopened.",
             "ledgerDeleted": "Ledger deleted.",
             "transactionAdded": "Transaction added.",
-            "transactionDeleted": "Transaction deleted."
+            "transactionDeleted": "Transaction deleted.",
+            "transactionRestored": "Transaction restored.",
+            "undo": "Undo"
         },
         "error": {
-            "generic": "Something went wrong."
+            "generic": "Something went wrong.",
+            "restoreExpired": "This transaction can no longer be restored."
         },
         "loadError": "Your ledgers could not be loaded.",
         "empty": {
@@ -49,13 +52,6 @@
             "title": "Delete this ledger?",
             "description": "This permanently removes the ledger and ALL of its transactions. This cannot be undone.",
             "confirm": "Delete ledger"
-        },
-        "deleteTransaction": {
-            "title": "Delete this transaction?",
-            "summary": "{envelope} · {date} · {amount}.",
-            "summaryMasked": "{envelope} · {date}.",
-            "description": "The transaction will be permanently removed. This cannot be undone.",
-            "confirm": "Delete transaction"
         },
         "status": {
             "open": "Open",

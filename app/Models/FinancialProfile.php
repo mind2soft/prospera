@@ -374,6 +374,10 @@ class FinancialProfile extends Model
             $owner = $this->ownerUser();
             $remainingMembers = $this->members()->whereKeyNot($member->id)->get();
 
+            // Before the envelope hand-over below, which only sees live
+            // references (docs/undoable-deletion.md).
+            Transaction::purgeDeletionsOnMemberEnvelopes($this, $member);
+
             $this->transferBudgetsOwnedBy($member, $owner);
             $this->deleteBudgetPermissionsFor($member);
             $this->transferLedgersOwnedBy($member, $owner);

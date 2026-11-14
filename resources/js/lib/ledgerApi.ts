@@ -62,6 +62,10 @@ export const ledgerApi = {
     destroyTransaction: (transactionId: number): Promise<void> =>
         api(transactions.destroy(transactionId)),
 
+    /** Undo a deletion, within the server's undo window. */
+    restoreTransaction: (transactionId: number): Promise<void> =>
+        api(transactions.restore(transactionId)),
+
     shares: (id: number): Promise<{ shares: ResourceMember[] }> =>
         api(ledgerShares.index(id)),
 

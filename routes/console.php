@@ -18,6 +18,12 @@ Schedule::command('contact:prune')->daily();
 // 30) that hold no data are deleted (mistyped emails, abandoned sign-ups).
 Schedule::command('users:prune-unverified')->daily()->withoutOverlapping()->onOneServer();
 
+// Undoable transaction deletion (issue #48, docs/undoable-deletion.md):
+// deleted transactions stay restorable for Transaction::UNDO_WINDOW_SECONDS
+// (3 minutes), then this sweep removes them for good. The overlap lock expires
+// after 5 minutes should a run be killed, so the sweep never stalls for long.
+Schedule::command('transactions:purge-deleted')->everyMinute()->withoutOverlapping(5)->onOneServer();
+
 // Encryption at rest (docs/encryption.md): monthly data-key rotation; retired
 // key versions are deleted after their grace period. The daily verify catches
 // a broken APP_KEY in the logs even when no request touches amounts — the

@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ManagesShares;
 use App\Http\Requests\EnvelopeRequest;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\ResourcePermissionService;
 use Illuminate\Database\Eloquent\Model;
@@ -65,10 +66,16 @@ class EnvelopeController extends Controller
             // under a shared lock (transactions, budget assignments).
             $locked = Envelope::query()->whereKey($envelope->id)->lockForUpdate()->firstOrFail();
 
-            if ($validated['type'] !== $locked->type && $locked->isReferenced()) {
-                throw ValidationException::withMessages([
-                    'type' => __('This envelope is already used by a budget or transactions: its direction cannot be changed.'),
-                ]);
+            if ($validated['type'] !== $locked->type) {
+                if ($locked->isReferenced()) {
+                    throw ValidationException::withMessages([
+                        'type' => __('This envelope is already used by a budget or transactions: its direction cannot be changed.'),
+                    ]);
+                }
+
+                // A pending deletion restored after the flip would carry the
+                // old sign (docs/undoable-deletion.md).
+                Transaction::purgeDeletionsOnEnvelopes([$locked->id]);
             }
 
             $envelope->update($validated);
@@ -83,17 +90,27 @@ class EnvelopeController extends Controller
     {
         $this->authorize('delete', $envelope);
 
-        $referencedBy = $envelope->referencedBy();
+        DB::transaction(function () use ($envelope): void {
+            // The row lock serializes with writers reading the envelope under
+            // a shared lock (recording or restoring a transaction).
+            $locked = Envelope::query()->whereKey($envelope->id)->lockForUpdate()->firstOrFail();
 
-        if ($referencedBy !== null) {
-            throw ValidationException::withMessages([
-                'envelope' => $referencedBy === 'budget'
-                    ? __('This envelope is used in a budget and cannot be deleted.')
-                    : __('This envelope has transactions and cannot be deleted.'),
-            ]);
-        }
+            $referencedBy = $locked->referencedBy();
 
-        $envelope->delete();
+            if ($referencedBy !== null) {
+                throw ValidationException::withMessages([
+                    'envelope' => $referencedBy === 'budget'
+                        ? __('This envelope is used in a budget and cannot be deleted.')
+                        : __('This envelope has transactions and cannot be deleted.'),
+                ]);
+            }
+
+            // Pending transaction deletions no longer block the envelope
+            // (docs/undoable-deletion.md): they are purged with it.
+            Transaction::purgeDeletionsOnEnvelopes([$locked->id]);
+
+            $locked->delete();
+        });
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Envelope deleted.')]);
 

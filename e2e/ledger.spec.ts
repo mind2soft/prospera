@@ -140,19 +140,33 @@ test('ledger page audit', async ({ page }) => {
     await addedRow
         .getByRole('button', { name: /^Delete transaction: Food, Oct 22$/ })
         .click();
-    // Deleting is irreversible → a confirmation names the entry first.
-    const confirmDelete = page.getByRole('dialog');
-    await expect(confirmDelete).toContainText('Food · October 22, 2026 · $35');
-    await confirmDelete
-        .getByRole('button', { name: 'Delete transaction' })
-        .click();
+    // No confirmation: the deletion happens at once, and the toast offers an
+    // undo instead (issue #48).
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page.getByText('Transaction deleted.')).toBeVisible();
-    await expect(confirmDelete).toBeHidden();
     // The deleted row's button is gone: focus lands on the table, not <body>.
     await expect(
         page.getByRole('region', { name: 'Transactions' }),
     ).toBeFocused();
     await expect(newRows).toHaveCount(3);
+    await expect(foodRow).toContainText('680');
+
+    // --- undo the deletion from the toast (issue #48) --------------------------
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(page.getByText('Transaction restored.')).toBeVisible();
+    await expect(newRows).toHaveCount(4);
+    await expect(foodRow).toContainText('645');
+
+    // Delete it again: the undo toast outlasts the default toast duration
+    // (4 s) — it stays at least 30 s.
+    await page
+        .locator('tbody tr', { hasText: '($35)' })
+        .first()
+        .getByRole('button', { name: /^Delete transaction: Food, Oct 22$/ })
+        .click();
+    await expect(newRows).toHaveCount(3);
+    await page.waitForTimeout(6_000);
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
     await expect(foodRow).toContainText('680');
 
     // --- month navigation -----------------------------------------------------

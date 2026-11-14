@@ -36,7 +36,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Spinner } from '@/components/ui/spinner';
 import { useBudgets } from '@/composables/budgetQueries';
 import { useEnvelopeOptions } from '@/composables/envelopeQueries';
 import {
@@ -50,17 +49,16 @@ import {
     useLedgerTransactions,
     useRemoveLedgerShare,
     useReopenLedger,
+    useRestoreTransaction,
     useSetLedgerShare,
     useTransferLedgerOwnership,
 } from '@/composables/ledgerQueries';
 import { useOnboardingProgress } from '@/composables/onboardingQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
-import { useLocale } from '@/composables/useLocale';
 import { useOnboardingJourney } from '@/composables/useOnboardingJourney';
 import { useOnceFlag } from '@/composables/useOnceFlag';
-import { errorMessage } from '@/lib/api';
-import { formatMoney } from '@/lib/budget';
-import { formatCalendarDate, parseMonth } from '@/lib/calendar';
+import { ApiError, errorMessage } from '@/lib/api';
+import { parseMonth } from '@/lib/calendar';
 import { focusAnchor, stripDeepLink } from '@/lib/focusAnchor';
 import type {
     AddTransactionInput,
@@ -68,7 +66,7 @@ import type {
     PickerEnvelope,
 } from '@/lib/ledgerApi';
 import { envelopes as envelopesRoute, ledger as ledgerRoute } from '@/routes';
-import type { ResourcePermission, Transaction } from '@/types';
+import type { ResourcePermission } from '@/types';
 
 defineOptions({
     layout: {
@@ -77,7 +75,6 @@ defineOptions({
 });
 
 const { t } = useI18n();
-const { locale } = useLocale();
 
 // --- state -----------------------------------------------------------------
 const isoToday = (): string => {
@@ -356,6 +353,15 @@ const reopenLedger = useReopenLedger();
 const deleteLedger = useDeleteLedger();
 const addTransaction = useAddTransaction(ledgerId);
 const deleteTransaction = useDeleteTransaction(ledgerId);
+const restoreTransaction = useRestoreTransaction({
+    onSuccess: () => toast.success(t('ledger.toast.transactionRestored')),
+    // A toast kept open (hovered, hidden tab) can outlive the server's undo
+    // window: once purged, the entry is gone (404).
+    onError: (e) =>
+        e instanceof ApiError && e.status === 404
+            ? toast.error(t('ledger.error.restoreExpired'))
+            : fail(e),
+});
 const setLedgerShare = useSetLedgerShare();
 const removeLedgerShare = useRemoveLedgerShare();
 const transferLedgerOwnership = useTransferLedgerOwnership();
@@ -561,55 +567,17 @@ const onAddTransaction = (input: AddTransactionInput) => {
 
 const pendingTransactionId = ref<number | null>(null);
 
-// Deleting a transaction cannot be undone: confirm it, naming the entry.
-const transactionToDelete = ref<Transaction | null>(null);
-const confirmingTransactionDelete = ref(false);
-
-const onRemoveTransaction = (transactionId: number) => {
-    transactionToDelete.value =
-        transactions.value.find((tx) => tx.id === transactionId) ?? null;
-    confirmingTransactionDelete.value = transactionToDelete.value !== null;
-};
-
-const transactionSummary = computed(() => {
-    const tx = transactionToDelete.value;
-    if (tx === null) {
-        return '';
-    }
-    const date = formatCalendarDate(tx.event_at, locale.value, {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-    });
-    // A masked amount is never revealed, not even in the confirmation.
-    return tx.masked || tx.amount === null
-        ? t('ledger.deleteTransaction.summaryMasked', {
-              envelope: tx.name,
-              date,
-          })
-        : t('ledger.deleteTransaction.summary', {
-              envelope: tx.name,
-              date,
-              amount: formatMoney(tx.amount, currency.value, locale.value),
-          });
-});
+// Deleting needs no confirmation: the toast offers an undo instead
+// (docs/undoable-deletion.md).
+/** The undo toast stays at least 30 s; the server window is longer (3 min). */
+const UNDO_TOAST_DURATION_MS = 30_000;
 
 const transactionTable =
     useTemplateRef<InstanceType<typeof TransactionTable>>('transactionTable');
-/** The deleted row's trash button is gone: focus returns to the table. */
-let refocusTable = false;
 
-const onDeleteDialogCloseFocus = (event: Event) => {
-    if (refocusTable) {
-        refocusTable = false;
-        event.preventDefault();
-        transactionTable.value?.focus();
-    }
-};
-
-const confirmRemoveTransaction = () => {
-    const tx = transactionToDelete.value;
-    if (tx === null) {
+const onRemoveTransaction = (transactionId: number) => {
+    const tx = transactions.value.find((row) => row.id === transactionId);
+    if (tx === undefined || pendingTransactionId.value !== null) {
         return;
     }
     pendingTransactionId.value = tx.id;
@@ -617,9 +585,27 @@ const confirmRemoveTransaction = () => {
         { transactionId: tx.id },
         {
             onSuccess: () => {
-                refocusTable = true;
-                confirmingTransactionDelete.value = false;
-                toast.success(t('ledger.toast.transactionDeleted'));
+                // The deleted row's trash button goes away: focus returns to
+                // the table, not <body>, unless the user already moved on.
+                const active = document.activeElement;
+                if (
+                    active === null ||
+                    active === document.body ||
+                    transactionTable.value?.contains(active)
+                ) {
+                    transactionTable.value?.focus();
+                }
+                toast.success(t('ledger.toast.transactionDeleted'), {
+                    duration: UNDO_TOAST_DURATION_MS,
+                    action: {
+                        label: t('ledger.toast.undo'),
+                        onClick: () =>
+                            restoreTransaction.mutate({
+                                transactionId: tx.id,
+                                ledgerId: tx.ledger_id,
+                            }),
+                    },
+                });
             },
             onSettled: () => {
                 pendingTransactionId.value = null;
@@ -912,43 +898,6 @@ const confirmRemoveTransaction = () => {
             @revoke="onRevokeShare"
             @transfer="onTransferOwnership"
         />
-
-        <Dialog
-            :open="confirmingTransactionDelete"
-            @update:open="confirmingTransactionDelete = $event"
-        >
-            <DialogContent
-                class="sm:max-w-md"
-                @close-auto-focus="onDeleteDialogCloseFocus"
-            >
-                <DialogHeader>
-                    <DialogTitle>{{
-                        $t('ledger.deleteTransaction.title')
-                    }}</DialogTitle>
-                    <DialogDescription>
-                        {{ transactionSummary }}
-                        {{ $t('ledger.deleteTransaction.description') }}
-                    </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                    <Button
-                        variant="ghost"
-                        @click="confirmingTransactionDelete = false"
-                        >{{
-                            $t('common.actions.cancel')
-                        }}</Button
-                    >
-                    <Button
-                        variant="destructive"
-                        :disabled="deleteTransaction.isPending.value"
-                        @click="confirmRemoveTransaction"
-                    >
-                        <Spinner v-if="deleteTransaction.isPending.value" />
-                        {{ $t('ledger.deleteTransaction.confirm') }}
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
 
         <Dialog :open="showDelete" @update:open="showDelete = false">
             <DialogContent class="sm:max-w-md">

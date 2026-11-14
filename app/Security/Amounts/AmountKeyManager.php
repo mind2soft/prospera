@@ -199,7 +199,8 @@ final class AmountKeyManager
     {
         /** @var list<array{0: Builder<Model>, 1: string}> */
         return [
-            [Transaction::query()->whereIn('ledger_id', Ledger::query()->where('profile_id', $profileId)->select('id')), 'amount'],
+            // Pending deletions are restorable: they must stay decryptable.
+            [Transaction::withTrashed()->whereIn('ledger_id', Ledger::query()->where('profile_id', $profileId)->select('id')), 'amount'],
             [BudgetEnvelope::query()->whereIn('budget_id', Budget::query()->where('profile_id', $profileId)->select('id')), 'amount'],
             [Ledger::query()->where('profile_id', $profileId), 'starting_balance'],
         ];

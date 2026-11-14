@@ -26,4 +26,12 @@ class TransactionPolicy
 
         return $mayDelete ? Response::allow() : Response::denyWithStatus(403);
     }
+
+    /**
+     * Undoing a deletion follows the deletion rules (docs/ledger.md).
+     */
+    public function restore(User $user, Transaction $transaction): Response
+    {
+        return $this->delete($user, $transaction);
+    }
 }
