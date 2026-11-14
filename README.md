@@ -181,11 +181,14 @@ the database: without it, no amount can be read.** Rotate it with
 `key:generate`; `php artisan amounts:verify` checks that every amount
 decrypts.
 
-Beware: `composer setup` runs `php artisan key:generate` unconditionally. Run
-it against an existing database only after backing the current `APP_KEY` up
-and restoring it (or adding it to `APP_PREVIOUS_KEYS`) — a rotated key with
-no previous key left makes every amount undecryptable, permanently. A rotated
-key is caught early: production refuses HTTP requests at boot with an
+Beware: `php artisan key:generate` replaces the key in place — run it against
+an existing database only after backing the current `APP_KEY` up and restoring
+it (or adding it to `APP_PREVIOUS_KEYS`) — a rotated key with no previous key
+left makes every amount undecryptable, permanently. `composer setup` itself is
+safe to rerun: it generates an `APP_KEY` only when none is configured and the
+database is confirmed fresh (`app:ensure-key`); on an existing migrated
+database, or an uninspectable one, it refuses and aborts before migrating. A
+rotated key is caught early: production refuses HTTP requests at boot with an
 explicit, actionable error once the amount keys no longer unwrap, and the
 scheduled daily `amounts:verify` reports it in the logs even when no request
 touches amounts.
