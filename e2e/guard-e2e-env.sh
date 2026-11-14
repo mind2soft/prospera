@@ -6,8 +6,8 @@
 #      hand-edited or ambiguous file (missing target, duplicates, config
 #      cache) is refused outright.
 #   2. .env.e2e is a derived file ("from .env, once"): when it goes stale
-#      (its APP_KEY diverged from .env's — e.g. `composer setup`
-#      regenerated the key), it is re-derived so the documented invariant
+#      (its APP_KEY diverged from .env's — e.g. after an intentional
+#      APP_KEY rotation), it is re-derived so the documented invariant
 #      (same APP_KEY → identical signed links and Fortify behaviour) holds.
 #      Re-deriving is safe: the e2e database is disposable — serve.sh wipes
 #      it (migrate:fresh) on every boot.

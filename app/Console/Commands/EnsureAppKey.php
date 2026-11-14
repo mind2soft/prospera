@@ -48,7 +48,10 @@ class EnsureAppKey extends Command
             return self::FAILURE;
         }
 
-        $this->writeEnvKey('base64:'.base64_encode(random_bytes(self::KEY_BYTES)));
+        if (! $this->writeEnvKey('base64:'.base64_encode(random_bytes(self::KEY_BYTES)))) {
+            return self::FAILURE;
+        }
+
         $this->info('Fresh installation: generated a new APP_KEY in '.$this->envFilePath().'.');
 
         return self::SUCCESS;
@@ -58,7 +61,7 @@ class EnsureAppKey extends Command
      * The env file the generated key is written to. Injectable so tests can
      * run against a disposable environment instead of the developer's `.env`.
      */
-    protected function envFilePath(): string
+    public function envFilePath(): string
     {
         return base_path('.env');
     }
@@ -101,8 +104,14 @@ class EnsureAppKey extends Command
         if (is_array($connection) && ($connection['driver'] ?? null) === 'sqlite') {
             $database = $connection['database'] ?? null;
 
-            if (is_string($database) && $database !== ':memory:' && ! is_file($database)) {
-                return true;
+            if (is_string($database) && $database !== ':memory:') {
+                // Resolve like the connector does (PDO sqlite resolves
+                // relative paths against the process cwd), falling back to
+                // the project root so running artisan from another directory
+                // cannot reclassify an existing database as fresh.
+                if (! is_file(is_file($database) ? $database : base_path($database))) {
+                    return true;
+                }
             }
         }
 
@@ -110,7 +119,7 @@ class EnsureAppKey extends Command
             // Resolved through the connection manager at call time — not the
             // `Schema` facade, whose singleton pins whatever connection
             // resolved it first (e.g. the test runner's in-memory database).
-            return ! DB::connection()->getSchemaBuilder()->hasTable('migrations');
+            return ! DB::connection()->getSchemaBuilder()->hasTable((string) config('database.migrations.table', 'migrations'));
         } catch (QueryException|PDOException $exception) {
             $this->error('Refusing to generate an APP_KEY: the configured database could not be inspected ('.$exception->getMessage().').');
             $this->line('No files were changed. An unreadable database is not proof of a fresh installation — check the DB_* settings in .env and rerun `composer setup`.');
@@ -122,20 +131,40 @@ class EnsureAppKey extends Command
     /**
      * Write the `APP_KEY=` line into the env file, byte-preserving every
      * other line. The key value is never logged.
+     *
+     * Every APP_KEY occurrence is replaced (export/indented variants
+     * included): phpdotenv resolves duplicate definitions last-wins, so a
+     * stale empty line after the new one would silently win.
      */
-    private function writeEnvKey(string $key): void
+    private function writeEnvKey(string $key): bool
     {
         $path = $this->envFilePath();
         $contents = is_file($path) ? (string) file_get_contents($path) : '';
 
-        if (preg_match('/^APP_KEY=.*$/m', $contents) === 1) {
-            $updated = (string) preg_replace('/^APP_KEY=.*$/m', 'APP_KEY='.$key, $contents, 1);
+        if (preg_match('/^\s*(?:export\s+)?APP_KEY=/m', $contents) === 1) {
+            $updated = (string) preg_replace('/^\s*(?:export\s+)?APP_KEY=.*$/m', 'APP_KEY='.$key, $contents);
         } else {
             $updated = $contents === '' ? '' : $contents.(str_ends_with($contents, "\n") ? '' : "\n");
 
             $updated .= 'APP_KEY='.$key."\n";
         }
 
-        file_put_contents($path, $updated);
+        if (! $this->putEnvContents($path, $updated)) {
+            $this->error("Failed to write the generated APP_KEY to {$path} — check the file's permissions. No key was configured.");
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Persist the updated env file contents. Injectable so tests can
+     * exercise the write-failure branch (read-only filesystem, permissions)
+     * deterministically.
+     */
+    protected function putEnvContents(string $path, string $contents): bool
+    {
+        return file_put_contents($path, $contents) !== false;
     }
 }

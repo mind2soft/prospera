@@ -8,7 +8,9 @@ use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Security\Amounts\AmountKeyRing;
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -51,11 +53,15 @@ class EnsureAppKeyTest extends TestCase
                 parent::__construct();
             }
 
-            protected function envFilePath(): string
+            public function envFilePath(): string
             {
                 return $this->path;
             }
         });
+
+        // The disposable env file is only reached through the container
+        // binding above: fail loudly if a refactor ever bypasses it.
+        $this->assertSame($this->envFile, $this->app->make(EnsureAppKey::class)->envFilePath());
 
         // The `setup_tmp` sqlite connection is registered lazily by the
         // tests that opt into it (useTempDatabase/useUnreadableDatabase):
@@ -251,6 +257,59 @@ class EnsureAppKeyTest extends TestCase
         $this->assertEnvKeyUsable();
         $this->assertStringStartsWith("APP_ENV=local\n", (string) file_get_contents($this->envFile));
         $this->assertFileDoesNotExist($this->database);
+    }
+
+    public function test_duplicate_and_export_prefixed_app_key_lines_are_all_replaced(): void
+    {
+        // phpdotenv resolves duplicates last-wins, so every occurrence must
+        // carry the generated key — including export-prefixed variants.
+        file_put_contents($this->envFile, "APP_ENV=local\nAPP_KEY=\nexport APP_KEY=\nAPP_KEY=\n");
+        config(['app.key' => null]);
+        $this->useTempDatabase();
+
+        $this->artisan('app:ensure-key')->assertSuccessful();
+        $key = $this->assertEnvKeyUsable();
+        $this->assertSame("APP_ENV=local\nAPP_KEY={$key}\nAPP_KEY={$key}\nAPP_KEY={$key}\n", (string) file_get_contents($this->envFile));
+    }
+
+    public function test_a_failing_env_write_fails_the_command(): void
+    {
+        file_put_contents($this->envFile, "APP_ENV=local\nAPP_KEY=\n");
+        config(['app.key' => null]);
+        $this->useTempDatabase();
+        $envBefore = (string) file_get_contents($this->envFile);
+
+        // An unwritable target: the write itself fails, simulating a
+        // read-only filesystem or a permissions problem at generation time.
+        $this->app->bind(EnsureAppKey::class, fn (): EnsureAppKey => new class($this->envFile) extends EnsureAppKey
+        {
+            public function __construct(private readonly string $path)
+            {
+                parent::__construct();
+            }
+
+            public function envFilePath(): string
+            {
+                return $this->path;
+            }
+
+            protected function putEnvContents(string $path, string $contents): bool
+            {
+                unset($path, $contents);
+
+                return false;
+            }
+        });
+
+        $kernel = $this->app->make(Kernel::class);
+        $exit = $kernel->call('app:ensure-key');
+        $output = $kernel->output();
+
+        $this->assertSame(1, $exit);
+        $this->assertStringContainsString('Failed to write', $output);
+        $this->assertStringContainsString('No key was configured', $output);
+
+        $this->assertSame($envBefore, (string) file_get_contents($this->envFile));
     }
 
     /**
