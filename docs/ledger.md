@@ -56,8 +56,10 @@ type Transaction = {
     amount: number; // same number rule as for BudgetEnvelope
     event_at: string; // ISO date time, stored at 00:00:00
     created_at: string; // ISO date time
-    deleted_at: string | null; // server-only: pending deletion, restorable for 3 minutes (docs/undoable-deletion.md)
 };
+
+// Server-side only (never serialized): `deleted_at` marks a pending
+// deletion, restorable for 3 minutes (see docs/undoable-deletion.md).
 
 // The transaction payload also carries the envelope's display info:
 // { name, color, direction } and the entering user's { id, name }
@@ -171,7 +173,7 @@ data fetching.
 | `GET`    | `/api/ledgers/{ledger}/transactions`       | Transactions filtered by `from_date` and `to_date` (query params; at most 366 days, `422` on `to_date` otherwise). Rows on envelopes the requester lacks envelope-`viewer`+ permission on are **masked server-side**: `amount: null` + `masked: true` (metadata only — name, color, direction) |
 | `POST`   | `/api/ledgers/{ledger}/transactions`       | Add a transaction (`envelope_id`, `amount`, `event_at`) — ledger owner or contributor, who must also be contributor+ on the target envelope                                                                                                    |
 | `DELETE` | `/api/transactions/{transaction}`          | Delete a transaction (open ledgers only; ledger owner: any transaction; ledger contributor: own entries only; viewer: none). Soft delete: restorable for 3 minutes, then purged ([Undoable deletion](undoable-deletion.md))                    |
-| `POST`   | `/api/transactions/{transaction}/restore`  | Undo a deletion within the 3-minute window (same rules as the deletion; `422` past the window or on a closed ledger, `404` once purged)                                                                                                       |
+| `POST`   | `/api/transactions/{transaction}/restore`  | Undo a deletion within the 3-minute window (same rules as the deletion; authors still need contributor+ on the envelope; `422` past the window or on a closed ledger, `404` once purged)                                                     |
 | `GET`    | `/api/ledgers/{ledger}/shares`             | List shares — profile members with their effective permission and an `explicit` flag (`false` = implicit viewer, not revocable)                                                                                                               |
 | `POST`   | `/api/ledgers/{ledger}/shares`             | Assign a permission to a **profile member** (`user_id`, `permission` — `owner` is rejected with a validation error; use transfer-ownership)                                                                                                    |
 | `PATCH`  | `/api/ledgers/{ledger}/shares/{userId}`    | Change a member's permission (owner only; `owner` is rejected — use transfer-ownership)                                                                                                                                                        |

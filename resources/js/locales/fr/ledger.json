@@ -16,7 +16,8 @@
             "undo": "Annuler"
         },
         "error": {
-            "generic": "Une erreur est survenue."
+            "generic": "Une erreur est survenue.",
+            "restoreExpired": "Cette transaction ne peut plus être restaurée."
         },
         "loadError": "Vos grands livres n'ont pas pu être chargés.",
         "empty": {

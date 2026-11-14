@@ -59,7 +59,7 @@ import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useLocale } from '@/composables/useLocale';
 import { useOnboardingJourney } from '@/composables/useOnboardingJourney';
 import { useOnceFlag } from '@/composables/useOnceFlag';
-import { errorMessage } from '@/lib/api';
+import { ApiError, errorMessage } from '@/lib/api';
 import { formatMoney } from '@/lib/budget';
 import { formatCalendarDate, parseMonth } from '@/lib/calendar';
 import { focusAnchor, stripDeepLink } from '@/lib/focusAnchor';
@@ -359,7 +359,12 @@ const addTransaction = useAddTransaction(ledgerId);
 const deleteTransaction = useDeleteTransaction(ledgerId);
 const restoreTransaction = useRestoreTransaction({
     onSuccess: () => toast.success(t('ledger.toast.transactionRestored')),
-    onError: (e) => fail(e),
+    // A toast kept open (hovered, hidden tab) can outlive the server's undo
+    // window: once purged, the entry is gone (404).
+    onError: (e) =>
+        e instanceof ApiError && e.status === 404
+            ? toast.error(t('ledger.error.restoreExpired'))
+            : fail(e),
 });
 const setLedgerShare = useSetLedgerShare();
 const removeLedgerShare = useRemoveLedgerShare();

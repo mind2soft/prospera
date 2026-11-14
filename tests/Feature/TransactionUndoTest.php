@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Actions\DeleteAccount;
+use App\Models\Budget;
+use App\Models\DashboardWidget;
 use App\Models\Envelope;
+use App\Models\EnvelopePermission;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
 use App\Models\Transaction;
@@ -137,6 +140,7 @@ class TransactionUndoTest extends TestCase
     public function test_restoring_follows_the_deletion_rules(): void
     {
         $this->ledger->permissions()->create(['user_id' => $this->member->id, 'permission' => 'contributor']);
+        EnvelopePermission::create(['envelope_id' => $this->envelope->id, 'user_id' => $this->member->id, 'permission' => 'contributor']);
         $ownerEntry = $this->record($this->owner);
         $memberEntry = $this->record($this->member);
         $ownerEntry->delete();
@@ -312,9 +316,11 @@ class TransactionUndoTest extends TestCase
 
         app(DeleteAccount::class)->handle($this->member);
 
+        // The live entry keeps the envelope in use: it goes to the profile
+        // owner. The pending deletion is purged when the membership ends.
         $this->assertSame($this->owner->id, $envelope->refresh()->user_id);
         $this->assertNotSoftDeleted('transactions', ['id' => $live->id]);
-        $this->assertSoftDeleted('transactions', ['id' => $pending->id]);
+        $this->assertDatabaseMissing('transactions', ['id' => $pending->id]);
     }
 
     public function test_key_rotation_re_encrypts_pending_deletions(): void
@@ -332,5 +338,136 @@ class TransactionUndoTest extends TestCase
         $this->actingAs($this->owner)->postJson("/api/transactions/{$transaction->id}/restore")->assertNoContent();
         app(AmountKeyRing::class)->forget();
         $this->assertSame(-12.34, Transaction::query()->findOrFail($transaction->id)->amount);
+    }
+
+    public function test_an_author_who_lost_envelope_access_cannot_restore_their_entry(): void
+    {
+        $this->ledger->permissions()->create(['user_id' => $this->member->id, 'permission' => 'contributor']);
+        $grant = EnvelopePermission::create([
+            'envelope_id' => $this->envelope->id,
+            'user_id' => $this->member->id,
+            'permission' => 'contributor',
+        ]);
+        $entry = $this->record($this->member);
+        $this->actingAs($this->member)->deleteJson("/api/transactions/{$entry->id}")->assertNoContent();
+
+        $grant->delete();
+
+        $this->actingAs($this->member)->postJson("/api/transactions/{$entry->id}/restore")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('envelope_id');
+        $this->assertSoftDeleted('transactions', ['id' => $entry->id]);
+
+        // The ledger owner may still undo it: they delete (and so restore)
+        // any entry, whatever their envelope access.
+        $this->actingAs($this->owner)->postJson("/api/transactions/{$entry->id}/restore")->assertNoContent();
+        $this->assertNotSoftDeleted('transactions', ['id' => $entry->id]);
+    }
+
+    public function test_leaving_a_profile_purges_pending_deletions_on_the_members_envelopes(): void
+    {
+        $envelope = $this->member->envelopes()->create(['name' => 'Fun', 'type' => 'expense', 'color' => '#f43f5e']);
+        $pending = $this->record($this->member, envelope: $envelope);
+        $pending->delete();
+        $ownersPending = $this->record($this->owner);
+        $ownersPending->delete();
+
+        $this->actingAs($this->member)
+            ->deleteJson("/api/profiles/{$this->profile->id}/members/{$this->member->id}")
+            ->assertNoContent();
+
+        // Nothing references the envelope any more: it stays the member's,
+        // and the entry cannot come back pointing at it.
+        $this->assertSame($this->member->id, $envelope->refresh()->user_id);
+        $this->assertDatabaseMissing('transactions', ['id' => $pending->id]);
+        $this->actingAs($this->owner)->postJson("/api/transactions/{$pending->id}/restore")->assertNotFound();
+
+        // Other pending deletions in the profile are untouched.
+        $this->assertSoftDeleted('transactions', ['id' => $ownersPending->id]);
+    }
+
+    public function test_removing_a_member_purges_pending_deletions_but_hands_over_envelopes_in_use(): void
+    {
+        $envelope = $this->member->envelopes()->create(['name' => 'Fun', 'type' => 'expense', 'color' => '#f43f5e']);
+        $live = $this->record($this->member, envelope: $envelope);
+        $pending = $this->record($this->member, envelope: $envelope);
+        $pending->delete();
+
+        $this->actingAs($this->owner)
+            ->deleteJson("/api/profiles/{$this->profile->id}/members/{$this->member->id}")
+            ->assertNoContent();
+
+        $this->assertSame($this->owner->id, $envelope->refresh()->user_id);
+        $this->assertNotSoftDeleted('transactions', ['id' => $live->id]);
+        $this->assertDatabaseMissing('transactions', ['id' => $pending->id]);
+    }
+
+    public function test_key_pruning_re_encrypts_pending_deletions_on_retired_versions(): void
+    {
+        $transaction = $this->record();
+        $transaction->delete();
+
+        $this->artisan('amounts:rotate-keys', ['--profile' => [$this->profile->id]])->assertSuccessful();
+
+        // A straggler still on the retired v1 key.
+        $keyV1 = app(AmountKeyRing::class)->key($this->profile->id, 1);
+        $context = Transaction::amountContextFor('amount', (array) DB::table('transactions')->where('id', $transaction->id)->first(), $this->profile->id);
+        DB::table('transactions')->where('id', $transaction->id)->update(['amount' => (new AmountCipher)->encrypt(-4321, $keyV1, $context)]);
+
+        $this->travel(25)->hours();
+        $this->artisan('amounts:prune-keys')->assertSuccessful();
+
+        $raw = (string) DB::table('transactions')->where('id', $transaction->id)->value('amount');
+        $this->assertSame(2, AmountCipher::keyVersionOf($raw));
+        app(AmountKeyRing::class)->forget();
+        $this->assertSame(-43.21, Transaction::withTrashed()->findOrFail($transaction->id)->amount);
+    }
+
+    public function test_pending_deletions_are_left_out_of_dashboard_aggregates(): void
+    {
+        $this->travelTo('2026-06-20 12:00:00');
+        $this->record(amount: -10);
+        $this->record(amount: -90)->delete();
+
+        $budget = Budget::create([
+            'profile_id' => $this->profile->id,
+            'currency' => 'CAD',
+            'effective_year' => 2026,
+            'effective_month' => 6,
+            'published_at' => now(),
+        ]);
+        $budget->envelopes()->create(['envelope_id' => $this->envelope->id, 'amount' => -200, 'type' => 'fixed']);
+
+        $widget = DashboardWidget::create([
+            'user_id' => $this->owner->id,
+            'financial_profile_id' => $this->profile->id,
+            'type' => 'envelope_spending',
+            'title' => null,
+            'view_type' => 'single',
+            'column_width' => 3,
+            'period_type' => 'months',
+            'period_range' => 1,
+            'selection' => [['kind' => 'envelope', 'envelope_id' => $this->envelope->id]],
+            'sort_order' => 0,
+        ]);
+
+        $this->actingAs($this->owner)
+            ->getJson("/api/dashboard/{$this->profile->id}/widgets/{$widget->id}/data")
+            ->assertOk()
+            ->assertJsonPath('rows.0.spent', -10);
+    }
+
+    public function test_the_restore_window_and_the_purge_agree_on_the_boundary(): void
+    {
+        $transaction = $this->record();
+        $transaction->delete();
+
+        $this->travel(Transaction::UNDO_WINDOW_SECONDS - 1)->seconds();
+        $this->assertTrue($transaction->refresh()->isRestorable());
+        $this->assertSame(0, Transaction::purgeExpiredDeletions());
+
+        $this->travel(1)->seconds();
+        $this->assertFalse($transaction->refresh()->isRestorable());
+        $this->assertSame(1, Transaction::purgeExpiredDeletions());
     }
 }

@@ -46,7 +46,8 @@ Restore responses:
 | Not deleted (for example, a double click on Undo)     | `204`, no change                         |
 | Past the window                                       | `422` on `transaction`                   |
 | Ledger closed in the meantime                         | `422` on `ledger` (closed is read-only)  |
-| Already purged                                        | `404`                                    |
+| Author lost contributor access to the envelope        | `422` on `envelope_id`                   |
+| Already purged                                        | `404` (the UI says it can no longer be restored) |
 | Caller may not delete it (viewer, others' entries)    | `403`, or `404` without ledger access    |
 
 ## Rules for any soft-deleted resource
@@ -61,6 +62,15 @@ gone. Every new use of the pattern must check the following:
   `DB::table()` query on the table needs `whereNull('deleted_at')`. For
   transactions, this is the referencing-profile lookup in
   `App\Actions\DeleteAccount`.
+- **Existence checks that drive decisions.** Eloquent relationship checks
+  (`whereHas`, `exists()`) now ignore pending deletions. When such a check
+  decides ownership or access, a row restored afterwards can contradict the
+  decision. Purge the pending rows the decision depends on first. For
+  transactions: when a member leaves a profile (or is removed, or deletes
+  their account), `FinancialProfile::removeMember()` purges the pending
+  deletions in the profile's ledgers on the member's envelopes. It does this
+  before it hands the envelopes still in use over to the profile owner and
+  prunes the envelope grants.
 - **Encryption at rest.** Key rotation, key pruning and `amounts:verify` must
   include pending deletions (`withTrashed()` in `AmountKeyManager::sources()`).
   Otherwise, a key version could be pruned while a restorable row still uses
@@ -79,7 +89,9 @@ gone. Every new use of the pattern must check the following:
 - **Cascading deletes.** A parent deleted on purpose has nothing left to undo.
   Deleting a ledger force-deletes its transactions, pending deletions included.
 - **Re-check on restore.** A restore is a write. It re-runs the delete
-  authorization and the read-only checks, such as a closed ledger.
+  authorization and the read-only checks, such as a closed ledger. Authors
+  restoring their own entry must still be allowed to record it, so they need
+  contributor+ on the envelope.
 - **Privacy.** Pending deletions are never listed or exported, and the purge
   removes them for good within minutes. They are not a recycle bin.
 
@@ -96,3 +108,6 @@ gone. Every new use of the pattern must check the following:
   does, so the feedback still appears after the user navigates away.
 - On success, invalidate the same queries as the deletion: transactions,
   onboarding progress and dashboard data.
+- vue-sonner pauses the toast timer on hover and in hidden tabs, so the Undo
+  button can outlive the server window. A `404` (already purged) shows "This
+  transaction can no longer be restored."; a `422` shows the server's message.

@@ -16,7 +16,8 @@
             "undo": "Undo"
         },
         "error": {
-            "generic": "Something went wrong."
+            "generic": "Something went wrong.",
+            "restoreExpired": "This transaction can no longer be restored."
         },
         "loadError": "Your ledgers could not be loaded.",
         "empty": {

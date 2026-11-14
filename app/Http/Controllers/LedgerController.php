@@ -328,17 +328,19 @@ class LedgerController extends Controller
 
     /**
      * Undo a transaction deletion, within the undo window. Same rules as the
-     * deletion; restoring an entry that is not deleted is a no-op.
+     * deletion; restoring an entry that is not deleted is a no-op. Authors
+     * restoring their own entry must still be allowed to record against the
+     * envelope, as if they entered it again.
      */
-    public function restoreTransaction(Transaction $transaction): JsonResponse
+    public function restoreTransaction(Request $request, Transaction $transaction): JsonResponse
     {
         $this->authorizeTransactionChange($transaction, 'restore');
 
-        DB::transaction(function () use ($transaction): void {
+        DB::transaction(function () use ($request, $transaction): void {
             // The shared lock serializes with the envelope's deletion or
             // direction change, which purge its pending deletions: the row
             // is re-read under it (docs/undoable-deletion.md).
-            Envelope::query()->whereKey($transaction->envelope_id)->sharedLock()->first();
+            $envelope = Envelope::query()->whereKey($transaction->envelope_id)->sharedLock()->first();
 
             $pending = Transaction::onlyTrashed()->whereKey($transaction->id)->lockForUpdate()->first();
 
@@ -352,6 +354,13 @@ class LedgerController extends Controller
             if (! $pending->isRestorable()) {
                 throw ValidationException::withMessages([
                     'transaction' => __('This transaction can no longer be restored.'),
+                ]);
+            }
+
+            if ($pending->user_id === $request->user()->id
+                && ($envelope === null || $request->user()->cannot('use', $envelope))) {
+                throw ValidationException::withMessages([
+                    'envelope_id' => __('You need contributor access to this envelope to record transactions.'),
                 ]);
             }
 

@@ -101,6 +101,21 @@ class Transaction extends Model implements HasEncryptedAmounts
         return static::onlyTrashed()->whereIn('envelope_id', $envelopeIds)->forceDelete();
     }
 
+    /**
+     * Permanently delete the pending deletions in the profile's ledgers on
+     * the member's envelopes, before the member leaves the profile: the
+     * envelope hand-over and grant pruning only see live references, and a
+     * row restored afterwards would point at an envelope the profile no
+     * longer controls.
+     */
+    public static function purgeDeletionsOnMemberEnvelopes(FinancialProfile $profile, User $member): int
+    {
+        return static::onlyTrashed()
+            ->whereIn('ledger_id', Ledger::query()->where('profile_id', $profile->id)->select('id'))
+            ->whereIn('envelope_id', Envelope::query()->where('user_id', $member->id)->select('id'))
+            ->forceDelete();
+    }
+
     public static function encryptedAmountColumns(): array
     {
         return ['amount'];
