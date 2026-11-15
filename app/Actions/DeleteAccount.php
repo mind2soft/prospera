@@ -2,6 +2,7 @@
 
 namespace App\Actions;
 
+use App\Models\DeletedAccountEmail;
 use App\Models\FinancialProfileInvite;
 use App\Models\Transaction;
 use App\Models\User;
@@ -64,6 +65,23 @@ class DeleteAccount
             // An invite reserved by this (unverified) account is released
             // instead of cascading away: the owner's invite stays usable.
             FinancialProfileInvite::releaseReservationOf($user);
+
+            // The deleted account's email is blacklisted so it cannot be
+            // recycled (issue #71): neither by a new registration, nor as
+            // another account's email address. Matched case-insensitively,
+            // like every email lookup; written inside the transaction,
+            // before the user row is removed, so the self-service deletion
+            // and the scheduled prune of unverified accounts share this
+            // path.
+            $blacklisted = DeletedAccountEmail::query()->forEmail($user->email)->first();
+
+            if ($blacklisted === null) {
+                DeletedAccountEmail::create([
+                    'email' => $user->email,
+                    'account_created_at' => $user->created_at,
+                    'account_deleted_at' => now(),
+                ]);
+            }
 
             $user->delete();
         });

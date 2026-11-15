@@ -188,6 +188,17 @@ communicates to users — keep the two in sync:
   deleted (one that verified or created data meanwhile is kept) and deleted
   in its own transaction: a failure is reported, skipped and retried by the
   next run;
+- **the deleted account's email address is blacklisted** (issue #71): it is
+  recorded in a dedicated `deleted_account_emails` table, with the dates the
+  account was created and deleted, and can no longer be used to register a
+  new account **nor as another account's email address** — otherwise a
+  blacklisted address could be claimed by simply updating an existing
+  account. Matching is case-insensitive, like every email lookup. There is
+  no self-service release: a legitimate owner who wants their email back
+  must contact the operator, who removes the entry after verifying their
+  identity out of band. A direct consequence: an invite issued to a
+  blacklisted address can never be completed and stays pending until it
+  expires or is pruned — issue it again to another address instead;
 - **the user is responsible for revoking sharing permissions before deleting
   their account** if they do not want a financial profile to keep existing —
   and be transferred — without them.

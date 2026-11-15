@@ -1,5 +1,5 @@
 ---
-last-updated: 2026-11-09
+last-updated: 2026-11-15
 ---
 
 > **Document en évolution.** Cette politique est un document évolutif : elle
@@ -130,6 +130,14 @@ Lorsque vous supprimez votre compte :
 **Il vous incombe de révoquer les permissions de partage avant de supprimer
 votre compte** si vous ne voulez pas qu'un profil financier continue
 d'exister — et soit transféré — sans vous.
+
+Votre adresse courriel est **mise sur liste noire** : elle ne peut plus être
+utilisée pour créer un nouveau compte, ni comme adresse courriel d'un autre
+compte, de sorte que personne — vous inclus — ne peut recréer un compte avec.
+L'entrée ne conserve que l'adresse courriel et les dates de création et de
+suppression du compte. Si vous êtes le propriétaire légitime de l'adresse et
+souhaitez la réutiliser, contactez l'opérateur afin que l'entrée soit retirée
+après vérification de votre identité hors bande.
 
 ## Espaces réservés — à compléter
 

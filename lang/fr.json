@@ -55,6 +55,8 @@
     "The widget view type is invalid.": "Le type d'affichage du widget est invalide.",
     "This budget is already published.": "Ce budget est déjà publié.",
     "This budget is already shared with this user.": "Ce budget est déjà partagé avec cet utilisateur.",
+    "This email address is invalid.": "Cette adresse courriel est invalide.",
+
     "This envelope has transactions and cannot be deleted.": "Cette enveloppe a des transactions et ne peut pas être supprimée.",
     "This envelope is already assigned to the budget.": "Cette enveloppe est déjà assignée au budget.",
     "This envelope is already shared with this user.": "Cette enveloppe est déjà partagée avec cet utilisateur.",

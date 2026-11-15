@@ -1,5 +1,5 @@
 ---
-last-updated: 2026-11-09
+last-updated: 2026-11-15
 ---
 
 > **Work in progress.** This policy is a living document: it will evolve as
@@ -121,6 +121,14 @@ When you delete your account:
 **You are responsible for revoking sharing permissions before deleting your
 account** if you do not want a financial profile to keep existing — and be
 transferred — without you.
+
+Your email address is **blacklisted**: it can no longer be used to create a
+new account, or as another account's email address, so nobody — including
+you — can re-create an account with it. The record keeps only the email
+address and the dates the account was created and deleted. If you are the
+legitimate owner of the address and want to use it again, contact the
+operator to have the entry released after your identity is verified out of
+band.
 
 ## Placeholders — to be completed
 
