@@ -109,42 +109,63 @@ class LedgerController extends Controller
     }
 
     /**
-     * Delete a ledger and ALL of its transactions (cascade).
+     * Delete a ledger and ALL of its transactions (cascade). The deletion
+     * takes the ledger's serialization lock, consistent with the other
+     * ledger state changes (docs/ledger.md).
      */
     public function destroy(Ledger $ledger): JsonResponse
     {
         $this->authorize('delete', $ledger);
 
-        $ledger->deleteWithTransactions();
+        DB::transaction(function () use ($ledger): void {
+            $this->lockLedger($ledger->id)->deleteWithTransactions();
+        });
 
         return response()->json(status: 204);
     }
 
     /**
      * Close a ledger: it becomes read-only.
+     *
+     * Close serializes on the same ledger lock as transaction writers: a
+     * write in flight commits before the close is applied, and a close
+     * committed first rejects subsequent writes (docs/ledger.md).
      */
     public function close(Request $request, Ledger $ledger): JsonResponse
     {
         $this->authorize('update', $ledger);
 
-        $ledger->update(['closed_at' => now()]);
+        $locked = DB::transaction(function () use ($ledger): Ledger {
+            $locked = $this->lockLedger($ledger->id);
+
+            $locked->update(['closed_at' => now()]);
+
+            return $locked;
+        });
 
         return response()->json([
-            'ledger' => $this->serializeLedger($ledger, $request->user()),
+            'ledger' => $this->serializeLedger($locked, $request->user()),
         ]);
     }
 
     /**
-     * Re-open a closed ledger.
+     * Re-open a closed ledger. Re-opening takes the same serialization lock
+     * as close and the transaction writes (docs/ledger.md).
      */
     public function reopen(Request $request, Ledger $ledger): JsonResponse
     {
         $this->authorize('update', $ledger);
 
-        $ledger->update(['closed_at' => null]);
+        $locked = DB::transaction(function () use ($ledger): Ledger {
+            $locked = $this->lockLedger($ledger->id);
+
+            $locked->update(['closed_at' => null]);
+
+            return $locked;
+        });
 
         return response()->json([
-            'ledger' => $this->serializeLedger($ledger, $request->user()),
+            'ledger' => $this->serializeLedger($locked, $request->user()),
         ]);
     }
 
@@ -400,12 +421,21 @@ class LedgerController extends Controller
         }
 
         $transaction = DB::transaction(function () use ($request, $ledger, $envelope, $validated, $eventAt): Transaction {
+            // The ledger's read-only state is re-read under the ledger's
+            // serialization lock: the route-bound model is only an
+            // authorization entry point, and a close committed in the
+            // meantime must win over this write (docs/ledger.md).
+            $lockedLedger = $this->lockLedger($ledger->id);
+            $this->ensureOpen($lockedLedger);
+
             // The sign comes from the direction read under a shared lock, so
             // a concurrent direction change (blocked once the envelope is
-            // referenced) cannot slip in between (docs/envelope.md).
+            // referenced) cannot slip in between (docs/envelope.md). The
+            // envelope lock is acquired after the ledger lock — the
+            // documented lock order (docs/ledger.md).
             $direction = Envelope::query()->whereKey($envelope->id)->sharedLock()->firstOrFail();
 
-            return $ledger->transactions()->create([
+            return $lockedLedger->transactions()->create([
                 'user_id' => $request->user()->id,
                 'envelope_id' => $envelope->id,
                 'amount' => $direction->signedAmount((float) $validated['amount']),
@@ -436,7 +466,13 @@ class LedgerController extends Controller
     {
         $this->authorizeTransactionChange($transaction, 'delete');
 
-        $transaction->delete();
+        DB::transaction(function () use ($transaction): void {
+            // Recheck the read-only state under the ledger's serialization
+            // lock: the route-bound ledger may be stale (docs/ledger.md).
+            $this->ensureOpen($this->lockLedger($transaction->ledger_id));
+
+            $transaction->delete();
+        });
 
         return response()->json(status: 204);
     }
@@ -452,9 +488,17 @@ class LedgerController extends Controller
         $this->authorizeTransactionChange($transaction, 'restore');
 
         DB::transaction(function () use ($request, $transaction): void {
+            // The ledger's read-only state is re-read under the ledger's
+            // serialization lock before the restore proceeds
+            // (docs/ledger.md).
+            $lockedLedger = $this->lockLedger($transaction->ledger_id);
+            $this->ensureOpen($lockedLedger);
+
             // The shared lock serializes with the envelope's deletion or
             // direction change, which purge its pending deletions: the row
-            // is re-read under it (docs/undoable-deletion.md).
+            // is re-read under it (docs/undoable-deletion.md). The envelope
+            // and transaction locks follow the ledger lock — the documented
+            // lock order (docs/ledger.md).
             $envelope = Envelope::query()->whereKey($transaction->envelope_id)->sharedLock()->first();
 
             $pending = Transaction::onlyTrashed()->whereKey($transaction->id)->lockForUpdate()->first();
@@ -487,7 +531,10 @@ class LedgerController extends Controller
 
     /**
      * Deleting and restoring entries: the ledger must be visible (404
-     * otherwise) and open, then the transaction policy decides.
+     * otherwise) and open, then the transaction policy decides. The state
+     * checks here are a fast path against the route-bound model; the
+     * authoritative read-only recheck happens under the ledger's
+     * serialization lock inside the write transaction (docs/ledger.md).
      */
     private function authorizeTransactionChange(Transaction $transaction, string $ability): void
     {
@@ -495,13 +542,42 @@ class LedgerController extends Controller
 
         $this->authorize('view', $ledger);
 
+        $this->ensureOpen($ledger);
+
+        $this->authorize($ability, $transaction);
+    }
+
+    /**
+     * The ledger's serialization lock: every close/reopen and transaction
+     * create/delete/restore acquires the ledger row lock first, then
+     * re-reads the read-only state under it — the route-bound model is only
+     * an ID and authorization entry point, not a state snapshot
+     * (docs/ledger.md).
+     *
+     * Documented lock order, lowest first: ledger row (exclusive, here) →
+     * envelope row (shared, direction changes and restore integrity) →
+     * transaction row (exclusive, restore's pending re-read). No other path
+     * acquires the ledger lock after another resource — profile locks (key
+     * rotation, budget publishing) and envelope locks (member departure,
+     * envelope deletion) never wait on a ledger — so the order cannot
+     * deadlock.
+     */
+    private function lockLedger(int $ledgerId): Ledger
+    {
+        return Ledger::query()->whereKey($ledgerId)->lockForUpdate()->firstOrFail();
+    }
+
+    /**
+     * Rejects a write on a ledger that is closed as of the moment the
+     * serialization lock is held (docs/ledger.md).
+     */
+    private function ensureOpen(Ledger $ledger): void
+    {
         if ($ledger->isClosed()) {
             throw ValidationException::withMessages([
                 'ledger' => __('This ledger is closed and read-only.'),
             ]);
         }
-
-        $this->authorize($ability, $transaction);
     }
 
     protected function sharedResource(Model $resource): Ledger

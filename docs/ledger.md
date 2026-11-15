@@ -117,6 +117,14 @@ the server from the decrypted amounts.
 - **Closing** is a manual action (ledger actions menu). Closed ledgers are
   read-only: transactions can no longer be added or deleted. A closed ledger
   can be re-opened.
+- **Serialization** — close/reopen and every transaction create, delete and
+  restore acquire the ledger's row lock (`SELECT … FOR UPDATE`) first and
+  re-read the read-only state under it: a close that commits first rejects
+  subsequent writes with the read-only validation error, while a write in
+  flight commits before a concurrent close is applied. The documented lock
+  order is ledger row (exclusive) → envelope row (shared) → transaction row
+  (exclusive); no other operation acquires the ledger lock after another
+  resource, so the order cannot deadlock.
 - **Deleting a ledger deletes ALL of its transactions** (cascade), pending
   deletions included. The UI always warns about this.
 

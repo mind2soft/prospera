@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\BudgetController;
+use App\Http\Controllers\LedgerController;
 use App\Models\Budget;
 use App\Models\BudgetPermission;
 use App\Models\Envelope;
@@ -544,6 +545,124 @@ class LedgerTest extends TestCase
 
         $this->actingAs($this->user)->deleteJson("/api/transactions/{$transaction->id}")
             ->assertUnprocessable()->assertJsonValidationErrors('ledger');
+    }
+
+    /**
+     * The deterministic stand-in for a concurrent close: route binding
+     * resolves the ledger, then a separate model instance commits the close
+     * before the controller runs — the write must be rejected even though
+     * the route model it received still reports open (issue #80).
+     */
+    private function bindStaleClosedLedger(Ledger $ledger): void
+    {
+        $this->app['router']->bind('ledger', function (string $id) use ($ledger): Ledger {
+            $bound = Ledger::query()->whereKey($id)->firstOrFail();
+
+            Ledger::query()->whereKey($ledger->id)->firstOrFail()->update(['closed_at' => now()]);
+
+            return $bound;
+        });
+    }
+
+    /**
+     * The deterministic stand-in for a concurrent close on the transaction
+     * routes: route binding resolves the transaction carrying the ledger
+     * snapshot from before the close, then a separate model instance
+     * commits the close — the write must be re-read under the ledger lock
+     * instead of trusting either stale snapshot (issue #80).
+     */
+    private function bindStaleClosedTransaction(Transaction $transaction): void
+    {
+        $this->app['router']->bind('transaction', function (string $id) use ($transaction): Transaction {
+            $bound = Transaction::withTrashed()->whereKey($id)->firstOrFail();
+
+            $staleLedger = Ledger::query()->whereKey($transaction->ledger_id)->firstOrFail();
+
+            Ledger::query()->whereKey($transaction->ledger_id)->firstOrFail()->update(['closed_at' => now()]);
+
+            return $bound->setRelation('ledger', $staleLedger);
+        });
+    }
+
+    public function test_a_transaction_cannot_be_added_when_the_ledger_is_closed_after_route_binding(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->createEnvelope('Food');
+
+        // Control: the same route with a freshly bound open ledger records
+        // the transaction, so the rejections below come from the committed
+        // close, not the fixture.
+        $this->app['router']->bind('ledger', fn (string $id): Ledger => Ledger::query()->whereKey($id)->firstOrFail());
+        Route::middleware(['web', 'auth'])
+            ->post('/__stale-close/{ledger}/transactions', [LedgerController::class, 'addTransaction']);
+
+        $this->actingAs($this->user)->postJson('/__stale-close/'.$ledger->id.'/transactions', [
+            'envelope_id' => $envelope->id,
+            'amount' => 10,
+            'event_at' => '2026-06-15',
+        ])->assertCreated();
+
+        $this->assertDatabaseCount('transactions', 1);
+
+        // The intervening close commits after the stale route model was
+        // resolved.
+        $this->bindStaleClosedLedger($ledger);
+
+        $this->actingAs($this->user)->postJson('/__stale-close/'.$ledger->id.'/transactions', [
+            'envelope_id' => $envelope->id,
+            'amount' => 20,
+            'event_at' => '2026-06-16',
+        ])->assertUnprocessable()->assertJsonValidationErrors('ledger');
+
+        // The write was rejected: the closed ledger stayed read-only.
+        $this->assertDatabaseCount('transactions', 1);
+        $this->assertNotNull($ledger->refresh()->closed_at);
+        $this->assertDatabaseMissing('transactions', ['event_at' => '2026-06-16 00:00:00']);
+    }
+
+    public function test_a_transaction_cannot_be_deleted_when_the_ledger_is_closed_after_route_binding(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->createEnvelope('Food');
+        $transaction = $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -10,
+            'event_at' => '2026-06-15 00:00:00',
+        ]);
+
+        $this->bindStaleClosedTransaction($transaction);
+
+        Route::middleware(['web', 'auth'])
+            ->delete('/__stale-close/transactions/{transaction}', [LedgerController::class, 'destroyTransaction']);
+
+        $this->actingAs($this->user)->deleteJson('/__stale-close/transactions/'.$transaction->id)
+            ->assertUnprocessable()->assertJsonValidationErrors('ledger');
+
+        $this->assertDatabaseHas('transactions', ['id' => $transaction->id, 'deleted_at' => null]);
+    }
+
+    public function test_a_transaction_cannot_be_restored_when_the_ledger_is_closed_after_route_binding(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->createEnvelope('Food');
+        $transaction = $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -10,
+            'event_at' => '2026-06-15 00:00:00',
+        ]);
+        $transaction->delete();
+
+        $this->bindStaleClosedTransaction($transaction);
+
+        Route::middleware(['web', 'auth'])
+            ->post('/__stale-close/transactions/{transaction}/restore', [LedgerController::class, 'restoreTransaction']);
+
+        $this->actingAs($this->user)->postJson('/__stale-close/transactions/'.$transaction->id.'/restore')
+            ->assertUnprocessable()->assertJsonValidationErrors('ledger');
+
+        $this->assertDatabaseMissing('transactions', ['id' => $transaction->id, 'deleted_at' => null]);
     }
 
     public function test_a_transaction_can_be_deleted(): void
