@@ -161,10 +161,37 @@ the Share drawer):
 
 | Method   | Path                                                 | Description                                                                                                     |
 | -------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/api/dashboard/{profileId}/widgets`                 | Ordered widgets for (user, profile) — `404` for non-members; selections pruned of deleted envelopes             |
-| `PUT`    | `/api/dashboard/{profileId}/widgets`                 | Full layout save (ordered list; each member manages **their own** dashboard for that profile; validates types, ranges, widths, one-occurrence-per-envelope selection, flat groups). Widgets carrying their id are updated **in place** (ids stay stable, so in-flight widget-data requests keep resolving); entries without an id are created; ids missing from the payload are removed |
-| `DELETE` | `/api/dashboard/{profileId}/widgets/{widget}`        | Remove one widget (own only; `404` otherwise)                                                                    |
+| `GET`    | `/api/dashboard/{profileId}/widgets`                 | Ordered widgets for (user, profile) plus the layout's `revision` — `404` for non-members; selections pruned of deleted envelopes |
+| `PUT`    | `/api/dashboard/{profileId}/widgets`                 | Full layout save (ordered list; each member manages **their own** dashboard for that profile; validates types, ranges, widths, one-occurrence-per-envelope selection, flat groups). Requires `expected_revision` (see below). Widgets carrying their id are updated **in place** (ids stay stable, so in-flight widget-data requests keep resolving); entries without an id are created; ids missing from the payload are removed |
+| `DELETE` | `/api/dashboard/{profileId}/widgets/{widget}`        | Remove one widget (own only; `404` otherwise). Requires `expected_revision` as a query parameter; returns `{revision}` |
 | `GET`    | `/api/dashboard/{profileId}/widgets/{widget}/data`   | Server-computed aggregate payload for the widget (masked per permissions), with `period`/`selection` applied server-side; optional `timezone` query param (IANA) for "today" |
+
+### Layout revisions (concurrency guard)
+
+Every layout write is a compare-and-write on a per-`(user, profile)`
+revision (a durable `dashboard_layouts` row; it exists even for an empty
+layout — widget rows come and go, so they cannot hold the revision):
+
+- `GET` returns the current `revision`; every `PUT` save and `DELETE`
+  removal must carry it as `expected_revision`.
+- The check happens **under a row lock inside the write transaction**: the
+  first writer wins; a stale one is refused with **`409`** and no
+  mutations, so two tabs — or a stale autosave racing a newer save — can
+  never overwrite newer state (last-write-wins is not enough here). The 409
+  body carries the current `revision`.
+- The revision advances **exactly once per write** (including removing the
+  last widget).
+- A save payload id that does not resolve in the caller's own layout
+  (deleted elsewhere or foreign) is refused with `422` — a stale full PUT
+  cannot resurrect a removed widget under a new id, and another member's
+  widget existence is never exposed.
+- Client-side: saves are serialized per profile by
+  `lib/dashboardSaveQueue.ts` and each carries the revision it was captured
+  against; when a save settles, the queued save of the same profile adopts
+  the new revision. A 409 is never retried automatically — the client
+  refetches the canonical layout and drops its stale local edits (the
+  server's newer layout wins); a save queued behind an in-flight one is not
+  flushed as a known-stale write while leaving the page either.
 
 The widget data endpoint returns, per type:
 
@@ -198,10 +225,13 @@ type RadialData = {
 - Saved with **debounced autosave** (~600 ms) on every change (project
   convention: no save buttons); the layout is sent in full and the server
   assigns ids and order. Saves are serialized (one in flight, at most one
-  queued per profile) by `composables/useLayoutAutosave.ts`; leaving the
+  queued per profile) by `composables/useLayoutAutosave.ts`, each editing
+  against the layout revision it was captured from (above); leaving the
   page — another page, a reload or closing the tab — sends a pending edit
   right away (`useFlushOnLeave`, `keepalive` requests), and a failed save
-  shows an error toast. Removing widgets is destructive → confirmation.
+  shows an error toast (a refused stale save reconciles with the server's
+  layout instead of being re-sent). Removing widgets is destructive →
+  confirmation.
 - Widget data auto-refreshes **every 15 minutes** via vue Query
   `refetchInterval`, **paused when the tab is hidden**
   (`document.visibilityState`) so background tabs don't burn requests.

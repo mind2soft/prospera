@@ -25,7 +25,13 @@ class SaveDashboardLayoutRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'widgets' => ['required', 'array', 'max:'.DashboardLayoutValidator::MAX_WIDGETS],
+            // An empty layout is a valid save (removing every widget) — the
+            // list must be present, not non-empty.
+            'widgets' => ['present', 'array', 'max:'.DashboardLayoutValidator::MAX_WIDGETS],
+            // The layout revision the client edited against (issue #55): a
+            // stale value is refused without changing data, so an older save
+            // can never overwrite a newer layout.
+            'expected_revision' => ['required', 'integer', 'min:1'],
         ];
     }
 
