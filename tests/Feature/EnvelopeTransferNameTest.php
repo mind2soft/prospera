@@ -126,7 +126,7 @@ class EnvelopeTransferNameTest extends TestCase
         $envelope->refresh();
 
         $this->assertLessThanOrEqual(Envelope::MAX_NAME_LENGTH, mb_strlen($envelope->name));
-        $this->assertSame(str_repeat('é', 30), mb_substr($envelope->name, 0, 30));
+        $this->assertSame(str_repeat('é', 49).' (imported)', $envelope->name);
     }
 
     public function test_wildcard_characters_in_names_do_not_cause_false_collisions(): void

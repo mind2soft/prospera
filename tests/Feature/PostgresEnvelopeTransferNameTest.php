@@ -150,7 +150,7 @@ class PostgresEnvelopeTransferNameTest extends TestCase
             [$name, $email, 'password'],
         );
 
-        return User::query()->sole();
+        return User::query()->where('email', $email)->sole();
     }
 
     /** A 60-character name must survive a collision on real PostgreSQL. */
@@ -203,7 +203,7 @@ class PostgresEnvelopeTransferNameTest extends TestCase
      */
     public function test_a_concurrent_claim_of_the_chosen_name_is_retried_on_the_unique_violation(): void
     {
-        $target = $this->seedUser('Owner', 'owner@example.com');
+        $target = $this->seedUser('Target', 'target@example.com');
         $entrant = $this->seedUser('Entrant', 'entrant@example.com');
 
         $envelope = Envelope::create(['name' => 'Groceries', 'type' => 'expense', 'user_id' => $entrant->id]);
