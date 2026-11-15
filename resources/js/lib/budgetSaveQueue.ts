@@ -71,6 +71,11 @@ type IdentityState = {
      * re-edits to reconcile, so the other tab's change is not overwritten.
      */
     conflicted: boolean;
+    /**
+     * The pending debounce handle, or null when no generation is waiting to
+     * be sent (the timer was cancelled, fired, or the send went through a
+     * flush or the in-flight chain instead).
+     */
     timer: unknown;
     /** Settles when the identity has drained all work queued when read. */
     drained: Promise<void>;
@@ -152,7 +157,12 @@ export class BudgetSaveQueue {
         state.desired = amount;
         state.failed = false;
         state.conflicted = false;
-        state.timer = this.clock.schedule(() => this.send(state), this.delayMs);
+        state.timer = this.clock.schedule(() => {
+            // The debounce elapsed: the generation it carried is being sent
+            // now, so nothing is waiting on the timer any more.
+            state.timer = null;
+            this.send(state);
+        }, this.delayMs);
         this.identities.set(identityKey(budgetId, envelopeId), state);
         this.emit();
     }
@@ -240,23 +250,62 @@ export class BudgetSaveQueue {
      * waits until each identity drained its queue; false when one of them
      * failed. An identity that is only awaiting its in-flight request is
      * waited for without being sent again.
+     *
+     * #87: an edit typed while this flush drains must not slip past the
+     * caller's gate — after draining, any newly queued generation (a pending
+     * debounce timer or an in-flight save) is flushed again, until a pass
+     * finds nothing new to send. A failed save is not requeued here: it is
+     * retried by the *next* flush, so a persistent failure cannot spin this
+     * loop; the final check still refuses.
      */
     async flush(budgetId?: number): Promise<boolean> {
-        const states = [...this.identities.values()].filter(
-            (state) =>
-                (budgetId === undefined || state.budgetId === budgetId) &&
-                (state.active || state.desired !== state.acknowledged),
-        );
-        for (const state of states) {
-            this.clock.cancel(state.timer);
-            // A conflicted save is never resent by an automatic flush: the
-            // user re-edits to reconcile (the other tab's value must not be
-            // overwritten silently). Publish still refuses via `failed`.
-            if (!state.active && !state.conflicted) {
-                this.send(state);
+        for (;;) {
+            const states = [...this.identities.values()].filter(
+                (state) =>
+                    (budgetId === undefined || state.budgetId === budgetId) &&
+                    (state.active || state.desired !== state.acknowledged),
+            );
+            for (const state of states) {
+                this.clock.cancel(state.timer);
+                state.timer = null;
+                // A conflicted save is never resent by an automatic flush:
+                // the user re-edits to reconcile (the other tab's value must
+                // not be overwritten silently). Publish still refuses via
+                // `failed`.
+                if (!state.active && !state.conflicted) {
+                    this.send(state);
+                }
+            }
+            await Promise.all(states.map((state) => state.drained));
+
+            // #87: an edit typed while this flush drained must not slip
+            // past the caller's gate — re-scan for work that arrived late:
+            // a queued debounce generation or an in-flight save. A timer
+            // the in-flight chain left behind is cancelled: the chain is
+            // already persisting that generation. A failed save is not
+            // requeued here — it is retried by the *next* flush, so a
+            // persistent failure cannot spin this loop; the final check
+            // still refuses.
+            let arrivedLate = false;
+            for (const state of this.identities.values()) {
+                if (budgetId !== undefined && state.budgetId !== budgetId) {
+                    continue;
+                }
+                if (state.timer !== null && !state.conflicted) {
+                    this.clock.cancel(state.timer);
+                    state.timer = null;
+                }
+                if (
+                    (state.active || state.desired !== state.acknowledged) &&
+                    !state.failed
+                ) {
+                    arrivedLate = true;
+                }
+            }
+            if (!arrivedLate) {
+                break;
             }
         }
-        await Promise.all(states.map((state) => state.drained));
 
         return [...this.identities.values()]
             .filter(

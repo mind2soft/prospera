@@ -322,11 +322,15 @@ const onPublish = async () => {
     }
 
     // A published budget is read-only: an amount edit still debounced or in
-    // flight would be rejected after publish and silently lost.
+    // flight would be rejected after publish and silently lost. #87: flush
+    // again while anything is still pending — an edit typed while an earlier
+    // pass drained must be saved before the publish goes out, too.
     flushingBeforePublish.value = true;
     let saved: boolean;
     try {
-        saved = await flushAmountSaves();
+        do {
+            saved = await flushAmountSaves();
+        } while (saved && budgetSaveQueue.hasPending(id));
     } finally {
         flushingBeforePublish.value = false;
     }

@@ -264,6 +264,145 @@ describe('BudgetSaveQueue', () => {
         expect(queue.status(10)).toBe('saved');
     });
 
+    it('a settled failure is retried by the next flush and then confirms', async () => {
+        const transport = new DeferredTransport();
+        const { queue, clock } = configuredQueue(transport.send, {
+            revisions: new Map([['b:7', 1]]),
+        });
+
+        queue.queue(10, 7, 900);
+        clock.advance();
+        transport.requests[0]?.fail();
+        await flushMicrotasks();
+        // The failure has settled: the request is gone, the value stays
+        // dirty. A publish flush at this point must not claim success.
+        expect(queue.status(10)).toBe('error');
+        expect(queue.hasPending(10)).toBe(true);
+
+        // Connectivity restored, nothing re-edited: the publish flush
+        // resends the desired amount through the ordered path and only then
+        // reports success (#87).
+        const flushed = queue.flush(10);
+        expect(transport.requests[1]?.amount).toBe(900);
+        transport.requests[1]?.settle(2);
+        expect(await flushed).toBe(true);
+        expect(queue.status(10)).toBe('saved');
+        expect(queue.hasPending(10)).toBe(false);
+    });
+
+    it('flush includes an edit queued while it was draining', async () => {
+        const transport = new DeferredTransport();
+        const { queue, clock } = configuredQueue(transport.send, {
+            revisions: new Map([['b:7', 1]]),
+        });
+
+        queue.queue(10, 7, 300);
+        const flushed = queue.flush(10); // 300 in flight
+        // A newer edit lands during the flush: its debounce timer is
+        // pending while the in-flight save settles.
+        queue.queue(10, 7, 400);
+
+        transport.requests[0]?.settle(2);
+        await flushMicrotasks(); // the chained send of 400 starts
+        expect(transport.requests.map((r) => r.amount)).toEqual([300, 400]);
+
+        transport.requests[1]?.settle(3);
+        expect(await flushed).toBe(true);
+        // #87: the flush re-scanned after draining and cancelled the stale
+        // debounce timer of the generation it already sent — publish cannot
+        // proceed while any generation of this budget is still queued.
+        expect(clock.size).toBe(0);
+    });
+
+    it('flush sends an edit that arrives for a clean identity while it drains', async () => {
+        const transport = new DeferredTransport();
+        const { queue, clock } = configuredQueue(transport.send, {
+            revisions: new Map([
+                ['b:1', 1],
+                ['b:2', 1],
+            ]),
+        });
+
+        queue.queue(10, 1, 100);
+        const flushed = queue.flush(10); // E1's save in flight
+        // A second envelope is edited while the flush drains: it was clean
+        // when the flush snapshotted, so only a re-scan can include it.
+        queue.queue(10, 2, 200);
+
+        transport.requests[0]?.settle(2);
+        await flushMicrotasks(); // the flush's re-scan sends E2's edit
+        expect(transport.requests.map((r) => r.envelopeId)).toEqual([1, 2]);
+        expect(transport.requests[1]?.amount).toBe(200);
+
+        transport.requests[1]?.settle(3);
+        // The gate opens only once the late edit is confirmed too — without
+        // the re-scan the flush would report success while 200 was still
+        // debounced (or refuse and stall the publish for the debounce).
+        expect(await flushed).toBe(true);
+        expect(clock.size).toBe(0);
+    });
+
+    it('a scoped flush refuses while one envelope of the budget failed', async () => {
+        const transport = new DeferredTransport();
+        const { queue, clock } = configuredQueue(transport.send, {
+            revisions: new Map([
+                ['b:1', 1],
+                ['b:2', 1],
+            ]),
+        });
+
+        queue.queue(10, 1, 100);
+        queue.queue(10, 2, 200);
+        const flushed = queue.flush(10);
+        // Only E2 confirms; E1's save fails and settles.
+        transport.requests[1]?.settle(2);
+        transport.requests[0]?.fail();
+        expect(await flushed).toBe(false);
+        expect(queue.status(10)).toBe('error');
+        expect(queue.hasPending(10)).toBe(true);
+
+        // E2's acknowledged value is not disturbed by the retry; E1 is
+        // resent once and confirms — then the gate opens.
+        const retried = queue.flush(10);
+        expect(transport.requests.map((r) => r.envelopeId)).toEqual([1, 2, 1]);
+        expect(transport.requests[2]?.amount).toBe(100);
+        transport.requests[2]?.settle(3);
+        expect(await retried).toBe(true);
+        expect(clock.size).toBe(0);
+    });
+
+    it('a failure survives leaving the page and publish still refuses after returning', async () => {
+        // The queue is a module singleton: it outlives the budget page, so
+        // a settled failure must still be unresolved when the user comes
+        // back and asks to publish.
+        const transport = new DeferredTransport();
+        const { queue, clock } = configuredQueue(transport.send, {
+            revisions: new Map([['b:7', 1]]),
+        });
+
+        queue.queue(10, 7, 900);
+        clock.advance();
+        transport.requests[0]?.fail();
+        await flushMicrotasks();
+
+        // The user leaves: the page-leave flush drains everything it can —
+        // it retries the dirty value, which fails again and is retained.
+        const leaving = queue.flush();
+        transport.requests[1]?.fail();
+        expect(await leaving).toBe(false);
+        // …and returns, switching budgets away and back. Nothing resets.
+        expect(queue.status(10)).toBe('error');
+        expect(queue.hasPending(10)).toBe(true);
+
+        // The publish flush retries the still-dirty value and only then
+        // reports success.
+        const flushed = queue.flush(10);
+        expect(transport.requests[2]?.amount).toBe(900);
+        transport.requests[2]?.settle(2);
+        expect(await flushed).toBe(true);
+        expect(queue.status(10)).toBe('saved');
+    });
+
     it('a re-edit clears the failure state and re-saves', async () => {
         const transport = new DeferredTransport();
         const { queue, clock } = configuredQueue(transport.send, {
