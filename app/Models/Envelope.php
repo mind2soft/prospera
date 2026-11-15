@@ -9,8 +9,10 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * @property int $id
@@ -28,6 +30,19 @@ class Envelope extends Model
     public const DIRECTION_REVENUE = 'revenue';
 
     public const DIRECTIONS = [self::DIRECTION_EXPENSE, self::DIRECTION_REVENUE];
+
+    /**
+     * The schema limit for envelope names (`envelopes.name` is varchar(60),
+     * see the create-envelopes migration): transfer collision resolution
+     * must keep every generated name within it.
+     */
+    public const MAX_NAME_LENGTH = 60;
+
+    /**
+     * The first suffix appended to a colliding name on transfer; repeated
+     * collisions are numbered (" (imported 2)", " (imported 3)", ...).
+     */
+    private const IMPORTED_SUFFIX = ' (imported)';
 
     protected $table = 'envelopes';
 
@@ -196,8 +211,8 @@ class Envelope extends Model
 
     /**
      * Transfer ownership of this envelope to the given user, resolving name
-     * collisions (unique per owner) by appending " (imported)". The new
-     * owner's former share row is dropped (ownership supersedes it).
+     * collisions (unique per owner) with a bounded " (imported)" suffix. The
+     * new owner's former share row is dropped (ownership supersedes it).
      */
     public function transferTo(User $target): void
     {
@@ -205,23 +220,81 @@ class Envelope extends Model
             return;
         }
 
-        $takenNames = Envelope::query()
-            ->where('user_id', $target->id)
-            ->where('name', 'like', $this->name.'%')
-            ->pluck('name')
-            ->flip();
+        // A concurrent transfer or rename of another envelope can claim the
+        // chosen name between the existence check and the save: the
+        // unique(user_id, name) index is the authority, so retry the whole
+        // resolution instead of failing the enclosing operation (member
+        // removal, account deletion).
+        retry(3, function () use ($target): void {
+            DB::transaction(function () use ($target): void {
+                $this->permissions()->where('user_id', $target->id)->delete();
 
-        $name = $this->name;
+                $this->forceFill([
+                    'user_id' => $target->id,
+                    'name' => $this->transferredNameFor($target->id),
+                ])->save();
+            });
+        }, 50, fn (Throwable $exception) => self::isUniqueViolation($exception));
+    }
 
-        while ($takenNames->has($name)) {
-            $name .= ' (imported)';
+    /**
+     * The name this envelope takes on transfer to the given user: the
+     * original name when it is free, otherwise the original base truncated
+     * (Unicode-aware) to leave room for an " (imported)" suffix, numbered
+     * " (imported 2)", " (imported 3)", ... on repeated collisions. Each
+     * candidate is regenerated from the original base, so no candidate ever
+     * exceeds the schema's name length limit.
+     */
+    private function transferredNameFor(int $targetUserId): string
+    {
+        $base = $this->name;
+
+        if (! self::nameTakenBy($base, $targetUserId)) {
+            return $base;
         }
 
-        DB::transaction(function () use ($target, $name): void {
-            $this->permissions()->where('user_id', $target->id)->delete();
+        for ($attempt = 1; ; $attempt++) {
+            $suffix = $attempt === 1
+                ? self::IMPORTED_SUFFIX
+                : ' (imported '.$attempt.')';
+            $candidate = mb_substr($base, 0, max(0, self::MAX_NAME_LENGTH - mb_strlen($suffix))).$suffix;
 
-            $this->forceFill(['user_id' => $target->id, 'name' => $name])->save();
-        });
+            if (! self::nameTakenBy($candidate, $targetUserId)) {
+                return $candidate;
+            }
+        }
+    }
+
+    /**
+     * Whether the given user already owns an envelope with the exact given
+     * name: an exact match, not a wildcard prefix, so names containing
+     * "%" or "_" cannot cause false collisions.
+     */
+    private static function nameTakenBy(string $name, int $userId): bool
+    {
+        return Envelope::query()
+            ->where('user_id', $userId)
+            ->where('name', $name)
+            ->exists();
+    }
+
+    /**
+     * Whether the exception chain carries a database unique-constraint
+     * violation: SQLSTATE 23505 on PostgreSQL, 23000 on SQLite.
+     */
+    private static function isUniqueViolation(Throwable $exception): bool
+    {
+        $cause = $exception;
+
+        while ($cause !== null) {
+            if ($cause instanceof QueryException) {
+                return in_array($cause->errorInfo[0] ?? null, ['23000', '23505'], true);
+            }
+
+            $cause = $cause->getPrevious();
+        }
+
+        return false;
     }
 
     /**

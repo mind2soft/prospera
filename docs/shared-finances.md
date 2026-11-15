@@ -218,7 +218,11 @@ voluntarily) or when their account is deleted. Auto-transfer edge cases:
   to: those stay owned by the member, and the profile owner is granted
   `contributor` on them so this profile's budgets/ledgers keep working.
 - If an envelope's name collides with the recipient owner's existing name,
-  ` (imported)` is appended to resolve the `unique(user_id, name)` constraint.
+  ` (imported)` is appended to resolve the `unique(user_id, name)` constraint
+  (then ` (imported 2)`, ` (imported 3)`, ... on further collisions, with the
+  original name truncated Unicode-aware so every candidate stays within the
+  60-character limit). The collision resolution retries on a concurrent
+  unique-constraint violation instead of failing the transfer.
 - Envelopes are user-owned and referenced by id, so an envelope transferring
   to a profile owner remains valid for references from other profiles'
   budgets/ledgers.
