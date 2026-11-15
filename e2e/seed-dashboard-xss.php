@@ -65,4 +65,4 @@ DashboardWidget::create([
     'sort_order' => 0,
 ]);
 
-echo "dashboard xss seed ok: envelope {$evil->id}\n";
+echo 'seeded dashboard xss envelope='.$evil->id.PHP_EOL;

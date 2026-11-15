@@ -153,7 +153,10 @@ data fetching.
   they are purged instead, since their stored sign follows the old direction
   (see [Undoable deletion](undoable-deletion.md)).
 - `name` must be unique per owner. On auto-transfer, a collision with the new
-  owner's existing names is resolved by appending ` (imported)`.
+  owner's existing names is resolved by appending ` (imported)` (then
+  ` (imported 2)`, ` (imported 3)`, ... on further collisions), truncating
+  the original name Unicode-aware so every generated name stays within the
+  60-character `name` limit.
 - Ownership transfer follows the shared rule: ownership can be transferred
   explicitly to a member (the previous owner becomes `contributor`), and when
   the owner is removed from the profile or their account is deleted, the

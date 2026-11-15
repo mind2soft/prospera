@@ -9,4 +9,17 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source e2e/guard-e2e-env.sh
-exec php artisan tinker --env=e2e "e2e/$1"
+
+# Tinker exits 0 even when the seed script throws, so the "seeded …" line
+# every seed script ends with is the real success signal: a seed aborted
+# mid-way (e.g. a foreign key a previous seed left behind) must fail the
+# spec's seeding step loudly, not surface later as missing page content.
+output=$(php artisan tinker --env=e2e "e2e/$1" 2>&1) || {
+    printf '%s\n' "$output" >&2
+    exit 1
+}
+if ! grep -q '^seeded ' <<<"$output"; then
+    printf 'ERROR: the seed script did not complete (tinker exits 0 even on an exception):\n%s\n' "$output" >&2
+    exit 1
+fi
+printf '%s\n' "$output"

@@ -506,7 +506,8 @@ class FinancialProfile extends Model
     /**
      * Transfer the member's envelopes referenced by this profile's budgets
      * or ledgers to the target user, resolving name collisions with the
-     * "(imported)" suffix. Unreferenced envelopes stay owned by the member.
+     * bounded " (imported)" suffix (see Envelope::transferTo).
+     * Unreferenced envelopes stay owned by the member.
      *
      * With $keepSharedElsewhere, envelopes also referenced by another
      * profile the member still belongs to are not transferred (that would
