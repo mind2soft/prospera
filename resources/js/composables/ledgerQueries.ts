@@ -15,11 +15,36 @@ export const ledgerKeys = {
     all: (profileId: number) => ['ledgers', profileId] as const,
     detail: (id: number) => ['ledgers', 'detail', id] as const,
     transactions: (id: number) => ['ledgers', 'transactions', id] as const,
+    /** Prefix covering every ledger transaction-report query. */
+    transactionsRoot: ['ledgers', 'transactions'] as const,
     shares: (id: number) => ['ledgers', 'shares', id] as const,
 };
 
 function ledgerKey(id: MaybeRefOrGetter<number | null>): QueryKey {
     return ledgerKeys.detail(toValue(id) ?? 0);
+}
+
+/**
+ * Ledger transaction reports derive "remaining allocated" from the
+ * **published** budget of each displayed month. Publishing (which replaces
+ * the month's published budget) or deleting a budget therefore changes
+ * values a cached ledger report may still show: its query keys carry the
+ * ledger and the date range, not the budget, and the app-wide 30-second
+ * `staleTime` with refetch-on-focus disabled would otherwise serve the
+ * stale amounts after returning to the Ledger.
+ *
+ * The whole key family is invalidated rather than a narrower
+ * profile/month-scoped prefix: the transaction keys do not carry the
+ * profile, so any narrower prefix would have to be invented here. This
+ * also keeps the callers free of any dependency on the profile selected
+ * when the mutation's response lands.
+ */
+export function invalidateLedgerTransactions(
+    queryClient: ReturnType<typeof useQueryClient>,
+): void {
+    void queryClient.invalidateQueries({
+        queryKey: ledgerKeys.transactionsRoot,
+    });
 }
 
 export function useLedgers() {

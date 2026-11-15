@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { invalidateDashboardData } from '@/composables/dashboardQueries';
+import { invalidateLedgerTransactions } from '@/composables/ledgerQueries';
 import { type QueryKey, useMutation, useQuery } from '@/composables/query';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { type AddEnvelopeInput, budgetApi } from '@/lib/budgetApi';
@@ -68,6 +69,7 @@ export function usePublishBudget() {
                 budget: data.budget,
             });
             void queryClient.invalidateQueries({ queryKey: ['budgets'] });
+            invalidateLedgerTransactions(queryClient);
             invalidateDashboardData(queryClient);
         },
     });
@@ -99,6 +101,7 @@ export function useDeleteBudget() {
             void queryClient.invalidateQueries({
                 queryKey: ['onboarding', 'progress'],
             });
+            invalidateLedgerTransactions(queryClient);
             invalidateDashboardData(queryClient);
         },
     });
