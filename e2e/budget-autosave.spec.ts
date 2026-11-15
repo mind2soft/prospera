@@ -183,6 +183,147 @@ test('publishing waits for a pending amount edit to be saved', async ({
     ).toBeVisible();
 });
 
+test('publishing retries a settled failure and refuses while it stays unresolved', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/budget');
+
+    // The autosave fails and settles before Publish is asked for (#87): the
+    // flush must retry the dirty value, and publication must wait for it.
+    let patches = 0;
+    let failPatches = true;
+    const publishPosts: string[] = [];
+    page.on('request', (request) => {
+        if (request.method() === 'POST' && /\/publish$/.test(request.url())) {
+            publishPosts.push(request.url());
+        }
+    });
+    await page.route(/\/api\/budgets\/\d+\/envelopes\/\d+$/, (route) => {
+        if (route.request().method() !== 'PATCH') {
+            return route.fallback();
+        }
+        patches += 1;
+        if (failPatches) {
+            return route.fulfill({
+                status: 500,
+                contentType: 'application/json',
+                body: JSON.stringify({ message: 'Server unavailable.' }),
+            });
+        }
+
+        return route.continue();
+    });
+
+    const amount = page.getByRole('spinbutton', { name: 'Food amount' });
+    await amount.fill('900');
+    await expect(page.getByTestId('budget-save-status')).toHaveText(
+        'A change could not be saved.',
+    );
+
+    await page.getByRole('button', { name: 'Budget actions' }).click();
+    await page.getByRole('menuitem', { name: 'Publish' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Publish this budget?' });
+    await dialog.getByRole('button', { name: 'Publish' }).click();
+
+    // The publish flush retried the 900 and it failed again: the dialog
+    // stays open and nothing is published.
+    await expect(dialog.getByRole('button', { name: 'Publish' })).toBeEnabled({
+        timeout: 10_000,
+    });
+    expect(patches).toBe(2); // the settled autosave failure, then its retry
+    expect(publishPosts).toHaveLength(0);
+
+    // Connectivity restored: the retried save lands first, then the publish
+    // goes out — without re-editing the amount.
+    failPatches = false;
+    await dialog.getByRole('button', { name: 'Publish' }).click();
+    await expect(page.getByText('Budget published.')).toBeVisible();
+    expect(patches).toBe(3);
+    expect(publishPosts).toHaveLength(1);
+
+    // The published budget carries the edited amount.
+    await page.reload();
+    await expect(
+        page.getByRole('row', { name: /Food/ }).getByText('$900'),
+    ).toBeVisible();
+});
+
+test('a save failing during the publish flush blocks publication', async ({
+    page,
+}) => {
+    // A paused clock keeps the debounced autosave from firing before the
+    // publish confirm: the save the flush sends is the one held below, and
+    // the dialog button stays clickable until the flush starts (a save
+    // already in flight would disable it — same technique as above).
+    await page.clock.install();
+    await login(page);
+    await page.goto('/budget');
+
+    const publishPosts: string[] = [];
+    page.on('request', (request) => {
+        if (request.method() === 'POST' && /\/publish$/.test(request.url())) {
+            publishPosts.push(request.url());
+        }
+    });
+
+    // Hold the save the publish flush sends, so its failure settles while
+    // the flush is waiting for it.
+    let release: () => void = () => {};
+    let failPatches = true;
+    const held = new Promise<void>((resolve) => {
+        release = resolve;
+    });
+    await page.route(/\/api\/budgets\/\d+\/envelopes\/\d+$/, async (route) => {
+        if (route.request().method() !== 'PATCH') {
+            return route.fallback();
+        }
+        await held;
+        if (failPatches) {
+            return route.fulfill({
+                status: 500,
+                contentType: 'application/json',
+                body: JSON.stringify({ message: 'Server unavailable.' }),
+            });
+        }
+
+        return route.continue();
+    });
+
+    await page.clock.pauseAt(Date.now() + 60_000);
+    await page.getByRole('spinbutton', { name: 'Food amount' }).fill('900');
+    await page.getByRole('button', { name: 'Budget actions' }).click();
+    await page.getByRole('menuitem', { name: 'Publish' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Publish this budget?' });
+    await dialog.getByRole('button', { name: 'Publish' }).click();
+    await expect(
+        dialog.getByRole('button', { name: 'Publish' }),
+    ).toBeDisabled();
+
+    // The in-flight save fails and settles during the flush: publication is
+    // refused, no publish request is sent.
+    release();
+    await page.clock.resume();
+    await expect(page.getByTestId('budget-save-status')).toHaveText(
+        'A change could not be saved.',
+    );
+    await expect(dialog.getByRole('button', { name: 'Publish' })).toBeEnabled({
+        timeout: 10_000,
+    });
+    expect(publishPosts).toHaveLength(0);
+
+    // The retried save then lands and publication proceeds.
+    failPatches = false;
+    await dialog.getByRole('button', { name: 'Publish' }).click();
+    await expect(page.getByText('Budget published.')).toBeVisible();
+    expect(publishPosts).toHaveLength(1);
+
+    await page.reload();
+    await expect(
+        page.getByRole('row', { name: /Food/ }).getByText('$900'),
+    ).toBeVisible();
+});
+
 test('removing an envelope keeps keyboard focus in the table', async ({
     page,
 }) => {
