@@ -848,6 +848,159 @@ class LedgerTest extends TestCase
         $this->assertNull($row['remaining_allocated']);
     }
 
+    /**
+     * A published budget for one month of the test profile, with a single
+     * allocation for the given envelope.
+     */
+    private function publishMonthBudget(int $year, int $month, Envelope $envelope, int|float $amount): Budget
+    {
+        $budget = Budget::create([
+            'profile_id' => $this->profile->id,
+            'currency' => 'CAD',
+        ]);
+        $budget->forceFill([
+            'published_at' => sprintf('%04d-%02d-01 00:00:00', $year, $month),
+            'effective_year' => $year,
+            'effective_month' => $month,
+        ])->save();
+        $budget->envelopes()->create(['envelope_id' => $envelope->id, 'amount' => $amount, 'type' => 'fixed']);
+
+        return $budget;
+    }
+
+    public function test_a_ranged_query_reports_each_months_remaining_allocation(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->user->envelopes()->create([
+            'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
+        ]);
+
+        // June 2026: Rent allocated -200; July 2026: -300.
+        $this->publishMonthBudget(2026, 6, $envelope, -200);
+        $this->publishMonthBudget(2026, 7, $envelope, -300);
+
+        $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -50,
+            'event_at' => '2026-06-05 00:00:00',
+        ]);
+        $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -80,
+            'event_at' => '2026-07-20 00:00:00',
+        ]);
+
+        // One request spanning both months: each row reports its own
+        // month's allocation minus that month's own transactions.
+        $rows = collect($this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-06-01&to_date=2026-07-31")
+            ->assertOk()->json('transactions'));
+
+        $this->assertCount(2, $rows);
+        $this->assertEquals('2026-06-05', $rows[0]['event_at']);
+        $this->assertEquals(-200 - -50, $rows[0]['remaining_allocated']);
+        $this->assertEquals('2026-07-20', $rows[1]['event_at']);
+        $this->assertEquals(-300 - -80, $rows[1]['remaining_allocated']);
+    }
+
+    public function test_a_partial_month_query_reports_the_whole_months_remaining(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->user->envelopes()->create([
+            'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
+        ]);
+
+        $this->publishMonthBudget(2026, 6, $envelope, -200);
+
+        $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -50,
+            'event_at' => '2026-06-05 00:00:00',
+        ]);
+        $later = $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -25.25,
+            'event_at' => '2026-06-20 00:00:00',
+        ]);
+
+        // A query narrowed to June 20th only returns that row, but its
+        // remaining allocation still covers the whole month: -200 − (-75.25).
+        $row = $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-06-20&to_date=2026-06-20")
+            ->assertOk()->json('transactions.0');
+
+        $this->assertEquals($later->id, $row['id']);
+        $this->assertEquals(-25.25, $row['amount']);
+        $this->assertEquals(-200 - -75.25, $row['remaining_allocated']);
+    }
+
+    public function test_an_unallocated_month_within_a_range_reports_no_remaining(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->user->envelopes()->create([
+            'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
+        ]);
+
+        $this->publishMonthBudget(2026, 6, $envelope, -200);
+
+        $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -50,
+            'event_at' => '2026-06-05 00:00:00',
+        ]);
+        $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -30,
+            'event_at' => '2026-07-10 00:00:00',
+        ]);
+
+        $rows = collect($this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-06-01&to_date=2026-07-31")
+            ->assertOk()->json('transactions'));
+
+        // June has the published budget; July has none and must not
+        // inherit June's allocation.
+        $this->assertEquals(-200 - -50, $rows[0]['remaining_allocated']);
+        $this->assertNull($rows[1]['remaining_allocated']);
+    }
+
+    public function test_remaining_allocated_spans_the_year_boundary(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->user->envelopes()->create([
+            'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
+        ]);
+
+        $this->publishMonthBudget(2026, 12, $envelope, -1000);
+        $this->publishMonthBudget(2027, 1, $envelope, -500);
+
+        $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -100,
+            'event_at' => '2026-12-15 00:00:00',
+        ]);
+        $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -200,
+            'event_at' => '2027-01-15 00:00:00',
+        ]);
+
+        $rows = collect($this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-12-01&to_date=2027-01-31")
+            ->assertOk()->json('transactions'));
+
+        $this->assertEquals(-1000 - -100, $rows[0]['remaining_allocated']);
+        $this->assertEquals(-500 - -200, $rows[1]['remaining_allocated']);
+    }
+
     // ------------------------------------------------------------------
     // Ledger contributor gated by envelope permission
     // ------------------------------------------------------------------
