@@ -177,39 +177,28 @@ class LedgerController extends Controller
             ->orderBy('id')
             ->get();
 
-        // Totals per envelope within the queried range, computed in PHP from
-        // the rows above — amounts are encrypted at rest (docs/encryption.md).
-        $totals = $transactions
-            ->groupBy(fn (Transaction $transaction): string => (string) $transaction->envelope_id)
-            ->map(fn (Collection $group): int => $group->sum(
-                fn (Transaction $transaction): int => Money::toMinorUnits($transaction->amount),
-            ));
+        // "Remaining allocated" is a per-month concept (docs/ledger.md —
+        // Allocation reporting): each row is measured against the published
+        // budget of its own month, minus the transactions recorded against
+        // that envelope within that whole calendar month. Envelopes without
+        // an allocation (or months without a published budget) report as
+        // unallocated.
+        //
+        // Exact minor-unit totals per (month, envelope), computed in PHP —
+        // amounts are encrypted at rest (docs/encryption.md). Months fully
+        // covered by the queried range reuse the rows loaded above; a
+        // partial month is completed with one bounded query.
+        $monthlyTotals = $this->monthlyTotals($ledger, $transactions, $from, $to);
 
-        // "Remaining allocated" comes from the published budget bound to the
-        // queried month (budgets are per month/year — see docs/budget.md):
-        // allocation minus the transactions for that envelope in the range.
-        // Envelopes without an allocation (or months without a published
-        // budget) report as unallocated.
-        $budget = Budget::query()
-            ->where('profile_id', $ledger->profile_id)
-            ->whereNotNull('published_at')
-            ->where('effective_year', $from->year)
-            ->where('effective_month', $from->month)
-            ->first();
+        $months = $transactions
+            ->map(fn (Transaction $transaction): string => $transaction->event_at->format('Y-m'))
+            ->unique()
+            ->values();
 
-        if ($budget !== null) {
-            app(AmountKeyRing::class)->rememberBudgetProfiles([$budget->id], $ledger->profile_id);
-        }
-
-        $allocations = $budget === null
-            ? collect()
-            : BudgetEnvelope::query()
-                ->where('budget_id', $budget->id)
-                ->whereIn('envelope_id', $totals->keys())
-                ->get()
-                ->mapWithKeys(fn (BudgetEnvelope $allocation): array => [
-                    (string) $allocation->envelope_id => $allocation->amount,
-                ]);
+        $allocations = $this->monthlyAllocations($ledger->profile_id, $months, $transactions
+            ->map(fn (Transaction $transaction): int => $transaction->envelope_id)
+            ->unique()
+            ->values());
 
         // Resolved once for every row's permission check (stale grants).
         $coMemberIds = FinancialProfile::coMemberIdsOf($user->id);
@@ -219,31 +208,157 @@ class LedgerController extends Controller
                 ->map(fn (Transaction $transaction) => $this->serializeTransaction(
                     $transaction,
                     $transaction->envelope->permissionFor($user, $coMemberIds),
-                    $this->remainingAllocated($transaction, $allocations, $totals),
+                    $this->remainingAllocated($transaction, $allocations, $monthlyTotals),
                 ))
                 ->values(),
         ]);
     }
 
     /**
-     * The envelope's allocated amount on the month's published budget, minus
-     * the transactions recorded against that envelope within the queried
-     * range ("remaining allocated"). Null when the envelope has no
-     * allocation (or the month has no published budget).
+     * Exact minor-unit totals per envelope, accumulated in PHP over each
+     * returned row's full calendar month (docs/ledger.md — Allocation
+     * reporting). Months entirely covered by the queried range are summed
+     * from the already-loaded rows; a month only partially covered by the
+     * range is completed with one bounded query — the encrypted amounts
+     * need their context columns (ledger_id, envelope_id, event_at).
      *
-     * @param  Collection<int|string, int|float>  $allocations
-     * @param  Collection<string, int>  $totals
+     * @param  Collection<int, Transaction>  $transactions
+     * @return Collection<string, Collection<string, int>> totals keyed by
+     *                                                     "Y-m", then envelope id
      */
-    private function remainingAllocated(Transaction $transaction, Collection $allocations, Collection $totals): int|float|null
+    private function monthlyTotals(Ledger $ledger, Collection $transactions, Carbon $from, Carbon $to): Collection
     {
-        $allocation = $allocations->get((string) $transaction->envelope_id);
+        $totals = collect();
+        $partialMonths = collect();
+
+        // Only the returned rows' envelopes are ever reported on.
+        $envelopeIds = $transactions
+            ->map(fn (Transaction $transaction): int => $transaction->envelope_id)
+            ->unique()
+            ->values();
+
+        foreach ($transactions
+            ->groupBy(fn (Transaction $transaction): string => $transaction->event_at->format('Y-m'))
+            ->sortKeys() as $month => $rows) {
+            $monthStart = Carbon::parse($month.'-01')->startOfDay();
+            $monthEnd = (clone $monthStart)->endOfMonth()->endOfDay();
+
+            if ($from->lte($monthStart) && $to->gte($monthEnd)) {
+                $totals[$month] = $this->envelopeTotals($rows);
+            } else {
+                $partialMonths->push([$month, $monthStart, $monthEnd]);
+            }
+        }
+
+        foreach ($partialMonths as [$month, $monthStart, $monthEnd]) {
+            $totals[$month] = $this->envelopeTotals(
+                $ledger->transactions()
+                    ->select(['id', 'ledger_id', 'envelope_id', 'event_at', 'amount'])
+                    ->whereIn('envelope_id', $envelopeIds->all())
+                    ->whereBetween('event_at', [$monthStart, $monthEnd])
+                    ->get(),
+            );
+        }
+
+        return $totals;
+    }
+
+    /**
+     * @param  Collection<int, Transaction>  $rows
+     * @return Collection<string, int>
+     */
+    private function envelopeTotals(Collection $rows): Collection
+    {
+        return $rows
+            ->groupBy(fn (Transaction $transaction): string => (string) $transaction->envelope_id)
+            ->map(fn (Collection $group): int => $group->sum(
+                fn (Transaction $transaction): int => Money::toMinorUnits($transaction->amount),
+            ));
+    }
+
+    /**
+     * Allocations from the published budgets of the given months, keyed by
+     * "Y-m:envelope". A missing key means the envelope is unallocated for
+     * that month (no published budget, or no allocation on it). The
+     * decryption context of every budget is remembered up front.
+     *
+     * @param  Collection<int, non-falsy-string>  $months
+     * @param  Collection<int, int>  $envelopeIds
+     * @return Collection<string, int>
+     */
+    private function monthlyAllocations(int $profileId, Collection $months, Collection $envelopeIds): Collection
+    {
+        if ($months->isEmpty() || $envelopeIds->isEmpty()) {
+            return collect();
+        }
+
+        $budgets = Budget::query()
+            ->where('profile_id', $profileId)
+            ->whereNotNull('published_at')
+            ->where(function ($query) use ($months): void {
+                // Months are canonical "Y-m" keys (see monthlyTotals).
+                foreach ($months as $month) {
+                    [$year, $monthNumber] = array_map(intval(...), explode('-', $month));
+
+                    $query->orWhere(function ($query) use ($year, $monthNumber): void {
+                        $query
+                            ->where('effective_year', $year)
+                            ->where('effective_month', $monthNumber);
+                    });
+                }
+            })
+            ->get()
+            ->keyBy(fn (Budget $budget): string => sprintf(
+                '%04d-%02d', $budget->effective_year, $budget->effective_month,
+            ));
+
+        if ($budgets->isNotEmpty()) {
+            app(AmountKeyRing::class)
+                ->rememberBudgetProfiles($budgets->pluck('id')->all(), $profileId);
+        }
+
+        // budget id → "Y-m" month key, resolved from the budgets above
+        // (no per-allocation lazy load).
+        $monthKeyByBudgetId = $budgets
+            ->mapWithKeys(fn (Budget $budget, string $monthKey): array => [$budget->id => $monthKey]);
+
+        return BudgetEnvelope::query()
+            ->whereIn('budget_id', $budgets->pluck('id'))
+            ->whereIn('envelope_id', $envelopeIds->all())
+            ->get()
+            ->mapWithKeys(fn (BudgetEnvelope $allocation): array => [
+                $monthKeyByBudgetId[$allocation->budget_id].':'.$allocation->envelope_id => $allocation->amount,
+            ]);
+    }
+
+    /**
+     * The envelope's allocated amount on the row's month's published budget,
+     * minus the transactions recorded against that envelope within that
+     * month ("remaining allocated"). Null when the envelope has no
+     * allocation for the month (or the month has no published budget).
+     *
+     * @param  Collection<string, int>  $allocations
+     * @param  Collection<string, Collection<string, int>>  $monthlyTotals
+     */
+    private function remainingAllocated(
+        Transaction $transaction,
+        Collection $allocations,
+        Collection $monthlyTotals,
+    ): int|float|null {
+        $allocation = $allocations->get(
+            $transaction->event_at->format('Y-m').':'.$transaction->envelope_id,
+        );
 
         if ($allocation === null) {
             return null;
         }
 
         return Money::fromMinorUnits(
-            Money::toMinorUnits($allocation) - $totals->get((string) $transaction->envelope_id, 0),
+            Money::toMinorUnits($allocation)
+                - $monthlyTotals->get(
+                    $transaction->event_at->format('Y-m'),
+                    collect(),
+                )->get((string) $transaction->envelope_id, 0),
         );
     }
 
