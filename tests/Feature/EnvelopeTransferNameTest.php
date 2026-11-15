@@ -7,6 +7,7 @@ use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -50,6 +51,65 @@ class EnvelopeTransferNameTest extends TestCase
         $envelope->refresh();
 
         $this->assertSame('Groceries (imported 2)', $envelope->name);
+    }
+
+    public function test_repeated_collisions_keep_numbering_within_the_name_limit_past_two_digits(): void
+    {
+        $target = User::factory()->create();
+        $entrant = User::factory()->create();
+
+        Envelope::create(['name' => 'Groceries', 'type' => 'expense', 'user_id' => $target->id]);
+
+        for ($number = 1; $number <= 9; $number++) {
+            $name = $number === 1 ? 'Groceries (imported)' : "Groceries (imported {$number})";
+            Envelope::create(['name' => $name, 'type' => 'expense', 'user_id' => $target->id]);
+        }
+
+        $envelope = Envelope::create(['name' => 'Groceries', 'type' => 'expense', 'user_id' => $entrant->id]);
+
+        $envelope->transferTo($target);
+        $envelope->refresh();
+
+        $this->assertSame('Groceries (imported 10)', $envelope->name);
+    }
+
+    /**
+     * A transfer that commits between the collision check and the save can
+     * steal the chosen name: the save must then fail on the unique
+     * constraint and the whole resolution must be retried against the new
+     * state, not fail the transfer. (The claimant row here lives inside the
+     * rolled-back transaction, so this asserts the recovery; the
+     * PostgresEnvelopeTransferNameTest proves the re-resolution against a
+     * committed claimant on real PostgreSQL.)
+     */
+    public function test_a_unique_violation_on_the_save_is_retried(): void
+    {
+        $target = User::factory()->create();
+        $entrant = User::factory()->create();
+
+        $envelope = Envelope::create(['name' => 'Groceries', 'type' => 'expense', 'user_id' => $entrant->id]);
+
+        $claimed = false;
+
+        DB::connection()->beforeExecuting(function (string $query) use (&$claimed, $target): void {
+            if ($claimed || ! str_starts_with($query, 'update "envelopes"')) {
+                return;
+            }
+
+            // A concurrent transfer claims the original name the moment the
+            // save runs, forcing a unique violation on this attempt.
+            $claimed = true;
+
+            Envelope::create(['name' => 'Groceries', 'type' => 'expense', 'user_id' => $target->id]);
+        });
+
+        $envelope->transferTo($target);
+        $envelope->refresh();
+
+        $this->assertTrue($claimed);
+        $this->assertSame($target->id, $envelope->user_id);
+        $this->assertSame('Groceries', $envelope->name);
+        $this->assertSame(1, Envelope::query()->where('user_id', $target->id)->where('name', 'Groceries')->count());
     }
 
     public function test_a_multibyte_max_length_collision_stays_within_the_name_limit(): void

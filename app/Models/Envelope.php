@@ -225,13 +225,18 @@ class Envelope extends Model
         // unique(user_id, name) index is the authority, so retry the whole
         // resolution instead of failing the enclosing operation (member
         // removal, account deletion).
-        retry(3, function () use ($target): void {
-            DB::transaction(function () use ($target): void {
+        //
+        // Resolve from the name captured here on every attempt: a failed
+        // save leaves the mutated candidate on the in-memory model.
+        $base = $this->name;
+
+        retry(3, function () use ($target, $base): void {
+            DB::transaction(function () use ($target, $base): void {
                 $this->permissions()->where('user_id', $target->id)->delete();
 
                 $this->forceFill([
                     'user_id' => $target->id,
-                    'name' => $this->transferredNameFor($target->id),
+                    'name' => self::transferredNameFor($base, $target->id),
                 ])->save();
             });
         }, 50, fn (Throwable $exception) => self::isUniqueViolation($exception));
@@ -245,10 +250,8 @@ class Envelope extends Model
      * candidate is regenerated from the original base, so no candidate ever
      * exceeds the schema's name length limit.
      */
-    private function transferredNameFor(int $targetUserId): string
+    private static function transferredNameFor(string $base, int $targetUserId): string
     {
-        $base = $this->name;
-
         if (! self::nameTakenBy($base, $targetUserId)) {
             return $base;
         }
@@ -279,8 +282,10 @@ class Envelope extends Model
     }
 
     /**
-     * Whether the exception chain carries a database unique-constraint
-     * violation: SQLSTATE 23505 on PostgreSQL, 23000 on SQLite.
+     * Whether the exception chain carries a database violation the transfer
+     * should retry on: a unique violation (SQLSTATE 23505) on PostgreSQL,
+     * or SQLite's integrity-violation code (23000), which subsumes unique
+     * violations there.
      */
     private static function isUniqueViolation(Throwable $exception): bool
     {
