@@ -231,6 +231,12 @@ class LedgerController extends Controller
         $totals = collect();
         $partialMonths = collect();
 
+        // Only the returned rows' envelopes are ever reported on.
+        $envelopeIds = $transactions
+            ->map(fn (Transaction $transaction): int => $transaction->envelope_id)
+            ->unique()
+            ->values();
+
         foreach ($transactions
             ->groupBy(fn (Transaction $transaction): string => $transaction->event_at->format('Y-m'))
             ->sortKeys() as $month => $rows) {
@@ -248,6 +254,7 @@ class LedgerController extends Controller
             $totals[$month] = $this->envelopeTotals(
                 $ledger->transactions()
                     ->select(['id', 'ledger_id', 'envelope_id', 'event_at', 'amount'])
+                    ->whereIn('envelope_id', $envelopeIds->all())
                     ->whereBetween('event_at', [$monthStart, $monthEnd])
                     ->get(),
             );
@@ -285,22 +292,18 @@ class LedgerController extends Controller
             return collect();
         }
 
-        $monthKeys = $months
-            ->map(fn (string $month): string => sprintf( // "Y-m"
-                '%04d-%02d', (int) Carbon::parse($month.'-01')->year, (int) Carbon::parse($month.'-01')->month,
-            ));
-
         $budgets = Budget::query()
             ->where('profile_id', $profileId)
             ->whereNotNull('published_at')
-            ->where(function ($query) use ($monthKeys): void {
-                foreach ($monthKeys as $monthKey) {
-                    $query->orWhere(function ($query) use ($monthKey): void {
-                        [$year, $month] = explode('-', $monthKey);
+            ->where(function ($query) use ($months): void {
+                // Months are canonical "Y-m" keys (see monthlyTotals).
+                foreach ($months as $month) {
+                    [$year, $monthNumber] = array_map(intval(...), explode('-', $month));
 
+                    $query->orWhere(function ($query) use ($year, $monthNumber): void {
                         $query
-                            ->where('effective_year', (int) $year)
-                            ->where('effective_month', (int) $month);
+                            ->where('effective_year', $year)
+                            ->where('effective_month', $monthNumber);
                     });
                 }
             })

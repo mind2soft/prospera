@@ -970,6 +970,44 @@ class LedgerTest extends TestCase
         $this->assertNull($rows[1]['remaining_allocated']);
     }
 
+    public function test_a_pending_deletion_stops_counting_towards_remaining_allocated(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->user->envelopes()->create([
+            'name' => 'Rent', 'type' => 'expense', 'color' => '#f43f5e',
+        ]);
+
+        $this->publishMonthBudget(2026, 6, $envelope, -200);
+
+        $kept = $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -50,
+            'event_at' => '2026-06-05 00:00:00',
+        ]);
+        $deleted = $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -25,
+            'event_at' => '2026-06-20 00:00:00',
+        ]);
+
+        $before = $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30")
+            ->assertOk()->json('transactions');
+        $this->assertEquals(-200 - -75, collect($before)->firstWhere('id', $kept->id)['remaining_allocated']);
+
+        // The pending deletion leaves the report and its month total.
+        $deleted->delete();
+
+        $rows = collect($this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30")
+            ->assertOk()->json('transactions'));
+
+        $this->assertNull($rows->firstWhere('id', $deleted->id));
+        $this->assertEquals(-200 - -50, $rows->firstWhere('id', $kept->id)['remaining_allocated']);
+    }
+
     public function test_remaining_allocated_spans_the_year_boundary(): void
     {
         $ledger = $this->createLedger($this->user);
