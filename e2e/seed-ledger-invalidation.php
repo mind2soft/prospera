@@ -73,9 +73,8 @@ $published->permissions()->create(['user_id' => $u->id, 'permission' => BudgetPe
 $add($published, $salary, 2000, 'fixed');
 $add($published, $food, 800, 'variable');
 
-// The alternative revision the spec publishes over it: Food 500. Created
-// last so the Budget page's created_at-descending list selects it by
-// default; it must stay a draft (no effective month, no published_at).
+// The alternative revision the spec publishes over it: Food 500. It must
+// stay a draft (no effective month, no published_at).
 $draft = Budget::create([
     'profile_id' => $profile->id,
     'currency' => 'CAD',
