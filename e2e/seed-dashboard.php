@@ -37,7 +37,8 @@ $profile = FinancialProfile::query()
 Transaction::whereIn('ledger_id', Ledger::query()->where('profile_id', $profile->id)->select('id'))->delete();
 Ledger::query()->where('profile_id', $profile->id)->get()->each(fn (Ledger $l) => $l->delete());
 Budget::query()->where('profile_id', $profile->id)->get()->each(fn (Budget $b) => $b->delete());
-$u->envelopes()->delete();
+require_once __DIR__.'/seed-helpers.php';
+clear_envelopes_of($u);
 // The dashboard starts empty, whatever an earlier spec left behind.
 DashboardWidget::query()->where('user_id', $u->id)->delete();
 
@@ -100,4 +101,4 @@ $tx($food, -450, $today->copy()->subDays(3));
 $tx($rent, -1300, $today->copy()->subDays(5));
 $tx($fun, -25, $today->copy());
 
-echo "dashboard seed ok: profile {$profile->id}\n";
+echo 'seeded dashboard profile='.$profile->id.PHP_EOL;

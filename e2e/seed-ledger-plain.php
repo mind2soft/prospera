@@ -33,7 +33,8 @@ $mk = function (string $email): array {
 
     Transaction::whereIn('ledger_id', Ledger::query()->where('profile_id', $profile->id)->select('id'))->delete();
     Ledger::query()->where('profile_id', $profile->id)->get()->each(fn (Ledger $l) => $l->delete());
-    $u->envelopes()->delete();
+    require_once __DIR__.'/seed-helpers.php';
+    clear_envelopes_of($u);
 
     $ledger = Ledger::create([
         'profile_id' => $profile->id,

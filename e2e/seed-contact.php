@@ -26,3 +26,5 @@ $u->forceFill(['email_verified_at' => now()])->save();
 if (! $u->profiles()->exists()) {
     FinancialProfile::createDefaultFor($u);
 }
+
+echo 'seeded contact user='.$u->id.PHP_EOL;
