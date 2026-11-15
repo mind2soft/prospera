@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/vue-query';
 import { useDebounceFn } from '@vueuse/core';
-import { computed, nextTick, type Ref, ref, shallowReactive, watch } from 'vue';
+import { computed, nextTick, type Ref, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { toast } from 'vue-sonner';
 import {
@@ -8,138 +8,29 @@ import {
     useSaveDashboardLayout,
 } from '@/composables/dashboardQueries';
 import { useFlushOnLeave } from '@/composables/useFlushOnLeave';
-import { errorMessage } from '@/lib/api';
+import { ApiError, errorMessage } from '@/lib/api';
+import {
+    createLayoutSaveQueue,
+    type LayoutSave,
+} from '@/lib/dashboardSaveQueue';
 import type {
+    DashboardLayoutData,
     DashboardWidget,
     DashboardWidgetConfig,
     DashboardWidgetPayload,
 } from '@/types';
 
 /**
- * One layout save: the payload, and the local id of each payload entry
- * (negative for widgets added since the last save) so the server-assigned
- * ids are adopted by identity, never by position.
- */
-type LayoutSave = {
-    profileId: number;
-    keys: number[];
-    widgets: DashboardWidgetPayload[];
-};
-
-type QueuedSave = LayoutSave & {
-    run: (input: {
-        profileId: number;
-        widgets: DashboardWidgetPayload[];
-    }) => Promise<{ widgets: DashboardWidget[] }>;
-    /** Applies the temporary → server id map to the page's local list. */
-    adopt: (assigned: Map<number, number>) => void;
-    fail: (error: unknown) => void;
-};
-
-/** The server ids assigned to the widgets a save created, by temporary id. */
-const assignedIds = (
-    save: LayoutSave,
-    saved: DashboardWidget[],
-): Map<number, number> => {
-    const assigned = new Map<number, number>();
-
-    if (saved.length === save.keys.length) {
-        save.keys.forEach((key, index) => {
-            if (key <= 0) {
-                assigned.set(key, saved[index].id);
-            }
-        });
-    }
-
-    return assigned;
-};
-
-/**
- * The layout save queue, shared by every dashboard instance: saves are
- * serialized (one in flight, at most one queued per profile) so responses
- * never land out of order and clobber newer edits. It lives outside the
- * page so it keeps draining after the page unmounts, and a remounted page
- * sees the saves still settling.
+ * The layout save queue, shared by every dashboard instance (see
+ * dashboardSaveQueue.ts): saves are serialized per profile and each carries
+ * the layout revision it was captured against, so responses never land out
+ * of order and a stale save can never clobber newer edits (issue #55).
  *
  * The chain runs on `mutateAsync` promises: per-call `mutate` callbacks are
  * dropped once the unmounted page's observer has no listener, which used
  * to strand the queued save (CQ-R3-1).
  */
-const layoutSaves = (() => {
-    const inFlight = ref<number | null>(null);
-    const queued = shallowReactive(new Map<number, QueuedSave>());
-
-    const send = (save: QueuedSave): void => {
-        inFlight.value = save.profileId;
-
-        void save
-            .run({ profileId: save.profileId, widgets: save.widgets })
-            .then((data) => {
-                const assigned = assignedIds(save, data.widgets);
-
-                if (assigned.size === 0) {
-                    return;
-                }
-
-                // A queued save of the same profile was captured before
-                // this response: without the ids it would create the new
-                // widgets a second time.
-                const next = queued.get(save.profileId);
-
-                next?.keys.forEach((key, index) => {
-                    const id = assigned.get(key);
-
-                    if (id !== undefined) {
-                        next.keys[index] = id;
-                        next.widgets[index].id = id;
-                    }
-                });
-
-                save.adopt(assigned);
-            }, save.fail)
-            .finally(() => {
-                const [next] = queued.values();
-
-                if (next === undefined) {
-                    inFlight.value = null;
-
-                    return;
-                }
-
-                queued.delete(next.profileId);
-                send(next);
-            });
-    };
-
-    return {
-        /** A save of the profile's layout is in flight or queued. */
-        isBusy: (profileId: number): boolean =>
-            inFlight.value === profileId || queued.has(profileId),
-
-        enqueue: (save: QueuedSave): void => {
-            if (inFlight.value === null) {
-                send(save);
-            } else {
-                queued.set(save.profileId, save);
-            }
-        },
-
-        /**
-         * The page is unloading: no continuation will run, so the queued
-         * saves go out now (keepalive requests). Each is a full layout,
-         * newer than the one in flight.
-         */
-        sendQueuedNow: (): void => {
-            for (const save of queued.values()) {
-                void save
-                    .run({ profileId: save.profileId, widgets: save.widgets })
-                    .catch(save.fail);
-            }
-
-            queued.clear();
-        },
-    };
-})();
+const layoutSaves = createLayoutSaveQueue();
 
 /** The save payload of a widget — existing widgets keep their id. */
 const configOf = (widget: DashboardWidgetConfig): DashboardWidgetPayload => ({
@@ -231,7 +122,7 @@ export function useLayoutAutosave(options: {
         const data =
             id === null
                 ? undefined
-                : queryClient.getQueryData<{ widgets: DashboardWidget[] }>(
+                : queryClient.getQueryData<DashboardLayoutData>(
                       dashboardKeys.widgets(id),
                   )?.widgets;
 
@@ -268,16 +159,32 @@ export function useLayoutAutosave(options: {
         });
     };
 
+    /** The layout revision the client currently holds for the profile. */
+    const currentRevision = (id: number): number =>
+        queryClient.getQueryData<DashboardLayoutData>(dashboardKeys.widgets(id))
+            ?.revision ?? 1;
+
     const enqueue = (id: number): void => {
         const save: LayoutSave = {
             profileId: id,
             keys: widgets.value.map((widget) => widget.id),
             widgets: widgets.value.map(configOf),
+            // The save must edit against the layout it was captured from;
+            // a stale revision is refused with 409 (issue #55).
+            revision: currentRevision(id),
         };
 
         layoutSaves.enqueue({
             ...save,
-            run: saveLayout.mutateAsync,
+            run: (input) =>
+                saveLayout.mutateAsync({
+                    profileId: input.profileId,
+                    widgets: input.widgets,
+                    // The queue read the save's revision at send time: a
+                    // queued save adopts the revision a settled save of the
+                    // same profile produced (issue #55).
+                    expectedRevision: input.revision,
+                }),
             adopt: (assigned) => {
                 // The local list belongs to another profile after a switch.
                 if (layoutProfileId.value !== id) {
@@ -297,6 +204,21 @@ export function useLayoutAutosave(options: {
                 });
             },
             fail: (error) => {
+                if (error instanceof ApiError && error.status === 409) {
+                    // The server kept a newer layout (another tab, another
+                    // device). Never re-send the stale local one — reconcile
+                    // by pulling the canonical layout; local edits older
+                    // than it are dropped (issue #55). Re-applied explicitly
+                    // after the refetch: if it equals the cached copy,
+                    // structural sharing would not retrigger the layout
+                    // watch, and the stale local edits would survive.
+                    void queryClient
+                        .invalidateQueries({
+                            queryKey: dashboardKeys.widgets(id),
+                        })
+                        .then(resync);
+                }
+
                 toast.error(
                     errorMessage(error, t('dashboard.toast.saveFailed')),
                 );

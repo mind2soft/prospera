@@ -173,6 +173,17 @@ export type DashboardWidgetPayload = Omit<DashboardWidgetConfig, 'id'> & {
     id?: number;
 };
 
+/**
+ * The dashboard layout API payload: the widget list plus its save revision
+ * (issue #55). Every layout write — full save or widget removal — must edit
+ * against the revision it read; a stale one is refused with 409 so an older
+ * layout can never overwrite a newer one.
+ */
+export type DashboardLayoutData = {
+    widgets: DashboardWidget[];
+    revision: number;
+};
+
 export type DashboardSpendingRow = {
     key: string;
     kind: 'envelope' | 'group';

@@ -206,6 +206,53 @@ test('a debounced edit is saved when the page is reloaded', async ({
     }).toPass({ timeout: 20_000 });
 });
 
+test('a save refused as stale is never re-sent — the server layout wins', async ({
+    page,
+}) => {
+    await login(page);
+    await page.goto('/dashboard');
+    await expect(cards(page)).toHaveCount(2, { timeout: 15_000 });
+
+    // Another device saved a newer layout while this tab was editing: the
+    // server refuses this tab's save with 409 (issue #55).
+    await page.route(SAVE_URL, async (route: Route) => {
+        if (route.request().method() !== 'PUT') {
+            return route.fallback();
+        }
+
+        await route.fulfill({
+            status: 409,
+            contentType: 'application/json',
+            body: JSON.stringify({
+                message:
+                    'This layout was changed elsewhere while you were saving. Reload the dashboard to see the latest layout.',
+                revision: 3,
+            }),
+        });
+    });
+
+    // A local rename is autosaved (debounced) — and refused as stale.
+    await cards(page)
+        .first()
+        .getByRole('button', { name: 'Widget settings' })
+        .click();
+    await page.getByRole('textbox', { name: 'Title' }).fill('Local rename');
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByRole('dialog')).toBeHidden();
+
+    // The server's localized message is surfaced…
+    await expect(
+        page.getByText('changed elsewhere while you were saving'),
+    ).toBeVisible();
+
+    // …and the canonical layout replaces the stale local one: the renamed
+    // title is dropped, never re-sent as a blind write.
+    await expect(cards(page).first()).toContainText('Home spending', {
+        timeout: 10_000,
+    });
+    await expect(cards(page).first()).not.toContainText('Local rename');
+});
+
 test('reordering a widget while it is being created keeps unique ids', async ({
     page,
 }) => {

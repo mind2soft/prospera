@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\DashboardLayout;
 use App\Models\DashboardWidget;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
@@ -93,9 +94,11 @@ class DashboardWidgetsTest extends TestCase
     {
         $this->actingAs($this->owner);
 
+        // A layout that was never written presents its initial revision
+        // (issue #55): a first save edits against it.
         $this->getJson("/api/dashboard/{$this->profile->id}/widgets")
             ->assertOk()
-            ->assertJson(['widgets' => []]);
+            ->assertJson(['widgets' => [], 'revision' => 1]);
     }
 
     public function test_a_layout_can_be_saved_and_is_returned_in_order(): void
@@ -103,6 +106,7 @@ class DashboardWidgetsTest extends TestCase
         $this->actingAs($this->owner);
 
         $response = $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [
                 $this->widgetPayload(),
                 $this->widgetPayload([
@@ -133,6 +137,9 @@ class DashboardWidgetsTest extends TestCase
             $widgets[1]['selection'],
         );
 
+        // The write advanced the layout revision exactly once.
+        $this->assertSame(2, $response->json('revision'));
+
         $this->assertDatabaseCount('dashboard_widgets', 2);
     }
 
@@ -141,10 +148,12 @@ class DashboardWidgetsTest extends TestCase
         $this->actingAs($this->owner);
 
         $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [$this->widgetPayload(), $this->widgetPayload()],
         ])->assertOk();
 
         $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 2,
             'widgets' => [$this->widgetPayload(['type' => 'income_expenses', 'view_type' => 'line'])],
         ])->assertOk();
 
@@ -157,6 +166,7 @@ class DashboardWidgetsTest extends TestCase
         $this->actingAs($this->owner);
 
         $id = $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [$this->widgetPayload(), $this->widgetPayload()],
         ])->json('widgets.0.id');
 
@@ -164,6 +174,7 @@ class DashboardWidgetsTest extends TestCase
         // keeps the first widget's id (in-flight data requests keep
         // resolving) and removes only the dropped one.
         $response = $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 2,
             'widgets' => [
                 $this->widgetPayload(['title' => 'Updated']) + ['id' => $id],
             ],
@@ -177,12 +188,14 @@ class DashboardWidgetsTest extends TestCase
         $this->assertDatabaseCount('dashboard_widgets', 1);
     }
 
-    public function test_a_foreign_widget_id_is_ignored(): void
+    public function test_a_foreign_widget_id_is_rejected(): void
     {
         $this->actingAs($this->owner);
 
-        // A widget of another user is not adoptable via a guessed id — the
-        // payload entry is created as a new widget of the caller instead.
+        // A widget of another user is not adoptable via a guessed id: an
+        // unresolvable id is refused (issue #55) — recreating it as a new
+        // widget of the caller would resurrect removed state, and a lookup
+        // in another member's layout must never happen.
         $stranger = User::factory()->create();
         $strangerWidget = DashboardWidget::create([
             'user_id' => $stranger->id,
@@ -198,16 +211,18 @@ class DashboardWidgetsTest extends TestCase
         ]);
 
         $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [$this->widgetPayload() + ['id' => $strangerWidget->id]],
-        ])->assertOk();
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('widgets');
 
-        // The stranger's widget is untouched; a fresh row was created.
+        // The stranger's widget is untouched, and nothing was created.
         $this->assertDatabaseHas('dashboard_widgets', [
             'id' => $strangerWidget->id,
             'user_id' => $stranger->id,
         ]);
 
-        $this->assertDatabaseCount('dashboard_widgets', 2);
+        $this->assertDatabaseCount('dashboard_widgets', 1);
     }
 
     public function test_each_member_manages_their_own_dashboard(): void
@@ -215,22 +230,25 @@ class DashboardWidgetsTest extends TestCase
         $this->actingAs($this->owner);
 
         $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [$this->widgetPayload()],
         ])->assertOk();
 
-        // The member has their own (empty) dashboard and deleting the
-        // owner's widget is a 404 — dashboards are per member.
+        // The member has their own (empty) dashboard with its own revision,
+        // and deleting the owner's widget is a 404 — dashboards are per
+        // member.
         $this->actingAs($this->member);
 
         $this->getJson("/api/dashboard/{$this->profile->id}/widgets")
             ->assertOk()
-            ->assertJson(['widgets' => []]);
+            ->assertJson(['widgets' => [], 'revision' => 1]);
 
         $widgetId = DashboardWidget::query()->sole()->id;
 
         $this->deleteJson("/api/dashboard/{$this->profile->id}/widgets/{$widgetId}")->assertNotFound();
 
         $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [$this->widgetPayload(['type' => 'radial', 'view_type' => 'pie'])],
         ])->assertOk();
 
@@ -247,12 +265,17 @@ class DashboardWidgetsTest extends TestCase
         $this->actingAs($this->owner);
 
         $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [$this->widgetPayload()],
         ])->assertOk();
 
         $widgetId = DashboardWidget::query()->sole()->id;
 
-        $this->deleteJson("/api/dashboard/{$this->profile->id}/widgets/{$widgetId}")->assertNoContent();
+        // The removal is a layout write: it carries the expected revision
+        // and returns the new one (issue #55).
+        $this->deleteJson("/api/dashboard/{$this->profile->id}/widgets/{$widgetId}?expected_revision=2")
+            ->assertOk()
+            ->assertJson(['revision' => 3]);
 
         $this->assertDatabaseCount('dashboard_widgets', 0);
     }
@@ -262,6 +285,7 @@ class DashboardWidgetsTest extends TestCase
         $this->actingAs($this->owner);
 
         $response = $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [
                 $this->widgetPayload(['title' => '  Spending  ']),
                 $this->widgetPayload(['type' => 'radial', 'view_type' => 'pie', 'title' => '   ']),
@@ -296,6 +320,7 @@ class DashboardWidgetsTest extends TestCase
 
         foreach ($cases as $case => $overrides) {
             $response = $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+                'expected_revision' => 1,
                 'widgets' => [$this->widgetPayload($overrides)],
             ]);
 
@@ -318,6 +343,7 @@ class DashboardWidgetsTest extends TestCase
         $this->actingAs($this->member);
 
         $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [$this->widgetPayload([
                 'selection' => [['kind' => 'envelope', 'envelope_id' => $hidden->id]],
             ])],
@@ -331,6 +357,7 @@ class DashboardWidgetsTest extends TestCase
         $this->actingAs($this->owner);
 
         $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [$this->widgetPayload([
                 'selection' => [
                     ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
@@ -340,6 +367,7 @@ class DashboardWidgetsTest extends TestCase
         ])->assertUnprocessable();
 
         $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [$this->widgetPayload([
                 'selection' => [
                     ['kind' => 'group', 'name' => 'A', 'envelope_ids' => [$this->gas->id, $this->groceries->id]],
@@ -356,12 +384,14 @@ class DashboardWidgetsTest extends TestCase
         $this->actingAs($this->owner);
 
         $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [$this->widgetPayload([
                 'selection' => [['kind' => 'group', 'name' => '   ', 'envelope_ids' => [$this->gas->id]]],
             ])],
         ])->assertUnprocessable();
 
         $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [$this->widgetPayload([
                 'selection' => [['kind' => 'group', 'name' => 'Combine', 'envelope_ids' => []]],
             ])],
@@ -375,6 +405,7 @@ class DashboardWidgetsTest extends TestCase
         $this->actingAs($this->owner);
 
         $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
             'widgets' => [$this->widgetPayload([
                 'selection' => [
                     ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
@@ -398,15 +429,249 @@ class DashboardWidgetsTest extends TestCase
         );
     }
 
+    /**
+     * Two writers editing against the same revision (two tabs, or a stale
+     * autosave racing a newer save): the first writer wins, the stale one
+     * changes nothing (issue #55).
+     */
+    public function test_a_save_refuses_a_stale_revision(): void
+    {
+        $this->actingAs($this->owner);
+
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
+            'widgets' => [$this->widgetPayload()],
+        ])->assertOk()->assertJsonPath('revision', 2);
+
+        // The second writer still edits against revision 1: refused with the
+        // current revision, and the saved layout is untouched.
+        $response = $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
+            'widgets' => [$this->widgetPayload(['type' => 'radial', 'view_type' => 'pie'])],
+        ]);
+
+        $response->assertStatus(409)
+            ->assertJsonPath('revision', 2);
+
+        $this->assertDatabaseCount('dashboard_widgets', 1);
+        $this->assertDatabaseHas('dashboard_widgets', ['type' => 'envelope_spending']);
+    }
+
+    public function test_the_save_requires_the_revision_the_edit_was_made_against(): void
+    {
+        $this->actingAs($this->owner);
+
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'widgets' => [$this->widgetPayload()],
+        ])->assertUnprocessable()->assertJsonValidationErrors('expected_revision');
+
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 0,
+            'widgets' => [$this->widgetPayload()],
+        ])->assertUnprocessable()->assertJsonValidationErrors('expected_revision');
+
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 'two',
+            'widgets' => [$this->widgetPayload()],
+        ])->assertUnprocessable()->assertJsonValidationErrors('expected_revision');
+
+        $this->assertDatabaseCount('dashboard_widgets', 0);
+    }
+
+    /**
+     * A create whose response was lost must not create a second copy when
+     * the client retries the same save (issue #55).
+     */
+    public function test_replaying_a_successful_save_does_not_duplicate_it(): void
+    {
+        $this->actingAs($this->owner);
+
+        $payload = [
+            'expected_revision' => 1,
+            'widgets' => [$this->widgetPayload()],
+        ];
+
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", $payload)
+            ->assertOk()
+            ->assertJsonPath('revision', 2);
+
+        // The retry (same payload, same revision) cannot apply twice: the
+        // revision has moved on, the replay is refused.
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", $payload)
+            ->assertStatus(409);
+
+        $this->assertDatabaseCount('dashboard_widgets', 1);
+    }
+
+    /**
+     * Two initial saves of an empty layout: exactly one may win — the row
+     * that arbitrates exists even for a layout with zero widgets (issue #55).
+     */
+    public function test_two_initial_saves_of_an_empty_layout_cannot_both_win(): void
+    {
+        $this->actingAs($this->owner);
+
+        $payload = ['expected_revision' => 1, 'widgets' => []];
+
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", $payload)
+            ->assertOk()
+            ->assertJsonPath('revision', 2);
+
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", $payload)
+            ->assertStatus(409);
+
+        $this->assertDatabaseCount('dashboard_widgets', 0);
+
+        // The layout row exists once and carries the advanced revision.
+        $this->assertSame(1, DashboardLayout::query()->count());
+        $this->assertSame(2, DashboardLayout::query()->sole()->revision);
+    }
+
+    /**
+     * A PUT captured before a DELETE cannot resurrect the removed widget
+     * once the delete has landed (issue #55).
+     */
+    public function test_a_late_save_cannot_resurrect_a_deleted_widget(): void
+    {
+        $this->actingAs($this->owner);
+
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
+            'widgets' => [$this->widgetPayload(), $this->widgetPayload()],
+        ])->assertOk();
+
+        $widgetId = DashboardWidget::query()->first()->id;
+
+        $this->deleteJson("/api/dashboard/{$this->profile->id}/widgets/{$widgetId}?expected_revision=2")
+            ->assertOk()
+            ->assertJsonPath('revision', 3);
+
+        // The stale PUT still references the deleted widget id and the
+        // revision it was captured against: refused on the revision — the
+        // widget is not recreated.
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 2,
+            'widgets' => [
+                $this->widgetPayload(['title' => 'Resurrected']) + ['id' => $widgetId],
+            ],
+        ])->assertStatus(409);
+
+        $this->assertDatabaseCount('dashboard_widgets', 1);
+        $this->assertDatabaseMissing('dashboard_widgets', ['id' => $widgetId]);
+
+        // Even a full save without the id cannot sneak past the stale
+        // revision — the removal stands.
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 2,
+            'widgets' => [$this->widgetPayload(['title' => 'Fresh'])],
+        ])->assertStatus(409);
+
+        $this->assertDatabaseCount('dashboard_widgets', 1);
+    }
+
+    public function test_a_save_referencing_a_widget_deleted_elsewhere_is_rejected(): void
+    {
+        $this->actingAs($this->owner);
+
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
+            'widgets' => [$this->widgetPayload()],
+        ])->assertOk();
+
+        $widgetId = DashboardWidget::query()->sole()->id;
+
+        // Removed from another device (the revision advanced to 3).
+        $this->deleteJson("/api/dashboard/{$this->profile->id}/widgets/{$widgetId}?expected_revision=2")
+            ->assertOk();
+
+        // The client's next autosave still carries the deleted id: refused
+        // — it must reconcile with the current layout instead of silently
+        // recreating the widget under a new identity (issue #55).
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 3,
+            'widgets' => [
+                $this->widgetPayload(['title' => 'Back?']) + ['id' => $widgetId],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('widgets');
+
+        $this->assertDatabaseCount('dashboard_widgets', 0);
+    }
+
+    public function test_a_widget_removal_refuses_a_stale_revision(): void
+    {
+        $this->actingAs($this->owner);
+
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
+            'widgets' => [$this->widgetPayload()],
+        ])->assertOk();
+
+        $widgetId = DashboardWidget::query()->sole()->id;
+
+        $this->deleteJson("/api/dashboard/{$this->profile->id}/widgets/{$widgetId}?expected_revision=1")
+            ->assertStatus(409)
+            ->assertJsonPath('revision', 2);
+
+        $this->assertDatabaseCount('dashboard_widgets', 1);
+    }
+
+    /**
+     * Removing the last widget is a layout write like any other: the
+     * revision advances even though the widget list ends up empty (issue
+     * #55), and the empty layout presents its revision on read.
+     */
+    public function test_removing_the_last_widget_still_advances_the_revision(): void
+    {
+        $this->actingAs($this->owner);
+
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
+            'widgets' => [$this->widgetPayload()],
+        ])->assertOk();
+
+        $widgetId = DashboardWidget::query()->sole()->id;
+
+        $this->deleteJson("/api/dashboard/{$this->profile->id}/widgets/{$widgetId}?expected_revision=2")
+            ->assertOk()
+            ->assertJsonPath('revision', 3);
+
+        $this->getJson("/api/dashboard/{$this->profile->id}/widgets")
+            ->assertOk()
+            ->assertJson(['widgets' => [], 'revision' => 3]);
+    }
+
+    public function test_a_widget_removal_requires_the_expected_revision(): void
+    {
+        $this->actingAs($this->owner);
+
+        $this->putJson("/api/dashboard/{$this->profile->id}/widgets", [
+            'expected_revision' => 1,
+            'widgets' => [$this->widgetPayload()],
+        ])->assertOk();
+
+        $widgetId = DashboardWidget::query()->sole()->id;
+
+        $this->deleteJson("/api/dashboard/{$this->profile->id}/widgets/{$widgetId}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('expected_revision');
+
+        $this->deleteJson("/api/dashboard/{$this->profile->id}/widgets/{$widgetId}?expected_revision=0")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('expected_revision');
+
+        $this->assertDatabaseCount('dashboard_widgets', 1);
+    }
+
     public function test_listing_widgets_runs_a_constant_number_of_queries(): void
     {
         $url = "/api/dashboard/{$this->profile->id}/widgets";
         $this->actingAs($this->owner);
 
-        $this->actingAs($this->owner)->putJson($url, ['widgets' => [$this->widgetPayload()]])->assertOk();
+        $this->actingAs($this->owner)->putJson($url, ['expected_revision' => 1, 'widgets' => [$this->widgetPayload()]])->assertOk();
         $one = count($this->queriesDuring(fn () => $this->getJson($url)->assertOk()->assertJsonCount(1, 'widgets')));
 
-        $this->putJson($url, ['widgets' => array_map(fn (int $i): array => $this->widgetPayload([
+        $this->putJson($url, ['expected_revision' => 2, 'widgets' => array_map(fn (int $i): array => $this->widgetPayload([
             'selection' => [
                 ['kind' => 'envelope', 'envelope_id' => $this->gas->id],
                 ['kind' => 'group', 'name' => "Group {$i}", 'envelope_ids' => [$this->groceries->id, $this->paycheck->id]],

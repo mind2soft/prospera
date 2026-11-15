@@ -29,6 +29,7 @@ import {
 } from '@/composables/dashboardQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useLayoutAutosave } from '@/composables/useLayoutAutosave';
+import { errorMessage } from '@/lib/api';
 import { moveItem } from '@/lib/list';
 import { dashboard as dashboardRoute } from '@/routes';
 import type {
@@ -196,27 +197,39 @@ const onRemove = (): void => {
 const onDestroy = (): void => {
     const widget = settingsWidget.value;
 
-    if (widget === null || widget.id <= 0) {
+    if (widget === null) {
+        return;
+    }
+
+    if (widget.id <= 0 || profileId.value === null) {
         // Not saved yet — drop it locally.
         widgets.value = widgets.value.filter((w) => w !== widget);
         confirmRemove.value = false;
         return;
     }
 
-    removeWidget.mutate(widget.id, {
-        onSuccess: () => {
-            confirmRemove.value = false;
-            // The canonical list is invalidated by the mutation; keep the
-            // UI responsive by removing the row immediately too (without a
-            // redundant autosave round-trip).
-            withoutAutosave(() => {
-                widgets.value = widgets.value.filter((w) => w !== widget);
-            });
+    // The removal edits against the profile's layout revision (issue #55);
+    // the profile id travels with the mutation so its callbacks can never
+    // land on another profile's cache if the user switches mid-request.
+    removeWidget.mutate(
+        { profileId: profileId.value, widgetId: widget.id },
+        {
+            onSuccess: () => {
+                confirmRemove.value = false;
+                // The canonical list is invalidated by the mutation; keep the
+                // UI responsive by removing the row immediately too (without a
+                // redundant autosave round-trip).
+                withoutAutosave(() => {
+                    widgets.value = widgets.value.filter((w) => w !== widget);
+                });
+            },
+            onError: (error) => {
+                // A refused removal (409) carries the server's localized
+                // reconciliation message (issue #55).
+                toast.error(errorMessage(error, t('dashboard.toast.failed')));
+            },
         },
-        onError: () => {
-            toast.error(t('dashboard.toast.failed'));
-        },
-    });
+    );
 };
 </script>
 
