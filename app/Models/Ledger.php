@@ -24,6 +24,9 @@ use Illuminate\Support\Facades\DB;
  * @property CarbonImmutable $end_date
  * @property int $starting_balance encrypted at rest (docs/encryption.md)
  * @property CarbonImmutable|null $closed_at
+ * @property CarbonImmutable|null $expired_notified_at set when the daily
+ *                                                     run first detects the ledger past its end date while open —
+ *                                                     at most once ever (issue #50, docs/notifications.md)
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
@@ -39,6 +42,7 @@ class Ledger extends Model implements HasEncryptedAmounts, HasImmutableColumns
         'start_date' => 'date',
         'end_date' => 'date',
         'closed_at' => 'datetime',
+        'expired_notified_at' => 'datetime',
     ];
 
     /**

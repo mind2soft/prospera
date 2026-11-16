@@ -25,4 +25,15 @@ return [
         'manage_notifications' => 'Manage your notifications:',
     ],
 
+    // Ledger expired (issue #50): an open ledger whose end date has passed,
+    // sent once per ledger when the daily run first detects it.
+    'ledger_expired' => [
+        'subject' => '[Prospera] Ledger ":ledger" has reached its end date',
+        'subject_generic' => '[Prospera] A ledger has reached its end date',
+        'intro' => 'The open ledger ":ledger" of your financial profile ":profile" has reached its end date (:end — it ran from :start). Its end date has passed: transactions dated after :end can no longer be recorded on it.',
+        'next_steps_owner' => 'As the ledger owner, you can close it now, or create the next period\'s ledger first and close this one once you are done reviewing it.',
+        'next_steps_member' => 'The ledger owner can close it, or create the next period\'s ledger to keep recording transactions.',
+        'manage_notifications' => 'Manage your notifications:',
+    ],
+
 ];

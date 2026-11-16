@@ -40,4 +40,14 @@ class QueueScheduleTest extends TestCase
         $this->assertSame('0 0 * * *', $prune->expression);
         $this->assertStringContainsString('--hours=720', (string) $prune->command);
     }
+
+    public function test_expired_ledger_notifications_run_daily_without_overlapping(): void
+    {
+        $run = $this->scheduled('ledgers:notify-expired');
+
+        $this->assertNotNull($run, 'ledgers:notify-expired is not scheduled');
+        $this->assertSame('0 0 * * *', $run->expression);
+        $this->assertTrue($run->withoutOverlapping);
+        $this->assertTrue($run->onOneServer);
+    }
 }
