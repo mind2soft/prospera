@@ -67,6 +67,17 @@ class Transaction extends Model implements HasEncryptedAmounts
     }
 
     /**
+     * The decrypted amount in exact integer minor units — the stored unit —
+     * without the currency-unit roundtrip (int|float → string → int) that
+     * the `amount` accessor performs. Aggregate scans sum in minor units and
+     * only convert for the payload, so every row is decoded once and exactly.
+     */
+    public function amountMinorUnits(): int
+    {
+        return $this->decryptStoredAmount('amount', $this->attributes['amount'] ?? null);
+    }
+
+    /**
      * Whether this pending deletion can still be undone.
      */
     public function isRestorable(): bool
