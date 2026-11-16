@@ -14,6 +14,8 @@ type TrackedRequest = {
     envelopeId: number;
     amount: number;
     revision: number;
+    /** Whether the save rode the unload transport (a `pagehide` flush). */
+    unload: boolean;
     settle: (revision: number) => void;
     /** Rejects the request; a status marks the error like an ApiError. */
     fail: (status?: number) => void;
@@ -24,10 +26,11 @@ class DeferredTransport {
 
     readonly calls: string[] = [];
 
-    send: AmountSaveTransport = (request) =>
+    send: AmountSaveTransport = (request, transport) =>
         new Promise<number>((resolve, reject) => {
             this.requests.push({
                 ...request,
+                unload: transport?.unload === true,
                 settle: (revision) => {
                     this.calls.push(
                         `ack ${request.budgetId}:${request.envelopeId}=${request.amount}`,
@@ -604,5 +607,74 @@ describe('BudgetSaveQueue', () => {
         expect(queue.hasPendingEdits(10, { envelopeId: 7, amount: 300 })).toBe(
             true,
         );
+    });
+
+    it('sends ordinary saves without the unload transport', async () => {
+        const transport = new DeferredTransport();
+        const { queue, clock } = configuredQueue(transport.send, {
+            revisions: new Map([['b:7', 1]]),
+        });
+
+        queue.queue(10, 7, 300);
+        clock.advance();
+        transport.requests[0]?.settle(2);
+        await flushMicrotasks();
+
+        // A debounced save outlives the component, not the page: a normal
+        // request (issue #54).
+        expect(transport.requests[0]?.unload).toBe(false);
+    });
+
+    it('a pagehide flush sends its saves as keepalive', async () => {
+        const transport = new DeferredTransport();
+        const { queue } = configuredQueue(transport.send, {
+            revisions: new Map([
+                ['b:7', 1],
+                ['b:8', 1],
+            ]),
+        });
+
+        queue.queue(10, 7, 300);
+        queue.queue(10, 8, 500);
+        // The edits are still waiting on their debounce when the page
+        // unloads: the flush cancels the timers and sends now.
+        expect(transport.requests).toHaveLength(0);
+
+        // The page is unloading: no continuation will run, so the flush's
+        // saves ride the unload transport (issue #54).
+        const flushPromise = queue.flush(undefined, { unload: true });
+        for (const request of transport.requests) {
+            request.settle(2);
+        }
+        expect(await flushPromise).toBe(true);
+
+        expect(transport.requests[0]?.unload).toBe(true);
+        expect(transport.requests[1]?.unload).toBe(true);
+    });
+
+    it('an unload flush keeps the unload transport for late arrivals', async () => {
+        const transport = new DeferredTransport();
+        const { queue, clock } = configuredQueue(transport.send, {
+            revisions: new Map([['b:7', 1]]),
+        });
+
+        queue.queue(10, 7, 300);
+        clock.advance();
+        expect(transport.requests).toHaveLength(1);
+
+        // The page unloads while the first save is in flight; an edit
+        // typed right before it arrives mid-flush (#87). Its save must
+        // ride the unload transport too — no continuation runs after the
+        // handler once the page is really gone (issue #54).
+        const flushPromise = queue.flush(undefined, { unload: true });
+        queue.queue(10, 7, 400);
+        transport.requests[0]?.settle(2);
+        await flushMicrotasks();
+        transport.requests[1]?.settle(3);
+        expect(await flushPromise).toBe(true);
+        await flushMicrotasks();
+
+        expect(transport.requests[1]?.unload).toBe(true);
+        expect(transport.requests[1]?.amount).toBe(400);
     });
 });

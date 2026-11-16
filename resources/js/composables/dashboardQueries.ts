@@ -61,11 +61,17 @@ export function useSaveDashboardLayout() {
             widgets: DashboardWidgetPayload[];
             /** The layout revision the payload was captured against (issue #55). */
             expectedRevision: number;
+            /** True for a `pagehide` flush: the save may ride keepalive (#54). */
+            unload?: boolean;
         }) =>
-            dashboardApi.save(input.profileId, {
-                widgets: input.widgets,
-                expected_revision: input.expectedRevision,
-            }),
+            dashboardApi.save(
+                input.profileId,
+                {
+                    widgets: input.widgets,
+                    expected_revision: input.expectedRevision,
+                },
+                { unload: input.unload === true },
+            ),
         onSuccess: (data, { profileId }) => {
             // The response carries the new revision: the next save edits
             // against the layout this save just wrote (issue #55).

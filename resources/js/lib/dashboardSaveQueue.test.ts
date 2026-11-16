@@ -16,8 +16,11 @@ type TrackedSave = {
     widgets: DashboardWidgetPayload[];
     /** The revision the save was sent with, read from the save at send time. */
     revision: number;
+    /** Whether the save rode the unload transport (a `pagehide` flush). */
+    unload: boolean;
     settle: (revision: number, ids: number[]) => void;
-    fail: () => void;
+    /** Rejects the request; a status marks the error like an ApiError. */
+    fail: (status?: number) => void;
 };
 
 class DeferredTransport {
@@ -26,6 +29,7 @@ class DeferredTransport {
     send = (
         save: QueuedSave,
         input: { profileId: number; revision: number },
+        transport?: { unload?: boolean },
     ): Promise<{
         widgets: DashboardWidget[];
         revision: number;
@@ -37,6 +41,7 @@ class DeferredTransport {
                 // The queue passes the revision it read from the save at
                 // send time (a queued save adopts the settled revision).
                 revision: input.revision,
+                unload: transport?.unload === true,
                 settle: (revision, ids) =>
                     resolve({
                         revision,
@@ -46,7 +51,17 @@ class DeferredTransport {
                             order: index,
                         })) as DashboardWidget[],
                     }),
-                fail: () => reject(new Error('save failed')),
+                fail: (status?: number) => {
+                    const error: Error & { status?: number } = new Error(
+                        'save failed',
+                    );
+
+                    if (status !== undefined) {
+                        error.status = status;
+                    }
+
+                    reject(error);
+                },
             });
         });
 }
@@ -76,7 +91,7 @@ const saveOf = (
 
     const queued: QueuedSave = {
         ...save,
-        run: (input) => transport.send(queued, input),
+        run: (input, options) => transport.send(queued, input, options),
         adopt: () => {},
         fail: () => {},
     };
@@ -247,5 +262,178 @@ describe('layout save queue', () => {
         // A response whose length does not match the payload is never
         // interpreted (partial or mismatched data).
         expect(assignedIds(save, saved.slice(0, 2)).size).toBe(0);
+    });
+
+    it('sends ordinary saves without the unload transport', async () => {
+        const transport = new DeferredTransport();
+        const queue = createLayoutSaveQueue();
+
+        const { queued } = saveOf(1, 1, transport, [
+            { key: -1, widget: payload() },
+        ]);
+
+        queue.enqueue(queued);
+        transport.requests[0].settle(2, []);
+
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // A debounced save or an SPA-unmount flush outlives the component,
+        // not the page: a normal request (issue #54).
+        expect(transport.requests[0].unload).toBe(false);
+    });
+
+    it('sends an unload flush as keepalive and retries a failed one', async () => {
+        const transport = new DeferredTransport();
+        const queue = createLayoutSaveQueue();
+        const failures: unknown[] = [];
+
+        const { queued } = saveOf(1, 1, transport, [
+            { key: -1, widget: payload() },
+        ]);
+        queued.fail = (error) => {
+            failures.push(error);
+        };
+
+        queue.enqueue(queued, { unload: true });
+
+        expect(transport.requests).toHaveLength(1);
+        // The pagehide flush rides keepalive (issue #54).
+        expect(transport.requests[0].unload).toBe(true);
+
+        transport.requests[0].fail();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // The save failed: the failure is reported…
+        expect(failures).toHaveLength(1);
+        // …and the save returns to the queue — a document that survives the
+        // unload (back/forward cache) keeps the unsaved state recoverable.
+        expect(queue.isBusy(1)).toBe(true);
+
+        // Leaving again retries it, still on the unload transport.
+        queue.sendQueuedNow();
+
+        expect(transport.requests).toHaveLength(2);
+        expect(transport.requests[1].unload).toBe(true);
+
+        transport.requests[1].settle(2, []);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(failures).toHaveLength(1);
+        expect(queue.isBusy(1)).toBe(false);
+    });
+
+    it('replaces a failed unload save with a newer enqueued layout', async () => {
+        const transport = new DeferredTransport();
+        const queue = createLayoutSaveQueue();
+
+        const stale = saveOf(1, 1, transport, [{ key: -1, widget: payload() }]);
+        const newer = saveOf(1, 1, transport, [
+            { key: -1, widget: payload() },
+            { key: -2, widget: payload() },
+        ]);
+
+        queue.enqueue(stale.queued, { unload: true });
+
+        expect(transport.requests).toHaveLength(1);
+
+        transport.requests[0].fail();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(queue.isBusy(1)).toBe(true);
+
+        // A newer edit is a full layout that supersedes the failed one:
+        // sending the stale layout after it would revert the newer edits.
+        queue.enqueue(newer.queued);
+
+        expect(transport.requests).toHaveLength(2);
+        expect(transport.requests[1].widgets).toHaveLength(2);
+        expect(transport.requests[1].unload).toBe(false);
+
+        transport.requests[1].settle(2, []);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // The replaced stale layout is never sent afterwards.
+        expect(transport.requests).toHaveLength(2);
+        expect(queue.isBusy(1)).toBe(false);
+    });
+
+    it('a newer enqueued layout survives a late unload-save failure', async () => {
+        const transport = new DeferredTransport();
+        const queue = createLayoutSaveQueue();
+
+        const stale = saveOf(1, 1, transport, [{ key: -1, widget: payload() }]);
+        const newer = saveOf(1, 1, transport, [
+            { key: -1, widget: payload() },
+            { key: -2, widget: payload() },
+        ]);
+
+        // The pagehide flush sends the stale layout; the document survives
+        // (back/forward cache) and the user edits while it is still out.
+        queue.enqueue(stale.queued, { unload: true });
+        queue.enqueue(newer.queued);
+
+        expect(transport.requests).toHaveLength(1);
+        expect(queue.isBusy(1)).toBe(true);
+
+        transport.requests[0].fail();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // The failure must not put the stale snapshot back over the newer
+        // layout: the settle chain sends the newer one instead.
+        expect(transport.requests).toHaveLength(2);
+        expect(transport.requests[1].widgets).toHaveLength(2);
+
+        transport.requests[1].settle(2, []);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        // The stale layout is never sent afterwards.
+        expect(transport.requests).toHaveLength(2);
+        expect(queue.isBusy(1)).toBe(false);
+    });
+
+    it('a conflicted unload save is never re-queued for a retry', async () => {
+        const transport = new DeferredTransport();
+        const queue = createLayoutSaveQueue();
+        const failures: unknown[] = [];
+
+        const { queued } = saveOf(1, 1, transport, [
+            { key: -1, widget: payload() },
+        ]);
+        queued.fail = (error) => {
+            failures.push(error);
+        };
+
+        queue.enqueue(queued, { unload: true });
+
+        expect(transport.requests).toHaveLength(1);
+
+        // The server keeps a newer layout (another tab, another device):
+        // the local one is stale and is never re-sent (issue #55) — the
+        // fail handler reconciles with the canonical layout instead.
+        transport.requests[0].fail(409);
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(failures).toHaveLength(1);
+        expect(queue.isBusy(1)).toBe(false);
+
+        queue.sendQueuedNow();
+
+        expect(transport.requests).toHaveLength(1);
     });
 });

@@ -1,5 +1,6 @@
 import { api } from '@/lib/api';
 import { browserTimeZone } from '@/lib/calendar';
+import type { UnloadOptions } from '@/lib/unloadTransport';
 import * as widgets from '@/routes/api/dashboard/widgets';
 import type {
     DashboardLayoutData,
@@ -20,9 +21,16 @@ export const dashboardApi = {
     save: (
         profileId: number,
         input: SaveLayoutInput,
+        transport: UnloadOptions = {},
     ): Promise<DashboardLayoutData> =>
-        // keepalive: the dashboard flushes its autosave while unloading.
-        api(widgets.save(profileId), { body: input, keepalive: true }),
+        // Only an unload-time flush (a `pagehide` save) may ride keepalive,
+        // and even then only while the body fits the browser's keepalive
+        // budget (lib/api.ts, issue #54): ordinary saves use a normal
+        // request, and an oversized layout is never sent keepalive.
+        api(widgets.save(profileId), {
+            body: input,
+            unload: transport.unload === true,
+        }),
 
     /** The removal is a layout write: it carries and returns the revision (issue #55). */
     remove: (

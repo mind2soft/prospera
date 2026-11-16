@@ -228,10 +228,11 @@ type RadialData = {
   queued per profile) by `composables/useLayoutAutosave.ts`, each editing
   against the layout revision it was captured from (above); leaving the
   page — another page, a reload or closing the tab — sends a pending edit
-  right away (`useFlushOnLeave`, `keepalive` requests), and a failed save
-  shows an error toast (a refused stale save reconciles with the server's
-  layout instead of being re-sent). Removing widgets is destructive →
-  confirmation.
+  right away (`useFlushOnLeave`; only a `pagehide` flush may ride
+  `keepalive`, and only while the body fits the browser's keepalive budget
+  — `lib/unloadTransport.ts`), and a failed save shows an error toast (a
+  refused stale save reconciles with the server's layout instead of being
+  re-sent). Removing widgets is destructive → confirmation.
 - Widget data auto-refreshes **every 15 minutes** via vue Query
   `refetchInterval`, **paused when the tab is hidden**
   (`document.visibilityState`) so background tabs don't burn requests.

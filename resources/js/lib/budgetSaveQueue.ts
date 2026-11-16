@@ -17,6 +17,8 @@
  * with deferred promises and a manual clock instead of fake globals.
  */
 
+import type { UnloadOptions } from '@/lib/unloadTransport';
+
 /** One amount save as the transport receives it. */
 export type AmountSaveRequest = {
     budgetId: number;
@@ -33,9 +35,12 @@ export type AmountSaveRequest = {
 /**
  * Sends one save and resolves with the assignment revision the server
  * acknowledged — even when the amount it carried was no longer the newest.
+ * The transport options carry the leave reason: only a `pagehide` flush
+ * rides keepalive (issue #54).
  */
 export type AmountSaveTransport = (
     request: AmountSaveRequest,
+    transport?: UnloadOptions,
 ) => Promise<number>;
 
 /** Reads the assignment revision currently known to the app's cache. */
@@ -106,6 +111,15 @@ export class BudgetSaveQueue {
     private delayMs = DEFAULT_SAVE_DELAY_MS;
 
     /**
+     * How many unload flushes (a `pagehide` flush, issue #54) are currently
+     * draining. A send issued while one drains — the follow-up generation
+     * of an in-flight save — must ride the unload transport too: no
+     * continuation runs after the pagehide handler once the page is really
+     * gone.
+     */
+    private unloadDepth = 0;
+
+    /**
      * Wires the transport and the cache that knows each assignment's
      * revision. Must be called before any edit is queued.
      */
@@ -170,9 +184,18 @@ export class BudgetSaveQueue {
     /**
      * One save in flight per identity; when it settles, the newest desired
      * amount is sent next — never a second request in parallel. Resolves
-     * when the identity has settled.
+     * when the identity has settled. The transport options ride along: a
+     * `pagehide` flush sends its saves as keepalive requests (issue #54).
      */
-    private send(state: IdentityState): Promise<void> {
+    private send(
+        state: IdentityState,
+        transport?: UnloadOptions,
+    ): Promise<void> {
+        // A send issued while an unload flush drains (no options of its
+        // own) inherits the unload transport (issue #54).
+        const effective: UnloadOptions | undefined =
+            transport ?? (this.unloadDepth > 0 ? { unload: true } : undefined);
+
         if (state.active || state.desired === state.acknowledged) {
             // Nothing to persist: an in-flight save settles through its own
             // chain, and a timer that fired late must not re-send an amount
@@ -185,12 +208,15 @@ export class BudgetSaveQueue {
         const amount = state.desired;
         let request: Promise<number>;
         try {
-            request = this.transport({
-                budgetId: state.budgetId,
-                envelopeId: state.envelopeId,
-                amount,
-                revision: state.revision,
-            });
+            request = this.transport(
+                {
+                    budgetId: state.budgetId,
+                    envelopeId: state.envelopeId,
+                    amount,
+                    revision: state.revision,
+                },
+                effective,
+            );
         } catch (error) {
             // A transport that fails synchronously (never configured) must
             // settle the identity like a rejected promise would.
@@ -237,7 +263,11 @@ export class BudgetSaveQueue {
                 const newerQueued =
                     !state.failed && state.desired !== state.acknowledged;
 
-                return newerQueued ? this.send(state) : undefined;
+                // The follow-up inherits the transport options: during a
+                // `pagehide` flush no continuation runs after the handler,
+                // so the newer generation must ride keepalive too (issue
+                // #54).
+                return newerQueued ? this.send(state, effective) : undefined;
             })
             .finally(() => this.emit());
         this.emit();
@@ -251,6 +281,11 @@ export class BudgetSaveQueue {
      * failed. An identity that is only awaiting its in-flight request is
      * waited for without being sent again.
      *
+     * The transport options ride along on every send this flush issues: a
+     * `pagehide` flush sends its saves as keepalive requests (issue #54) —
+     * including the late-arrival passes below, since no continuation runs
+     * after the handler once the page is really gone.
+     *
      * #87: an edit typed while this flush drains must not slip past the
      * caller's gate — after draining, any newly queued generation (a pending
      * debounce timer or an in-flight save) is flushed again, until a pass
@@ -258,7 +293,29 @@ export class BudgetSaveQueue {
      * retried by the *next* flush, so a persistent failure cannot spin this
      * loop; the final check still refuses.
      */
-    async flush(budgetId?: number): Promise<boolean> {
+    async flush(
+        budgetId?: number,
+        transport?: UnloadOptions,
+    ): Promise<boolean> {
+        const unload = transport?.unload === true;
+
+        if (unload) {
+            this.unloadDepth++;
+        }
+
+        try {
+            return await this.drain(budgetId, transport);
+        } finally {
+            if (unload) {
+                this.unloadDepth--;
+            }
+        }
+    }
+
+    private async drain(
+        budgetId?: number,
+        transport?: UnloadOptions,
+    ): Promise<boolean> {
         for (;;) {
             const states = [...this.identities.values()].filter(
                 (state) =>
@@ -273,7 +330,7 @@ export class BudgetSaveQueue {
                 // not be overwritten silently). Publish still refuses via
                 // `failed`.
                 if (!state.active && !state.conflicted) {
-                    this.send(state);
+                    this.send(state, transport);
                 }
             }
             await Promise.all(states.map((state) => state.drained));
