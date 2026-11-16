@@ -62,7 +62,7 @@ const TOGGLES = [
         label: 'settings.notifications.envelope_limit_exceeded',
         description:
             'settings.notifications.envelope_limit_exceededDescription',
-        available: false,
+        available: true,
     },
     {
         key: 'profile_invite',

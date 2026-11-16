@@ -129,7 +129,11 @@ is not silently overwritten.
   already has a published budget **replaces** it — the previously published budget for
   that month is deleted immediately (with its shares and assignments). Transactions
   are independent of budgets and are never blocked by (or blocking) this replacement.
-  The publish confirmation dialog must warn about this replacement.
+  The publish confirmation dialog must warn about this replacement. The replacement
+  re-arms the **envelope limit exceeded** notification for the month: the deleted
+  budget's notification claim is removed with it (cascade), so the new budget's
+  allocation is checked on the next crossing
+  ([notifications.md](notifications.md)).
 - **Concurrency** — publishing and every assignment edit (add, update,
   remove) lock the budget row and re-check the draft state inside their
   transaction, so an edit racing a publish never modifies a published

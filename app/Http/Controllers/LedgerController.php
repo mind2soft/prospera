@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ManagesShares;
 use App\Http\Requests\Ledger\LedgerTransactionsRequest;
 use App\Http\Requests\Ledger\StoreLedgerRequest;
 use App\Http\Requests\Ledger\StoreTransactionRequest;
+use App\Jobs\CheckEnvelopeLimit;
 use App\Mail\ContributorTransaction;
 use App\Models\Budget;
 use App\Models\BudgetEnvelope;
@@ -466,6 +467,18 @@ class LedgerController extends Controller
                 ledgerId: $ledger->id,
             ));
         }
+
+        // "Envelope limit exceeded" notification (issue #52): the
+        // allocation-crossing check runs off the request path, in the
+        // queue — dispatched here, after the `DB::transaction` above
+        // returned (i.e. after the commit; the job is also marked
+        // afterCommit), so a rolled-back insert never notifies and the
+        // month's totals are read from committed rows only. The reusable
+        // check itself lives in App\Services\EnvelopeLimitChecker — both
+        // this endpoint and the schedule-materialized transactions of #15
+        // call it; revenue envelopes and every other precondition are the
+        // checker's business, not the caller's.
+        dispatch(new CheckEnvelopeLimit($transaction->id));
 
         return response()->json([
             'transaction' => $this->serializeTransaction(

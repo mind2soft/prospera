@@ -58,4 +58,19 @@ return [
         'revenue' => 'revenu',
     ],
 
+    // Limite d'enveloppe dépassée (issue #52) : les dépenses enregistrées
+    // pour une enveloppe au cours d'un mois ont franchi son allocation sur
+    // le budget publié de ce mois — un courriel par franchissement, par
+    // budget publié, enveloppe et grand livre.
+    'envelope_limit_exceeded' => [
+        'subject' => '[Prospera] L\'enveloppe « :envelope » dépasse son budget de :month',
+        'subject_generic' => '[Prospera] Une enveloppe dépasse son budget mensuel',
+        'intro' => 'L\'enveloppe « :envelope » du grand livre « :ledger » (profil financier « :profile ») dépasse son allocation pour :month.',
+        'allocated' => 'Alloué : :amount',
+        'spent' => 'Enregistré ce mois : :amount',
+        'over' => 'Montant dépassé : :amount',
+        'next_steps' => 'Le mois est visible dans le grand livre ci-dessous.',
+        'manage_notifications' => 'Gérer vos notifications :',
+    ],
+
 ];

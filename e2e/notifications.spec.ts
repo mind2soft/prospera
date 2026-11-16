@@ -107,16 +107,14 @@ test('notifications that are not implemented yet are disabled, marked "Coming so
     await login(page);
     await visitNotifications(page);
 
-    for (const name of ['Payment reminders', 'Envelope limit exceeded']) {
-        const toggle = page.getByRole('switch', { name });
-        await expect(toggle).toBeDisabled();
-        await expect(toggle).not.toBeChecked();
-        await expect(toggle).toHaveAccessibleDescription('Coming soon');
-    }
+    const toggle = page.getByRole('switch', { name: 'Payment reminders' });
+    await expect(toggle).toBeDisabled();
+    await expect(toggle).not.toBeChecked();
+    await expect(toggle).toHaveAccessibleDescription('Coming soon');
 
     await expect(
         page.locator('[data-test="notifications-coming-soon"]'),
-    ).toHaveCount(2);
+    ).toHaveCount(1);
 
     // The implemented ones stay interactive.
     await expect(
@@ -127,6 +125,9 @@ test('notifications that are not implemented yet are disabled, marked "Coming so
     ).toBeEnabled();
     await expect(
         page.getByRole('switch', { name: 'Contributor transactions' }),
+    ).toBeEnabled();
+    await expect(
+        page.getByRole('switch', { name: 'Envelope limit exceeded' }),
     ).toBeEnabled();
 });
 
@@ -181,6 +182,39 @@ test('the Contributor transactions toggle autosaves and persists across reloads'
     await visitNotifications(page);
     const reloaded = page.getByRole('switch', {
         name: 'Contributor transactions',
+    });
+    await expect(reloaded).not.toBeChecked();
+    await expect(reloaded).toBeEnabled();
+
+    // Restore the default so other specs start from a clean state.
+    await reloaded.click();
+    await expect(reloaded).toBeChecked();
+});
+
+test('the Envelope limit exceeded toggle autosaves and persists across reloads', async ({
+    page,
+}) => {
+    await login(page);
+    await visitNotifications(page);
+
+    const envelopeLimit = page.getByRole('switch', {
+        name: 'Envelope limit exceeded',
+    });
+    await expect(envelopeLimit).toBeEnabled();
+    await expect(envelopeLimit).toBeChecked();
+
+    // Autosave on toggle — no save button; the choice must survive a reload.
+    await envelopeLimit.click();
+    await expect(envelopeLimit).not.toBeChecked();
+    await expect(
+        page.locator(
+            '[data-test="notifications-toggle-envelope_limit_exceeded"]',
+        ),
+    ).not.toHaveClass(/opacity-60/);
+
+    await visitNotifications(page);
+    const reloaded = page.getByRole('switch', {
+        name: 'Envelope limit exceeded',
     });
     await expect(reloaded).not.toBeChecked();
     await expect(reloaded).toBeEnabled();
