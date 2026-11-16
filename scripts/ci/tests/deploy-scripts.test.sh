@@ -244,6 +244,11 @@ expect 'deploy: a failure after migrating stays in maintenance' \
     "$rc $(live) $(maintenance) $(record) $(consistent)" '1 old on a b  yes'
 
 setup
+rc=$(deploy FAIL=encryption:verify)
+expect 'deploy: an unreadable APP_KEY payload refuses the release' \
+    "$rc $(live) $(maintenance) $(record) $(consistent)" '1 old on a b  yes'
+
+setup
 rc=$(deploy MIGRATE_EXIT=1)
 expect 'deploy: a failed migration stays in maintenance' "$rc $(live) $(maintenance) $(consistent)" '1 old on yes'
 
