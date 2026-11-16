@@ -36,4 +36,23 @@ return [
         'manage_notifications' => 'Manage your notifications:',
     ],
 
+    // Contributor transactions (issue #51): another user records a
+    // transaction in a ledger one owns — one email per transaction,
+    // delivered to the ledger's current owner.
+    'contributor_transaction' => [
+        'subject' => '[Prospera] :actor recorded a transaction in ":ledger"',
+        'subject_generic' => '[Prospera] A transaction was recorded',
+        'subject_generic_named' => '[Prospera] A transaction was recorded in ":ledger"',
+        'actor_generic' => 'A member who has since deleted their account',
+        'intro' => ':actor recorded a transaction in ":ledger" (financial profile ":profile"): envelope ":envelope" — :direction, dated :date.',
+        'amount' => 'Amount: :amount',
+        'next_steps' => 'The transaction is visible on the ledger below.',
+        'manage_notifications' => 'Manage your notifications:',
+    ],
+
+    'directions' => [
+        'expense' => 'expense',
+        'revenue' => 'revenue',
+    ],
+
 ];

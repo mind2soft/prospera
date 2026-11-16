@@ -38,4 +38,24 @@ return [
         'manage_notifications' => 'Gérer vos notifications :',
     ],
 
+    // Transactions des collaborateurs (issue #51) : un autre utilisateur
+    // enregistre une transaction dans un grand livre dont on est le
+    // propriétaire — un courriel par transaction, livré au propriétaire
+    // actuel du grand livre.
+    'contributor_transaction' => [
+        'subject' => '[Prospera] :actor a enregistré une transaction dans « :ledger »',
+        'subject_generic' => '[Prospera] Une transaction a été enregistrée',
+        'subject_generic_named' => '[Prospera] Une transaction a été enregistrée dans « :ledger »',
+        'actor_generic' => 'Un membre ayant depuis supprimé son compte',
+        'intro' => ':actor a enregistré une transaction dans « :ledger » (profil financier « :profile ») : enveloppe « :envelope » — :direction, datée du :date.',
+        'amount' => 'Montant : :amount',
+        'next_steps' => 'La transaction est visible dans le grand livre ci-dessous.',
+        'manage_notifications' => 'Gérer vos notifications :',
+    ],
+
+    'directions' => [
+        'expense' => 'dépense',
+        'revenue' => 'revenu',
+    ],
+
 ];

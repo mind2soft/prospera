@@ -207,11 +207,7 @@ test('the notifications settings page renders', async ({ page }) => {
         page.getByRole('switch', { name: 'Profile invitations' }),
     ).toBeChecked();
     // Not implemented yet: rendered disabled (notifications.spec.ts).
-    for (const toggle of [
-        'Payment reminders',
-        'Contributor transactions',
-        'Envelope limit exceeded',
-    ]) {
+    for (const toggle of ['Payment reminders', 'Envelope limit exceeded']) {
         await expect(page.getByRole('switch', { name: toggle })).toBeDisabled();
     }
 

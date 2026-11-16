@@ -107,11 +107,7 @@ test('notifications that are not implemented yet are disabled, marked "Coming so
     await login(page);
     await visitNotifications(page);
 
-    for (const name of [
-        'Payment reminders',
-        'Contributor transactions',
-        'Envelope limit exceeded',
-    ]) {
+    for (const name of ['Payment reminders', 'Envelope limit exceeded']) {
         const toggle = page.getByRole('switch', { name });
         await expect(toggle).toBeDisabled();
         await expect(toggle).not.toBeChecked();
@@ -120,7 +116,7 @@ test('notifications that are not implemented yet are disabled, marked "Coming so
 
     await expect(
         page.locator('[data-test="notifications-coming-soon"]'),
-    ).toHaveCount(3);
+    ).toHaveCount(2);
 
     // The implemented ones stay interactive.
     await expect(
@@ -128,6 +124,9 @@ test('notifications that are not implemented yet are disabled, marked "Coming so
     ).toBeEnabled();
     await expect(
         page.getByRole('switch', { name: 'Ledger expired' }),
+    ).toBeEnabled();
+    await expect(
+        page.getByRole('switch', { name: 'Contributor transactions' }),
     ).toBeEnabled();
 });
 
@@ -150,6 +149,39 @@ test('the Ledger expired toggle autosaves and persists across reloads', async ({
 
     await visitNotifications(page);
     const reloaded = page.getByRole('switch', { name: 'Ledger expired' });
+    await expect(reloaded).not.toBeChecked();
+    await expect(reloaded).toBeEnabled();
+
+    // Restore the default so other specs start from a clean state.
+    await reloaded.click();
+    await expect(reloaded).toBeChecked();
+});
+
+test('the Contributor transactions toggle autosaves and persists across reloads', async ({
+    page,
+}) => {
+    await login(page);
+    await visitNotifications(page);
+
+    const contributor = page.getByRole('switch', {
+        name: 'Contributor transactions',
+    });
+    await expect(contributor).toBeEnabled();
+    await expect(contributor).toBeChecked();
+
+    // Autosave on toggle — no save button; the choice must survive a reload.
+    await contributor.click();
+    await expect(contributor).not.toBeChecked();
+    await expect(
+        page.locator(
+            '[data-test="notifications-toggle-contributor_transactions"]',
+        ),
+    ).not.toHaveClass(/opacity-60/);
+
+    await visitNotifications(page);
+    const reloaded = page.getByRole('switch', {
+        name: 'Contributor transactions',
+    });
     await expect(reloaded).not.toBeChecked();
     await expect(reloaded).toBeEnabled();
 

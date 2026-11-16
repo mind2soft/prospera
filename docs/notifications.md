@@ -5,12 +5,12 @@ is gated. This feature ships the **settings** (UI, persistence, gate helper);
 the notifications themselves are shipped by their own issues (payment
 reminders first, with scheduled transactions — issue #15).
 
-> **Status:** **profile invitations** and **ledger expired** are sent
-> today. Payment reminders, contributor transactions and envelope limit
-> exceeded are **TODO — not yet implemented**: no mailable or trigger exists
-> for them. Their toggles are shown **disabled** on the settings page with a
-> "Coming soon" hint (the stored values are kept and will apply once each
-> notification ships).
+> **Status:** **profile invitations**, **ledger expired** and
+> **contributor transactions** are sent today. Payment reminders and
+> envelope limit exceeded are **TODO — not yet implemented**: no mailable or
+> trigger exists for them. Their toggles are shown **disabled** on the
+> settings page with a "Coming soon" hint (the stored values are kept and
+> will apply once each notification ships).
 
 ## Catalog & semantics
 
@@ -22,7 +22,7 @@ regardless of the individual switches.**
 | ------ | ------- | ------ | ------- |
 | **Payment reminders** | on | TODO — not yet implemented ([#15](https://github.com/mind2soft/prospera/issues/15)) | Upcoming scheduled-transaction reminders (sent when a schedule has a `reminder_days` option set). |
 | **Ledger expired** | on | Implemented ([#50](https://github.com/mind2soft/prospera/issues/50)) | An open ledger you own (or are a member of) whose **end date has passed** — sent once, when the daily run first detects it. |
-| **Contributor transactions** | on | TODO — not yet implemented ([#51](https://github.com/mind2soft/prospera/issues/51)) | Another user records a transaction in a ledger you are the owner of — one email per transaction (the recipient list stays narrow to ledger owners to avoid noisy group mails; broader audiences can be added later). |
+| **Contributor transactions** | on | Implemented ([#51](https://github.com/mind2soft/prospera/issues/51)) | Another user records a transaction in a ledger you are the owner of — one email per transaction (the recipient list stays narrow to ledger owners to avoid noisy group mails; broader audiences can be added later). |
 | **Envelope limit exceeded** | on | TODO — not yet implemented ([#52](https://github.com/mind2soft/prospera/issues/52)) | Recorded spending for an envelope within a month **exceeds its allocation on that month's published budget** — checked when the exceeding transaction is recorded; recipients are the envelope owner + envelope contributors. Amounts are masked for recipients holding less than `viewer` permission on the envelope. |
 | **Profile invitations** | on | Implemented | Someone shares a financial profile with you — the invite email with the accept link to the invite confirmation (issue #39). The toggle only gates emails **received**; invitations you send are always delivered to their recipients. |
 
@@ -61,6 +61,55 @@ too. Recipients are deduplicated: one email per user per ledger.
 - **No amounts.** The email carries the ledger and profile names, the
   start and end dates, and a link to the ledger page — nothing needs
   decryption or masking.
+
+**Contributor transactions**
+([#51](https://github.com/mind2soft/prospera/issues/51)): when a
+transaction is recorded through `POST /api/ledgers/{ledger}/transactions`
+(`LedgerController::addTransaction`) by anyone but the ledger owner, one
+email is queued to the ledger's **current** owner. The dispatch happens
+after the insert's database transaction commits
+([`App\Mail\ContributorTransaction`](../app/Mail/ContributorTransaction.php)),
+so a rolled-back insert never notifies; the recipient, the ownership and
+every gate are re-resolved **at send time**, exactly as queued.
+
+- **One email per transaction, once per recording.** No digest, no
+  re-dispatch path: the mail is queued exactly once, inside the recording
+  request, and a second transaction over the same ledger notifies again.
+  Delivery is **at-least-once at the queue level**, like every queued mail
+  in this app: `RetriesDelivery` re-runs the same mailable until the
+  transport accepts the message (5 tries over about 20 minutes), and a
+  re-evaluated send-time gate suppresses nothing a first attempt delivered.
+  The issue's stronger "unique job / sent marker" option — a
+  `transactions.notified_at` claim — would trade this for an at-most-once
+  guarantee that risks losing a mail whose delivery was acknowledged as
+  failed; it can be added on top if the maintainer prefers it
+  (issue #51, "dedup" section).
+- **No email** when the actor **is** the ledger owner (checked at dispatch
+  and again at send), or when the transaction has been **deleted** by the
+  time the job runs (its row is soft-deleted, so it disappears from the
+  default query — the undo window's purges are honoured). When
+  [scheduled transactions](https://github.com/mind2soft/prospera/issues/15)
+  land, their materialized rows must not dispatch this mail — nothing was
+  recorded by "another user"; the guard belongs to the dispatching path.
+- **Ownership transfers while queued are honoured.** The recipient is
+  resolved at send time from the `owner` row in `ledger_permissions` —
+  ownership transfer or auto-transfer (see
+  [shared-finances.md](shared-finances.md)) moves the mail to the new
+  owner; if the current owner **is** the actor, nothing is sent. The
+  mailable receives **IDs only** (transaction id, ledger id) — names,
+  locale, and the recipient's email are re-resolved at send time, and no
+  address or amount rides in the queue payload.
+- **Amount masking:** envelope permissions are independent of ledger
+  permissions (see [ledger.md](ledger.md),
+  [envelope.md](envelope.md)). The recipient's envelope permission is
+  resolved at send time; below `viewer`, the email carries no amount at
+  all — envelope name, direction and date only (metadata, the same rule as
+  the ledger API). No placeholder hints at the masked value. Amounts are
+  read in PHP from the decrypted `Transaction::amount` — never in SQL —
+  shown positive (sign convention, see [budget.md](budget.md)) and
+  formatted with the currency of the published budget effective for the
+  transaction's month (falling back to the latest published budget, per
+  the ledger page's reporting currency).
 
 **Invite emails and unregistered recipients**: the profile-invitation email
 may target an email address that has no Prospera account yet. Such

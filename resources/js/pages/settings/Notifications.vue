@@ -55,7 +55,7 @@ const TOGGLES = [
         label: 'settings.notifications.contributor_transactions',
         description:
             'settings.notifications.contributor_transactionsDescription',
-        available: false,
+        available: true,
     },
     {
         key: 'envelope_limit_exceeded',
