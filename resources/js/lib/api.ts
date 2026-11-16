@@ -1,6 +1,7 @@
 import { i18n } from '@/i18n';
 import { isClient } from '@/lib/ssr';
 import { createKeepaliveBudget, utf8ByteLength } from '@/lib/unloadTransport';
+import statusErrorKeys from '@/locales/status-error-keys.json';
 import type { RouteDefinition } from '@/wayfinder';
 
 export class ApiError extends Error {
@@ -42,6 +43,21 @@ export function errorMessage<T extends string | undefined>(
 }
 
 /**
+ * The status → `common.errors.*` mapping, shared with the server's parity
+ * test (tests/Feature/ErrorMessageParityTest.php) and the unit tests
+ * (statusMessage.test.ts): `exact` singles out statuses, `serverErrors`
+ * covers every status ≥ 500 not listed there, and `fallback` covers all
+ * the others.
+ */
+type StatusErrorKeys = {
+    exact: Record<number, string>;
+    serverErrors: string;
+    fallback: string;
+};
+
+const STATUS_ERROR_KEYS = statusErrorKeys as StatusErrorKeys;
+
+/**
  * The localized, generic message of an HTTP error status. The server
  * already sends localized messages (app/Exceptions/LocalizedJsonErrors.php);
  * this covers an empty body, a proxy error page or a non-JSON response.
@@ -49,24 +65,13 @@ export function errorMessage<T extends string | undefined>(
 export function statusMessage(status: number): string {
     const { t } = i18n.global;
 
-    switch (true) {
-        case status === 401:
-            return t('common.errors.unauthenticated');
-        case status === 403:
-            return t('common.errors.forbidden');
-        case status === 404:
-            return t('common.errors.notFound');
-        case status === 419:
-            return t('common.errors.sessionExpired');
-        case status === 429:
-            return t('common.errors.tooMany');
-        case status === 503:
-            return t('common.errors.unavailable');
-        case status >= 500:
-            return t('common.errors.server');
-        default:
-            return t('common.errors.generic');
-    }
+    const key =
+        STATUS_ERROR_KEYS.exact[status] ??
+        (status >= 500
+            ? STATUS_ERROR_KEYS.serverErrors
+            : STATUS_ERROR_KEYS.fallback);
+
+    return t(`common.errors.${key}`);
 }
 
 type ApiMethod = 'get' | 'post' | 'patch' | 'put' | 'delete';

@@ -1,0 +1,12 @@
+{
+    "exact": {
+        "401": "unauthenticated",
+        "403": "forbidden",
+        "404": "notFound",
+        "419": "sessionExpired",
+        "429": "tooMany",
+        "503": "unavailable"
+    },
+    "serverErrors": "server",
+    "fallback": "generic"
+}

@@ -106,9 +106,13 @@ lang/
   localized, user-facing `message` (never a model class name); a 403
   keeps the reason the application gave, translated. The client
   (`resources/js/lib/api.ts`) falls back to the same messages
-  (`common.errors.*`) when a response carries none;
+  (`common.errors.*`) when a response carries none. Both sides read their
+  status → key mapping from the shared
+  `resources/js/locales/status-error-keys.json`;
   [`ErrorMessageParityTest`](../tests/Feature/ErrorMessageParityTest.php)
-  keeps the two tables identical in every locale.
+  keeps the server messages identical to the client's in every locale, and
+  the Vitest suite (`resources/js/lib/statusMessage.test.ts`) keeps the
+  client's mapping on that shared source.
 - [`LangParityTest`](../tests/Unit/LangParityTest.php) fails when a locale
   misses a key of `lang/en/*.php`, when a literal `__('…')` string of `app/`
   has no `lang/{locale}.json` entry, or when placeholders differ.
