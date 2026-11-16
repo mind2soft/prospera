@@ -509,8 +509,12 @@ fi
 
 record_schema
 # Encryption at rest (docs/encryption.md): every stored amount must decrypt
-# before the release goes live.
+# before the release goes live. The same holds for the direct-APP_KEY data
+# (contact messages, queued and failed mail, 2FA secrets) — checked with the
+# keys as configured, so a key removed too early refuses the deploy; the
+# stricter current-key-only check is the runbook's step-7 gate.
 php artisan amounts:verify
+php artisan encryption:verify --allow-previous-keys
 php artisan optimize:clear
 rm -rf public/storage
 php artisan storage:link

@@ -179,7 +179,10 @@ Money amounts are encrypted with per-profile keys wrapped by `APP_KEY` — see
 the database: without it, no amount can be read.** Rotate it with
 `APP_PREVIOUS_KEYS` and `php artisan amounts:rewrap-keys`, never with a bare
 `key:generate`; `php artisan amounts:verify` checks that every amount
-decrypts.
+decrypts. Contact messages, the queued mail payloads and the 2FA secrets are
+encrypted with `APP_KEY` directly: `php artisan contact:reencrypt` migrates
+the retained contact messages during a rotation, and `php artisan
+encryption:verify` gates the removal of `APP_PREVIOUS_KEYS` over all of them.
 
 Beware: `php artisan key:generate` replaces the key in place — run it against
 an existing database only after backing the current `APP_KEY` up and restoring
