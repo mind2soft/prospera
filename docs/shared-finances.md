@@ -59,18 +59,23 @@ invite for an email and gets a link containing a hash key (`invite_key`).
     off via Settings → Notifications ("Profile invitations").
 - An **existing user** accepts by opening the link while signed in — the invite
   must match their account email. The confirmation page
-  (`GET /invites/{inviteKey}`) depends on who opens it:
+  (`GET /invites/{inviteKey}`) depends on who opens it, checked in the order
+  shown below (so a state lower in the list is only reached when no higher
+  state applies):
 
   - **Signed out:** the page is the registration form, and its **Log in**
     link points at the invite's accept link, so signing in returns to this
     confirmation page instead of the dashboard.
-  - **Signed in, email not verified:** instead of Accept/Decline the page
+  - **Signed in with another address:** takes **precedence over the
+    unverified state below** (checked first) — an inline alert states that
+    the invite was **issued to another email address** (the invited one and
+    the current one), with **Log out** and a link back to the dashboard.
+    Only the invited account can accept or decline, so verifying the
+    current address would not change anything.
+  - **Signed in, matching address, email not verified:** only reached when
+    the account email matches the invite; instead of Accept/Decline the page
     shows a **"Verify your email address first"** alert with a link to the
     verification notice (accepting and declining require a verified email).
-  - **Signed in with another address:** an inline alert states that the
-    invite was **issued to another email address** (the invited one and the
-    current one), with **Log out** and a link back to the dashboard; only
-    the invited account can accept or decline.
 - A **new user** registers through the invite link; the invite key is carried
   through registration. Membership is **not** granted at account creation: the
   invite is **reserved** for the new account (`pending_user_id`), and
@@ -144,8 +149,10 @@ invite for an email and gets a link containing a hash key (`invite_key`).
   **leaves or is removed**, or when a profile they belonged to is **deleted**,
   an account left without any profile gets its own default profile seeded —
   an account never ends up with zero profiles.
-- An invalid, expired, reserved or email-mismatched invite shows an explicit error
-  page.
+- An invalid, expired or reserved invite renders the registration page
+  **without invite context**, with an inline alert and a transient error
+  toast (no dedicated error page); registering with such a key is rejected
+  with a validation error on `invite_key`.
 
 ## Transfer of ownership
 
