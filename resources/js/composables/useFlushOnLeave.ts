@@ -11,9 +11,10 @@ export type LeaveReason = 'unmount' | 'pagehide';
  *
  * The flush outlives the component: it must not depend on per-call
  * `mutate` callbacks (TanStack drops them once the unmounted observer has
- * no listener) — chain on `mutateAsync` promises instead. On `pagehide` no
- * script runs after the handler, so everything must be sent right away, as
- * `keepalive` requests (lib/api.ts) that survive the page.
+ * no listener) — chain on `mutateAsync` promises instead. The reason is
+ * passed on: on `pagehide` no script runs after the handler, so everything
+ * must be sent right away, as unload requests that may ride `keepalive`
+ * (lib/api.ts, issue #54); an unmount flush uses a normal request.
  */
 export function useFlushOnLeave(flush: (reason: LeaveReason) => void): void {
     onBeforeUnmount(() => flush('unmount'));

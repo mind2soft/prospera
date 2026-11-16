@@ -136,16 +136,24 @@ export function useUpdateEnvelope() {
             envelopeId,
             amount,
             expectedRevision,
+            unload,
         }: {
             budgetId: number;
             envelopeId: number;
             amount: number;
             expectedRevision: number;
+            /** True for a `pagehide` flush: the save may ride keepalive (#54). */
+            unload?: boolean;
         }) =>
-            budgetApi.updateEnvelope(budgetId, envelopeId, {
-                amount,
-                expected_revision: expectedRevision,
-            }),
+            budgetApi.updateEnvelope(
+                budgetId,
+                envelopeId,
+                {
+                    amount,
+                    expected_revision: expectedRevision,
+                },
+                { unload: unload === true },
+            ),
         onSuccess: (_data, { budgetId, envelopeId, amount }) => {
             // TanStack runs this onSuccess before `mutateAsync` resolves, and
             // the queue records the acknowledgment only after — so this save

@@ -1,5 +1,6 @@
 import { api, setResourceShare } from '@/lib/api';
 import { browserTimeZone } from '@/lib/calendar';
+import type { UnloadOptions } from '@/lib/unloadTransport';
 import * as budgets from '@/routes/api/budgets';
 import * as budgetEnvelopes from '@/routes/api/budgets/envelopes';
 import * as budgetShares from '@/routes/api/budgets/shares';
@@ -63,11 +64,15 @@ export const budgetApi = {
         id: number,
         envelopeId: number,
         input: { amount: number; expected_revision: number },
+        transport: UnloadOptions = {},
     ): Promise<{ envelope: BudgetEnvelope }> =>
-        // keepalive: the budget page flushes its amount edits while unloading.
+        // Only an unload-time flush (a `pagehide` save) may ride keepalive,
+        // and even then only while the body fits the browser's keepalive
+        // budget (lib/api.ts, issue #54): ordinary saves use a normal
+        // request.
         api(budgetEnvelopes.update({ budget: id, envelopeId }), {
             body: input,
-            keepalive: true,
+            unload: transport.unload === true,
         }),
 
     removeEnvelope: (id: number, envelopeId: number): Promise<void> =>

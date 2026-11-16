@@ -1,5 +1,6 @@
 import { i18n } from '@/i18n';
 import { isClient } from '@/lib/ssr';
+import { createKeepaliveBudget, utf8ByteLength } from '@/lib/unloadTransport';
 import type { RouteDefinition } from '@/wayfinder';
 
 export class ApiError extends Error {
@@ -73,9 +74,23 @@ type ApiMethod = 'get' | 'post' | 'patch' | 'put' | 'delete';
 type ApiOptions = {
     body?: unknown;
     signal?: AbortSignal;
-    /** Let the request outlive the page (a save sent while it unloads). */
-    keepalive?: boolean;
+    /**
+     * The request may outlive the page (an autosave flushed on `pagehide`).
+     * It is sent as a `keepalive` request when its body fits the browser's
+     * keepalive budget — on its own and summed with the keepalive requests
+     * still in flight; an oversized body rides a normal request instead,
+     * which a unloading page may drop (the save stays pending in its queue
+     * and is reconciled on the next visit — issue #54). Ordinary requests
+     * must not set this: keepalive is reserved for actual unload flushes.
+     */
+    unload?: boolean;
 };
+
+/**
+ * The keepalive budget is page-wide (the browser enforces it across all of
+ * the page's keepalive requests), so one instance serves every call.
+ */
+const keepaliveBudget = createKeepaliveBudget();
 
 /**
  * Calls a JSON endpoint. The target is a generated Wayfinder route
@@ -98,7 +113,7 @@ export async function api<T>(
     }
 
     const method = route.method.toUpperCase();
-    const { body, signal, keepalive } = options;
+    const { body, signal, unload } = options;
 
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (body !== undefined) {
@@ -113,36 +128,66 @@ export async function api<T>(
         headers['X-CSRF-TOKEN'] = token;
     }
 
-    const response = await fetch(url, {
-        method,
-        headers,
-        signal,
-        keepalive,
-        body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    // The body is serialized once: the same text decides the transport and
+    // is sent.
+    const bodyText = body === undefined ? undefined : JSON.stringify(body);
 
-    if (response.status === 204) {
-        return undefined as T;
+    let keepalive = unload === true;
+    let reservedBytes = 0;
+
+    if (keepalive && bodyText !== undefined) {
+        const bytes = utf8ByteLength(bodyText);
+
+        if (keepaliveBudget.reserve(bytes)) {
+            reservedBytes = bytes;
+        } else {
+            // The body does not fit the keepalive budget (issue #54): a
+            // keepalive request would be rejected outright, so this save
+            // rides a normal request instead.
+            keepalive = false;
+        }
     }
 
-    const json: unknown = await response.json().catch(() => undefined);
+    try {
+        const response = await fetch(url, {
+            method,
+            headers,
+            signal,
+            keepalive,
+            body: bodyText,
+        });
 
-    if (!response.ok) {
-        const payload = (json ?? {}) as {
-            message?: string;
-            errors?: Record<string, string[]>;
-        };
-        const message =
-            typeof payload.message === 'string' ? payload.message.trim() : '';
+        if (response.status === 204) {
+            return undefined as T;
+        }
 
-        throw new ApiError(
-            message || statusMessage(response.status),
-            response.status,
-            payload.errors ?? {},
-        );
+        const json: unknown = await response.json().catch(() => undefined);
+
+        if (!response.ok) {
+            const payload = (json ?? {}) as {
+                message?: string;
+                errors?: Record<string, string[]>;
+            };
+            const message =
+                typeof payload.message === 'string'
+                    ? payload.message.trim()
+                    : '';
+
+            throw new ApiError(
+                message || statusMessage(response.status),
+                response.status,
+                payload.errors ?? {},
+            );
+        }
+
+        return json as T;
+    } finally {
+        // The reservation is held until the request settles: the browser
+        // counts a keepalive body against the budget while it is in flight.
+        if (reservedBytes > 0) {
+            keepaliveBudget.release(reservedBytes);
+        }
     }
-
-    return json as T;
 }
 
 /**

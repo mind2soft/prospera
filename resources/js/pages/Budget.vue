@@ -579,13 +579,18 @@ const revisionFromCache = (id: number, envelopeId: number): number =>
         ?.revision ?? 0;
 
 budgetSaveQueue.configure({
-    transport: async ({ budgetId, envelopeId, amount, revision }) => {
+    transport: async (
+        { budgetId, envelopeId, amount, revision },
+        transport,
+    ) => {
         try {
             const { envelope } = await updateEnvelope.mutateAsync({
                 budgetId,
                 envelopeId,
                 amount,
                 expectedRevision: revision,
+                // Only a `pagehide` flush rides keepalive (issue #54).
+                unload: transport?.unload === true,
             });
 
             return envelope.revision;
@@ -654,9 +659,11 @@ const flushAmountSaves = async (): Promise<boolean> =>
 // Leaving the page (or unloading it) sends every budget's debounced edits
 // right away: edits queued for a budget the user has already left are still
 // pending in the module-level queue, and on `pagehide` their debounce timer
-// would never fire (#79).
-useFlushOnLeave(() => {
-    void budgetSaveQueue.flush();
+// would never fire (#79). Only a `pagehide` flush rides the unload transport
+// (keepalive, issue #54): an SPA unmount leaves the document alive, so its
+// saves use a normal request.
+useFlushOnLeave((reason) => {
+    void budgetSaveQueue.flush(undefined, { unload: reason === 'pagehide' });
 });
 
 const envelopeTable =

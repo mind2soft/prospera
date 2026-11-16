@@ -13,6 +13,7 @@ import {
     createLayoutSaveQueue,
     type LayoutSave,
 } from '@/lib/dashboardSaveQueue';
+import type { UnloadOptions } from '@/lib/unloadTransport';
 import type {
     DashboardLayoutData,
     DashboardWidget,
@@ -164,7 +165,11 @@ export function useLayoutAutosave(options: {
         queryClient.getQueryData<DashboardLayoutData>(dashboardKeys.widgets(id))
             ?.revision ?? 1;
 
-    const enqueue = (id: number): void => {
+    /**
+     * `unload` marks a `pagehide` flush: its save rides the unload
+     * transport (keepalive, issue #54) because no continuation will run.
+     */
+    const enqueue = (id: number, transport?: UnloadOptions): void => {
         const save: LayoutSave = {
             profileId: id,
             keys: widgets.value.map((widget) => widget.id),
@@ -174,67 +179,75 @@ export function useLayoutAutosave(options: {
             revision: currentRevision(id),
         };
 
-        layoutSaves.enqueue({
-            ...save,
-            run: (input) =>
-                saveLayout.mutateAsync({
-                    profileId: input.profileId,
-                    widgets: input.widgets,
-                    // The queue read the save's revision at send time: a
-                    // queued save adopts the revision a settled save of the
-                    // same profile produced (issue #55).
-                    expectedRevision: input.revision,
-                }),
-            adopt: (assigned) => {
-                // The local list belongs to another profile after a switch.
-                if (layoutProfileId.value !== id) {
-                    return;
-                }
-
-                // A temp id → real id transition must not re-trigger the
-                // autosave.
-                withoutAutosave(() => {
-                    for (const widget of widgets.value) {
-                        const real = assigned.get(widget.id);
-
-                        if (real !== undefined) {
-                            widget.id = real;
-                        }
+        layoutSaves.enqueue(
+            {
+                ...save,
+                run: (input, runTransport) =>
+                    saveLayout.mutateAsync({
+                        profileId: input.profileId,
+                        widgets: input.widgets,
+                        // The queue read the save's revision at send time: a
+                        // queued save adopts the revision a settled save of
+                        // the same profile produced (issue #55).
+                        expectedRevision: input.revision,
+                        unload: runTransport?.unload === true,
+                    }),
+                adopt: (assigned) => {
+                    // The local list belongs to another profile after a switch.
+                    if (layoutProfileId.value !== id) {
+                        return;
                     }
-                });
-            },
-            fail: (error) => {
-                if (error instanceof ApiError && error.status === 409) {
-                    // The server kept a newer layout (another tab, another
-                    // device). Never re-send the stale local one — reconcile
-                    // by pulling the canonical layout; local edits older
-                    // than it are dropped (issue #55). Re-applied explicitly
-                    // after the refetch: if it equals the cached copy,
-                    // structural sharing would not retrigger the layout
-                    // watch, and the stale local edits would survive.
-                    void queryClient
-                        .invalidateQueries({
-                            queryKey: dashboardKeys.widgets(id),
-                        })
-                        .then(resync);
-                }
 
-                toast.error(
-                    errorMessage(error, t('dashboard.toast.saveFailed')),
-                );
+                    // A temp id → real id transition must not re-trigger the
+                    // autosave.
+                    withoutAutosave(() => {
+                        for (const widget of widgets.value) {
+                            const real = assigned.get(widget.id);
+
+                            if (real !== undefined) {
+                                widget.id = real;
+                            }
+                        }
+                    });
+                },
+                fail: (error) => {
+                    if (error instanceof ApiError && error.status === 409) {
+                        // The server kept a newer layout (another tab, another
+                        // device). Never re-send the stale local one — reconcile
+                        // by pulling the canonical layout; local edits older
+                        // than it are dropped (issue #55). Re-applied explicitly
+                        // after the refetch: if it equals the cached copy,
+                        // structural sharing would not retrigger the layout
+                        // watch, and the stale local edits would survive.
+                        void queryClient
+                            .invalidateQueries({
+                                queryKey: dashboardKeys.widgets(id),
+                            })
+                            .then(resync);
+                    }
+
+                    toast.error(
+                        errorMessage(error, t('dashboard.toast.saveFailed')),
+                    );
+                },
             },
-        });
+            transport,
+        );
     };
 
-    /** Saves the current profile's local layout now. */
-    const saveNow = (): void => {
+    /**
+     * Saves the current profile's local layout now. `unload` marks a
+     * `pagehide` flush: its save rides the unload transport (keepalive,
+     * issue #54) because no continuation will run after the handler.
+     */
+    const saveNow = (unload = false): void => {
         editPending = false;
 
         if (!layoutLoaded.value || profileId.value === null) {
             return;
         }
 
-        enqueue(profileId.value);
+        enqueue(profileId.value, { unload });
     };
 
     const debouncedSave = useDebounceFn(() => {
@@ -293,13 +306,18 @@ export function useLayoutAutosave(options: {
         },
     );
 
-    // Leaving the page must not drop a debounced or queued edit.
+    // Leaving the page must not drop a debounced or queued edit. Only a
+    // `pagehide` flush rides the unload transport (keepalive, issue #54):
+    // an SPA unmount leaves the document alive, so its saves use a normal
+    // request.
     useFlushOnLeave((reason) => {
+        const unload = reason === 'pagehide';
+
         if (editPending) {
-            saveNow();
+            saveNow(unload);
         }
 
-        if (reason === 'pagehide') {
+        if (unload) {
             layoutSaves.sendQueuedNow();
         }
     });
