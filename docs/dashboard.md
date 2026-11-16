@@ -144,9 +144,16 @@ the Share drawer):
 ## Data, privacy & masking
 
 - All aggregates are **computed server-side** by the widget data endpoint:
-  transactions are hydrated (decrypting amounts) and summed **in PHP** —
-  money is never aggregated, filtered or sorted in SQL
-  ([docs/encryption.md](encryption.md)).
+  transactions are streamed in bounded id-ordered chunks (`TransactionScan`,
+  500 rows per chunk) and summed **in PHP** — money is never aggregated,
+  filtered or sorted in SQL ([docs/encryption.md](encryption.md)). Each row
+  is decrypted once, added to the aggregates and released with its chunk, so
+  peak memory is bounded by the chunk size (measured: ≈0.5 MB per 500-row
+  chunk of hydrated models), not the history length. Rows on envelopes whose
+  aggregate is never exposed (see the masking rule below) are not fetched or
+  decrypted at all, and one scan serves every aggregate shape a widget needs.
+  Repeatable baselines: `php scripts/benchmark-dashboard-aggregation.php
+  --rows=50000` (disposable database — never a user's data).
 - Aggregates are scoped to the **selected profile** (the transactions of
   the profile's ledgers — open and closed — within the period window).
 - **Masking rule**: any aggregate that includes an envelope the requester

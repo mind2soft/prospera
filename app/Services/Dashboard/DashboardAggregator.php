@@ -7,8 +7,6 @@ use App\Models\BudgetEnvelope;
 use App\Models\DashboardWidget;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
-use App\Models\Ledger;
-use App\Models\Transaction;
 use App\Models\User;
 use App\Security\Amounts\AmountKeyRing;
 use App\Services\ResourcePermissions;
@@ -20,9 +18,9 @@ use Illuminate\Support\Collection;
 
 /**
  * Computes the server-side aggregate payloads for dashboard widgets
- * (docs/dashboard.md). Amounts are encrypted at rest
- * (docs/encryption.md): transactions and budget allocations are hydrated
- * as models and summed in PHP — never aggregated in SQL.
+ * (docs/dashboard.md). Amounts are encrypted at rest (docs/encryption.md):
+ * transactions are streamed in bounded chunks and summed in PHP — never
+ * aggregated in SQL.
  *
  * Masking rule: any aggregate that includes an envelope the requester
  * cannot amount-see (envelope permission below viewer) is masked —
@@ -61,20 +59,60 @@ final class DashboardAggregator
             fn (Envelope $envelope): bool => $envelope->permissionFor($user, $coMemberIds) !== ResourcePermissions::NONE,
         );
 
-        $transactions = $this->transactions($profile, $period, $envelopeIds, $today);
+        // One streaming scan per request: rows are decoded once and added to
+        // the accumulators of every aggregate shape the widget needs.
+        $scan = TransactionScan::run(
+            $profile,
+            $period,
+            $envelopeIds,
+            $today,
+            $this->decryptableEnvelopeIds($widget->type, $envelopeIds, $amountVisible),
+        );
 
         return match ($widget->type) {
             DashboardWidget::TYPE_ENVELOPE_SPENDING => $this->envelopeSpending(
-                $profile, $period, $selection, $envelopes, $amountVisible, $transactions, $today,
+                $profile, $period, $selection, $envelopes, $amountVisible, $scan, $today,
             ),
             DashboardWidget::TYPE_INCOME_EXPENSES => $this->incomeExpenses(
-                $period, $selection, $amountVisible, $transactions, $today,
+                $period, $selection, $amountVisible, $scan, $today,
             ),
             DashboardWidget::TYPE_RADIAL => $this->radial(
-                $selection, $envelopes, $amountVisible, $transactions,
+                $selection, $envelopes, $amountVisible, $scan,
             ),
             default => throw new \InvalidArgumentException("Unknown widget type [{$widget->type}]."),
         };
+    }
+
+    /**
+     * The envelope ids whose amounts may be exposed in the widget's
+     * response. Rows outside this set are never fetched or decrypted: every
+     * aggregate that includes a masked envelope is masked as a whole
+     * (docs/dashboard.md), so masked rows never contribute to an exposed
+     * value.
+     *
+     * @param  list<int>  $envelopeIds
+     * @param  Collection<int, bool>  $amountVisible
+     * @return list<int>|null null = all selected envelopes may be exposed
+     */
+    private function decryptableEnvelopeIds(string $widgetType, array $envelopeIds, Collection $amountVisible): ?array
+    {
+        if ($widgetType === DashboardWidget::TYPE_INCOME_EXPENSES) {
+            // The whole series is masked when any selected envelope is
+            // masked — then no amount is exposed at all.
+            $allVisible = collect($envelopeIds)->every(
+                fn (int $envelopeId): bool => $amountVisible->get($envelopeId, false) === true,
+            );
+
+            return $allVisible ? null : [];
+        }
+
+        // Per-envelope masking: only the visible envelopes' amounts are
+        // exposed (spending rows and radial rows for masked envelopes are
+        // null, and groups containing a masked member are masked as a whole).
+        return array_values($amountVisible
+            ->filter(fn (bool $visible): bool => $visible)
+            ->keys()
+            ->all());
     }
 
     /**
@@ -86,7 +124,6 @@ final class DashboardAggregator
      *
      * @param  Collection<int, Envelope>  $envelopes
      * @param  Collection<int, bool>  $amountVisible
-     * @param  Collection<int, Transaction>  $transactions
      * @return array<string, mixed>
      */
     private function envelopeSpending(
@@ -95,10 +132,10 @@ final class DashboardAggregator
         WidgetSelection $selection,
         Collection $envelopes,
         Collection $amountVisible,
-        Collection $transactions,
+        TransactionScan $scan,
         CarbonImmutable $today,
     ): array {
-        $totals = $this->totalsByEnvelope($transactions);
+        $totals = $scan->totalsByEnvelope();
         $allocations = $this->allocationsByEnvelope($profile, $period, $selection->envelopeIds(), $today);
 
         $rows = [];
@@ -168,32 +205,25 @@ final class DashboardAggregator
      * sums must not reveal masked amounts by omission.
      *
      * @param  Collection<int, bool>  $amountVisible
-     * @param  Collection<int, Transaction>  $transactions
      * @return array<string, mixed>
      */
     private function incomeExpenses(
         WidgetPeriod $period,
         WidgetSelection $selection,
         Collection $amountVisible,
-        Collection $transactions,
+        TransactionScan $scan,
         CarbonImmutable $today,
     ): array {
         $masked = collect($selection->envelopeIds())->contains(
             fn (int $envelopeId): bool => $amountVisible->get($envelopeId, false) === false,
         );
 
-        // Per envelope, per bucket, the summed amount (encrypted at rest —
-        // summed in PHP).
-        $byBucket = $transactions
-            ->groupBy(fn (Transaction $transaction): string => $period->bucketKey($transaction->event_at))
-            ->map(fn (Collection $group): array => [
-                'revenue' => Money::fromMinorUnits($group->filter(
-                    fn (Transaction $transaction): bool => $transaction->amount > 0,
-                )->sum(fn (Transaction $transaction): int => Money::toMinorUnits($transaction->amount))),
-                'expenses' => Money::fromMinorUnits($group->filter(
-                    fn (Transaction $transaction): bool => $transaction->amount < 0,
-                )->sum(fn (Transaction $transaction): int => Money::toMinorUnits($transaction->amount))),
-            ]);
+        // Per bucket, the summed revenue and expenses (encrypted at rest —
+        // summed in PHP, in exact minor units).
+        $byBucket = $scan->bucketTotals()->map(fn (array $totals): array => [
+            'revenue' => Money::fromMinorUnits($totals['revenue']),
+            'expenses' => Money::fromMinorUnits($totals['expenses']),
+        ]);
 
         $series = [];
 
@@ -222,16 +252,15 @@ final class DashboardAggregator
      *
      * @param  Collection<int, Envelope>  $envelopes
      * @param  Collection<int, bool>  $amountVisible
-     * @param  Collection<int, Transaction>  $transactions
      * @return array<string, mixed>
      */
     private function radial(
         WidgetSelection $selection,
         Collection $envelopes,
         Collection $amountVisible,
-        Collection $transactions,
+        TransactionScan $scan,
     ): array {
-        $totals = $this->totalsByEnvelope($transactions);
+        $totals = $scan->totalsByEnvelope();
 
         $rows = [];
 
@@ -307,50 +336,6 @@ final class DashboardAggregator
                 'rows' => [],
             ],
         };
-    }
-
-    /**
-     * The profile's transactions on the selected envelopes within the
-     * period window, across all of the profile's ledgers (open and closed —
-     * history is history). Amounts are decrypted by hydration.
-     *
-     * @param  list<int>  $envelopeIds
-     * @return Collection<int, Transaction>
-     */
-    private function transactions(FinancialProfile $profile, WidgetPeriod $period, array $envelopeIds, CarbonImmutable $today): Collection
-    {
-        $ledgerIds = Ledger::query()->where('profile_id', $profile->id)->pluck('id');
-
-        if ($ledgerIds->isEmpty()) {
-            return collect();
-        }
-
-        // Decryption binds each row's profile: known here, no lookup per ledger.
-        app(AmountKeyRing::class)->rememberLedgerProfiles($ledgerIds, $profile->id);
-
-        ['from' => $from, 'to' => $to] = $period->window($today);
-
-        return Transaction::query()
-            ->whereIn('ledger_id', $ledgerIds)
-            ->whereIn('envelope_id', $envelopeIds)
-            ->whereBetween('event_at', [$from, $to])
-            ->get();
-    }
-
-    /**
-     * The signed total per envelope, computed in PHP from the hydrated rows
-     * (docs/encryption.md).
-     *
-     * @param  Collection<int, Transaction>  $transactions
-     * @return Collection<int, int> Integer minor units per envelope.
-     */
-    private function totalsByEnvelope(Collection $transactions): Collection
-    {
-        return $transactions
-            ->groupBy(fn (Transaction $transaction): int => $transaction->envelope_id)
-            ->map(fn (Collection $group): int => (int) $group->sum(
-                fn (Transaction $transaction): int => Money::toMinorUnits($transaction->amount),
-            ));
     }
 
     /**
