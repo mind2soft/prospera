@@ -104,7 +104,10 @@ allocated amount on that month's published budget minus the transactions
 recorded against that envelope within the displayed month. Months without
 a published budget (or envelopes without an allocation on it) report as
 unallocated ("remaining allocated" shows as `—`). Both sides are summed by
-the server from the decrypted amounts.
+the server from the decrypted amounts. Crossing that allocation is what
+triggers the **envelope limit exceeded** email
+([notifications.md](notifications.md)) — per ledger, on the recording
+that crosses.
 
 - Deleting a budget does not affect transactions (data is independent).
 - **Envelopes referenced by transactions cannot be deleted.**

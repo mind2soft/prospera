@@ -5,12 +5,12 @@ is gated. This feature ships the **settings** (UI, persistence, gate helper);
 the notifications themselves are shipped by their own issues (payment
 reminders first, with scheduled transactions — issue #15).
 
-> **Status:** **profile invitations**, **ledger expired** and
-> **contributor transactions** are sent today. Payment reminders and
-> envelope limit exceeded are **TODO — not yet implemented**: no mailable or
-> trigger exists for them. Their toggles are shown **disabled** on the
-> settings page with a "Coming soon" hint (the stored values are kept and
-> will apply once each notification ships).
+> **Status:** **profile invitations**, **ledger expired**,
+> **contributor transactions** and **envelope limit exceeded** are sent
+> today. Payment reminders are **TODO — not yet implemented**: no mailable
+> or trigger exists. Its toggle is shown **disabled** on the settings page
+> with a "Coming soon" hint (the stored value is kept and will apply once
+> the notification ships).
 
 ## Catalog & semantics
 
@@ -23,7 +23,7 @@ regardless of the individual switches.**
 | **Payment reminders** | on | TODO — not yet implemented ([#15](https://github.com/mind2soft/prospera/issues/15)) | Upcoming scheduled-transaction reminders (sent when a schedule has a `reminder_days` option set). |
 | **Ledger expired** | on | Implemented ([#50](https://github.com/mind2soft/prospera/issues/50)) | An open ledger you own (or are a member of) whose **end date has passed** — sent once, when the daily run first detects it. |
 | **Contributor transactions** | on | Implemented ([#51](https://github.com/mind2soft/prospera/issues/51)) | Another user records a transaction in a ledger you are the owner of — one email per transaction (the recipient list stays narrow to ledger owners to avoid noisy group mails; broader audiences can be added later). |
-| **Envelope limit exceeded** | on | TODO — not yet implemented ([#52](https://github.com/mind2soft/prospera/issues/52)) | Recorded spending for an envelope within a month **exceeds its allocation on that month's published budget** — checked when the exceeding transaction is recorded; recipients are the envelope owner + envelope contributors. Amounts are masked for recipients holding less than `viewer` permission on the envelope. |
+| **Envelope limit exceeded** | on | Implemented ([#52](https://github.com/mind2soft/prospera/issues/52)) | Recorded spending for an envelope within a month **exceeds its allocation on that month's published budget** — checked when the exceeding transaction is recorded; recipients are the envelope owner + envelope contributors. Amounts are masked for recipients holding less than `viewer` permission on the envelope. |
 | **Profile invitations** | on | Implemented | Someone shares a financial profile with you — the invite email with the accept link to the invite confirmation (issue #39). The toggle only gates emails **received**; invitations you send are always delivered to their recipients. |
 
 Timing notes: notifications are queued per-event emails (no digests — a
@@ -110,6 +110,65 @@ every gate are re-resolved **at send time**, exactly as queued.
   formatted with the currency of the published budget effective for the
   transaction's month (falling back to the latest published budget, per
   the ledger page's reporting currency).
+
+**Envelope limit exceeded**
+([#52](https://github.com/mind2soft/prospera/issues/52)): when a
+transaction is recorded on an **expense** envelope — today through
+`POST /api/ledgers/{ledger}/transactions`, and the schedule-materialized
+transactions of [#15](https://github.com/mind2soft/prospera/issues/15) call
+the same reusable check (`App\Services\EnvelopeLimitChecker`, wrapped in
+the queued `App\Jobs\CheckEnvelopeLimit` job, dispatched after commit) —
+the recorded spending for the transaction's month is compared to the
+envelope's allocation on that month's published budget, and the
+**crossing** is notified.
+
+- **Per-ledger scope.** The check compares the envelope's month totals
+  **within the recording's ledger** — the same number the ledger page
+  reports as "remaining allocated" (see
+  [ledger.md](ledger.md) — Allocation reporting). A profile with several
+  open ledgers covering the same month checks each ledger separately; the
+  alternative (summing across all the profile's ledgers) was rejected to
+  stay consistent with what the ledger page shows.
+- **Crossing, not over-ness.** The notification fires on the transaction
+  that takes the envelope from within its allocation
+  (`recorded_before ≥ allocated`) to strictly over it
+  (`recorded_after < allocated`) — the exact boundary (recorded equal to
+  the allocation) is within. Later over-limit transactions do not send
+  again: the crossing is the one actionable moment.
+- **Once per (published budget, envelope, ledger).** The dedup state is a
+  row in `envelope_limit_notifications`, whose unique index over the three
+  ids **is** the atomic claim — inserted before the mails are queued, so
+  concurrent recordings and job retries can never double-send. A **budget
+  revision** (a new published budget for the month — a new `budget_id`)
+  re-arms the check; deleting transactions so the envelope drops back
+  under does **not** re-arm it (no email ping-pong), and publishing a
+  budget after transactions already exceed it does **not** send (the check
+  only runs when a transaction is recorded).
+- **Recipients.** The envelope **owner** (`envelopes.user_id`) plus every
+  user holding an explicit envelope share at **contributor level or
+  above** (`envelope_permissions`; envelope `viewer`s and other profile
+  members are not included), restricted to **members of the ledger's
+  financial profile** — envelopes are user-owned and can be referenced
+  from several profiles, so a profile's ledger activity never leaks
+  outside it — and deduplicated. The user who recorded the transaction is
+  included when they are the owner or a contributor: a useful warning for
+  them too.
+- **Re-resolved at send time.** The mailable carries **IDs only** (budget,
+  envelope, ledger, recipient); at send time it re-checks the recipient's
+  envelope permission — below **envelope-owner-or-contributor** the whole
+  mail is suppressed (holders of less than `viewer` get no amounts at all,
+  so a permission downgrade while the mail waits in the queue can never
+  leak a value), alongside the verified address and the toggle gates.
+- **No SQL on encrypted columns.** The allocation and the month's recorded
+  total are read in PHP from the decrypted model values — no `SUM(amount)`,
+  no `WHERE amount < …` — exactly like the ledger page's reporting
+  (docs/encryption.md, docs/ledger.md). The email shows allocated, spent
+  and over amounts positive, in the budget's currency, per recipient
+  locale — or **no amounts at all** when the allocation is gone by send
+  time (a stale notification renders metadata only).
+- **The link** points at the ledger page; the month itself is stated in
+  the body (the ledger page's month navigation is client-side state with
+  no URL today).
 
 **Invite emails and unregistered recipients**: the profile-invitation email
 may target an email address that has no Prospera account yet. Such

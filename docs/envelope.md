@@ -92,6 +92,10 @@ existing **profile members** of the owner (see
   through a ledger (or a dashboard of a profile) the caller can read. There
   is deliberately no envelope-wide transactions or totals endpoint — it
   would aggregate entries across every profile using the envelope.
+- **Notification emails follow the same masking rule**: an envelope's
+  owner and contributors are emailed when a ledger recording crosses its
+  monthly allocation, and holders of less than `viewer` permission receive
+  no amounts at all ([notifications.md](notifications.md)).
 
 ## API
 

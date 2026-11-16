@@ -32,10 +32,10 @@ the filing cabinet.
   (sanitized markdown per locale, with English fallback), linked from the
   landing footer, the sign-up/login pages and the user menu.
 - **Notification settings** — a master switch plus per-type toggles that
-  gate every system email at send time. Profile-invitation, ledger-expired
-  and contributor-transaction emails exist today; payment reminders and
-  envelope limit exceeded are TODO (not yet implemented — their toggles are
-  shown disabled, "Coming soon").
+  gate every system email at send time. Profile-invitation, ledger-expired,
+  contributor-transaction and envelope-limit emails exist today; payment
+  reminders are TODO (not yet implemented — the toggle is shown disabled,
+  "Coming soon").
 
 Design docs live in [`docs/`](docs/): [getting started](docs/onboarding.md),
 [dashboard](docs/dashboard.md),

@@ -55,4 +55,19 @@ return [
         'revenue' => 'revenue',
     ],
 
+    // Envelope limit exceeded (issue #52): recorded spending for an
+    // envelope within a month crossed its allocation on that month's
+    // published budget — one email per crossing, per published budget,
+    // envelope and ledger.
+    'envelope_limit_exceeded' => [
+        'subject' => '[Prospera] Envelope ":envelope" is over its :month budget',
+        'subject_generic' => '[Prospera] An envelope is over its monthly budget',
+        'intro' => 'The envelope ":envelope" of ledger ":ledger" (financial profile ":profile") is over its allocation for :month.',
+        'allocated' => 'Allocated: :amount',
+        'spent' => 'Recorded this month: :amount',
+        'over' => 'Amount over: :amount',
+        'next_steps' => 'The month is visible on the ledger below.',
+        'manage_notifications' => 'Manage your notifications:',
+    ],
+
 ];
