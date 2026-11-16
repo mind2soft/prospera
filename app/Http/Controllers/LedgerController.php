@@ -6,11 +6,13 @@ use App\Http\Controllers\Concerns\ManagesShares;
 use App\Http\Requests\Ledger\LedgerTransactionsRequest;
 use App\Http\Requests\Ledger\StoreLedgerRequest;
 use App\Http\Requests\Ledger\StoreTransactionRequest;
+use App\Mail\ContributorTransaction;
 use App\Models\Budget;
 use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\Ledger;
+use App\Models\LedgerPermission;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Security\Amounts\AmountKeyRing;
@@ -24,6 +26,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 
@@ -442,6 +445,27 @@ class LedgerController extends Controller
                 'event_at' => $eventAt,
             ])->setRelation('envelope', $direction);
         });
+
+        // "Contributor transactions" notification (issue #51): a recording
+        // by anyone but the ledger owner queues one email to the ledger's
+        // current owner. Dispatched after the `DB::transaction` above
+        // returned — i.e. after the commit — so a rolled-back insert never
+        // notifies; the recipient, the ownership and every setting gate are
+        // re-resolved at send time (App\Mail\ContributorTransaction). When
+        // #15 lands, schedule-materialized transactions (nothing was
+        // recorded by "another user") must skip this — the guard belongs
+        // here.
+        $ownerId = LedgerPermission::query()
+            ->where('ledger_id', $ledger->id)
+            ->where('permission', LedgerPermission::PERMISSION_OWNER)
+            ->value('user_id');
+
+        if ($ownerId !== null && (int) $ownerId !== $transaction->user_id) {
+            Mail::queue(new ContributorTransaction(
+                transactionId: $transaction->id,
+                ledgerId: $ledger->id,
+            ));
+        }
 
         return response()->json([
             'transaction' => $this->serializeTransaction(

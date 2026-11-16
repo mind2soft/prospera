@@ -129,6 +129,11 @@ the server from the decrypted amounts.
   today, so an end date cannot change; **if one is added later, moving the
   end date must clear `expired_notified_at`** so the run re-detects the
   ledger against its new period.
+- **Contributor-transaction notification** — a transaction recorded by
+  anyone but the ledger owner queues one email to the ledger's current
+  owner (resolves ownership transfers at send time), masked per envelope
+  permission like the ledger API — see
+  [notifications.md](notifications.md).
 - **Serialization** — close/reopen and every transaction create, delete and
   restore acquire the ledger's row lock (`SELECT … FOR UPDATE`) first and
   re-read the read-only state under it: a close that commits first rejects
