@@ -209,7 +209,6 @@ test('the notifications settings page renders', async ({ page }) => {
     // Not implemented yet: rendered disabled (notifications.spec.ts).
     for (const toggle of [
         'Payment reminders',
-        'Ledger expired',
         'Contributor transactions',
         'Envelope limit exceeded',
     ]) {

@@ -48,7 +48,7 @@ const TOGGLES = [
         key: 'ledger_expired',
         label: 'settings.notifications.ledger_expired',
         description: 'settings.notifications.ledger_expiredDescription',
-        available: false,
+        available: true,
     },
     {
         key: 'contributor_transactions',

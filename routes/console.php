@@ -18,6 +18,12 @@ Schedule::command('contact:prune')->daily();
 // 30) that hold no data are deleted (mistyped emails, abandoned sign-ups).
 Schedule::command('users:prune-unverified')->daily()->withoutOverlapping()->onOneServer();
 
+// Ledger expired notification (issue #50, docs/notifications.md): one
+// email per recipient for every open ledger past its end date, sent once
+// per ledger when this run first detects it. The dedup state lives on the
+// ledger row, so re-runs and catch-ups never double-send.
+Schedule::command('ledgers:notify-expired')->daily()->withoutOverlapping()->onOneServer();
+
 // Undoable transaction deletion (issue #48, docs/undoable-deletion.md):
 // deleted transactions stay restorable for Transaction::UNDO_WINDOW_SECONDS
 // (3 minutes), then this sweep removes them for good. The overlap lock expires

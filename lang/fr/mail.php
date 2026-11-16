@@ -26,4 +26,16 @@ return [
         'manage_notifications' => 'Gérer vos notifications :',
     ],
 
+    // Grand livre expiré (issue #50) : un grand livre ouvert dont la date
+    // de fin est passée, envoyé une seule fois par grand livre, quand la
+    // tâche quotidienne le détecte pour la première fois.
+    'ledger_expired' => [
+        'subject' => '[Prospera] Le grand livre « :ledger » a atteint sa date de fin',
+        'subject_generic' => '[Prospera] Un grand livre a atteint sa date de fin',
+        'intro' => 'Le grand livre ouvert « :ledger » de votre profil financier « :profile » a atteint sa date de fin (:end — il s\'est déroulé du :start). Sa date de fin est passée : plus aucune transaction postérieure au :end ne peut y être enregistrée.',
+        'next_steps_owner' => 'En tant que propriétaire du grand livre, vous pouvez le fermer dès maintenant, ou créer d\'abord le grand livre de la prochaine période et fermer celui-ci une fois votre révision terminée.',
+        'next_steps_member' => 'Le propriétaire du grand livre peut le fermer, ou créer le grand livre de la prochaine période pour continuer à enregistrer des transactions.',
+        'manage_notifications' => 'Gérer vos notifications :',
+    ],
+
 ];

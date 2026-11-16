@@ -35,6 +35,9 @@ type Ledger = {
     starting_balance: number; // signed: positive = cash/assets, negative = debt
     closed_at: string | null; // ISO date time; null = open
     status: 'open' | 'closed'; // derived from closed_at (serialized enum)
+    expired_notified_at: string | null; // server-side only (never serialized): set when the
+                        // daily run first detects the ledger past its end date while
+                        // open — at most once ever (issue #50, docs/notifications.md)
     created_at: string; // ISO date time
 };
 
@@ -117,6 +120,15 @@ the server from the decrypted amounts.
 - **Closing** is a manual action (ledger actions menu). Closed ledgers are
   read-only: transactions can no longer be added or deleted. A closed ledger
   can be re-opened.
+- **Expiry notification** — a ledger is never auto-closed, but once an open
+  ledger's end date has passed, the daily run
+  (`php artisan ledgers:notify-expired`) emails the owner and the profile
+  members once, when it first detects it (`ledgers.expired_notified_at`,
+  sent at most once per ledger ever; re-opening never re-arms it — see
+  [notifications.md](notifications.md)). Ledgers have no update endpoint
+  today, so an end date cannot change; **if one is added later, moving the
+  end date must clear `expired_notified_at`** so the run re-detects the
+  ledger against its new period.
 - **Serialization** — close/reopen and every transaction create, delete and
   restore acquire the ledger's row lock (`SELECT … FOR UPDATE`) first and
   re-read the read-only state under it: a close that commits first rejects

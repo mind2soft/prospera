@@ -32,8 +32,8 @@ the filing cabinet.
   (sanitized markdown per locale, with English fallback), linked from the
   landing footer, the sign-up/login pages and the user menu.
 - **Notification settings** — a master switch plus per-type toggles that
-  gate every system email at send time. Only profile-invitation emails exist
-  today; payment reminders, ledger expired, contributor transactions and
+  gate every system email at send time. Profile-invitation and ledger-expired
+  emails exist today; payment reminders, contributor transactions and
   envelope limit exceeded are TODO (not yet implemented — their toggles are
   shown disabled, "Coming soon").
 
@@ -148,7 +148,10 @@ has passed (`php artisan transactions:purge-deleted` — see
 unverified accounts left untouched that hold no data are deleted daily
 (`php artisan users:prune-unverified`, retention configurable via
 `UNVERIFIED_ACCOUNT_RETENTION_DAYS`, default 30 days — see
-[docs/shared-finances.md](docs/shared-finances.md)).
+[docs/shared-finances.md](docs/shared-finances.md)), and an expired open
+ledger is reported to its owner and the profile members once, when the
+daily run first detects it (`php artisan ledgers:notify-expired` — see
+[docs/notifications.md](docs/notifications.md)).
 
 Emails (profile invitations, contact messages) are queued on the `database`
 queue. In production there is no long-lived worker (shared hosting): the

@@ -5,8 +5,8 @@ is gated. This feature ships the **settings** (UI, persistence, gate helper);
 the notifications themselves are shipped by their own issues (payment
 reminders first, with scheduled transactions — issue #15).
 
-> **Status:** only **profile invitations** are sent today. Payment
-> reminders, ledger expired, contributor transactions and envelope limit
+> **Status:** **profile invitations** and **ledger expired** are sent
+> today. Payment reminders, contributor transactions and envelope limit
 > exceeded are **TODO — not yet implemented**: no mailable or trigger exists
 > for them. Their toggles are shown **disabled** on the settings page with a
 > "Coming soon" hint (the stored values are kept and will apply once each
@@ -21,13 +21,46 @@ regardless of the individual switches.**
 | Toggle | Default | Status | Meaning |
 | ------ | ------- | ------ | ------- |
 | **Payment reminders** | on | TODO — not yet implemented ([#15](https://github.com/mind2soft/prospera/issues/15)) | Upcoming scheduled-transaction reminders (sent when a schedule has a `reminder_days` option set). |
-| **Ledger expired** | on | TODO — not yet implemented ([#50](https://github.com/mind2soft/prospera/issues/50)) | An open ledger you own (or are a member of) whose **end date has passed** — sent once, when the daily run first detects it. |
+| **Ledger expired** | on | Implemented ([#50](https://github.com/mind2soft/prospera/issues/50)) | An open ledger you own (or are a member of) whose **end date has passed** — sent once, when the daily run first detects it. |
 | **Contributor transactions** | on | TODO — not yet implemented ([#51](https://github.com/mind2soft/prospera/issues/51)) | Another user records a transaction in a ledger you are the owner of — one email per transaction (the recipient list stays narrow to ledger owners to avoid noisy group mails; broader audiences can be added later). |
 | **Envelope limit exceeded** | on | TODO — not yet implemented ([#52](https://github.com/mind2soft/prospera/issues/52)) | Recorded spending for an envelope within a month **exceeds its allocation on that month's published budget** — checked when the exceeding transaction is recorded; recipients are the envelope owner + envelope contributors. Amounts are masked for recipients holding less than `viewer` permission on the envelope. |
 | **Profile invitations** | on | Implemented | Someone shares a financial profile with you — the invite email with the accept link to the invite confirmation (issue #39). The toggle only gates emails **received**; invitations you send are always delivered to their recipients. |
 
 Timing notes: notifications are queued per-event emails (no digests — a
 digest mode can be added later as a new option without a schema break).
+
+**Ledger expired** ([#50](https://github.com/mind2soft/prospera/issues/50)):
+a daily scheduled command (`php artisan ledgers:notify-expired`, see
+[Scheduled tasks](../README.md#scheduled-tasks)) selects open ledgers
+(`closed_at` null) whose `end_date` has passed and queues one email per
+eligible recipient — the **ledger owner plus every member of the ledger's
+financial profile**. All profile members can view ledgers by default
+(implicit viewer, see [ledger.md](ledger.md)), so the whole profile learns
+that the period ended; explicit `contributor`/`viewer` rows are members
+too. Recipients are deduplicated: one email per user per ledger.
+
+- **Sent once per ledger, ever.** The dedup state is the nullable
+  `ledgers.expired_notified_at` timestamp, claimed atomically
+  (`UPDATE … SET expired_notified_at = now() WHERE id = ? AND
+  expired_notified_at IS NULL`) before dispatching, so overlapping runs and
+  command re-runs never double-send. The claim and the queued mail rows
+  commit in the same transaction — the once-ever guarantee therefore relies
+  on the `database` queue (the shipped default, see
+  [Scheduled tasks](../README.md#scheduled-tasks)) writing to the same
+  database. A scheduler catch-up after missed days still finds every
+  expired-and-unnotified ledger — "first detects" means the first run after
+  the end date. A ledger closed after the run but before delivery still
+  receives its email: the mail is already queued and the closing action
+  does not withdraw it.
+- **Closed ledgers are never notified.** A ledger closed before expiry and
+  re-opened after its end date counts as first detected on the next run,
+  unless it was already notified; re-opening never resets
+  `expired_notified_at`. Ledgers have no update endpoint today, so an end
+  date cannot change — if one is added later, moving the end date must
+  clear `expired_notified_at` (see [ledger.md](ledger.md)).
+- **No amounts.** The email carries the ledger and profile names, the
+  start and end dates, and a link to the ledger page — nothing needs
+  decryption or masking.
 
 **Invite emails and unregistered recipients**: the profile-invitation email
 may target an email address that has no Prospera account yet. Such
