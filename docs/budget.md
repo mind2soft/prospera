@@ -134,6 +134,11 @@ is not silently overwritten.
   budget's notification claim is removed with it (cascade), so the new budget's
   allocation is checked on the next crossing
   ([notifications.md](notifications.md)).
+- **Scheduled transactions** — publishing (including a replacement) and
+  deleting a published budget queue a full reconciliation of the profile's
+  open ledgers after commit: occurrences of schedules on the assigned
+  envelopes appear for the whole month, and rows whose coverage disappeared
+  are removed ([scheduled transactions](scheduled-transactions.md)).
 - **Concurrency** — publishing and every assignment edit (add, update,
   remove) lock the budget row and re-check the draft state inside their
   transaction, so an edit racing a publish never modifies a published

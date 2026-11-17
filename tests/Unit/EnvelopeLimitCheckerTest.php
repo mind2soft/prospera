@@ -59,4 +59,23 @@ class EnvelopeLimitCheckerTest extends TestCase
     {
         $this->assertFalse(EnvelopeLimitChecker::isCrossing(self::ALLOCATED, -5_000, 10_000));
     }
+
+    public function test_a_batch_crosses_on_its_first_over_prefix_in_ascending_id_order(): void
+    {
+        // 3 × -60.00 against -100.00: within after the first, over after the second.
+        $this->assertSame(12, EnvelopeLimitChecker::crossingCandidate(-10_000, [11 => -6_000, 12 => -6_000, 13 => -6_000]));
+    }
+
+    public function test_no_candidate_while_the_final_total_is_within(): void
+    {
+        $this->assertNull(EnvelopeLimitChecker::crossingCandidate(self::ALLOCATED, [1 => -10_000, 2 => -10_000]));
+        $this->assertNull(EnvelopeLimitChecker::crossingCandidate(self::ALLOCATED, []));
+    }
+
+    public function test_the_last_crossing_wins_when_credits_dip_back_within(): void
+    {
+        $this->assertSame(4, EnvelopeLimitChecker::crossingCandidate(self::ALLOCATED, [
+            1 => -25_000, 2 => 10_000, 3 => -1_000, 4 => -5_000,
+        ]));
+    }
 }

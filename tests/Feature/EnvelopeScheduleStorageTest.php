@@ -502,12 +502,19 @@ final class EnvelopeScheduleStorageTest extends TestCase
     public function test_new_migration_is_reversible_without_touching_existing_profile_data(): void
     {
         $key = FinancialProfileKey::query()->sole()->wrapped_key;
+        // Reverse order, like migrate:rollback: the later provenance FK on
+        // transactions depends on envelope_schedules (PostgreSQL enforces it).
+        $provenance = require database_path('migrations/2026_11_17_000003_add_schedule_provenance_to_transactions.php');
         $migration = require database_path('migrations/2026_11_17_000001_create_envelope_schedules_table.php');
+        $provenance->down();
+        $this->assertFalse(Schema::hasColumn('transactions', 'schedule_id'));
         $migration->down();
         $this->assertFalse(Schema::hasTable('envelope_schedules'));
         $this->assertFalse(Schema::hasTable('envelope_amount_keys'));
         $this->assertSame($key, FinancialProfileKey::query()->sole()->wrapped_key);
         $migration->up();
+        $provenance->up();
+        $this->assertTrue(Schema::hasColumn('transactions', 'schedule_id'));
         $this->assertSame(-12345, $this->schedule()->fresh()?->amount);
     }
 }

@@ -119,7 +119,10 @@
             "error": "Transactions could not be loaded.",
             "label": "Transactions",
             "recordedBy": "{name}, recorded {date}",
-            "amountHidden": "Amount hidden"
+            "amountHidden": "Amount hidden",
+            "scheduled": "Scheduled",
+            "scheduleManaged": "Scheduled transaction. Edit its schedule to change this entry.",
+            "system": "System"
         }
     }
 }

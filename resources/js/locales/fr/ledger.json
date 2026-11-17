@@ -119,7 +119,10 @@
             "error": "Les transactions n'ont pas pu être chargées.",
             "label": "Transactions",
             "recordedBy": "{name}, enregistré le {date}",
-            "amountHidden": "Montant masqué"
+            "amountHidden": "Montant masqué",
+            "scheduled": "Planifiée",
+            "scheduleManaged": "Opération planifiée. Modifiez son échéancier pour changer cette écriture.",
+            "system": "Système"
         }
     }
 }

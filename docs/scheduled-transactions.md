@@ -3,10 +3,12 @@
 ## Implementation status
 
 [Issue #15](https://github.com/mind2soft/prospera/issues/15) is being delivered
-incrementally. **The recurrence resolver, encrypted storage, and owner-only
-definition API are implemented.** There is no schedule UI yet, no transactions
-are generated, and no reminders are sent. The payment-reminder toggle stays
-disabled. There are no `schedules:sync` or `schedules:remind` commands yet.
+incrementally. **The recurrence resolver, encrypted storage, owner-only
+definition API, transaction provenance and materialization into open ledgers
+(with the daily `schedules:sync` catch-up) are implemented.** There is no
+schedule UI on the Envelopes page yet (schedules are managed through the API),
+and no reminders are sent: the payment-reminder toggle stays disabled and
+there is no `schedules:remind` command yet.
 
 ## Calendar rules (implemented)
 
@@ -49,15 +51,15 @@ query window and the rule bounds. The query requires valid ISO dates and
 
 Dates are calendar labels, not instants. UTC midnight is used internally only
 as a stable arithmetic container; no timezone conversion or current-clock
-lookup occurs. A future materializer must preserve the date and store
-`event_at` at `00:00:00`, following the existing transaction convention.
+lookup occurs. The materializer preserves the date and stores `event_at` at
+`00:00:00`, following the existing transaction convention.
 
 The resolver jumps by recurrence intervals, not every elapsed day since the
 schedule began. Callers should use bounded windows such as one published
 budget month. Resolving consecutive, non-overlapping windows produces the
 same occurrences as resolving their combined window, allowing deterministic
-catch-up after downtime. This is **not** transaction-level idempotency:
-the future materializer must enforce that with database uniqueness/locking.
+catch-up after downtime. This is **not** transaction-level idempotency: the
+materializer enforces that with a unique index and ledger locking.
 
 ```php
 use App\Services\Schedules\ScheduleOccurrenceResolver;
@@ -107,11 +109,10 @@ the model directly to the tested recurrence resolver.
   deletion cascades schedule and key rows. Profile membership alone never
   makes a schedule profile-owned. Ownership follows the envelope.
 - Schedules are soft-deleted and included in amount-key rotation, pruning,
-  and verification. This prepares the lifecycle for the future requirement
-  that generated rows in closed ledgers retain their schedule provenance.
-  **No generated transactions or provenance columns exist yet.**
+  and verification, so generated rows in closed ledgers keep a valid
+  provenance FK to a deleted schedule (see [Materialization](#materialization-implemented)).
 
-## Definition API (implemented; no automatic posting yet)
+## Definition API (implemented)
 
 All endpoints live in the session-authenticated, verified-email **web**
 middleware group, including CSRF protection for writes. The envelope owner
@@ -169,35 +170,161 @@ under the envelope row lock, and precedes amount decryption. Reads take a
 shared envelope lock; writes take an exclusive envelope lock before schedule
 rows, consistently with key rotation and envelope lifecycle operations.
 
-This API manages **definitions only**. Schedule writes do not currently
-dispatch reconciliation jobs, create ledger entries, or send mail. The
-localized owner-only drawer will use TanStack Vue Query when materialization
-is available; no schedule entry point is exposed in the UI yet.
+Create and update queue reconciliation of the affected open ledgers after
+commit; DELETE removes the schedule's generated rows from open ledgers in the
+same database transaction (see [Materialization](#materialization-implemented)).
+No reminder mail is sent. The localized owner-only drawer (TanStack Vue Query)
+is not built yet; no schedule entry point is exposed in the UI.
+
+## Materialization (implemented)
+
+`App\Services\Schedules\ScheduleReconciler` converges **one open ledger** at
+a time with its expected generated rows.
+
+### What lands where
+
+An occurrence on date `D` of an active (not soft-deleted) schedule is recorded
+in ledger `L` when:
+
+1. `L` is **open** (`closed_at` null). Expired-but-open ledgers count: a
+   ledger is never auto-closed.
+2. `L.start_date ≤ D ≤ L.end_date`.
+3. The month of `D` is covered by a **published budget of `L`'s profile**
+   that assigns the schedule's envelope. The latest published budget of a
+   month wins, like allocation reporting.
+
+Coverage is a **whole calendar month**: once a month is covered, every
+occurrence of that month is generated at once, including dates later than
+today. Because budgets can only be published for the current month, months
+after the current one are never covered, so no row is generated beyond the
+current month. Months without a published budget or without the envelope
+assigned get nothing. Closed ledgers are never touched.
+
+Generated rows are ordinary `transactions` rows with:
+
+- `schedule_id` set (nullable FK to `envelope_schedules`, `restrict` on
+  delete, which works with soft-deleted schedules);
+- `user_id = null` (the API and the ledger show "System" as the author);
+- `event_at` at `00:00:00` of the occurrence date;
+- the schedule's signed amount, written in **exact integer minor units**
+  (`Transaction::setAmountMinorUnits`). Schedule amounts are minor units,
+  while `Transaction::amount` is currency units. The reconciler never goes
+  through the currency-unit accessor or floats.
+
+A unique index on `(ledger_id, schedule_id, event_at)` makes one occurrence
+exist at most once per ledger. Manual rows have a null `schedule_id`, so
+manual duplicates on the same day stay allowed.
+
+### Read-only rows
+
+Generated rows are system-managed:
+
+- `DELETE /api/transactions/{id}` and its restore endpoint reject them for
+  everyone (ledger owner included) with a `422` validation error on
+  `transaction`. There is no transaction update endpoint.
+- A manual `POST` may not carry `schedule_id` (`422`).
+- `schedule_id` is immutable on saves and refused in bulk updates. It is not
+  mass-assignable.
+- The ledger API exposes a boolean `scheduled`. The ledger page shows a
+  localized **Scheduled** badge, "System" in the user column, and no delete
+  action. Amount masking follows the usual envelope permissions.
+- No contributor-transaction mail is sent for generated rows.
+
+To change a generated row, edit its schedule.
+
+### Reconciliation
+
+Each run recomputes the full expected set and converges the ledger to it. It
+inserts missing rows, rewrites changed amounts in place (same row ids), and
+permanently deletes superfluous rows. The relevant set is the **union** of
+current coverage and the ledger's existing generated rows (their
+envelopes/months), so rows whose coverage, assignment or schedule disappeared
+(including soft-deleted schedules) are cleaned up. Manual rows are never
+read for reconciliation and never changed.
+
+There is no last-run watermark. Repeated or overlapping runs, retries and
+catch-up after downtime all converge to the same rows without duplicates.
+
+Lock order (see [financial write serialization](financial-locking.md)):
+
+1. Ledger row, exclusive. The read-only state is re-read under it. The
+   profile key memo is refreshed.
+2. Covering published budgets, shared, ascending id.
+3. Every relevant envelope (coverage ∪ existing generated rows), shared,
+   ascending id. Envelope key memos are refreshed.
+4. Schedule reads, then transaction writes.
+
+No profile root is taken beneath the ledger. Money is compared and written in
+PHP only: no SQL arithmetic or filtering on encrypted amounts. Each ledger is
+one database transaction with deadlock retries.
+
+### Triggers
+
+All triggers are ID-only queued jobs dispatched **after commit**. Jobs are
+deliberately not unique or coalesced: each recomputes from current state
+under the ledger lock, so an edit committed while a run is in progress gets
+its own run.
+
+| Change | Job | Ledgers reconciled |
+| --- | --- | --- |
+| Schedule created or edited | `ReconcileScheduleLedgers` (envelope) | Open ledgers of profiles with a published budget assigning the envelope, plus open ledgers holding the envelope's generated rows |
+| Schedule deleted | none, synchronous (below) | Its open-ledger rows are removed in the same transaction |
+| Budget published (including replacement) or a published budget deleted | `ReconcileScheduleLedgers` (profile) | Every open ledger of the profile, in full |
+| Ledger created or reopened | `ReconcileLedgerSchedules` | That ledger |
+| Daily `php artisan schedules:sync` | none, in-process | Every open ledger |
+
+Fan-out jobs discover the ledgers when they run, after the triggering commit.
+Ledgers created or reopened concurrently dispatch their own job. Reopening a
+ledger applies everything that changed while it was closed, including the
+removal of rows of schedules deleted in the meantime.
+
+`schedules:sync` runs daily (`->daily()->withoutOverlapping()->onOneServer()`).
+It reconciles each open ledger in its own transaction. A failing ledger is
+reported (`report()` plus an error line naming the ledger) without stopping
+the others, and the command then exits non-zero. It prints the inserted,
+updated and deleted totals.
+
+### Schedule deletion
+
+`DELETE /api/envelopes/{envelope}/schedules/{schedule}`
+(`App\Services\Schedules\ScheduleDeletion`) soft-deletes the schedule and
+permanently removes its generated rows from **open** ledgers atomically:
+
+1. Discover every ledger holding rows of the schedule. This includes closed
+   ledgers and soft-deleted rows.
+2. Lock those ledgers in ascending id order, **before** the envelope.
+3. Lock the envelope exclusively, reauthorize ownership on the fresh row, and
+   lock the schedule.
+4. Requery the ledger set. If a reconciliation committed rows in a ledger
+   that was not locked, roll the whole attempt back and rediscover (at most
+   three attempts). The set is never extended beneath the envelope lock.
+5. Delete the open-ledger rows, then soft-delete the schedule.
+
+Closed-ledger rows keep their `schedule_id` (FK to the soft-deleted
+schedule). Reopening such a ledger removes them.
+
+### Envelope limit notifications
+
+Reconciliation records the expense groups (ledger × envelope × month) whose
+spending **grew**: an inserted row, or an amount made more negative. It
+dispatches an ID-only, after-commit `CheckEnvelopeLimitGroup` job for each
+group, starting from the lowest changed row id. See
+[notifications](notifications.md) for the batch-safe crossing rule. Removals
+and decreases only lower spending, so they cannot cross an allocation and are
+not checked.
 
 ## Remaining work (#15)
 
-Materialization must follow the prerequisite
-[financial serialization protocol](financial-locking.md), including ledger-first
-locking and fresh key material. Automatic posting is still disabled. Batch
-limit notifications, atomic schedule deletion, provenance, and trigger wiring
-must be implemented and audited together with reconciliation.
-
-- Generated-transaction provenance/uniqueness (`ledger_id`, `schedule_id`,
-  `event_at`). Add the provenance FK and generated-row mutation guards
-  together with materialization rather than exposing half-managed entries.
-- Reconciliation for open ledgers with published-budget month coverage;
-  schedule create/edit/delete, budget publish, ledger open/reopen, and daily
-  catch-up triggers. Closed ledgers must remain untouched, including when a
-  schedule is soft-deleted. Generated rows must be read-only server-side.
-- Daily `schedules:sync` and `schedules:remind`, durable per-occurrence and
-  recipient reminder deduplication, send-time recipient/permission/settings
-  checks, masked amounts, and English/French mail content. See
+- Localized owner-only schedules drawer/dialog on the Envelopes page, with the
+  affected-entries warning.
+- Daily `schedules:remind`: durable per-occurrence and per-recipient reminder
+  deduplication, send-time recipient/permission/settings checks, masked
+  amounts, and English/French mail content. See
   [notification requirements](notifications.md) and the issue's reminder
   acceptance criteria. Never put decrypted amounts in queued payloads.
-- Localized owner-only schedules drawer/dialog and generated-row badges;
-  re-enable payment reminders only once sending is implemented and tested.
-- Integration and e2e coverage, plus updates to budget/ledger/envelope docs
-  and the README's scheduled commands when those capabilities actually ship.
+  Re-enable payment reminders only once sending is implemented and tested.
+- End-to-end coverage of schedule create/edit/delete through the UI once the
+  drawer exists.
 
 The recurrence unit suite runs without a database or Laravel boot:
 
@@ -205,5 +332,6 @@ The recurrence unit suite runs without a database or Laravel boot:
 vendor/bin/phpunit tests/Unit/Schedules
 vendor/bin/phpunit tests/Feature/EnvelopeScheduleStorageTest.php tests/Unit/Security
 vendor/bin/phpunit tests/Feature/EnvelopeScheduleApiTest.php
-TZ=UTC npm run e2e -- e2e/schedule-api.spec.ts
+php artisan test --filter='ScheduleMaterializationTest|ScheduleLimitNotificationTest|PostgresScheduleDeletionTest|EnvelopeLimitCheckerTest'
+TZ=UTC npm run e2e -- e2e/schedule-api.spec.ts e2e/ledger.spec.ts
 ```

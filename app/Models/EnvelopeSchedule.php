@@ -22,7 +22,8 @@ use InvalidArgumentException;
 use LogicException;
 
 /**
- * Schedule definitions; automatic ledger materialization is not enabled yet.
+ * Schedule definitions, materialized into open ledgers by ScheduleReconciler
+ * (docs/scheduled-transactions.md).
  *
  * @property int $id
  * @property int $envelope_id

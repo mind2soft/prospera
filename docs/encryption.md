@@ -109,9 +109,19 @@ Existing scheduler commands include envelope keys automatically:
   to the requested namespaces and ids. Boot-time key checks use an envelope
   key as a fallback when no active profile key exists.
 
-No new scheduler registration or separate operator command is required.
-The owner-only schedule definition API is implemented; materialization,
-reminders, and a schedule UI remain unimplemented.
+No new key-maintenance command is required. Generated transactions are
+ordinary profile-keyed `transactions.amount` ciphertexts, rotated, pruned and
+verified with every other transaction.
+
+**Provenance is not bound into the AAD.** `transactions.schedule_id` is
+plaintext metadata like the row's author. Binding it would change the context
+of every generated row, and every partial amount projection would have to
+select it. In return it would only protect against an attacker with database
+write access swapping a ciphertext between a generated and a manual row of
+the same ledger, envelope and day. That case is already outside the threat
+model (swaps within an identical context, above). Generated and manual rows
+therefore share the existing, unchanged transaction AAD, and the amount
+migrations' rollback paths need no special case.
 
 ## Ciphertext format
 

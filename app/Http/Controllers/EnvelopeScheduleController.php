@@ -5,14 +5,21 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Requests\EnvelopeScheduleRequest;
+use App\Jobs\ReconcileScheduleLedgers;
 use App\Models\Envelope;
 use App\Models\EnvelopeSchedule;
+use App\Services\Schedules\ScheduleDeletion;
 use App\Services\Schedules\ScheduleOccurrencePreview;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 
-/** Definition management only. Automatic ledger posting/reminders are not enabled yet. */
+/**
+ * Owner-only schedule definitions. Writes queue reconciliation of the
+ * affected open ledgers after commit; deletion removes the schedule's
+ * open-ledger rows synchronously (docs/scheduled-transactions.md).
+ * Reminders are not sent yet.
+ */
 class EnvelopeScheduleController extends Controller
 {
     public function __construct(private readonly ScheduleOccurrencePreview $preview) {}
@@ -39,6 +46,7 @@ class EnvelopeScheduleController extends Controller
         return DB::transaction(function () use ($request, $envelope): JsonResponse {
             $locked = $this->lockedEnvelope($envelope);
             $schedule = $locked->schedules()->create($request->attributesFor($locked));
+            dispatch(ReconcileScheduleLedgers::forEnvelope($locked->id));
 
             return response()->json(['schedule' => $this->serialize($schedule, $request->calendar()->today()->toDateString())], 201);
         });
@@ -52,20 +60,18 @@ class EnvelopeScheduleController extends Controller
             $attributes = $request->attributesFor($locked, $fresh);
             if ($attributes !== []) {
                 $fresh->fill($attributes)->save();
+                dispatch(ReconcileScheduleLedgers::forEnvelope($locked->id));
             }
 
             return response()->json(['schedule' => $this->serialize($fresh, $request->calendar()->today()->toDateString())]);
         });
     }
 
-    public function destroy(EnvelopeScheduleRequest $request, Envelope $envelope, EnvelopeSchedule $schedule): Response
+    public function destroy(EnvelopeScheduleRequest $request, Envelope $envelope, EnvelopeSchedule $schedule, ScheduleDeletion $deletion): Response
     {
-        return DB::transaction(function () use ($envelope, $schedule): Response {
-            $locked = $this->lockedEnvelope($envelope);
-            $locked->schedules()->whereKey($schedule->id)->lockForUpdate()->firstOrFail()->delete();
+        $deletion->delete($envelope->id, $schedule->id, fn (Envelope $locked) => $this->authorize('manageSchedules', $locked));
 
-            return response()->noContent();
-        });
+        return response()->noContent();
     }
 
     private function lockedEnvelope(Envelope $envelope, bool $readOnly = false): Envelope

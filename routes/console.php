@@ -24,6 +24,11 @@ Schedule::command('users:prune-unverified')->daily()->withoutOverlapping()->onOn
 // ledger row, so re-runs and catch-ups never double-send.
 Schedule::command('ledgers:notify-expired')->daily()->withoutOverlapping()->onOneServer();
 
+// Scheduled transactions (issue #15, docs/scheduled-transactions.md): full,
+// idempotent reconciliation of every open ledger — the catch-up for lost
+// jobs or downtime; there is no last-run watermark to drift.
+Schedule::command('schedules:sync')->daily()->withoutOverlapping()->onOneServer();
+
 // Undoable transaction deletion (issue #48, docs/undoable-deletion.md):
 // deleted transactions stay restorable for Transaction::UNDO_WINDOW_SECONDS
 // (3 minutes), then this sweep removes them for good. The overlap lock expires

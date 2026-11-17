@@ -1,4 +1,5 @@
 import { execSync } from 'node:child_process';
+import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page, test } from '@playwright/test';
 
 const LOGIN = {
@@ -425,4 +426,49 @@ test('ledger page audit', async ({ page }) => {
 
     console.log('CONSOLE ERRORS:', JSON.stringify(consoleErrors));
     expect(consoleErrors).toEqual([]);
+});
+
+test('schedule-generated rows carry a badge and no delete action', async ({
+    page,
+}) => {
+    execSync('npm run e2e:seed -- seed-ledger-scheduled.php', { cwd: '.' });
+    await login(page);
+    await page.goto('/ledger');
+
+    const today = new Date();
+    const steps =
+        (2026 - today.getFullYear()) * 12 + (10 - (today.getMonth() + 1));
+    const navButton = page.getByRole('button', {
+        name: steps <= 0 ? 'Previous month' : 'Next month',
+    });
+    for (let i = 0; i < Math.abs(steps); i += 1) {
+        await navButton.click();
+    }
+
+    const rows = page.locator('tbody tr');
+    await expect(rows).toHaveCount(4);
+    const scheduled = rows.filter({ has: page.getByTestId('scheduled-badge') });
+    await expect(scheduled).toHaveCount(1);
+    await expect(scheduled).toContainText('Mortgage');
+    await expect(scheduled).toContainText('Scheduled');
+    await expect(scheduled).toContainText('System');
+    // 45.50 from 4550 minor units; remaining Mortgage 1300 - 1250 - 45.50.
+    await expect(scheduled).toContainText('($45.5)$4.5');
+    await expect(scheduled.getByRole('button')).toHaveCount(0);
+
+    // Manual entries keep their usual delete action.
+    await expect(
+        rows
+            .filter({ hasText: 'Food' })
+            .getByRole('button', { name: /^Delete transaction/ }),
+    ).toHaveCount(1);
+    await expect(
+        rows.getByRole('button', { name: /^Delete transaction/ }),
+    ).toHaveCount(3);
+
+    const contrast = await new AxeBuilder({ page })
+        .include('table')
+        .withRules(['color-contrast'])
+        .analyze();
+    expect(contrast.violations).toEqual([]);
 });

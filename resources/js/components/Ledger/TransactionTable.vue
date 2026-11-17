@@ -5,6 +5,7 @@ import Currency from '@/components/Currency.vue';
 import EnvelopeChip from '@/components/EnvelopeChip.vue';
 import Icon from '@/components/Icon.vue';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
     Tooltip,
@@ -15,6 +16,7 @@ import {
 import { getInitials } from '@/composables/useInitials';
 import { useLocale } from '@/composables/useLocale';
 import { formatCalendarDate } from '@/lib/calendar';
+import { canDeleteTransaction } from '@/lib/transactionPermissions';
 import type { Transaction } from '@/types';
 
 const { locale } = useLocale();
@@ -50,16 +52,11 @@ const canDelete = computed(
 );
 
 const mayDelete = (transaction: Transaction): boolean => {
-    if (!canDelete.value) {
-        return false;
-    }
-    if (props.permission === 'owner') {
-        return true;
-    }
-    return (
-        props.permission === 'contributor' &&
-        transaction.user.id !== null &&
-        transaction.user.id === props.currentUserId
+    return canDeleteTransaction(
+        transaction,
+        props.permission,
+        props.currentUserId,
+        props.open ?? true,
     );
 };
 
@@ -156,6 +153,18 @@ defineExpose({
                             :color="transaction.color"
                             :direction="transaction.direction"
                         />
+                        <Badge
+                            v-if="transaction.scheduled"
+                            variant="secondary"
+                            class="mt-1"
+                            data-testid="scheduled-badge"
+                        >
+                            <Icon name="schedule" aria-hidden="true" />
+                            {{ $t('ledger.table.scheduled') }}
+                            <span class="sr-only">{{
+                                $t('ledger.table.scheduleManaged')
+                            }}</span>
+                        </Badge>
                     </td>
                     <td class="px-4 py-2.5 text-right">
                         <span
@@ -186,7 +195,14 @@ defineExpose({
                     </td>
                     <td class="px-4 py-2.5">
                         <TooltipProvider :delay-duration="0">
-                            <Tooltip v-if="transaction.user.id !== null">
+                            <span
+                                v-if="transaction.scheduled"
+                                class="text-xs text-muted-foreground"
+                                >{{
+                                    $t('ledger.table.system')
+                                }}</span
+                            >
+                            <Tooltip v-else-if="transaction.user.id !== null">
                                 <TooltipTrigger
                                     class="rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                                     :aria-label="

@@ -1,10 +1,9 @@
 # Financial write serialization
 
-This is the locking prerequisite for scheduled-transaction materialization
-([#15](https://github.com/mind2soft/prospera/issues/15)). It also protects
-existing account deletion, profile lifecycle, amount-key maintenance, and
-manual money writes. It does **not** enable generated transactions or a new
-retention policy.
+This protocol protects scheduled-transaction materialization
+([#15](https://github.com/mind2soft/prospera/issues/15)), account deletion,
+profile lifecycle, amount-key maintenance, and manual money writes. It does
+**not** introduce a new retention policy.
 
 ## Root order
 
@@ -22,8 +21,6 @@ Not every writer needs every root. Manual transaction writers serialize on
 their ledger before the envelope and transaction; draft assignment writers
 serialize on the budget before the envelope and assignment. A writer must
 not acquire a previously missing ledger beneath an envelope/transaction lock.
-Future reconciliation follows the existing ledger-first transaction protocol,
-not a new envelope-first protocol.
 
 Profile key rotation and pruning lock the profile, **all its ledger roots,
 then all its budget roots**, before changing key inventory or locking money
@@ -43,6 +40,32 @@ Budget create/clone/publish also reload and reauthorize beneath the profile
 root, rather than trusting permission relations loaded before a lock wait.
 Empty-profile deletion checks for budgets/ledgers beneath the profile lock,
 so a concurrent resource insertion cannot slip between its check and delete.
+
+## Scheduled transactions
+
+Reconciliation follows the ledger-first transaction protocol, not an
+envelope-first one. It works per ledger, in one transaction:
+
+1. The ledger row, exclusive (never a profile root beneath it).
+2. The covering published budgets, shared, in ascending id order. Publishing
+   a replacement or deleting a budget waits for the reconciler.
+3. All relevant envelopes, shared, in ascending global id order. Schedule
+   writers and envelope-key maintenance take the envelope exclusively, so
+   schedule definitions and keys are stable from here on.
+4. Schedule reads, then transaction inserts, amount rewrites and deletions.
+
+The limit-notification group check takes the ledger (shared), the published
+budget (shared), then the envelope (shared), before reading amounts and
+claiming.
+
+Schedule deletion must hold the ledgers of every generated row before it
+locks the envelope exclusively. It discovers the ledger set from the rows,
+including closed ledgers and soft-deleted rows, locks it in ascending order,
+then locks the envelope and schedule and requeries. If the set grew (a
+reconciliation committed rows in another ledger in between), the attempt
+rolls back entirely and rediscovers, with at most three attempts. This is the
+same closure check as account deletion, and it relies on READ COMMITTED
+rediscovery in the same way.
 
 ## Account deletion and conditional pruning
 
@@ -111,8 +134,9 @@ value with cached v1 after its database key row was pruned.
   Waiting only on the INSERT's eventual FK check would be too late.
 - Key maintenance flushes beneath its complete root set on every attempt.
 - Envelope schedule saves already flush their envelope key memo beneath the
-  envelope lock. Future reconciliation must flush profile keys after its
-  ledger lock and envelope keys after its envelope locks, on every attempt.
+  envelope lock. Reconciliation flushes the profile key after its ledger lock
+  and the envelope keys after its envelope locks, on every attempt. The limit
+  check flushes the profile key after its ledger lock.
 
 Amounts still pass through encrypted Eloquent persistence; this is not
 permission to write money in SQL. Internal callers adding new money-writing
@@ -133,7 +157,14 @@ first attempt's rollback and appears in rediscovery, and the actual ledger
 deletion method's ledger-before-child order. It runs in the existing
 PostgreSQL release gate and skips locally when the driver/server is absent.
 
+`ScheduleMaterializationTest` checks the reconciler's and schedule
+deletion's query order, fresh-key encryption after rotation/pruning, and
+deletion's rollback/rediscovery/exhaustion. `PostgresScheduleDeletionTest`
+proves on two connections that deletion holds nothing beneath the ledger
+while it waits, and that rows committed in an unlocked ledger force a fresh
+attempt.
+
 ```bash
-php artisan test --filter='FinancialLockProtocolTest|AccountDeletionTest|UnverifiedAccountsTest|AmountKeyCommandsTest|SharingLifecycleTest'
+php artisan test --filter='FinancialLockProtocolTest|AccountDeletionTest|UnverifiedAccountsTest|AmountKeyCommandsTest|SharingLifecycleTest|ScheduleMaterializationTest|PostgresScheduleDeletionTest'
 composer ci:check
 ```
