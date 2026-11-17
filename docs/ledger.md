@@ -133,6 +133,12 @@ that crosses.
 - **Closing** is a manual action (ledger actions menu). Closed ledgers are
   read-only: transactions can no longer be added or deleted. A closed ledger
   can be re-opened.
+- **Retention prune** — a ledger is never auto-closed and is **kept for
+  7 years after its end date**, then deleted by the daily run
+  (`php artisan retention:prune`, issue #61) with all of its transactions,
+  pending deletions included — open and closed ledgers alike, shared
+  profiles included; no advance notice is sent. Boundaries, exceptions and
+  operator cautions: [data retention](retention.md).
 - **Expiry notification** — a ledger is never auto-closed, but once an open
   ledger's end date has passed, the daily run
   (`php artisan ledgers:notify-expired`) emails the owner and the profile

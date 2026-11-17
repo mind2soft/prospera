@@ -27,4 +27,40 @@ class PrivacyTest extends TestCase
 
         $this->get(route('privacy'))->assertOk();
     }
+
+    /**
+     * The privacy policies promise a 7-year retention prune (issue #61,
+     * docs/retention.md): the wording is a product commitment, so both
+     * localized policies must keep stating the same implemented rules — a
+     * policy silently diverging from `retention:prune` is a defect.
+     */
+    public function test_both_localized_policies_state_the_implemented_retention_rules()
+    {
+        $english = (string) file_get_contents(resource_path('content/privacy.en.md'));
+        $french = (string) file_get_contents(resource_path('content/privacy.fr.md'));
+
+        // Ledgers: 7 years after their end date, budgets and transactions tied to it.
+        $this->assertStringContainsStringIgnoringCase(
+            '7 years after the ledger\'s end date', $english,
+        );
+        $this->assertStringContainsStringIgnoringCase(
+            '7 ans après sa date de fin', $french,
+        );
+
+        // Published budgets and drafts.
+        $this->assertStringContainsStringIgnoringCase(
+            '7 years past its effective month', $english,
+        );
+        $this->assertStringContainsStringIgnoringCase(
+            '7 ans après son mois effectif', $french,
+        );
+
+        // Envelopes and scheduled transactions are not bound to a period.
+        $this->assertStringContainsStringIgnoringCase(
+            'scheduled transactions are not bound to a period', $english,
+        );
+        $this->assertStringContainsStringIgnoringCase(
+            'transactions planifiées ne sont pas liées à une période', $french,
+        );
+    }
 }
