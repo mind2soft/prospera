@@ -211,6 +211,16 @@ final class AmountKeyManager
     private function lockOwner(int $ownerId, AmountKeyScope $scope): void
     {
         $scope->ownerModel()::query()->whereKey($ownerId)->lockForUpdate()->firstOrFail();
+        if ($scope === AmountKeyScope::Profile) {
+            // Never hold transaction/assignment locks while waiting for a
+            // ledger or budget writer. Lock roots in global id order first,
+            // retaining at most one chunk of metadata in application memory.
+            Ledger::query()->where('profile_id', $ownerId)->select('id')->lockForUpdate()
+                ->chunkById(self::CHUNK, static fn (Collection $rows): bool => true);
+            Budget::query()->where('profile_id', $ownerId)->select('id')->lockForUpdate()
+                ->chunkById(self::CHUNK, static fn (Collection $rows): bool => true);
+        }
+        $this->ring->forget($ownerId, $scope);
     }
 
     /** @return list<int> */

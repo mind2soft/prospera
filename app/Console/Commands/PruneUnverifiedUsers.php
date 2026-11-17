@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Console\Commands;
 
 use App\Actions\DeleteAccount;
@@ -10,7 +12,6 @@ use App\Models\User;
 use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 use Throwable;
 
 class PruneUnverifiedUsers extends Command
@@ -43,21 +44,11 @@ class PruneUnverifiedUsers extends Command
             ->lazyById()
             ->each(function (User $candidate) use ($deleteAccount, $cutoff, &$deleted, &$failed): void {
                 try {
-                    $wasDeleted = DB::transaction(function () use ($candidate, $deleteAccount, $cutoff): bool {
-                        /** @var User|null $user */
-                        $user = $this->candidates($cutoff)
-                            ->whereKey($candidate->id)
-                            ->lockForUpdate()
-                            ->first();
-
-                        if ($user === null || ! $this->holdsNoData($user)) {
-                            return false;
-                        }
-
-                        $deleteAccount->handle($user);
-
-                        return true;
-                    });
+                    $wasDeleted = $deleteAccount->deleteIf($candidate, fn (User $user): bool => $user->email_verified_at === null
+                        && $user->created_at !== null && $user->created_at->lte($cutoff)
+                        && $user->updated_at !== null && $user->updated_at->lte($cutoff)
+                        && ! $user->envelopes()->exists()
+                        && $this->holdsNoData($user));
                 } catch (Throwable $exception) {
                     report($exception);
                     $failed++;

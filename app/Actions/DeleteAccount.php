@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Actions;
 
+use App\Exceptions\FinancialLockSetChanged;
 use App\Models\DeletedAccountEmail;
 use App\Models\FinancialProfileInvite;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Security\Amounts\AmountContext;
+use App\Services\AccountDeletionLocks;
+use Closure;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -26,67 +30,93 @@ class DeleteAccount
 {
     public function handle(User $user): void
     {
-        DB::transaction(function () use ($user): void {
-            // Ownership of owned profiles passes to the earliest joiner (ties
-            // broken by the lowest user_id); solo profiles are deleted along
-            // with the owner's resources in them. Resources owned by the
-            // deleted user in the remaining profiles auto-transfer to the
-            // profile owners (profiles are processed earliest-first, so for
-            // envelopes referenced by several profiles the earliest-created
-            // referencing profile's owner wins).
-            $profiles = $user->profiles()->orderBy('financial_profiles.created_at')->get();
+        $this->deleteIf($user, fn (User $fresh): bool => true);
+    }
 
-            foreach ($profiles as $profile) {
-                if ($profile->isOwner($user) && $profile->isSolo()) {
-                    $profile->deleteWithResources();
-
-                    continue;
-                }
-
-                if ($profile->isOwner($user)) {
-                    $profile->transferOwnershipToEarliestJoiner();
-                }
-
-                $profile->removeMember($user, accountDeletion: true);
+    /**
+     * Owns the complete production transaction/retry boundary for both
+     * self-service deletion and pruning. Eligibility is evaluated only after
+     * the root set is stable, against a fresh locked user and resource state.
+     *
+     * @param  Closure(User): bool  $eligible
+     */
+    public function deleteIf(User $user, Closure $eligible): bool
+    {
+        return retry(3, fn (): bool => DB::transaction(function () use ($user, $eligible): bool {
+            $fresh = app(AccountDeletionLocks::class)->lock($user->id);
+            if ($fresh === null || ! $eligible($fresh)) {
+                return false;
             }
 
-            // Referenced envelopes transfer to the owner of the
-            // earliest-created profile referencing them; unreferenced
-            // envelopes are deleted with the account (cascade).
-            $this->transferReferencedEnvelopes($user);
+            $this->deleteLocked($fresh);
 
-            // The envelopes left are deleted with the account: pending
-            // transaction deletions on them would trip the restrictive
-            // foreign key (docs/undoable-deletion.md).
-            Transaction::purgeDeletionsOnEnvelopes($user->envelopes()->pluck('id')->all());
+            return true;
+        }, attempts: 3), 0, fn (\Throwable $exception): bool => $exception instanceof FinancialLockSetChanged);
+    }
 
-            // Pending invites the user issued on surviving profiles stay
-            // valid, re-attributed to the profile's new owner.
-            FinancialProfileInvite::reassignIssuedBy($user);
+    /** Caller must own all roots established by AccountDeletionLocks. */
+    protected function deleteLocked(User $user): void
+    {
+        // Ownership of owned profiles passes to the earliest joiner (ties
+        // broken by the lowest user_id); solo profiles are deleted along
+        // with the owner's resources in them. Resources owned by the
+        // deleted user in the remaining profiles auto-transfer to the
+        // profile owners (profiles are processed earliest-first, so for
+        // envelopes referenced by several profiles the earliest-created
+        // referencing profile's owner wins).
+        $profiles = $user->profiles()->orderBy('financial_profiles.created_at')->get();
 
-            // An invite reserved by this (unverified) account is released
-            // instead of cascading away: the owner's invite stays usable.
-            FinancialProfileInvite::releaseReservationOf($user);
+        foreach ($profiles as $profile) {
+            if ($profile->isOwner($user) && $profile->isSolo()) {
+                $profile->deleteWithResources();
 
-            // The deleted account's email is blacklisted so it cannot be
-            // recycled (issue #71): neither by a new registration, nor as
-            // another account's email address. Matched case-insensitively,
-            // like every email lookup; written inside the transaction,
-            // before the user row is removed, so the self-service deletion
-            // and the scheduled prune of unverified accounts share this
-            // path.
-            $blacklisted = DeletedAccountEmail::query()->forEmail($user->email)->first();
-
-            if ($blacklisted === null) {
-                DeletedAccountEmail::create([
-                    'email' => $user->email,
-                    'account_created_at' => $user->created_at,
-                    'account_deleted_at' => now(),
-                ]);
+                continue;
             }
 
-            $user->delete();
-        });
+            if ($profile->isOwner($user)) {
+                $profile->transferOwnershipToEarliestJoiner();
+            }
+
+            $profile->removeMember($user, accountDeletion: true);
+        }
+
+        // Referenced envelopes transfer to the owner of the
+        // earliest-created profile referencing them; unreferenced
+        // envelopes are deleted with the account (cascade).
+        $this->transferReferencedEnvelopes($user);
+
+        // The envelopes left are deleted with the account: pending
+        // transaction deletions on them would trip the restrictive
+        // foreign key (docs/undoable-deletion.md).
+        Transaction::purgeDeletionsOnEnvelopes($user->envelopes()->pluck('id')
+            ->map(fn (mixed $id): int => AmountContext::id($id, 'envelope_id'))->all());
+
+        // Pending invites the user issued on surviving profiles stay
+        // valid, re-attributed to the profile's new owner.
+        FinancialProfileInvite::reassignIssuedBy($user);
+
+        // An invite reserved by this (unverified) account is released
+        // instead of cascading away: the owner's invite stays usable.
+        FinancialProfileInvite::releaseReservationOf($user);
+
+        // The deleted account's email is blacklisted so it cannot be
+        // recycled (issue #71): neither by a new registration, nor as
+        // another account's email address. Matched case-insensitively,
+        // like every email lookup; written inside the transaction,
+        // before the user row is removed, so the self-service deletion
+        // and the scheduled prune of unverified accounts share this
+        // path.
+        $blacklisted = DeletedAccountEmail::query()->forEmail($user->email)->first();
+
+        if ($blacklisted === null) {
+            DeletedAccountEmail::create([
+                'email' => $user->email,
+                'account_created_at' => $user->created_at,
+                'account_deleted_at' => now(),
+            ]);
+        }
+
+        $user->delete();
     }
 
     /**
@@ -122,7 +152,7 @@ class DeleteAccount
 
         $profileIdsByEnvelope = $references
             ->groupBy('envelope_id')
-            ->map(fn (Collection $rows): Collection => $rows->pluck('profile_id')->map(fn ($id): int => (int) $id)->unique()->values());
+            ->map(fn (Collection $rows): Collection => $rows->pluck('profile_id')->map(fn (mixed $id): int => AmountContext::id($id, 'profile_id'))->unique()->values());
 
         // One query for every candidate heir: per referencing profile, its
         // owner first, then the other members by join date.

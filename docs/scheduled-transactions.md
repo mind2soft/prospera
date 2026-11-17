@@ -176,6 +176,12 @@ is available; no schedule entry point is exposed in the UI yet.
 
 ## Remaining work (#15)
 
+Materialization must follow the prerequisite
+[financial serialization protocol](financial-locking.md), including ledger-first
+locking and fresh key material. Automatic posting is still disabled. Batch
+limit notifications, atomic schedule deletion, provenance, and trigger wiring
+must be implemented and audited together with reconciliation.
+
 - Generated-transaction provenance/uniqueness (`ledger_id`, `schedule_id`,
   `event_at`). Add the provenance FK and generated-row mutation guards
   together with materialization rather than exposing half-managed entries.

@@ -1,5 +1,10 @@
 # Ledger
 
+Financial lifecycle and key maintenance use the shared
+[root-lock protocol](financial-locking.md); transaction writes remain
+ledger-first. The ledger deletion model method acquires that root even for
+non-HTTP callers, before permanently deleting active or pending transactions.
+
 A ledger provides a yearly financial record of transactions. Paired with
 budgets, it helps adjust expenses so income and spending either balance out,
 or yield dividends.
@@ -143,8 +148,10 @@ that crosses.
   subsequent writes with the read-only validation error, while a write in
   flight commits before a concurrent close is applied. The documented lock
   order is ledger row (exclusive) → envelope row (shared) → transaction row
-  (exclusive); no other operation acquires the ledger lock after another
-  resource, so the order cannot deadlock.
+  (exclusive). Lifecycle/key-maintenance operations that also require profile
+  roots take those first, then prelock all relevant ledger roots in global ID
+  order before budget, envelope, or transaction mutations; see
+  [financial write serialization](financial-locking.md).
 - **Deleting a ledger deletes ALL of its transactions** (cascade), pending
   deletions included. The UI always warns about this.
 

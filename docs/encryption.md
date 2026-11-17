@@ -144,6 +144,12 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
 
 ## Development rules
 
+Concurrent writes also follow the shared
+[financial root-lock and key-freshness protocol](financial-locking.md).
+Profile rotation/pruning prelock ledgers then budgets before key/money-row
+changes; application writers refresh memoized keys beneath their serialization
+root, not before waiting for it.
+
 - Every new money column uses the `EncryptsAmounts` trait and implements
   `HasEncryptedAmounts`.
 - **Never aggregate, sort or filter money in SQL** (`SUM`, `ORDER BY`,

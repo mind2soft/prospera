@@ -79,17 +79,18 @@ class FinancialProfileInviteController extends Controller
         $validated = $request->validated();
         $user = $this->currentUser($request);
 
-        $alreadyMember = $profile->members()->forEmail($validated['email'], 'users.email')->exists();
-
-        if ($alreadyMember) {
-            throw ValidationException::withMessages([
-                'email' => __('This user is already a member of the profile.'),
-            ]);
-        }
-
         $rawKey = FinancialProfileInvite::generateKey();
 
         $invite = DB::transaction(function () use ($user, $profile, $validated, $rawKey): FinancialProfileInvite {
+            $profile = FinancialProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+            $this->authorize('manage', $profile);
+
+            if ($profile->members()->forEmail($validated['email'], 'users.email')->exists()) {
+                throw ValidationException::withMessages([
+                    'email' => __('This user is already a member of the profile.'),
+                ]);
+            }
+
             // The profile's invites for the email, locked: a registration
             // reserving one of them (CreateNewUser locks the invite too)
             // cannot slip in between the check and the replacement.
@@ -120,7 +121,7 @@ class FinancialProfileInviteController extends Controller
                 'invited_by' => $user->id,
                 'expires_at' => now()->addHours(48),
             ]);
-        });
+        }, attempts: 3);
 
         // One email per share event, queued after the transaction commits.
         $this->notifyInvitee($invite, $rawKey);
@@ -256,7 +257,16 @@ class FinancialProfileInviteController extends Controller
     {
         try {
             return DB::transaction(function () use ($inviteKey, $user): FinancialProfile {
+                $candidate = FinancialProfileInvite::query()
+                    ->where('invite_key', FinancialProfileInvite::keyHash($inviteKey))->first(['id', 'profile_id']);
+                abort_if($candidate === null, 404);
+                $profile = FinancialProfile::query()->whereKey($candidate->profile_id)->lockForUpdate()->first();
+                abort_if($profile === null, 404);
+                $user = User::query()->whereKey($user->id)->lockForUpdate()->first();
+                abort_if($user === null, 401);
+                abort_unless($user->hasVerifiedEmail(), 403);
                 $invite = FinancialProfileInvite::query()
+                    ->whereKey($candidate->id)->where('profile_id', $profile->id)
                     ->where('invite_key', FinancialProfileInvite::keyHash($inviteKey))
                     ->lockForUpdate()
                     ->first();
@@ -269,12 +279,6 @@ class FinancialProfileInviteController extends Controller
                     throw ValidationException::withMessages(['invite_key' => __($error)]);
                 }
 
-                $profile = $invite->profile;
-
-                // The profile_id FK cascades: while the invite exists, its
-                // profile does too.
-                abort_if($profile === null, 404);
-
                 if ($profile->isMember($user)) {
                     throw ValidationException::withMessages([
                         'invite_key' => __('You are already a member of this profile.'),
@@ -286,7 +290,7 @@ class FinancialProfileInviteController extends Controller
                 FinancialProfileInvite::deleteRedundantFor($profile, $user);
 
                 return $profile;
-            });
+            }, attempts: 3);
         } catch (UniqueConstraintViolationException) {
             throw ValidationException::withMessages([
                 'invite_key' => __('You are already a member of this profile.'),
