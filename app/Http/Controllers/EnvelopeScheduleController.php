@@ -124,6 +124,7 @@ class EnvelopeScheduleController extends Controller
             'start_date' => $schedule->start_date, 'end_date' => $schedule->end_date,
             'weekdays' => $schedule->weekdays, 'day_of_month' => $schedule->day_of_month,
             'month' => $schedule->month, 'reminder_days' => $schedule->reminder_days,
+            'reminder_unit' => $schedule->reminder_unit,
             'created_at' => $schedule->created_at?->toISOString(), 'updated_at' => $schedule->updated_at?->toISOString(),
             'next_occurrences' => $this->preview->next($schedule->rule(), $today),
             'open_ledger_entries' => $openLedgerEntries,

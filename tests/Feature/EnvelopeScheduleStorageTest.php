@@ -145,6 +145,8 @@ final class EnvelopeScheduleStorageTest extends TestCase
         yield 'negative reminder' => [['reminder_days' => -1]];
         yield 'fractional reminder' => [['reminder_days' => 1.5]];
         yield 'oversized reminder' => [['reminder_days' => 367]];
+        yield 'oversized month reminder' => [['reminder_days' => 13, 'reminder_unit' => 'month']];
+        yield 'unknown reminder unit' => [['reminder_unit' => 'weeks']];
         yield 'expense with positive amount' => [['amount' => 12345]];
         yield 'fractional amount' => [['amount' => -12.34]];
         yield 'plaintext disguised as ciphertext' => [['amount' => 'pa1.1.fake']];

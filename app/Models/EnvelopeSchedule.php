@@ -35,6 +35,8 @@ use LogicException;
  * @property int|null $day_of_month
  * @property int|null $month
  * @property int|null $reminder_days
+ * @property string $reminder_unit Either REMINDER_UNIT_DAY (also for legacy
+ *                                 nulls) or REMINDER_UNIT_MONTH, the unit of `reminder_days`.
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  * @property CarbonImmutable|null $deleted_at
@@ -47,9 +49,18 @@ class EnvelopeSchedule extends Model implements HasEncryptedAmounts, HasImmutabl
     /** Reminders are sent at most this many days before an occurrence. */
     public const MAX_REMINDER_DAYS = 366;
 
+    /** Reminders with the month unit go back at most this many months. */
+    public const MAX_REMINDER_MONTHS = 12;
+
+    /** The default (legacy) unit: `reminder_days` counts days. */
+    public const REMINDER_UNIT_DAY = 'day';
+
+    /** `reminder_days` counts calendar months, clamped at month ends. */
+    public const REMINDER_UNIT_MONTH = 'month';
+
     protected $fillable = [
         'envelope_id', 'amount', 'start_date', 'end_date', 'period',
-        'weekdays', 'day_of_month', 'month', 'reminder_days',
+        'weekdays', 'day_of_month', 'month', 'reminder_days', 'reminder_unit',
     ];
 
     protected $attributes = ['weekdays' => '[]'];
@@ -65,6 +76,22 @@ class EnvelopeSchedule extends Model implements HasEncryptedAmounts, HasImmutabl
         return Attribute::make(
             get: fn (mixed $value): int => $this->decryptStoredAmount('amount', $value),
             set: fn (mixed $value): int => $this->encodeAmount('amount', $value),
+        );
+    }
+
+    /**
+     * Legacy rows have no unit on disk: their `reminder_days` count days.
+     *
+     * @return Attribute<string, mixed>
+     */
+    protected function reminderUnit(): Attribute
+    {
+        return Attribute::make(
+            get: fn (mixed $value): string => match ($value) {
+                self::REMINDER_UNIT_MONTH => self::REMINDER_UNIT_MONTH,
+                null, self::REMINDER_UNIT_DAY => self::REMINDER_UNIT_DAY,
+                default => throw new InvalidArgumentException('Schedule reminder unit must be "day" or "month".'),
+            },
         );
     }
 
@@ -88,11 +115,21 @@ class EnvelopeSchedule extends Model implements HasEncryptedAmounts, HasImmutabl
             throw new LogicException('A schedule cannot move to another envelope.');
         }
 
-        foreach (['day_of_month' => 2147483647, 'month' => 2147483647, 'reminder_days' => self::MAX_REMINDER_DAYS] as $column => $max) {
+        foreach (['day_of_month' => 2147483647, 'month' => 2147483647] as $column => $max) {
             $value = $this->getAttribute($column);
             if ($value !== null && (! is_int($value) || $value < 0 || $value > $max)) {
                 throw new InvalidArgumentException('Schedule numeric fields must be non-negative integers within the supported range.');
             }
+        }
+        // The bound depends on the unit: days go out to a year, months to 12.
+        // Reading the unit throws for an unknown unit; legacy nulls are days.
+        $unit = $this->reminder_unit;
+        $days = $this->getAttribute('reminder_days');
+        $maxDays = $unit === self::REMINDER_UNIT_MONTH
+            ? self::MAX_REMINDER_MONTHS
+            : self::MAX_REMINDER_DAYS;
+        if ($days !== null && (! is_int($days) || $days < 0 || $days > $maxDays)) {
+            throw new InvalidArgumentException('Schedule reminder days must be a non-negative integer within the supported range for its unit.');
         }
         $rule = $this->rule();
         $this->weekdays = $rule->weekdays;

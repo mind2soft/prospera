@@ -37,6 +37,7 @@ import {
     ISO_WEEKDAYS,
     MAX_REMINDER_DAYS,
     monthName,
+    REMINDER_MODES,
     type ReminderMode,
     SCHEDULE_PERIODS,
     type ScheduleDraft,
@@ -127,7 +128,7 @@ const monthOptions = computed(() =>
         label: monthName(index + 1, locale.value),
     })),
 );
-const reminderModes: ReminderMode[] = ['none', 'sameDay', 'daysBefore'];
+const reminderModes: readonly ReminderMode[] = REMINDER_MODES;
 
 const affected = computed(() => props.schedule?.open_ledger_entries ?? 0);
 const affectedText = computed(() =>

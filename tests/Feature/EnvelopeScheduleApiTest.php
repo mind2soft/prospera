@@ -86,6 +86,41 @@ final class EnvelopeScheduleApiTest extends TestCase
         $this->postJson($this->url(), array_replace($this->payload(), ['amount' => 0]))->assertCreated()->assertJsonPath('schedule.amount', 0);
     }
 
+    public function test_reminder_units_round_trip_and_days_stay_the_default(): void
+    {
+        $this->actingAs($this->owner)->postJson($this->url(), $this->payload() + ['reminder_days' => 1, 'reminder_unit' => 'month'])
+            ->assertCreated()
+            ->assertJsonPath('schedule.reminder_days', 1)
+            ->assertJsonPath('schedule.reminder_unit', 'month');
+
+        // A caller that omits the unit keeps the legacy days semantics.
+        $this->actingAs($this->owner)->postJson($this->url(), $this->payload() + ['reminder_days' => 14])
+            ->assertCreated()->assertJsonPath('schedule.reminder_unit', 'day');
+
+        // A legacy stored row (null unit) still reads as days and can adopt
+        // the month unit, but never beyond its bound.
+        $legacy = $this->schedule(['reminder_days' => 3]);
+        $this->assertNull($legacy->getRawOriginal('reminder_unit'));
+        $this->actingAs($this->owner)->getJson($this->url())->assertOk()->assertJsonPath('schedules.2.reminder_unit', 'day');
+
+        $this->patchJson($this->url($legacy), ['reminder_days' => 1, 'reminder_unit' => 'month'])->assertOk()
+            ->assertJsonPath('schedule.reminder_days', 1)
+            ->assertJsonPath('schedule.reminder_unit', 'month');
+
+        $this->patchJson($this->url($legacy), ['reminder_days' => 13])->assertUnprocessable()
+            ->assertJsonValidationErrors('reminder_days');
+
+        $boundless = $this->schedule(['reminder_days' => 15]);
+        $this->patchJson($this->url($boundless), ['reminder_unit' => 'month'])->assertUnprocessable()
+            ->assertJsonValidationErrors('reminder_days');
+
+        // Clearing the reminder clears its unit too; legacy null reads as day.
+        $this->patchJson($this->url($legacy), ['reminder_days' => null])->assertOk()
+            ->assertJsonPath('schedule.reminder_days', null)
+            ->assertJsonPath('schedule.reminder_unit', 'day');
+        $this->assertNull($legacy->fresh()?->getRawOriginal('reminder_unit'));
+    }
+
     /** @return iterable<string, array{array<string, mixed>}> */
     public static function validDefinitions(): iterable
     {
@@ -227,6 +262,8 @@ final class EnvelopeScheduleApiTest extends TestCase
         yield 'weekday object, not list' => [['weekdays' => ['monday' => 1]], 'weekdays'];
         yield 'negative reminder' => [['reminder_days' => -1], 'reminder_days'];
         yield 'oversized reminder' => [['reminder_days' => 367], 'reminder_days'];
+        yield 'unknown reminder unit' => [['reminder_days' => 1, 'reminder_unit' => 'weeks'], 'reminder_unit'];
+        yield 'month reminder past 12' => [['reminder_days' => 13, 'reminder_unit' => 'month'], 'reminder_days'];
         foreach (['id', 'envelope_id', 'profile_id', 'user_id', 'deleted_at', 'created_at', 'updated_at'] as $field) {
             yield "reserved $field" => [[$field => null], $field];
         }

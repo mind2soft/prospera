@@ -210,11 +210,17 @@ export function describeSchedule(
             ? t(`${prefix}.noReminder`)
             : days === 0
               ? t(`${prefix}.remindSameDay`)
-              : t(
-                    `${prefix}.remindDaysBefore`,
-                    { n: formatInteger(days, locale) },
-                    days,
-                );
+              : schedule.reminder_unit === 'month'
+                ? t(
+                      `${prefix}.remindMonthsBefore`,
+                      { n: formatInteger(days, locale) },
+                      days,
+                  )
+                : t(
+                      `${prefix}.remindDaysBefore`,
+                      { n: formatInteger(days, locale) },
+                      days,
+                  );
 
     const upcoming =
         schedule.next_occurrences.length === 0
@@ -243,7 +249,90 @@ export function describeSchedule(
 
 // --- dialog draft ---------------------------------------------------------
 
-export type ReminderMode = 'none' | 'sameDay' | 'daysBefore';
+export type ReminderUnit = 'day' | 'month';
+
+/**
+ * The reminder selector's choices (issue #117), plus `daysBefore` — the free
+ * "days before" input, kept selectable and used for stored lead times no
+ * preset matches (schedules saved before #117).
+ */
+export type ReminderMode =
+    | 'none'
+    | 'sameDay'
+    | 'day1'
+    | 'day2'
+    | 'day3'
+    | 'week1'
+    | 'week2'
+    | 'month1'
+    | 'daysBefore';
+
+/** The selector's display order. */
+export const REMINDER_MODES: readonly ReminderMode[] = [
+    'none',
+    'sameDay',
+    'day1',
+    'day2',
+    'day3',
+    'week1',
+    'week2',
+    'month1',
+    'daysBefore',
+];
+
+/** The fixed lead behind each preset mode (the free input sets its own). */
+const PRESET_LEADS = {
+    sameDay: { days: 0, unit: 'day' },
+    day1: { days: 1, unit: 'day' },
+    day2: { days: 2, unit: 'day' },
+    day3: { days: 3, unit: 'day' },
+    week1: { days: 7, unit: 'day' },
+    week2: { days: 14, unit: 'day' },
+    month1: { days: 1, unit: 'month' },
+} satisfies Partial<Record<ReminderMode, { days: number; unit: ReminderUnit }>>;
+
+/** The selector choice of a stored (days, unit) pair. */
+export function reminderModeFor(
+    days: number | null,
+    unit: ReminderUnit | null,
+): ReminderMode {
+    if (days === null) {
+        return 'none';
+    }
+    const legacyUnit: ReminderUnit = unit === 'month' ? 'month' : 'day';
+    const presets = Object.keys(PRESET_LEADS) as Exclude<
+        ReminderMode,
+        'none' | 'daysBefore'
+    >[];
+
+    return (
+        presets.find(
+            (mode) =>
+                PRESET_LEADS[mode].days === days &&
+                PRESET_LEADS[mode].unit === legacyUnit,
+        ) ?? 'daysBefore'
+    );
+}
+
+/** The API lead of a draft's reminder choice. */
+function reminderLead(draft: ScheduleDraft): {
+    days: number | null;
+    unit: ReminderUnit | null;
+} {
+    switch (draft.reminder) {
+        case 'none':
+            return { days: null, unit: null };
+        case 'daysBefore':
+            return { days: Number(draft.reminderDays), unit: 'day' };
+        case 'month1':
+            return { days: 1, unit: 'month' };
+        default: {
+            const lead = PRESET_LEADS[draft.reminder];
+
+            return { days: lead.days, unit: lead.unit };
+        }
+    }
+}
 
 /** The dialog's editable state: text inputs stay strings until submit. */
 export type ScheduleDraft = {
@@ -368,8 +457,7 @@ export function draftFromSchedule(
         month: String(
             schedule.month ?? Number(schedule.start_date.slice(5, 7)),
         ),
-        reminder:
-            days === null ? 'none' : days === 0 ? 'sameDay' : 'daysBefore',
+        reminder: reminderModeFor(days, schedule.reminder_unit),
         reminderDays: days !== null && days > 0 ? String(days) : '1',
     };
 }
@@ -453,6 +541,8 @@ export function validateDraft(
  * fields the period does not use emptied (the server rejects stale ones).
  */
 export function toScheduleInput(draft: ScheduleDraft): ScheduleInput {
+    const lead = reminderLead(draft);
+
     return {
         amount: parseAmountInput(draft.amount) ?? 0,
         period: draft.period,
@@ -465,12 +555,8 @@ export function toScheduleInput(draft: ScheduleDraft): ScheduleInput {
             ? Number(draft.dayOfMonth)
             : null,
         month: draft.period === 'yearly' ? Number(draft.month) : null,
-        reminder_days:
-            draft.reminder === 'none'
-                ? null
-                : draft.reminder === 'sameDay'
-                  ? 0
-                  : Number(draft.reminderDays),
+        reminder_days: lead.days,
+        reminder_unit: lead.unit,
     };
 }
 
