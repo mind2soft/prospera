@@ -13,8 +13,11 @@ use App\Models\FinancialProfile;
 use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Security\Amounts\AmountContext;
+use App\Security\Amounts\AmountKeyRing;
 use App\Settings\NotificationSettings;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -34,14 +37,14 @@ use Illuminate\Support\Facades\Mail;
  * summed in PHP** (docs/encryption.md): no `SUM(amount)`, no `WHERE
  * amount < …` — SQL only ever filters non-encrypted columns. The dedup
  * claim (`envelope_limit_notifications`, unique over budget × envelope ×
- * ledger) is written **before** the mails are queued, so concurrent
- * recordings and job retries can never double-send. The mailables carry
+ * ledger) is written **before** the mails are queued after commit, so
+ * concurrent recordings and job retries can never double-send. The mailables carry
  * IDs only — names, amounts and recipients are re-resolved at send time,
  * tolerating `amounts:rotate-keys` running in between.
  *
  * This is the reusable entry point both recording paths call — the
- * transaction endpoint today, schedule-materialized transactions when
- * #15 lands.
+ * transaction endpoint (one row) and schedule reconciliation (a batch of
+ * generated rows per month and envelope, docs/scheduled-transactions.md).
  */
 final class EnvelopeLimitChecker
 {
@@ -66,86 +69,161 @@ final class EnvelopeLimitChecker
     }
 
     /**
-     * Run the check for a freshly recorded transaction. Never throws for
-     * unmet preconditions — they simply mean "nothing to check": a revenue
-     * envelope, a month without a published budget, an unallocated
-     * envelope, or an envelope that does not cross its allocation.
+     * The row at which an ascending-ID prefix of the group's exact
+     * minor-unit amounts last crosses the allocation, provided the final
+     * total is strictly over it; null when the group ends within its
+     * allocation. Ascending IDs make atomic batches deterministic: three
+     * rows of -60 against -100 cross on the second, even when all three
+     * were committed together.
+     *
+     * @param  iterable<int, int>  $amountsById  signed minor units keyed by
+     *                                           transaction id, ascending
+     */
+    public static function crossingCandidate(int $allocatedMinor, iterable $amountsById): ?int
+    {
+        $total = 0;
+        $candidate = null;
+
+        foreach ($amountsById as $id => $amount) {
+            if (self::isCrossing($allocatedMinor, $total, $amount)) {
+                $candidate = $id;
+            }
+            $total += $amount;
+        }
+
+        return $total < $allocatedMinor ? $candidate : null;
+    }
+
+    /**
+     * Run the check for a freshly recorded transaction: it notifies only
+     * when the crossing happens on this row or a later one, so recording on
+     * an already-over envelope stays silent. Never throws for unmet
+     * preconditions — they simply mean "nothing to check".
      */
     public function check(Transaction $transaction): void
     {
-        $envelope = Envelope::query()->with('permissions')->find($transaction->envelope_id);
+        $this->checkGroup(
+            AmountContext::id($transaction->ledger_id, 'ledger_id'),
+            AmountContext::id($transaction->envelope_id, 'envelope_id'),
+            $transaction->event_at->format('Y-m'),
+            $transaction->id,
+        );
+    }
 
-        // Revenue envelopes never trigger this notification — it is about
-        // spending (docs/notifications.md).
-        if ($envelope === null || $envelope->type !== Envelope::DIRECTION_EXPENSE) {
-            return;
+    /**
+     * Check one ledger × expense envelope × month group whose recorded
+     * spending grew from row `$fromTransactionId` on (a manual recording, or
+     * a batch of generated rows inserted or increased by schedule
+     * reconciliation). It notifies when the final total is strictly over
+     * the allocation and the crossing row is at or after that changed row —
+     * including a crossing that moved onto a later manual row because an
+     * earlier generated amount increased. Rows that were already over
+     * before the change never notify.
+     *
+     * Lock order (docs/financial-locking.md): ledger (shared) → published
+     * budget (shared) → envelope (shared); the profile key memo is
+     * refreshed beneath the ledger lock. The persistent claim is taken inside this transaction; mails
+     * are queued only after the outermost transaction commits.
+     *
+     * @param  string  $month  "Y-m"
+     */
+    public function checkGroup(int $ledgerId, int $envelopeId, string $month, int $fromTransactionId): void
+    {
+        $mails = DB::transaction(function () use ($ledgerId, $envelopeId, $month, $fromTransactionId): array {
+            $ledger = Ledger::query()->whereKey($ledgerId)->sharedLock()->first();
+
+            if ($ledger === null) {
+                return [];
+            }
+
+            $ring = app(AmountKeyRing::class);
+            $ring->forget($ledger->profile_id);
+
+            $start = CarbonImmutable::createFromFormat('!Y-m', $month);
+
+            if (! $start instanceof CarbonImmutable) {
+                return [];
+            }
+
+            // The published budget of the ledger's profile for that month —
+            // SQL filters non-encrypted columns only (docs/encryption.md).
+            $budget = Budget::query()
+                ->where('profile_id', $ledger->profile_id)
+                ->where('effective_year', $start->year)
+                ->where('effective_month', $start->month)
+                ->whereNotNull('published_at')
+                ->orderByDesc('published_at')
+                ->sharedLock()
+                ->first();
+
+            if ($budget === null) {
+                return []; // no published budget: nothing to check
+            }
+
+            $envelope = Envelope::query()->whereKey($envelopeId)->sharedLock()->first();
+
+            // Revenue envelopes never trigger this notification — it is
+            // about spending (docs/notifications.md).
+            if ($envelope === null || $envelope->type !== Envelope::DIRECTION_EXPENSE) {
+                return [];
+            }
+
+            $allocation = BudgetEnvelope::query()
+                ->where('budget_id', $budget->id)
+                ->where('envelope_id', $envelope->id)
+                ->first();
+
+            if ($allocation === null) {
+                return []; // unallocated envelope on this month's budget
+            }
+
+            // Decrypted exact minor units in ascending id order, summed in
+            // PHP like the ledger page's reporting (docs/ledger.md).
+            $amounts = $ledger->transactions()
+                ->select(['id', 'ledger_id', 'envelope_id', 'event_at', 'amount'])
+                ->where('envelope_id', $envelope->id)
+                ->whereBetween('event_at', [$start, $start->endOfMonth()->endOfDay()])
+                ->orderBy('id')
+                ->get()
+                ->mapWithKeys(fn (Transaction $row): array => [$row->id => $row->amountMinorUnits()]);
+
+            $candidate = self::crossingCandidate(Money::toMinorUnits($allocation->amount), $amounts);
+
+            if ($candidate === null || $candidate < $fromTransactionId) {
+                return []; // within the allocation, or over before this change
+            }
+
+            if (! $this->claim($budget, $envelope, $ledger)) {
+                return []; // already claimed — never double-send
+            }
+
+            return $this->mailsFor($budget, $envelope->load('permissions'), $ledger);
+        });
+
+        if ($mails !== []) {
+            DB::afterCommit(function () use ($mails): void {
+                foreach ($mails as $mail) {
+                    Mail::queue($mail);
+                }
+            });
         }
+    }
 
-        $ledger = Ledger::query()->find($transaction->ledger_id);
-
-        if ($ledger === null) {
-            return;
-        }
-
-        // The month containing the transaction's event date.
-        $month = $transaction->event_at->startOfMonth();
-
-        // The published budget of the ledger's profile for that month —
-        // SQL filters non-encrypted columns only (docs/encryption.md).
-        $budget = Budget::query()
-            ->where('profile_id', $ledger->profile_id)
-            ->where('effective_year', $month->year)
-            ->where('effective_month', $month->month)
-            ->whereNotNull('published_at')
-            ->orderByDesc('published_at')
-            ->first();
-
-        if ($budget === null) {
-            return; // no published budget: nothing to check
-        }
-
-        $allocation = BudgetEnvelope::query()
-            ->where('budget_id', $budget->id)
-            ->where('envelope_id', $envelope->id)
-            ->first();
-
-        if ($allocation === null) {
-            return; // unallocated envelope on this month's budget
-        }
-
-        // The month's recorded total for the envelope **before** this
-        // transaction — decrypted amounts summed in PHP, exactly like the
-        // ledger page's reporting (docs/ledger.md). The query excludes the
-        // new transaction itself.
-        $recordedBeforeMinor = $ledger->transactions()
-            ->select(['id', 'ledger_id', 'envelope_id', 'event_at', 'amount'])
-            ->where('envelope_id', $envelope->id)
-            ->whereBetween('event_at', [$month, $month->copy()->endOfMonth()->endOfDay()])
-            ->whereKeyNot($transaction->getKey())
-            ->get()
-            ->sum(fn (Transaction $row): int => Money::toMinorUnits($row->amount));
-
-        if (! self::isCrossing(
-            Money::toMinorUnits($allocation->amount),
-            $recordedBeforeMinor,
-            Money::toMinorUnits($transaction->amount),
-        )) {
-            return; // within the allocation, or already over it
-        }
-
-        // The dedup claim: one row per (published budget, envelope, ledger),
-        // ever — the unique index is the atomic claim. A concurrent crossing
-        // or a job retry lands here and stops; a newly published budget
-        // revision (a new budget_id) re-arms the check.
-        //
-        // The claim insert runs in its own nested transaction: the expected
-        // unique violation must roll back that savepoint instead of aborting
-        // the enclosing recording transaction (PostgreSQL refuses every
-        // further statement after a failed one; SQLite only tolerates it).
-        // The catch lives outside the transaction so the violation is the
-        // exception that triggers the savepoint rollback.
-        $claimed = true;
-
+    /**
+     * The dedup claim: one row per (published budget, envelope, ledger),
+     * ever — the unique index is the atomic claim. A concurrent crossing or
+     * a job retry lands here and stops; a newly published budget revision
+     * (a new budget_id) re-arms the check.
+     *
+     * The claim insert runs in its own nested transaction: the expected
+     * unique violation must roll back that savepoint instead of aborting
+     * the enclosing transaction (PostgreSQL refuses every further statement
+     * after a failed one; SQLite only tolerates it). The catch lives outside
+     * the transaction so the violation is the exception that triggers the
+     * savepoint rollback.
+     */
+    private function claim(Budget $budget, Envelope $envelope, Ledger $ledger): bool
+    {
         try {
             DB::transaction(function () use ($budget, $envelope, $ledger): void {
                 DB::table('envelope_limit_notifications')->insert([
@@ -164,18 +242,14 @@ final class EnvelopeLimitChecker
                 throw $exception;
             }
 
-            $claimed = false; // already claimed — never double-send
+            return false;
         }
 
-        if (! $claimed) {
-            return;
-        }
-
-        $this->dispatchMails($budget, $envelope, $ledger, $transaction);
+        return true;
     }
 
     /**
-     * Queue one mail per eligible recipient: the envelope **owner**
+     * One mail per eligible recipient: the envelope **owner**
      * (`envelopes.user_id`) plus every explicit envelope share at
      * contributor level or above, restricted to members of the ledger's
      * financial profile (envelopes are user-owned and can be referenced
@@ -183,8 +257,10 @@ final class EnvelopeLimitChecker
      * outside it), deduplicated. Verified addresses and the notification
      * toggle are pre-filtered here; the mailable re-checks everything at
      * send time, when it actually delivers.
+     *
+     * @return list<EnvelopeLimitExceeded>
      */
-    private function dispatchMails(Budget $budget, Envelope $envelope, Ledger $ledger, Transaction $transaction): void
+    private function mailsFor(Budget $budget, Envelope $envelope, Ledger $ledger): array
     {
         $recipients = collect([$envelope->user_id])
             ->merge(
@@ -205,18 +281,22 @@ final class EnvelopeLimitChecker
                 ->whereHas('members', fn ($query) => $query->whereKey($user->id))
                 ->exists());
 
+        $mails = [];
+
         foreach ($users as $user) {
             if ($user->email_verified_at === null
                 || ! $user->wantsNotification(NotificationSettings::ENVELOPE_LIMIT_EXCEEDED)) {
                 continue;
             }
 
-            Mail::queue(new EnvelopeLimitExceeded(
+            $mails[] = new EnvelopeLimitExceeded(
                 budgetId: $budget->id,
                 envelopeId: $envelope->id,
                 ledgerId: $ledger->id,
                 recipientUserId: $user->id,
-            ));
+            );
         }
+
+        return $mails;
     }
 }

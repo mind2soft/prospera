@@ -57,10 +57,11 @@ existing **profile members** of the owner (see
 - **Encryption at rest** — the amounts recorded against envelopes are
   encrypted in the database; envelope totals are computed by the server from
   the decrypted amounts (see [Encryption at rest](encryption.md)).
-- **Scheduled transactions (definition API only)** — encrypted schedules
-  belong to envelopes and use envelope-scoped keys. Owner-only CRUD and
-  previews are available through the definition API; the drawer and automatic
-  transactions are not available yet. See
+- **Scheduled transactions** — encrypted schedules (signed minor units,
+  money data) belong to envelopes and use envelope-scoped keys. Owner-only
+  CRUD and previews are available through the definition API; their
+  occurrences are materialized as read-only rows in covered open ledgers.
+  The Envelopes-page drawer is not available yet. See
   [scheduled transactions](scheduled-transactions.md) for schema, recurrence,
   encryption, ownership, and implementation status.
 
@@ -163,7 +164,8 @@ data fetching.
   they are purged instead, since their stored sign follows the old direction
   (see [Undoable deletion](undoable-deletion.md)).
 - Active schedules also block explicit envelope deletion and direction
-  changes. Soft-deleted schedules are purged before an otherwise valid
+  changes, as do generated transactions (they reference the envelope like
+  any transaction). Soft-deleted schedules are purged before an otherwise valid
   direction change and cascade with a deleted envelope. Envelope ownership
   transfers preserve their key material and amounts independently of any
   profile (see [scheduled transactions](scheduled-transactions.md)).

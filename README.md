@@ -19,6 +19,11 @@ the filing cabinet.
 - **Ledger** — a running log of expenses and revenues, one line at a time
 - **Envelopes** — category envelopes (housing, groceries, fun…) with a name,
   a direction (expense/revenue) and a color. Fully CRUD-able.
+- **Scheduled transactions** — recurring envelope schedules (owner-only API)
+  materialized as read-only, badged entries in open ledgers for months
+  covered by a published budget
+  ([docs/scheduled-transactions.md](docs/scheduled-transactions.md));
+  the schedule drawer and reminders are still planned.
 - **Getting started** — a first-login guide, live setup progress, and concise
   help for envelopes, ledgers, transactions and budgets
   ([docs/onboarding.md](docs/onboarding.md))
@@ -42,7 +47,7 @@ Design docs live in [`docs/`](docs/): [getting started](docs/onboarding.md),
 [dashboard](docs/dashboard.md),
 [budget](docs/budget.md),
 [ledger](docs/ledger.md), [envelopes](docs/envelope.md),
-[scheduled transactions (definition API; automatic posting/UI still planned)](docs/scheduled-transactions.md),
+[scheduled transactions](docs/scheduled-transactions.md),
 [shared finances](docs/shared-finances.md),
 [encryption at rest](docs/encryption.md),
 [financial write locking](docs/financial-locking.md),
@@ -191,7 +196,12 @@ unverified accounts left untouched that hold no data are deleted daily
 [docs/shared-finances.md](docs/shared-finances.md)), and an expired open
 ledger is reported to its owner and the profile members once, when the
 daily run first detects it (`php artisan ledgers:notify-expired` — see
-[docs/notifications.md](docs/notifications.md)).
+[docs/notifications.md](docs/notifications.md)), and scheduled transactions
+are reconciled daily in every open ledger as an idempotent catch-up for lost
+jobs or downtime (`php artisan schedules:sync` — see
+[docs/scheduled-transactions.md](docs/scheduled-transactions.md)).
+Schedule, budget and ledger changes also queue reconciliation jobs, which the
+same queue worker runs.
 
 Emails (profile invitations, contact messages) are queued on the `database`
 queue. In production there is no long-lived worker (shared hosting): the

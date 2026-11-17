@@ -87,10 +87,10 @@ every gate are re-resolved **at send time**, exactly as queued.
 - **No email** when the actor **is** the ledger owner (checked at dispatch
   and again at send), or when the transaction has been **deleted** by the
   time the job runs (its row is soft-deleted, so it disappears from the
-  default query — the undo window's purges are honoured). When
-  [scheduled transactions](https://github.com/mind2soft/prospera/issues/15)
-  land, their materialized rows must not dispatch this mail — nothing was
-  recorded by "another user"; the guard belongs to the dispatching path.
+  default query — the undo window's purges are honoured).
+  [Schedule-generated rows](scheduled-transactions.md) never dispatch this
+  mail: nothing was recorded by "another user", and reconciliation does
+  not go through the recording endpoint.
 - **Ownership transfers while queued are honoured.** The recipient is
   resolved at send time from the `owner` row in `ledger_permissions` —
   ownership transfer or auto-transfer (see
@@ -113,14 +113,15 @@ every gate are re-resolved **at send time**, exactly as queued.
 
 **Envelope limit exceeded**
 ([#52](https://github.com/mind2soft/prospera/issues/52)): when a
-transaction is recorded on an **expense** envelope — today through
-`POST /api/ledgers/{ledger}/transactions`, and the schedule-materialized
-transactions of [#15](https://github.com/mind2soft/prospera/issues/15) call
-the same reusable check (`App\Services\EnvelopeLimitChecker`, wrapped in
-the queued `App\Jobs\CheckEnvelopeLimit` job, dispatched after commit) —
-the recorded spending for the transaction's month is compared to the
-envelope's allocation on that month's published budget, and the
-**crossing** is notified.
+transaction is recorded on an **expense** envelope — through
+`POST /api/ledgers/{ledger}/transactions` (the queued
+`App\Jobs\CheckEnvelopeLimit` job) or as a batch of
+[schedule-generated rows](scheduled-transactions.md) (the queued
+`App\Jobs\CheckEnvelopeLimitGroup` job, per ledger × envelope × month whose
+spending grew), both dispatched after commit and calling the same
+`App\Services\EnvelopeLimitChecker` — the recorded spending for the month
+is compared to the envelope's allocation on that month's published budget,
+and the **crossing** is notified.
 
 - **Per-ledger scope.** The check compares the envelope's month totals
   **within the recording's ledger** — the same number the ledger page
@@ -135,15 +136,32 @@ envelope's allocation on that month's published budget, and the
   (`recorded_after < allocated`) — the exact boundary (recorded equal to
   the allocation) is within. Later over-limit transactions do not send
   again: the crossing is the one actionable moment.
+- **Batch-safe crossing.** The checker locks the ledger, then the published
+  budget, then the envelope (all shared), and refreshes the profile key. It
+  sums the month's rows in **ascending id order** in exact minor units. The
+  crossing row is where a running prefix last goes from within to strictly
+  over. Mail is sent only when the final total is over and the crossing row
+  is at or after the first changed row (the recorded transaction, or the
+  lowest generated row inserted or increased). An atomic batch of 3 × 60.00
+  against 100.00 therefore notifies, on its second row. A crossing that moves
+  onto a later manual row, because an earlier generated amount increased,
+  also notifies. Nothing is sent while the final total is within the
+  allocation, or when the last crossing row precedes the first changed row
+  (for example, manual over-spending that predates newly generated rows).
 - **Once per (published budget, envelope, ledger).** The dedup state is a
   row in `envelope_limit_notifications`, whose unique index over the three
-  ids **is** the atomic claim — inserted before the mails are queued, so
-  concurrent recordings and job retries can never double-send. A **budget
-  revision** (a new published budget for the month — a new `budget_id`)
-  re-arms the check; deleting transactions so the envelope drops back
-  under does **not** re-arm it (no email ping-pong), and publishing a
-  budget after transactions already exceed it does **not** send (the check
-  only runs when a transaction is recorded).
+  ids **is** the atomic claim. It is inserted inside the check's
+  transaction, and the mails are queued only **after the outermost
+  transaction commits**, so a rolled-back check never mails, and concurrent
+  recordings and job retries never double-send. As before, the claim
+  commits before the mails are queued, so delivery stays at most once: a
+  process dying between the two loses that mail. A **budget revision** (a new published budget for the
+  month, so a new `budget_id`) re-arms the check. Deleting transactions so
+  the envelope drops back under does **not** re-arm it (no email
+  ping-pong). Publishing a budget after transactions already exceed it
+  does **not** send: the reconciliation that follows only checks spending
+  that grew, and over-spending that predates the generated rows is not a
+  crossing caused by them.
 - **Recipients.** The envelope **owner** (`envelopes.user_id`) plus every
   user holding an explicit envelope share at **contributor level or
   above** (`envelope_permissions`; envelope `viewer`s and other profile

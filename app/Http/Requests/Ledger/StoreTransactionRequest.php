@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests\Ledger;
 
 use Illuminate\Auth\Access\Response;
@@ -29,6 +31,7 @@ class StoreTransactionRequest extends LedgerRequest
             'envelope_id' => ['required', 'integer'],
             'amount' => ['required', 'numeric', 'regex:/^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/D', 'gt:0', 'max:999999999.99'],
             'event_at' => ['required', 'date'],
+            'schedule_id' => ['missing'],
         ];
     }
 }

@@ -10,6 +10,7 @@ use App\Http\Requests\Budget\PublishBudgetRequest;
 use App\Http\Requests\Budget\StoreBudgetEnvelopeRequest;
 use App\Http\Requests\Budget\StoreBudgetRequest;
 use App\Http\Requests\Budget\UpdateBudgetEnvelopeRequest;
+use App\Jobs\ReconcileScheduleLedgers;
 use App\Models\Budget;
 use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
@@ -198,6 +199,10 @@ class BudgetController extends Controller
                 'effective_year' => $year,
                 'effective_month' => $month,
             ]);
+
+            // New (or replaced) coverage: reconcile the profile's open
+            // ledgers in full once committed (docs/scheduled-transactions.md).
+            dispatch(ReconcileScheduleLedgers::forProfile($budget->profile_id));
         });
 
         return response()->json([
@@ -264,7 +269,16 @@ class BudgetController extends Controller
     {
         $this->authorize('delete', $budget);
 
-        $budget->delete();
+        DB::transaction(function () use ($budget): void {
+            $locked = Budget::query()->whereKey($budget->id)->lockForUpdate()->first();
+            $locked?->delete();
+
+            // Removed coverage: its generated rows leave the open ledgers
+            // (dispatched after commit).
+            if ($locked !== null && ! $locked->isDraft()) {
+                dispatch(ReconcileScheduleLedgers::forProfile($locked->profile_id));
+            }
+        });
 
         return response()->json(status: 204);
     }
