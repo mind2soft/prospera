@@ -1,10 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Tests\Unit\Security;
 
 use App\Security\Amounts\AmountCipher;
 use App\Security\Amounts\AmountContext;
 use App\Security\Amounts\AmountDecryptionException;
+use App\Security\Amounts\AmountKeyScope;
 use App\Security\Amounts\DataKey;
 use InvalidArgumentException;
 use LogicException;
@@ -209,6 +212,47 @@ class AmountCipherTest extends TestCase
         );
     }
 
+    #[DataProvider('amounts')]
+    public function test_envelope_scoped_amounts_round_trip_signed_64_bit_values(int $amount): void
+    {
+        $key = DataKey::generate(7, 3, AmountKeyScope::Envelope);
+        $context = new AmountContext('envelope_schedules', 'amount', 7, ['d' => '2026-01-01'], AmountKeyScope::Envelope);
+        $payload = $this->cipher->encrypt($amount, $key, $context);
+
+        $this->assertSame($amount, $this->cipher->decrypt($payload, $key, $context));
+        $this->assertSame('prospera/amount/pa1|v=3|t=envelope_schedules.amount|e=7|d=2026-01-01', $context->aad(3));
+    }
+
+    public function test_key_scope_must_match_even_when_owner_ids_and_key_bytes_match(): void
+    {
+        $envelopeKey = new DataKey(7, 3, $this->key->bytes(), AmountKeyScope::Envelope);
+        $this->expectException(LogicException::class);
+        $this->cipher->encrypt(42, $envelopeKey, $this->context);
+    }
+
+    public function test_scope_is_authenticated_even_when_table_owner_id_and_key_bytes_match(): void
+    {
+        $envelopeKey = new DataKey(7, 3, $this->key->bytes(), AmountKeyScope::Envelope);
+        $context = new AmountContext('transactions', 'amount', 7, $this->context->bindings, AmountKeyScope::Envelope);
+        $payload = $this->cipher->encrypt(42, $this->key, $this->context);
+        $this->expectException(AmountDecryptionException::class);
+        $this->cipher->decrypt($payload, $envelopeKey, $context);
+    }
+
+    public function test_legacy_profile_ciphertext_still_decrypts_without_a_data_migration(): void
+    {
+        // Construct a pre-envelope-scope fixture without the production AAD
+        // builder, proving the existing cryptographic contract is unchanged.
+        $bytes = str_repeat('K', 32);
+        $iv = str_repeat('I', 12);
+        $tag = '';
+        $ciphertext = openssl_encrypt(pack('J', -12345), 'aes-256-gcm', $bytes, OPENSSL_RAW_DATA, $iv, $tag,
+            'prospera/amount/pa1|v=3|t=transactions.amount|p=7|l=11|e=13|d=2026-10-05', 16);
+        $this->assertIsString($ciphertext);
+        $legacy = 'pa1.3.'.rtrim(strtr(base64_encode($iv.$ciphertext.$tag), '+/', '-_'), '=');
+        $this->assertSame(-12345, $this->cipher->decrypt($legacy, new DataKey(7, 3, $bytes), $this->context));
+    }
+
     /**
      * @return array<string, array{array<string, int|string>}>
      */
@@ -258,7 +302,7 @@ class AmountCipherTest extends TestCase
         $this->assertIsString($dumped);
         $this->assertStringNotContainsString($bytes, $dumped);
         $this->assertStringNotContainsString(bin2hex($bytes), $dumped);
-        $this->assertSame('{"profileId":7,"version":3}', json_encode($key));
+        $this->assertSame('{"ownerId":7,"version":3,"scope":"profile"}', json_encode($key));
         $this->assertSame($bytes, $key->bytes());
 
         ob_start();

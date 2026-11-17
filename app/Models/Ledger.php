@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Models\Concerns\EncryptsAmounts;
@@ -50,7 +52,10 @@ class Ledger extends Model implements HasEncryptedAmounts, HasImmutableColumns
      */
     protected function startingBalance(): Attribute
     {
-        return $this->encryptedIntegerAmount('starting_balance');
+        return Attribute::make(
+            get: fn (mixed $value): int => $this->decryptStoredAmount('starting_balance', $value),
+            set: fn (mixed $value): int => $this->encodeAmount('starting_balance', $value),
+        );
     }
 
     public static function encryptedAmountColumns(): array
@@ -68,7 +73,7 @@ class Ledger extends Model implements HasEncryptedAmounts, HasImmutableColumns
         return new AmountContext('ledgers', $column, $profileId);
     }
 
-    protected function amountProfileId(array $attributes): int
+    protected function amountKeyOwnerId(array $attributes): int
     {
         return AmountContext::id($attributes['profile_id'] ?? null, 'profile_id');
     }

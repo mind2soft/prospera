@@ -1,9 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Security\Amounts;
 
 use App\Models\Budget;
 use App\Models\BudgetEnvelope;
+use App\Models\Envelope;
+use App\Models\EnvelopeAmountKey;
+use App\Models\EnvelopeSchedule;
 use App\Models\FinancialProfile;
 use App\Models\FinancialProfileKey;
 use App\Models\Ledger;
@@ -27,44 +32,49 @@ final class AmountKeyManager
     public function __construct(private readonly AmountKeyRing $ring) {}
 
     /**
-     * Retire the profile's current key, create the next version and
-     * re-encrypt every amount of the profile with it — atomically, with the
-     * profile row locked. Returns the number of re-encrypted amounts.
+     * Retire the owner's current key, create the next version and re-encrypt
+     * its amounts atomically, locking the profile/envelope before its rows.
+     * Returns the number of re-encrypted amounts.
      */
-    public function rotate(int $profileId): int
+    public function rotate(int $ownerId, AmountKeyScope $scope = AmountKeyScope::Profile): int
     {
         try {
-            return DB::transaction(function () use ($profileId): int {
-                $this->lockProfile($profileId);
+            return DB::transaction(function () use ($ownerId, $scope): int {
+                $this->lockOwner($ownerId, $scope);
 
-                FinancialProfileKey::query()
-                    ->where('profile_id', $profileId)
+                // Rotation replaces a known key; it must never initialize a
+                // missing one or trust a request's stale memoized material.
+                $this->ring->forget($ownerId, $scope);
+                $this->ring->activeKey($ownerId, $scope);
+
+                $scope->keyModel()::query()
+                    ->where($scope->column(), $ownerId)
                     ->whereNull('retired_at')
                     ->update(['retired_at' => now(), 'updated_at' => now()]);
 
-                $this->ring->forget($profileId);
-                $this->ring->createKey($profileId);
+                $this->ring->forget($ownerId, $scope);
+                $this->ring->createKey($ownerId, $scope);
 
-                return $this->reencrypt($profileId);
+                return $this->reencrypt($ownerId, $scope);
             });
         } finally {
-            $this->ring->forget($profileId);
+            $this->ring->forget($ownerId, $scope);
         }
     }
 
     /**
-     * Delete the profile's key versions retired before the cutoff, after
+     * Delete the owner's key versions retired before the cutoff, after
      * re-encrypting any amount still using them. Returns the number of
      * deleted key versions.
      */
-    public function prune(int $profileId, CarbonInterface $retiredBefore): int
+    public function prune(int $ownerId, CarbonInterface $retiredBefore, AmountKeyScope $scope = AmountKeyScope::Profile): int
     {
         try {
-            return DB::transaction(function () use ($profileId, $retiredBefore): int {
-                $this->lockProfile($profileId);
+            return DB::transaction(function () use ($ownerId, $retiredBefore, $scope): int {
+                $this->lockOwner($ownerId, $scope);
 
-                $versions = FinancialProfileKey::query()
-                    ->where('profile_id', $profileId)
+                $versions = $scope->keyModel()::query()
+                    ->where($scope->column(), $ownerId)
                     ->whereNotNull('retired_at')
                     ->where('retired_at', '<', $retiredBefore)
                     ->pluck('version');
@@ -73,23 +83,25 @@ final class AmountKeyManager
                     return 0;
                 }
 
-                $this->reencrypt($profileId);
+                $this->reencrypt($ownerId, $scope);
 
-                foreach ($versions as $version) {
-                    foreach ($this->sources($profileId) as [$query, $column]) {
+                foreach ($versions as $rawVersion) {
+                    $version = AmountContext::id($rawVersion, 'version');
+                    foreach ($this->sources($ownerId, $scope) as [$query, $column]) {
                         if ($query->where($column, 'like', AmountCipher::FORMAT.'.'.$version.'.%')->exists()) {
-                            throw new RuntimeException("Amount key version {$version} of profile {$profileId} is still in use.");
+                            throw new RuntimeException("Amount key version {$version} of {$scope->value} {$ownerId} is still in use.");
                         }
                     }
                 }
 
-                return FinancialProfileKey::query()
-                    ->where('profile_id', $profileId)
+                return $scope->keyModel()::query()
+                    ->where($scope->column(), $ownerId)
                     ->whereIn('version', $versions)
+                    ->toBase()
                     ->delete();
             });
         } finally {
-            $this->ring->forget($profileId);
+            $this->ring->forget($ownerId, $scope);
         }
     }
 
@@ -103,77 +115,88 @@ final class AmountKeyManager
         return DB::transaction(function (): int {
             $count = 0;
 
-            FinancialProfileKey::query()->orderBy('id')->lockForUpdate()->each(function (FinancialProfileKey $row) use (&$count): void {
-                $key = AmountKeyRing::unwrap($row->profile_id, $row->version, $row->wrapped_key);
+            foreach (AmountKeyScope::cases() as $scope) {
+                $scope->keyModel()::query()->orderBy('id')->lockForUpdate()->each(function (FinancialProfileKey|EnvelopeAmountKey $row) use (&$count, $scope): void {
+                    $ownerId = AmountContext::id($row->getAttribute($scope->column()), $scope->column());
+                    $key = AmountKeyRing::unwrap($ownerId, $row->version, $row->wrapped_key, $scope);
 
-                FinancialProfileKey::query()->whereKey($row->id)->update(['wrapped_key' => AmountKeyRing::wrap($key)]);
+                    $row->update(['wrapped_key' => AmountKeyRing::wrap($key)]);
 
-                $count++;
-            });
+                    $count++;
+                });
+            }
 
             return $count;
         });
     }
 
     /**
-     * Decrypt every amount of the given profiles (all when empty). Returns
-     * the failures; never throws on a bad row.
+     * Decrypt every amount of the selected owners (both scopes when neither
+     * list is supplied). Returns failures; never throws on a bad amount row.
      *
      * @param  list<int>  $profileIds
+     * @param  list<int>  $envelopeIds
      * @return list<array{table: string, id: int, error: string}>
      */
-    public function verify(array $profileIds = []): array
+    public function verify(array $profileIds = [], array $envelopeIds = []): array
     {
         $failures = [];
+        $all = $profileIds === [] && $envelopeIds === [];
 
-        $profiles = $profileIds === []
-            ? FinancialProfile::query()->orderBy('id')->pluck('id')->all()
-            : $profileIds;
+        foreach (AmountKeyScope::cases() as $scope) {
+            $ids = $all ? $this->ownerIds($scope) : ($scope === AmountKeyScope::Profile ? $profileIds : $envelopeIds);
+            foreach ($ids as $ownerId) {
+                try {
+                    $this->ring->activeKey($ownerId, $scope);
+                } catch (Throwable $e) {
+                    $failures[] = ['table' => (new ($scope->keyModel()))->getTable(), 'id' => $ownerId, 'error' => $e->getMessage()];
+                }
 
-        foreach ($profiles as $profileId) {
-            try {
-                $this->ring->activeKey((int) $profileId);
-            } catch (Throwable $e) {
-                $failures[] = ['table' => 'financial_profile_keys', 'id' => (int) $profileId, 'error' => $e->getMessage()];
-            }
-
-            foreach ($this->sources((int) $profileId) as [$query, $column]) {
-                $query->chunkById(self::CHUNK, function (Collection $rows) use ($column, &$failures): void {
-                    foreach ($rows as $row) {
-                        try {
-                            $row->getAttribute($column);
-                        } catch (Throwable $e) {
-                            $failures[] = ['table' => $row->getTable(), 'id' => (int) $row->getKey(), 'error' => $e->getMessage()];
+                foreach ($this->sources($ownerId, $scope) as [$query, $column]) {
+                    $query->chunkById(self::CHUNK, function (Collection $rows) use ($column, &$failures): void {
+                        foreach ($rows as $row) {
+                            try {
+                                $row->getAttribute($column);
+                            } catch (Throwable $e) {
+                                $failures[] = ['table' => $row->getTable(), 'id' => AmountContext::id($row->getKey(), 'id'), 'error' => $e->getMessage()];
+                            }
                         }
-                    }
-                });
-            }
+                    });
+                }
 
-            $this->ring->forget((int) $profileId);
+                $this->ring->forget($ownerId, $scope);
+            }
         }
 
         return $failures;
     }
 
     /**
-     * Re-encrypt the profile's amounts not on its active key version, with
+     * Re-encrypt the owner's amounts not on its active key version, with
      * the rows locked so no concurrent write is lost.
      */
-    private function reencrypt(int $profileId): int
+    private function reencrypt(int $ownerId, AmountKeyScope $scope): int
     {
-        $active = $this->ring->activeKey($profileId)->version;
+        $active = $this->ring->activeKey($ownerId, $scope)->version;
         $count = 0;
 
-        foreach ($this->sources($profileId) as [$query, $column]) {
+        foreach ($this->sources($ownerId, $scope) as [$query, $column]) {
             $query->lockForUpdate()->chunkById(self::CHUNK, function (Collection $rows) use ($column, $active, &$count): void {
                 foreach ($rows as $row) {
-                    $raw = (string) $row->getRawOriginal($column);
+                    $raw = $row->getRawOriginal($column);
+                    if (! is_string($raw)) {
+                        throw new AmountDecryptionException('Stored amount is not an encrypted payload.');
+                    }
 
+                    // Authenticate even a matching version: a missing key row
+                    // must not be silently replaced by a new key with the
+                    // same version number, nor corruption skipped by pruning.
+                    $amount = $row->getAttribute($column);
                     if (AmountCipher::keyVersionOf($raw) === $active) {
                         continue;
                     }
 
-                    $row->setAttribute($column, $row->getAttribute($column));
+                    $row->setAttribute($column, $amount);
                     $row->timestamps = false;
                     $row->saveQuietly();
 
@@ -185,24 +208,41 @@ final class AmountKeyManager
         return $count;
     }
 
-    private function lockProfile(int $profileId): void
+    private function lockOwner(int $ownerId, AmountKeyScope $scope): void
     {
-        FinancialProfile::query()->whereKey($profileId)->lockForUpdate()->firstOrFail();
+        $scope->ownerModel()::query()->whereKey($ownerId)->lockForUpdate()->firstOrFail();
+    }
+
+    /** @return list<int> */
+    public function ownerIds(AmountKeyScope $scope): array
+    {
+        $query = $scope === AmountKeyScope::Profile
+            ? FinancialProfile::query()
+            : Envelope::query()->where(fn (Builder $query) => $query
+                ->whereHas('amountKeys')
+                ->orWhereHas('schedules', fn (Builder $schedules) => $schedules->withTrashed()));
+
+        return array_values(array_map(fn (mixed $id): int => AmountContext::id($id, 'id'), $query->orderBy('id')->pluck('id')->all()));
     }
 
     /**
-     * The profile's encrypted amount rows: [query, column].
+     * The owner's encrypted amount rows: [query, column].
      *
      * @return list<array{0: Builder<Model>, 1: string}>
      */
-    private function sources(int $profileId): array
+    private function sources(int $ownerId, AmountKeyScope $scope): array
     {
+        if ($scope === AmountKeyScope::Envelope) {
+            /** @var list<array{0: Builder<Model>, 1: string}> */
+            return [[EnvelopeSchedule::withTrashed()->where('envelope_id', $ownerId), 'amount']];
+        }
+
         /** @var list<array{0: Builder<Model>, 1: string}> */
         return [
             // Pending deletions are restorable: they must stay decryptable.
-            [Transaction::withTrashed()->whereIn('ledger_id', Ledger::query()->where('profile_id', $profileId)->select('id')), 'amount'],
-            [BudgetEnvelope::query()->whereIn('budget_id', Budget::query()->where('profile_id', $profileId)->select('id')), 'amount'],
-            [Ledger::query()->where('profile_id', $profileId), 'starting_balance'],
+            [Transaction::withTrashed()->whereIn('ledger_id', Ledger::query()->where('profile_id', $ownerId)->select('id')), 'amount'],
+            [BudgetEnvelope::query()->whereIn('budget_id', Budget::query()->where('profile_id', $ownerId)->select('id')), 'amount'],
+            [Ledger::query()->where('profile_id', $ownerId), 'starting_balance'],
         ];
     }
 }

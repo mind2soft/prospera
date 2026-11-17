@@ -1,9 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Console\Commands;
 
-use App\Models\FinancialProfileKey;
+use App\Security\Amounts\AmountContext;
 use App\Security\Amounts\AmountKeyManager;
+use App\Security\Amounts\AmountKeyScope;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -26,23 +29,27 @@ class PruneAmountKeys extends Command
 
         $cutoff = now()->subHours((int) $grace);
 
-        $profileIds = FinancialProfileKey::query()
-            ->whereNotNull('retired_at')
-            ->where('retired_at', '<', $cutoff)
-            ->distinct()
-            ->orderBy('profile_id')
-            ->pluck('profile_id');
-
         $failed = 0;
 
-        foreach ($profileIds as $profileId) {
-            try {
-                $count = $manager->prune((int) $profileId, $cutoff);
-                $this->line("Profile {$profileId}: {$count} retired key version(s) deleted.");
-            } catch (Throwable $e) {
-                $failed++;
-                report($e);
-                $this->error("Profile {$profileId}: pruning failed and was rolled back ({$e->getMessage()}).");
+        foreach (AmountKeyScope::cases() as $scope) {
+            $profileIds = $scope->keyModel()::query()
+                ->whereNotNull('retired_at')
+                ->where('retired_at', '<', $cutoff)
+                ->distinct()
+                ->orderBy($scope->column())
+                ->pluck($scope->column());
+
+            foreach ($profileIds as $id) {
+                $profileId = AmountContext::id($id, $scope->column());
+                $label = ucfirst($scope->value);
+                try {
+                    $count = $manager->prune($profileId, $cutoff, $scope);
+                    $this->line("{$label} {$profileId}: {$count} retired key version(s) deleted.");
+                } catch (Throwable $e) {
+                    $failed++;
+                    report($e);
+                    $this->error("{$label} {$profileId}: pruning failed and was rolled back ({$e->getMessage()}).");
+                }
             }
         }
 

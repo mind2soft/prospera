@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Security\Amounts;
 
 use InvalidArgumentException;
@@ -7,7 +9,7 @@ use LogicException;
 use WeakMap;
 
 /**
- * A plaintext per-profile amount data key, held in memory only. Its bytes
+ * A plaintext scoped amount data key, held in memory only. Its bytes
  * live outside the instance (a private static WeakMap), so no dumper — PHP's
  * own, Symfony VarDumper (dump(), dd(), Tinker) — nor an (array) cast can
  * print them; it refuses to be serialized or cloned. Reflection can still
@@ -21,12 +23,13 @@ final class DataKey
     private static ?WeakMap $secrets = null;
 
     public function __construct(
-        public readonly int $profileId,
+        public readonly int $ownerId,
         public readonly int $version,
         #[\SensitiveParameter] string $bytes,
+        public readonly AmountKeyScope $scope = AmountKeyScope::Profile,
     ) {
-        if ($profileId < 1 || $version < 1) {
-            throw new InvalidArgumentException('Amount key profile id and version must be positive.');
+        if ($ownerId < 1 || $version < 1) {
+            throw new InvalidArgumentException('Amount key owner id and version must be positive.');
         }
 
         if (strlen($bytes) !== self::LENGTH) {
@@ -37,9 +40,9 @@ final class DataKey
         self::$secrets[$this] = $bytes;
     }
 
-    public static function generate(int $profileId, int $version): self
+    public static function generate(int $ownerId, int $version, AmountKeyScope $scope = AmountKeyScope::Profile): self
     {
-        return new self($profileId, $version, random_bytes(self::LENGTH));
+        return new self($ownerId, $version, random_bytes(self::LENGTH), $scope);
     }
 
     public function bytes(): string
@@ -54,11 +57,11 @@ final class DataKey
     }
 
     /**
-     * @return array{profileId: int, version: int}
+     * @return array{ownerId: int, version: int, scope: string}
      */
     public function __debugInfo(): array
     {
-        return ['profileId' => $this->profileId, 'version' => $this->version];
+        return ['ownerId' => $this->ownerId, 'version' => $this->version, 'scope' => $this->scope->value];
     }
 
     public function __clone(): void

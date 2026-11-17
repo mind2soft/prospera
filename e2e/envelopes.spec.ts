@@ -116,3 +116,54 @@ test('the direction of an envelope used by a budget is locked', async ({
             .getByText('Rent', { exact: true }),
     ).toBeVisible();
 });
+
+test('an envelope with an internal schedule cannot be deleted', async ({
+    page,
+}) => {
+    seed('seed-envelope-schedule.php');
+    await login(page);
+    await page.goto('/envelopes');
+    await openMenu(page, 'Insurance');
+    await page
+        .getByRole('menuitem', { name: t('envelopes.menu.delete') })
+        .click();
+    await page
+        .getByRole('dialog')
+        .getByRole('button', { name: t('envelopes.delete.confirm') })
+        .click();
+    await expect(
+        page.getByText('This envelope has schedules and cannot be deleted.'),
+    ).toBeVisible();
+    await page.reload();
+    await expect(card(page, 'Insurance')).toBeVisible();
+});
+
+test('the direction of an envelope with an internal schedule is locked', async ({
+    page,
+}) => {
+    seed('seed-envelope-schedule.php');
+    await login(page);
+    await page.goto('/envelopes');
+    await openMenu(page, 'Insurance');
+    await page
+        .getByRole('menuitem', { name: t('common.actions.edit') })
+        .click();
+    const dialog = page.getByRole('dialog');
+    await dialog
+        .getByRole('radio', { name: t('envelopes.form.revenue') })
+        .click();
+    await dialog
+        .getByRole('button', { name: t('envelopes.form.saveChanges') })
+        .click();
+    await expect(
+        dialog.getByText(
+            'This envelope has schedules: its direction cannot be changed.',
+        ),
+    ).toBeVisible();
+    await page.reload();
+    await expect(
+        page
+            .getByRole('region', { name: t('envelopes.groups.expenses') })
+            .getByText('Insurance', { exact: true }),
+    ).toBeVisible();
+});

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Security\Amounts\AmountCipher;
 use App\Security\Amounts\AmountContext;
 use App\Security\Amounts\AmountDecryptionException;
@@ -51,14 +53,14 @@ return new class extends Migration
                 $key = DataKey::generate((int) $profileId, 1);
 
                 DB::table('financial_profile_keys')->insert([
-                    'profile_id' => $key->profileId,
+                    'profile_id' => $key->ownerId,
                     'version' => $key->version,
                     'wrapped_key' => AmountKeyRing::wrap($key),
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
 
-                $keys[$key->profileId] = $key;
+                $keys[$key->ownerId] = $key;
             }
         });
 

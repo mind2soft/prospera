@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Services\ResourcePermissions;
@@ -88,6 +90,18 @@ class Envelope extends Model
         return $this->hasMany(Transaction::class, 'envelope_id');
     }
 
+    /** @return HasMany<EnvelopeSchedule, $this> */
+    public function schedules(): HasMany
+    {
+        return $this->hasMany(EnvelopeSchedule::class);
+    }
+
+    /** @return HasMany<EnvelopeAmountKey, $this> */
+    public function amountKeys(): HasMany
+    {
+        return $this->hasMany(EnvelopeAmountKey::class);
+    }
+
     /**
      * The permission the given user has on this envelope: "owner",
      * "contributor", "viewer" — or "none" (metadata-only) for users who
@@ -132,13 +146,14 @@ class Envelope extends Model
      * direction change (docs/envelope.md): "budget" (a budget assignment),
      * "transactions", or null when nothing does.
      *
-     * @return 'budget'|'transactions'|null
+     * @return 'budget'|'transactions'|'schedules'|null
      */
     public function referencedBy(): ?string
     {
         return match (true) {
             $this->budgetEnvelopes()->exists() => 'budget',
             $this->transactions()->exists() => 'transactions',
+            $this->schedules()->exists() => 'schedules',
             default => null,
         };
     }
@@ -156,7 +171,7 @@ class Envelope extends Model
     #[Scope]
     protected function referenced(Builder $query): void
     {
-        $query->where(fn (Builder $query) => $query->whereHas('budgetEnvelopes')->orWhereHas('transactions'));
+        $query->where(fn (Builder $query) => $query->whereHas('budgetEnvelopes')->orWhereHas('transactions')->orWhereHas('schedules'));
     }
 
     /**

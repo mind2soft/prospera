@@ -11,6 +11,7 @@ Encrypted columns:
 | `transactions.amount`      | profile, ledger, envelope, event date (`Y-m-d`) |
 | `budget_envelopes.amount`  | profile, budget, envelope                       |
 | `ledgers.starting_balance` | profile                                         |
+| `envelope_schedules.amount` | envelope key scope/id, start date (`Y-m-d`)    |
 
 Everything happens on the server: models decrypt the amounts for authorized
 users only, and the API and Inertia payloads still carry plain integers over
@@ -43,7 +44,8 @@ Does **not** protect against:
 - **Swaps within an identical context** — two transactions of the same
   ledger, envelope and day can trade ciphertexts, a row can be rolled back to
   an older ciphertext of itself, and ledgers of one profile can swap starting
-  balances (the row id is not known at insert time, so it is not bound).
+  balances, as can two schedules of the same envelope and start date (the row
+  id is not known at insert time, so it is not bound).
 - **Old backups** — they contain the wrapped keys, which `APP_KEY` unwraps;
   deleting a key row does not shred backed-up data.
 
@@ -51,8 +53,10 @@ Does **not** protect against:
 
 ```
 APP_KEY (key-encryption key; Laravel Crypt, AES-256-CBC + HMAC-SHA256)
-  └─ financial_profile_keys.wrapped_key   one 32-byte data key per profile and version
-       └─ amount ciphertext                AES-256-GCM, one per stored amount
+  ├─ financial_profile_keys.wrapped_key   one 32-byte key per profile/version
+  │    └─ profile-owned amount ciphertext (AES-256-GCM)
+  └─ envelope_amount_keys.wrapped_key     one 32-byte key per initialized envelope/version
+       └─ envelope_schedules.amount        AES-256-GCM, signed minor units
 ```
 
 - Every financial profile gets a random data key (version 1) on creation
@@ -63,6 +67,51 @@ APP_KEY (key-encryption key; Laravel Crypt, AES-256-CBC + HMAC-SHA256)
   `AmountKeyRing` — never cached, logged, serialized or sent to clients.
 - Collaborators never receive keys: the server decrypts after authorization.
 
+### Envelope-scoped keys
+
+[Schedules](scheduled-transactions.md) belong to envelopes, not financial
+profiles. Their versioned keys live in `envelope_amount_keys` and are created
+on the first schedule save, under an envelope row lock, in the same database
+transaction. Envelopes without schedules need no new keys. A missing key for
+an existing schedule is an error, never an invitation to generate replacement
+material.
+
+`AmountKeyScope` keeps profile and envelope namespaces distinct in the
+request/job memo, key wrapping, context AAD, and cipher checks, even for the
+same numeric id and version. Wrapped profile keys retain their existing
+`{p, v, k}` payload; envelope keys use `{e, v, k}`. The cipher verifies scope
+as well as owner id. Data-key objects expose only owner id/version/scope in
+debug metadata and still refuse cloning/serialization.
+
+Profile ciphertext/AAD and existing wrapped profile keys are unchanged; no
+financial data is re-encrypted by the schedule migration. The original
+encryption migration only adapts to the internal `DataKey::ownerId` property
+rename so fresh installs/its existing rollback tests continue working.
+
+Keys follow the envelope across ownership transfers without re-encryption or
+dependence on a default profile. Deleting a profile cannot delete them.
+Deleting the envelope cascades its keys and schedules. The internal schedule
+writer locks envelope → schedule/key rows; envelope rotation/pruning takes the
+same root lock and processes schedules in id-ordered chunks of 500, including
+soft-deleted rows. A failed owner's rotation/prune rolls back entirely; the
+commands continue to other selected owners and return failure overall.
+
+Existing scheduler commands include envelope keys automatically:
+
+- `amounts:rotate-keys --all` rotates all profiles and initialized envelopes.
+  `--profile=<id>` remains profile-only; `--envelope=<id>` selects envelope
+  keys explicitly. Both repeatable selectors can be combined, not with `--all`.
+- `amounts:prune-keys` checks both namespaces and re-encrypts old-key
+  stragglers before pruning, including soft-deleted schedules.
+- `amounts:rewrap-keys` rewraps both key tables under the current `APP_KEY`.
+- `amounts:verify` checks both by default, discovering envelopes with schedules
+  even if their key rows were lost. `--profile`/`--envelope` limit verification
+  to the requested namespaces and ids. Boot-time key checks use an envelope
+  key as a fallback when no active profile key exists.
+
+No new scheduler registration or separate operator command is required.
+Schedule CRUD/materialization/reminders are still unimplemented.
+
 ## Ciphertext format
 
 ```
@@ -72,7 +121,7 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
 - `pa1` — format version: AES-256-GCM (`openssl`), random 96-bit IV, 128-bit
   tag. The plaintext is an amount as a signed 64-bit big-endian integer
   (`pack('J')`), so every payload has the same length (54–62 characters,
-  stored in `varchar(80)`) whatever the value or sign. Transaction amounts
+  stored in `varchar(80)`) whatever the value or sign. Transaction and schedule amounts
   use minor units (two decimal places); ledger starting balances and budget
   assignments use whole currency units.
 - Additional authenticated data (AAD):
@@ -83,7 +132,9 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
 
     with the bindings in order: `l=<ledger>|e=<envelope>|d=<Y-m-d>`
     (transactions), `b=<budget>|e=<envelope>` (budget assignments), none
-    (ledgers).
+    (ledgers). Envelope schedule AAD uses `e=<envelope>` in place of the
+    profile's `p=<profile>`, followed by `d=<start_date>`; the other components
+    and ciphertext format stay the same.
 
 - Parsing is strict (anchored format, strict base64url, exact length). A
   malformed payload, unknown key version, wrong key, context mismatch or
@@ -107,12 +158,13 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
   Multi-row inserts must give every row the same columns. `DB::table()` and `toBase()` writes
   bypass Eloquent and must never touch them.
 - Changing an attribute bound into the context (a transaction's ledger,
-  envelope or date; an assignment's budget or envelope) requires assigning
+  envelope or date; an assignment's budget or envelope; a schedule's start date) requires assigning
   the amount in the same save — a time change within the same day does not.
   Bulk updates of those columns are refused unless every amount column is
   re-written in the same statement.
 - Ledgers and budgets cannot move to another profile (`profile_id` is
-  immutable, for saves and bulk writes alike).
+  immutable, for saves and bulk writes alike). Schedules likewise cannot move
+  to another envelope (`envelope_id` is immutable).
 - `replicate()` copies carry the plaintext amounts and are encrypted afresh in
   their own context.
 - A transaction's date is bound as the `Y-m-d` of `event_at` as stored.
@@ -125,7 +177,8 @@ pa1.<keyVersion>.<base64url(iv[12] || ciphertext[8] || tag[16])>
 
 ### Scheduler
 
-Data keys are rotated monthly and retired versions pruned daily. The
+Profile and initialized envelope data keys are rotated monthly and retired
+versions pruned daily. The
 production host must run the scheduler (it also runs the queue worker that
 sends the emails — see [Scheduled tasks](../README.md#scheduled-tasks)):
 
@@ -137,20 +190,24 @@ sends the emails — see [Scheduled tasks](../README.md#scheduled-tasks)):
 
 | Command                              | Purpose                                                                                                                                                                                                  |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `amounts:rotate-keys --all`          | Scheduled monthly. Per profile, in one transaction with the profile and rows locked: retire the active key, create the next version, re-encrypt every amount. A failure rolls the profile back entirely. |
+| `amounts:rotate-keys --all`          | Scheduled monthly. Rotate every profile and initialized envelope in a per-owner transaction, locking that owner before its amounts. A failure rolls back that owner and does not skip later owners. |
 | `amounts:rotate-keys --profile=<id>` | Rotate given profiles (repeatable), e.g. after a suspected leak.                                                                                                                                         |
 | `amounts:prune-keys [--grace=24]`    | Scheduled daily. Deletes key versions retired more than `--grace` hours ago, after re-encrypting any amount still using them; refuses to delete a version still in use.                                  |
 | `amounts:rewrap-keys`                | Re-wraps every data key with the current `APP_KEY` (see below).                                                                                                                                          |
 | `amounts:verify [--profile=<id>]`    | Decrypts every amount and lists failures by table and id; non-zero exit on any failure. Runs on every deploy and daily via the scheduler.                                                                |
 
 Retired versions stay readable for the grace period so a request that loaded
-the previous key just before a rotation can still write; pruning re-encrypts
-those stragglers. A request that loaded a row just before pruning deletes its
+the previous profile key just before a rotation can still write; schedule
+writers re-resolve the current envelope key while holding the envelope lock.
+For either scope, pruning re-encrypts stragglers before deleting old versions.
+An existing request that loaded
+an amount row just before pruning deletes its
 key version may fail once (HTTP 500) when decrypting it; writes are not
 affected.
 
-"Every amount" includes transactions pending deletion: they can still be
-restored during their undo window, so they must stay decryptable (see
+"Every amount" includes soft-deleted schedules and transactions pending
+deletion: transactions can still be restored during their undo window, so
+they must stay decryptable (see
 [Undoable deletion](undoable-deletion.md)).
 
 ### Backing up `APP_KEY`
@@ -171,7 +228,8 @@ for a confirmed fresh installation). Instead of scattered
 (issue #36):
 
 - **Boot-time smoke check** — on every production HTTP request, a single
-  amount key (the most recently created active one) is unwrapped — a
+  amount key (the latest active profile key, falling back to an envelope key
+  when none exists) is unwrapped — a
   rotation breaks every wrapped key at once, so one is enough, at constant
   cost whatever the number of profiles; a failure aborts the request with an
   explicit, actionable error in the logs: restore the previous `APP_KEY` from
@@ -185,7 +243,8 @@ for a confirmed fresh installation). Instead of scattered
   deploy's migrations) and when the key table cannot be read (database
   down or not migrated yet — the request fails on its own terms). It is
   not cached: with the default `database` cache store a cache lookup costs
-  the same single query.
+  the same single query in the usual profile-key case (two queries for the
+  envelope-only fallback).
 - **Daily scheduled `amounts:verify`** — so the failure surfaces in the logs
   even when no request touches amounts; the command logs a failure summary
   itself, since the scheduler's own output goes to `/dev/null`.

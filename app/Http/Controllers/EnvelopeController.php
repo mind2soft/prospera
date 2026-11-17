@@ -7,6 +7,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Concerns\ManagesShares;
 use App\Http\Requests\EnvelopeRequest;
 use App\Models\Envelope;
+use App\Models\EnvelopeSchedule;
 use App\Models\FinancialProfile;
 use App\Models\Transaction;
 use App\Models\User;
@@ -71,13 +72,16 @@ class EnvelopeController extends Controller
             if ($validated['type'] !== $locked->type) {
                 if ($locked->isReferenced()) {
                     throw ValidationException::withMessages([
-                        'type' => __('This envelope is already used by a budget or transactions: its direction cannot be changed.'),
+                        'type' => $locked->referencedBy() === 'schedules'
+                            ? __('This envelope has schedules: its direction cannot be changed.')
+                            : __('This envelope is already used by a budget or transactions: its direction cannot be changed.'),
                     ]);
                 }
 
                 // A pending deletion restored after the flip would carry the
                 // old sign (docs/undoable-deletion.md).
                 Transaction::purgeDeletionsOnEnvelopes([$locked->id]);
+                EnvelopeSchedule::onlyTrashed()->where('envelope_id', $locked->id)->forceDelete();
             }
 
             $envelope->update($validated);
@@ -101,9 +105,11 @@ class EnvelopeController extends Controller
 
             if ($referencedBy !== null) {
                 throw ValidationException::withMessages([
-                    'envelope' => $referencedBy === 'budget'
-                        ? __('This envelope is used in a budget and cannot be deleted.')
-                        : __('This envelope has transactions and cannot be deleted.'),
+                    'envelope' => match ($referencedBy) {
+                        'budget' => __('This envelope is used in a budget and cannot be deleted.'),
+                        'schedules' => __('This envelope has schedules and cannot be deleted.'),
+                        default => __('This envelope has transactions and cannot be deleted.'),
+                    },
                 ]);
             }
 

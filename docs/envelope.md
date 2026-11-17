@@ -57,6 +57,11 @@ existing **profile members** of the owner (see
 - **Encryption at rest** — the amounts recorded against envelopes are
   encrypted in the database; envelope totals are computed by the server from
   the decrypted amounts (see [Encryption at rest](encryption.md)).
+- **Scheduled transactions (internal storage only)** — encrypted schedules
+  belong to envelopes and use envelope-scoped keys. The API/drawer and
+  automatic transactions are not available yet; see
+  [scheduled transactions](scheduled-transactions.md) for schema, recurrence,
+  encryption, ownership, and implementation status.
 
 ## Permissions
 
@@ -156,6 +161,11 @@ data fetching.
   can race the check. Transactions pending deletion do not block the change;
   they are purged instead, since their stored sign follows the old direction
   (see [Undoable deletion](undoable-deletion.md)).
+- Active schedules also block explicit envelope deletion and direction
+  changes. Soft-deleted schedules are purged before an otherwise valid
+  direction change and cascade with a deleted envelope. Envelope ownership
+  transfers preserve their key material and amounts independently of any
+  profile (see [scheduled transactions](scheduled-transactions.md)).
 - `name` must be unique per owner. On auto-transfer, a collision with the new
   owner's existing names is resolved by appending ` (imported)` (then
   ` (imported 2)`, ` (imported 3)`, ... on further collisions), truncating

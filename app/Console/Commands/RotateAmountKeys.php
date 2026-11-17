@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Console\Commands;
 
-use App\Models\FinancialProfile;
 use App\Security\Amounts\AmountKeyManager;
+use App\Security\Amounts\AmountKeyScope;
 use Illuminate\Console\Command;
 use Throwable;
 
@@ -11,30 +13,32 @@ class RotateAmountKeys extends Command
 {
     protected $signature = 'amounts:rotate-keys
         {--profile=* : Financial profile id(s) to rotate}
-        {--all : Rotate every financial profile}';
+        {--envelope=* : Envelope id(s) to rotate}
+        {--all : Rotate every financial profile and every initialized envelope key}';
 
     protected $description = 'Rotate the amount data keys and re-encrypt the amounts (docs/encryption.md)';
 
     public function handle(AmountKeyManager $manager): int
     {
-        $profileIds = $this->profileIds();
+        $targets = $this->targets($manager);
 
-        if ($profileIds === null) {
-            $this->error('Pass --profile=<id> (repeatable) or --all.');
+        if ($targets === null) {
+            $this->error('Pass --profile=<id> and/or --envelope=<id> (repeatable), or --all.');
 
             return self::INVALID;
         }
 
         $failed = 0;
 
-        foreach ($profileIds as $profileId) {
+        foreach ($targets as [$scope, $profileId]) {
+            $label = ucfirst($scope->value);
             try {
-                $count = $manager->rotate($profileId);
-                $this->line("Profile {$profileId}: rotated, {$count} amount(s) re-encrypted.");
+                $count = $manager->rotate($profileId, $scope);
+                $this->line("{$label} {$profileId}: rotated, {$count} amount(s) re-encrypted.");
             } catch (Throwable $e) {
                 $failed++;
                 report($e);
-                $this->error("Profile {$profileId}: rotation failed and was rolled back ({$e->getMessage()}).");
+                $this->error("{$label} {$profileId}: rotation failed and was rolled back ({$e->getMessage()}).");
             }
         }
 
@@ -42,31 +46,26 @@ class RotateAmountKeys extends Command
     }
 
     /**
-     * @return list<int>|null
+     * @return list<array{AmountKeyScope, int}>|null
      */
-    private function profileIds(): ?array
+    private function targets(AmountKeyManager $manager): ?array
     {
-        /** @var list<string> $ids */
-        $ids = $this->option('profile');
-
-        if ($this->option('all')) {
-            return $ids === [] ? array_values(array_map(intval(...), FinancialProfile::query()->orderBy('id')->pluck('id')->all())) : null;
-        }
-
-        if ($ids === []) {
-            return null;
-        }
-
-        $profileIds = [];
-
-        foreach ($ids as $id) {
-            if (! preg_match('/^[1-9]\d*$/D', $id)) {
+        $targets = [];
+        foreach (AmountKeyScope::cases() as $scope) {
+            /** @var list<string> $ids */
+            $ids = $this->option($scope->value);
+            if ($this->option('all') && $ids !== []) {
                 return null;
             }
 
-            $profileIds[] = (int) $id;
+            foreach ($this->option('all') ? $manager->ownerIds($scope) : array_unique($ids) as $id) {
+                if (! preg_match('/^[1-9]\d*$/D', (string) $id) || filter_var($id, FILTER_VALIDATE_INT) === false) {
+                    return null;
+                }
+                $targets[] = [$scope, (int) $id];
+            }
         }
 
-        return $profileIds;
+        return $targets === [] && ! $this->option('all') ? null : $targets;
     }
 }

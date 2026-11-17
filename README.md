@@ -25,7 +25,8 @@ the filing cabinet.
 - **Shared finances** — financial profiles shared with invited members, with
   per-resource owner/contributor/viewer permissions.
 - **Encryption at rest** — money amounts are stored encrypted with a key per
-  financial profile (AES-256-GCM), rotated monthly.
+  financial profile (AES-256-GCM), rotated monthly; internal schedule storage
+  uses independent envelope-scoped keys.
 - **Contact form** — a public, rate-limited contact page with a per-IP
   cooldown, a submission log and a queued email to the maintainers.
 - **Privacy page** — a public, localized privacy policy at `/privacy`
@@ -41,7 +42,7 @@ Design docs live in [`docs/`](docs/): [getting started](docs/onboarding.md),
 [dashboard](docs/dashboard.md),
 [budget](docs/budget.md),
 [ledger](docs/ledger.md), [envelopes](docs/envelope.md),
-[scheduled transactions (recurrence foundation only)](docs/scheduled-transactions.md),
+[scheduled transactions (recurrence/storage foundations only)](docs/scheduled-transactions.md),
 [shared finances](docs/shared-finances.md),
 [encryption at rest](docs/encryption.md),
 [notifications](docs/notifications.md),
