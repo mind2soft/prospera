@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Security\Amounts\AmountKeyRing;
@@ -12,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use LogicException;
 
 /**
@@ -316,7 +319,19 @@ class FinancialProfile extends Model
     public function transferOwnershipTo(User $target): void
     {
         DB::transaction(function () use ($target): void {
-            $this->members()->updateExistingPivot($target, ['is_owner' => true]);
+            $locked = self::query()->whereKey($this->id)->lockForUpdate()->firstOrFail();
+            if (! $locked->isMember($target)) {
+                throw ValidationException::withMessages([
+                    'user_id' => __('The target user must be a member of the profile.'),
+                ]);
+            }
+
+            // Draft editing locks the budget before child permissions; take
+            // the same root before changing either ownership pivot.
+            Budget::query()->where('profile_id', $this->id)->whereNull('published_at')
+                ->orderBy('id')->lockForUpdate()->get(['id']);
+
+            $locked->members()->updateExistingPivot($target, ['is_owner' => true]);
 
             DB::table('financial_profile_user')
                 ->where('profile_id', $this->id)
@@ -342,19 +357,22 @@ class FinancialProfile extends Model
      */
     public function transferOwnershipToEarliestJoiner(): ?User
     {
-        $next = $this->members()
-            ->wherePivot('is_owner', false)
-            ->orderByPivot('created_at')
-            ->orderBy('users.id')
-            ->first();
+        return DB::transaction(function (): ?User {
+            $locked = self::query()->whereKey($this->id)->lockForUpdate()->firstOrFail();
+            $next = $locked->members()
+                ->wherePivot('is_owner', false)
+                ->orderByPivot('created_at')
+                ->orderBy('users.id')
+                ->first();
 
-        if ($next === null) {
-            return null;
-        }
+            if ($next === null) {
+                return null;
+            }
 
-        $this->transferOwnershipTo($next);
+            $locked->transferOwnershipTo($next);
 
-        return $next;
+            return $next;
+        });
     }
 
     /**
@@ -371,8 +389,15 @@ class FinancialProfile extends Model
     public function removeMember(User $member, bool $accountDeletion = false): void
     {
         DB::transaction(function () use ($member, $accountDeletion): void {
-            $owner = $this->ownerUser();
-            $remainingMembers = $this->members()->whereKeyNot($member->id)->get();
+            $locked = self::query()->whereKey($this->id)->lockForUpdate()->firstOrFail();
+            if (! $locked->isMember($member)) {
+                return;
+            }
+            if ($locked->isOwner($member)) {
+                throw ValidationException::withMessages(['member' => __('The profile owner cannot be removed.')]);
+            }
+            $owner = $locked->ownerUser();
+            $remainingMembers = $locked->members()->whereKeyNot($member->id)->get();
 
             // Before the envelope hand-over below, which only sees live
             // references (docs/undoable-deletion.md).
@@ -568,7 +593,10 @@ class FinancialProfile extends Model
     public function deleteWithResources(): void
     {
         DB::transaction(function (): void {
-            Ledger::query()->where('profile_id', $this->id)->get()
+            self::query()->whereKey($this->id)->lockForUpdate()->firstOrFail();
+            Ledger::query()->where('profile_id', $this->id)->orderBy('id')->lockForUpdate()->get(['id']);
+            Budget::query()->where('profile_id', $this->id)->orderBy('id')->lockForUpdate()->get(['id']);
+            Ledger::query()->where('profile_id', $this->id)->orderBy('id')->get()
                 ->each(fn (Ledger $ledger) => $ledger->deleteWithTransactions());
 
             // Budget children (permissions, envelope assignments) cascade.

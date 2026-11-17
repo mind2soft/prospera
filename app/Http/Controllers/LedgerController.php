@@ -92,6 +92,12 @@ class LedgerController extends Controller
         }
 
         $ledger = DB::transaction(function () use ($user, $profile, $validated): Ledger {
+            // Serialize key selection with rotation/pruning before preparing
+            // the INSERT ciphertext; waiting at the later FK check is too late.
+            $lockedProfile = FinancialProfile::query()->whereKey($profile->id)->sharedLock()->firstOrFail();
+            $this->authorize('manage', $lockedProfile);
+            app(AmountKeyRing::class)->forget($lockedProfile->id);
+
             $ledger = Ledger::create([
                 'profile_id' => $profile->id,
                 'name' => $validated['name'],
@@ -615,15 +621,16 @@ class LedgerController extends Controller
      *
      * Documented lock order, lowest first: ledger row (exclusive, here) →
      * envelope row (shared, direction changes and restore integrity) →
-     * transaction row (exclusive, restore's pending re-read). No other path
-     * acquires the ledger lock after another resource — profile locks (key
-     * rotation, budget publishing) and envelope locks (member departure,
-     * envelope deletion) never wait on a ledger — so the order cannot
-     * deadlock.
+     * transaction row (exclusive, restore's pending re-read). Operations that
+     * also need profile roots take those first, then prelock their complete
+     * ledger/budget root sets before child mutations (financial-locking.md).
      */
     private function lockLedger(int $ledgerId): Ledger
     {
-        return Ledger::query()->whereKey($ledgerId)->lockForUpdate()->firstOrFail();
+        $ledger = Ledger::query()->whereKey($ledgerId)->lockForUpdate()->firstOrFail();
+        app(AmountKeyRing::class)->forget($ledger->profile_id);
+
+        return $ledger;
     }
 
     /**

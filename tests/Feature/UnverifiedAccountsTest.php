@@ -167,12 +167,11 @@ class UnverifiedAccountsTest extends TestCase
         FinancialProfile::createDefaultFor($other);
         $this->travel(31)->days();
 
-        $real = app(DeleteAccount::class);
-        $this->app->instance(DeleteAccount::class, new class($real, $failing->id) extends DeleteAccount
+        $this->app->instance(DeleteAccount::class, new class($failing->id) extends DeleteAccount
         {
-            public function __construct(private readonly DeleteAccount $real, private readonly int $failingId) {}
+            public function __construct(private readonly int $failingId) {}
 
-            public function handle(User $user): void
+            protected function deleteLocked(User $user): void
             {
                 if ($user->id === $this->failingId) {
                     // Part of the deletion ran before the failure: it must
@@ -182,7 +181,7 @@ class UnverifiedAccountsTest extends TestCase
                     throw new RuntimeException('Transient database error');
                 }
 
-                $this->real->handle($user);
+                parent::deleteLocked($user);
             }
         });
 

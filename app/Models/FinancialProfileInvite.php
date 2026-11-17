@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Exceptions\FinancialLockSetChanged;
 use App\Models\Concerns\MatchesEmail;
+use App\Security\Amounts\AmountContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
@@ -239,14 +241,22 @@ class FinancialProfileInvite extends Model
      */
     public static function completePendingFor(User $user): void
     {
-        DB::transaction(function () use ($user): void {
+        retry(3, fn () => DB::transaction(function () use ($user): void {
+            $ids = self::completionProfileIds($user->id);
+            $lockedIds = FinancialProfile::query()->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->pluck('id')->all();
             // Serialize concurrent completions for the same account (two
             // tabs, the Verified listener racing the middleware): without a
             // reservation the invite lock below locks nothing, and both
             // would seed a default profile. The callers' "has no profile"
             // check ran unlocked, so the default is re-checked under this
             // lock by ensureDefaultFor.
-            User::query()->whereKey($user->id)->lockForUpdate()->first();
+            $user = User::query()->whereKey($user->id)->lockForUpdate()->first();
+            if ($user === null || ! $user->hasVerifiedEmail()) {
+                return;
+            }
+            if (array_diff(self::completionProfileIds($user->id), $lockedIds) !== []) {
+                throw new FinancialLockSetChanged('Invite completion roots changed while acquiring locks.');
+            }
 
             /** @var self|null $invite */
             $invite = self::query()
@@ -285,7 +295,16 @@ class FinancialProfileInvite extends Model
             if ($profile->isMember($user)) {
                 self::deleteRedundantFor($profile, $user);
             }
-        });
+        }, attempts: 3), 0, fn (\Throwable $exception): bool => $exception instanceof FinancialLockSetChanged);
+    }
+
+    /** @return list<int> */
+    private static function completionProfileIds(int $userId): array
+    {
+        return array_values(DB::table('financial_profile_user')->where('user_id', $userId)->select('profile_id')
+            ->union(DB::table('financial_profile_invites')->where('pending_user_id', $userId)->select('profile_id'))
+            ->orderBy('profile_id')->pluck('profile_id')
+            ->map(fn (mixed $id): int => AmountContext::id($id, 'profile_id'))->all());
     }
 
     /**

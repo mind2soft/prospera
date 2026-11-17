@@ -133,21 +133,19 @@ class FinancialProfileController extends Controller
     {
         $this->authorize('delete', $profile);
 
-        $hasBudgets = Budget::query()->where('profile_id', $profile->id)->exists();
-        $hasLedgers = Ledger::query()->where('profile_id', $profile->id)->exists();
-
-        if ($hasBudgets || $hasLedgers) {
-            throw ValidationException::withMessages([
-                'profile' => __('This profile still has budgets or ledgers.'),
-            ]);
-        }
-
         DB::transaction(function () use ($profile): void {
+            $locked = FinancialProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+            $this->authorize('delete', $locked);
+            if (Budget::query()->where('profile_id', $locked->id)->exists()
+                || Ledger::query()->where('profile_id', $locked->id)->exists()) {
+                throw ValidationException::withMessages(['profile' => __('This profile still has budgets or ledgers.')]);
+            }
+
             // Capture the members first: deleting cascades the pivot rows
             // away, so the capture must happen before the delete.
-            $members = $profile->members()->get();
+            $members = $locked->members()->get();
 
-            $profile->delete();
+            $locked->delete();
 
             // Envelope grants between former co-members who no longer
             // share any profile are dropped (both directions).
@@ -157,7 +155,7 @@ class FinancialProfileController extends Controller
             // defaults are reassigned here (earliest created owned profile,
             // else earliest remaining membership, else a seeded default).
             $members->each(fn (User $member) => FinancialProfile::ensureDefaultFor($member));
-        });
+        }, attempts: 3);
 
         return response()->json(status: 204);
     }
@@ -204,26 +202,30 @@ class FinancialProfileController extends Controller
         $current = $this->currentUser($request);
 
         $this->authorize('view', $profile);
-        abort_unless($profile->isMember($user), 404);
+        DB::transaction(function () use ($profile, $user, $current): void {
+            $locked = FinancialProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+            $this->authorize('view', $locked);
+            abort_unless($locked->isMember($user), 404);
 
-        if ($user->id === $current->id) {
-            // Voluntary self-leave.
-            if ($profile->isOwner($current)) {
-                throw ValidationException::withMessages([
-                    'member' => __('Transfer ownership before leaving the profile.'),
-                ]);
+            if ($user->id === $current->id) {
+                // Voluntary self-leave.
+                if ($locked->isOwner($current)) {
+                    throw ValidationException::withMessages([
+                        'member' => __('Transfer ownership before leaving the profile.'),
+                    ]);
+                }
+            } else {
+                $this->authorize('manage', $locked);
+
+                if ($locked->isOwner($user)) {
+                    throw ValidationException::withMessages([
+                        'member' => __('The profile owner cannot be removed.'),
+                    ]);
+                }
             }
-        } else {
-            $this->authorize('manage', $profile);
 
-            if ($profile->isOwner($user)) {
-                throw ValidationException::withMessages([
-                    'member' => __('The profile owner cannot be removed.'),
-                ]);
-            }
-        }
-
-        $profile->removeMember($user);
+            $locked->removeMember($user);
+        }, attempts: 3);
 
         return response()->json(status: 204);
     }
@@ -235,19 +237,24 @@ class FinancialProfileController extends Controller
     {
         $user = $this->currentUser($request);
 
-        $target = $this->permissionService->ensureNotOwner(
-            $this->permissionService->profileMember($profile, $request->targetId()),
-            $user,
-            __('You already own this profile.'),
-        );
+        $locked = DB::transaction(function () use ($profile, $request, $user): FinancialProfile {
+            $fresh = FinancialProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+            $this->authorize('manage', $fresh);
+            $target = $this->permissionService->ensureNotOwner(
+                $this->permissionService->profileMember($fresh, $request->targetId()),
+                $user,
+                __('You already own this profile.'),
+            );
+            $fresh->transferOwnershipTo($target);
 
-        $profile->transferOwnershipTo($target);
+            return $fresh;
+        }, attempts: 3);
 
         return response()->json([
             'profile' => $this->serialize(
-                $profile,
-                $profile->isOwner($user),
-                $profile->isDefaultFor($user),
+                $locked,
+                $locked->isOwner($user),
+                $locked->isDefaultFor($user),
             ),
         ]);
     }

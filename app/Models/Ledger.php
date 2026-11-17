@@ -115,6 +115,12 @@ class Ledger extends Model implements HasEncryptedAmounts, HasImmutableColumns
     public function deleteWithTransactions(): void
     {
         DB::transaction(function (): void {
+            // Direct lifecycle callers must obey the same ledger-first
+            // serialization as HTTP writers; not all come via the controller.
+            $locked = self::query()->whereKey($this->id)->lockForUpdate()->first();
+            if ($locked === null) {
+                return;
+            }
             $this->transactions()->withTrashed()->forceDelete();
             $this->delete();
         });

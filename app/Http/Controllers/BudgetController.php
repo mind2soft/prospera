@@ -15,6 +15,7 @@ use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
 use App\Models\User;
+use App\Security\Amounts\AmountKeyRing;
 use App\Services\OnboardingProgress;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
@@ -78,7 +79,9 @@ class BudgetController extends Controller
         $user = $this->currentUser($request);
 
         $budget = DB::transaction(function () use ($user, $profile, $validated): Budget {
-            FinancialProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+            $profile = FinancialProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
+            $this->authorize('manage', $profile);
+            app(AmountKeyRing::class)->forget($profile->id);
 
             $this->abortIfDraftExists($profile->id);
 
@@ -169,10 +172,14 @@ class BudgetController extends Controller
 
         DB::transaction(function () use ($budget, $year, $month): void {
             FinancialProfile::query()->whereKey($budget->profile_id)->lockForUpdate()->firstOrFail();
+            app(AmountKeyRing::class)->forget($budget->profile_id);
+
+            $budget = Budget::query()->whereKey($budget->id)->lockForUpdate()->firstOrFail();
+            $this->authorize('publish', $budget);
 
             // Re-checked under the lock: a concurrent publish (double click)
             // must not run twice.
-            if (! Budget::query()->whereKey($budget->id)->lockForUpdate()->firstOrFail()->isDraft()) {
+            if (! $budget->isDraft()) {
                 throw ValidationException::withMessages([
                     'budget' => __('This budget is already published.'),
                 ]);
@@ -209,6 +216,12 @@ class BudgetController extends Controller
 
         $draft = DB::transaction(function () use ($user, $budget, $validated): Budget {
             FinancialProfile::query()->whereKey($budget->profile_id)->lockForUpdate()->firstOrFail();
+            app(AmountKeyRing::class)->forget($budget->profile_id);
+            $budget = Budget::query()->whereKey($budget->id)->sharedLock()->firstOrFail();
+            $this->authorize('clone', $budget);
+            if ($budget->isDraft()) {
+                throw ValidationException::withMessages(['budget' => __('Only published budgets can be cloned.')]);
+            }
 
             $this->abortIfDraftExists($budget->profile_id);
 
@@ -465,7 +478,10 @@ class BudgetController extends Controller
      */
     private function lockDraft(Budget $budget): void
     {
-        Budget::query()->whereKey($budget->id)->lockForUpdate()->firstOrFail()->ensureDraft();
+        $budget = Budget::query()->whereKey($budget->id)->lockForUpdate()->firstOrFail();
+        $this->authorize('update', $budget);
+        $budget->ensureDraft();
+        app(AmountKeyRing::class)->forget($budget->profile_id);
     }
 
     private function abortIfDraftExists(int $profileId): void

@@ -45,6 +45,7 @@ Design docs live in [`docs/`](docs/): [getting started](docs/onboarding.md),
 [scheduled transactions (definition API; automatic posting/UI still planned)](docs/scheduled-transactions.md),
 [shared finances](docs/shared-finances.md),
 [encryption at rest](docs/encryption.md),
+[financial write locking](docs/financial-locking.md),
 [notifications](docs/notifications.md),
 [undoable deletion](docs/undoable-deletion.md) and
 [localization](docs/localization.md) (long-form content such as the

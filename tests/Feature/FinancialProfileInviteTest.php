@@ -824,7 +824,7 @@ class FinancialProfileInviteTest extends TestCase
         // discarded (no membership), and the account still gets its own
         // default profile.
         $user = User::where('email', 'newbie@example.com')->firstOrFail();
-        $user->forceFill(['email' => 'changed@example.com'])->save();
+        $user->forceFill(['email' => 'changed@example.com', 'email_verified_at' => now()])->save();
 
         event(new Verified($user));
 
@@ -920,6 +920,7 @@ class FinancialProfileInviteTest extends TestCase
         $user = User::where('email', 'newbie@example.com')->firstOrFail();
         $invite->delete();
 
+        $user->forceFill(['email_verified_at' => now()])->save();
         event(new Verified($user));
 
         $this->assertDatabaseMissing('financial_profile_user', [
