@@ -5,10 +5,10 @@
 [Issue #15](https://github.com/mind2soft/prospera/issues/15) is being delivered
 incrementally. **The recurrence resolver, encrypted storage, owner-only
 definition API, transaction provenance and materialization into open ledgers
-(with the daily `schedules:sync` catch-up) are implemented.** There is no
-schedule UI on the Envelopes page yet (schedules are managed through the API),
-and no reminders are sent: the payment-reminder toggle stays disabled and
-there is no `schedules:remind` command yet.
+(with the daily `schedules:sync` catch-up) and the owner-only schedules
+drawer on the Envelopes page are implemented.** No reminders are sent: the
+reminder setting is stored only, the payment-reminder toggle stays disabled
+and there is no `schedules:remind` command yet.
 
 ## Calendar rules (implemented)
 
@@ -155,8 +155,14 @@ without changing its value. Metadata-only changes leave ciphertext unchanged.
 An empty PATCH is a no-op.
 
 Responses expose the recurrence fields, signed minor-unit amount, timestamps,
-and `next_occurrences`: at most **five** upcoming ISO dates, inclusive of
-today. Optional IANA `timezone` on GET/POST/PATCH chooses the requesting
+`open_ledger_entries` and `next_occurrences`. `open_ledger_entries` counts the
+schedule's generated rows in **open** ledgers (any profile), i.e. the entries
+an edit or a deletion rewrites; closed-ledger history is not counted. It is a
+single grouped `count(*)` over provenance ids per listed page (no amounts are
+read), taken without ledger locks, so it is approximate under concurrent
+reconciliation. It is `0` on creation and is computed **before** the queued
+reconciliation of an update. `next_occurrences` holds at most **five**
+upcoming ISO dates, inclusive of today. Optional IANA `timezone` on GET/POST/PATCH chooses the requesting
 owner's calendar day; without it the application timezone (UTC) applies,
 matching [LocalCalendar](budget.md). Dates themselves are never shifted.
 The preview uses the canonical resolver over a bounded period-specific
@@ -173,8 +179,8 @@ rows, consistently with key rotation and envelope lifecycle operations.
 Create and update queue reconciliation of the affected open ledgers after
 commit; DELETE removes the schedule's generated rows from open ledgers in the
 same database transaction (see [Materialization](#materialization-implemented)).
-No reminder mail is sent. The localized owner-only drawer (TanStack Vue Query)
-is not built yet; no schedule entry point is exposed in the UI.
+No reminder mail is sent. The Envelopes page drawer below is the UI entry
+point.
 
 ## Materialization (implemented)
 
@@ -313,18 +319,56 @@ group, starting from the lowest changed row id. See
 and decreases only lower spending, so they cannot cross an allocation and are
 not checked.
 
+## UI (implemented)
+
+On the Envelopes page, the envelope menu (shown to the **owner** only) has a
+**Schedules** item opening a right drawer
+(`resources/js/components/schedules/ScheduleDrawer.vue`). Contributors and
+viewers never get the item; the API refuses them anyway.
+
+- **List** — view-only rows, each with a localized summary built by
+  `resources/js/lib/schedule.ts` (`describeSchedule`): the rule ("Bi-weekly
+  on Mon and Thu", "Monthly on day 31 (or the last day of shorter months)"),
+  the bounds ("From Mar 1, 2026" / "From … to …"), the reminder ("No
+  reminder", "Remind on the day", "Remind 3 days before", pluralized) and the
+  API's next dates. Dates, weekday/month names, lists and numbers use the
+  active locale's `Intl` formatters. The amount is shown with `Currency.vue`
+  in the profile's latest published budget currency (minor units ÷ 100,
+  display only). Edit and delete icon buttons, an **Add schedule** button and
+  an empty state complete the drawer; load errors offer a retry.
+- **Dialog** (`ScheduleDialog.vue`) — amount, repeat period, start (or the
+  one-off date), optional end date, weekday toggles (weekly/bi-weekly),
+  day of month (monthly/yearly), month (yearly), and a reminder select
+  (None / Same day / Days before + a number). Only the fields of the chosen
+  period are shown and sent; the others are sent empty. The weekday, day of
+  month and month default from the start date until the user sets them (or
+  the edited schedule defines them). The typed amount is
+  converted to integer minor units from its digits (never by float
+  multiplication) and sent unsigned: the server signs it. Client validation
+  mirrors the server rules; server `422` messages are shown on their fields
+  (`weekdays.N` → weekdays). Editing is dialog-only (no in-place editing).
+- **Affected entries** — the edit dialog and the delete confirmation warn
+  "Affects ~N ledger entries in open ledgers" from `open_ledger_entries`
+  when it is positive.
+- Every read and write goes through TanStack Vue Query
+  (`resources/js/composables/scheduleQueries.ts`). Writes invalidate the
+  envelope's schedule list, every ledger transaction report and the
+  dashboard data. Generated rows of a create/edit appear once the queued
+  reconciliation has run; deletions are synchronous.
+- All copy lives under `envelopes.schedules`
+  (`resources/js/locales/{en,fr}/envelopes.json`).
+- `e2e/schedules.spec.ts` covers create → edit → delete with the ledger's
+  Scheduled rows following. The e2e queue is `database` with no worker, so
+  the spec drains it (`drainQueue()` in `e2e/support.ts`) after each write.
+
 ## Remaining work (#15)
 
-- Localized owner-only schedules drawer/dialog on the Envelopes page, with the
-  affected-entries warning.
 - Daily `schedules:remind`: durable per-occurrence and per-recipient reminder
   deduplication, send-time recipient/permission/settings checks, masked
   amounts, and English/French mail content. See
   [notification requirements](notifications.md) and the issue's reminder
   acceptance criteria. Never put decrypted amounts in queued payloads.
   Re-enable payment reminders only once sending is implemented and tested.
-- End-to-end coverage of schedule create/edit/delete through the UI once the
-  drawer exists.
 
 The recurrence unit suite runs without a database or Laravel boot:
 
@@ -333,5 +377,6 @@ vendor/bin/phpunit tests/Unit/Schedules
 vendor/bin/phpunit tests/Feature/EnvelopeScheduleStorageTest.php tests/Unit/Security
 vendor/bin/phpunit tests/Feature/EnvelopeScheduleApiTest.php
 php artisan test --filter='ScheduleMaterializationTest|ScheduleLimitNotificationTest|PostgresScheduleDeletionTest|EnvelopeLimitCheckerTest'
-TZ=UTC npm run e2e -- e2e/schedule-api.spec.ts e2e/ledger.spec.ts
+npx vitest run resources/js/lib/schedule.test.ts
+TZ=UTC npm run e2e -- e2e/schedule-api.spec.ts e2e/schedules.spec.ts e2e/ledger.spec.ts
 ```

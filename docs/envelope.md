@@ -61,7 +61,7 @@ existing **profile members** of the owner (see
   money data) belong to envelopes and use envelope-scoped keys. Owner-only
   CRUD and previews are available through the definition API; their
   occurrences are materialized as read-only rows in covered open ledgers.
-  The Envelopes-page drawer is not available yet. See
+  The owner manages them in the Envelopes-page **Schedules** drawer. See
   [scheduled transactions](scheduled-transactions.md) for schema, recurrence,
   encryption, ownership, and implementation status.
 
@@ -146,6 +146,13 @@ data fetching.
   (labeled **Owner**), a **Grant access** section picking members from the
   owner's profile circle, permission changes, revoke and ownership transfer —
   no invites (see [Shared Finances](shared-finances.md)).
+- **Schedules** — an **owner-only** envelope menu item (contributors and
+  viewers never see it; the API answers `403`) opening a right drawer that
+  lists the envelope's schedules view-only, with a localized summary, the
+  signed amount, the reminder and the next dates. Adding and editing happen
+  in a dialog; deleting asks for confirmation. Both warn how many generated
+  entries in open ledgers are affected. See
+  [scheduled transactions — UI](scheduled-transactions.md#ui-implemented).
 
 ## Integrity rules
 

@@ -1,3 +1,5 @@
+import type { Budget } from '@/types';
+
 export const CURRENCIES = [
     { code: 'CAD' },
     { code: 'USD' },
@@ -135,5 +137,23 @@ export function budgetLabel(
         budget.effective_year,
         budget.effective_month,
         locale,
+    );
+}
+
+/**
+ * The currency of the most recently published budget ('' when none is
+ * published): amounts outside a budget (ledgers, schedules) are shown in it.
+ */
+export function latestPublishedCurrency(
+    budgets: readonly Pick<Budget, 'currency' | 'published_at'>[],
+): string {
+    return (
+        budgets
+            .filter((budget) => budget.published_at !== null)
+            .sort(
+                (a, b) =>
+                    new Date(b.published_at ?? '').getTime() -
+                    new Date(a.published_at ?? '').getTime(),
+            )[0]?.currency ?? ''
     );
 }

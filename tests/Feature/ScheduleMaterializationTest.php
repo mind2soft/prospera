@@ -211,6 +211,35 @@ final class ScheduleMaterializationTest extends TestCase
         $this->assertSame([], $this->generated($closed));
     }
 
+    public function test_schedules_expose_their_generated_entry_count_in_open_ledgers_only(): void
+    {
+        $closed = $this->ledger();
+        $other = $this->ledger();
+        $created = $this->actingAs($this->owner)->postJson($this->url(), [
+            'period' => 'weekly', 'start_date' => '2026-05-01', 'weekdays' => [1], 'amount' => 12345,
+        ])->assertCreated()->assertJsonPath('schedule.open_ledger_entries', 0);
+        $schedule = EnvelopeSchedule::query()->findOrFail($created->json('schedule.id'));
+        $quiet = $this->createSchedule(['period' => 'once', 'start_date' => '2026-07-01', 'weekdays' => []]);
+        $this->postJson("/api/ledgers/{$closed->id}/close")->assertOk();
+        // A manual row of the same envelope is not a generated entry.
+        $this->postJson("/api/ledgers/{$other->id}/transactions", [
+            'envelope_id' => $this->rent->id, 'amount' => 10, 'event_at' => '2026-06-01',
+        ])->assertCreated();
+
+        // Five Mondays in June in each of the two open ledgers; the closed
+        // ledger's rows are kept as history and never rewritten.
+        $this->getJson($this->url())->assertOk()
+            ->assertJsonPath('schedules.0.id', $schedule->id)
+            ->assertJsonPath('schedules.0.open_ledger_entries', 10)
+            ->assertJsonPath('schedules.1.id', $quiet->id)
+            ->assertJsonPath('schedules.1.open_ledger_entries', 0);
+        $this->patchJson($this->url($schedule), ['reminder_days' => 2])->assertOk()
+            ->assertJsonPath('schedule.open_ledger_entries', 10);
+
+        $this->postJson("/api/ledgers/{$other->id}/close")->assertOk();
+        $this->getJson($this->url())->assertJsonPath('schedules.0.open_ledger_entries', 5);
+    }
+
     public function test_reopening_applies_edits_made_while_the_ledger_was_closed(): void
     {
         $schedule = $this->createSchedule();

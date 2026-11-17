@@ -16,6 +16,11 @@ export function currentMonth(now: Date = new Date()): string {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
+/** A local `Date` as its calendar date (`Y-m-d`); today by default. */
+export function calendarDate(date: Date = new Date()): string {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 /** The year and month (1–12) of a `Y-m` month, e.g. "2026-05" → [2026, 5]. */
 export function parseMonth(month: string): [year: number, month: number] {
     const [year, number] = month.split('-').map(Number);

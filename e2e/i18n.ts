@@ -40,3 +40,19 @@ export function t(
             name in params ? String(params[name]) : match,
         );
 }
+
+/**
+ * A pluralized English message (`"one | many"` or `"none | one | many"`,
+ * vue-i18n's default rule), with `{n}` set to the count.
+ */
+export function tc(
+    key: string,
+    n: number,
+    params: Record<string, string | number> = {},
+): string {
+    const forms = t(key, { n, ...params }).split(' | ');
+    const index =
+        forms.length === 2 ? Number(n !== 1) : Math.min(n, forms.length - 1);
+
+    return forms[index];
+}

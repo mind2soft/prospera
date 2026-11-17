@@ -24,7 +24,8 @@
         "optionsFor": "Envelope options for {name}",
         "menu": {
             "share": "Share",
-            "delete": "Delete envelope"
+            "delete": "Delete envelope",
+            "schedules": "Schedules"
         },
         "dialog": {
             "newTitle": "New envelope",
@@ -59,6 +60,94 @@
             "description": "“{name}” will be removed from your envelopes. Existing transactions are not deleted.",
             "failed": "Could not delete the envelope.",
             "confirm": "Delete envelope"
+        },
+        "schedules": {
+            "drawer": {
+                "title": "Schedules",
+                "description": "Recurring transactions of “{name}”, posted automatically in open ledgers for months covered by a published budget.",
+                "loadError": "Could not load the schedules.",
+                "empty": "No schedules yet. Add one for a paycheck, rent or any amount that comes back on known dates.",
+                "add": "Add schedule",
+                "done": "Done",
+                "list": "Schedules of {name}",
+                "edit": "Edit schedule: {summary}",
+                "delete": "Delete schedule: {summary}"
+            },
+            "summary": {
+                "once": "Once on {date}",
+                "weekly": "Weekly on {days}",
+                "biweekly": "Bi-weekly on {days}",
+                "monthly": "Monthly on day {day}",
+                "monthlyClamped": "Monthly on day {day} (or the last day of shorter months)",
+                "yearly": "Yearly on {month} {day}",
+                "yearlyClamped": "Yearly on {month} {day} (or the month's last day)",
+                "from": "From {start}",
+                "between": "From {start} to {end}",
+                "noReminder": "No reminder",
+                "remindSameDay": "Remind on the day",
+                "remindDaysBefore": "Remind {n} day before | Remind {n} days before",
+                "upcoming": "Next: {dates}",
+                "noUpcoming": "No upcoming dates"
+            },
+            "affected": "Affects ~{n} ledger entry in open ledgers. | Affects ~{n} ledger entries in open ledgers.",
+            "dialog": {
+                "newTitle": "New schedule",
+                "editTitle": "Edit schedule",
+                "description": "Transactions are posted on these dates in open ledgers, for every month a published budget assigns this envelope.",
+                "amount": "Amount",
+                "inCurrency": "({currency})",
+                "expenseHint": "Recorded as an expense of this envelope.",
+                "revenueHint": "Recorded as revenue of this envelope.",
+                "period": "Repeats",
+                "startDate": "Start date",
+                "onceDate": "Date",
+                "endDate": "End date",
+                "endDateHint": "Optional. Last possible date, included.",
+                "weekdays": "On",
+                "dayOfMonth": "Day of the month",
+                "dayOfMonthHint": "Days 29 to 31 fall on the last day of shorter months.",
+                "month": "Month",
+                "reminder": "Reminder",
+                "reminderDays": "Days before",
+                "remindersNote": "Reminder emails are not sent yet.",
+                "save": "Save schedule",
+                "create": "Add schedule",
+                "saving": "Saving…"
+            },
+            "periods": {
+                "once": "Once",
+                "weekly": "Weekly",
+                "biweekly": "Bi-weekly",
+                "monthly": "Monthly",
+                "yearly": "Yearly"
+            },
+            "reminders": {
+                "none": "None",
+                "sameDay": "Same day",
+                "daysBefore": "Days before"
+            },
+            "validation": {
+                "amount": "Enter an amount of 0 or more, with at most two decimals.",
+                "startDate": "Choose a valid start date.",
+                "endDate": "Choose a valid end date, or leave it empty.",
+                "endBeforeStart": "The end date cannot be before the start date.",
+                "weekdays": "Choose at least one day of the week.",
+                "dayOfMonth": "Enter a day between 1 and 31.",
+                "month": "Choose a month.",
+                "reminderDays": "Enter a whole number of days, 1 or more."
+            },
+            "delete": {
+                "title": "Delete schedule?",
+                "description": "“{summary}” will stop posting transactions. Its entries are removed from open ledgers; closed ledgers keep theirs.",
+                "confirm": "Delete schedule"
+            },
+            "toast": {
+                "created": "Schedule added.",
+                "updated": "Schedule updated.",
+                "deleted": "Schedule deleted.",
+                "failed": "Could not save the schedule.",
+                "deleteFailed": "Could not delete the schedule."
+            }
         }
     }
 }

@@ -4,6 +4,7 @@ import Icon from '@/components/Icon.vue';
 import { Button } from '@/components/ui/button';
 import { useLocale } from '@/composables/useLocale';
 import {
+    calendarDate,
     formatCalendarDate,
     parseCalendarDate,
     parseMonth,
@@ -25,8 +26,7 @@ const emit = defineEmits<{
     (e: 'navigate-month', direction: 'prev' | 'next'): void;
 }>();
 
-const iso = (d: Date): string =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const iso = calendarDate;
 
 const todayIso = computed(() => iso(new Date()));
 
