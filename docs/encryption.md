@@ -110,7 +110,8 @@ Existing scheduler commands include envelope keys automatically:
   key as a fallback when no active profile key exists.
 
 No new scheduler registration or separate operator command is required.
-Schedule CRUD/materialization/reminders are still unimplemented.
+The owner-only schedule definition API is implemented; materialization,
+reminders, and a schedule UI remain unimplemented.
 
 ## Ciphertext format
 

@@ -3,8 +3,8 @@
 ## Implementation status
 
 [Issue #15](https://github.com/mind2soft/prospera/issues/15) is being delivered
-incrementally. **The recurrence resolver and internal encrypted schedule
-storage are implemented.** There is no schedule API/UI yet, no transactions
+incrementally. **The recurrence resolver, encrypted storage, and owner-only
+definition API are implemented.** There is no schedule UI yet, no transactions
 are generated, and no reminders are sent. The payment-reminder toggle stays
 disabled. There are no `schedules:sync` or `schedules:remind` commands yet.
 
@@ -78,15 +78,16 @@ the model directly to the tested recurrence resolver.
 
 - `amount` is a **signed integer in minor units**: `-12345` means an expense
   of 123.45 currency units. Unlike `Transaction::amount`, this internal model
-  does not convert currency units to/from minor units. Future HTTP/UI callers
-  must convert their input explicitly once, then sign it from the envelope's
-  direction. Fractional values are rejected; zero is allowed.
+  does not convert currency units to/from minor units. The definition API
+  accepts an integer minor-unit magnitude and signs it from the envelope's
+  direction. A future UI must convert human currency input exactly once.
+  Fractional minor-unit values are rejected; zero is allowed.
 - Amounts use the existing AES-256-GCM format and guarded Eloquent writes.
   The AAD binds the envelope key scope/id, table/column, and start date.
   Moving a schedule to another envelope is forbidden; changing its start
   date requires assigning its amount in the same save. The amount is hidden
-  from default array/JSON serialization; a future owner-only resource must
-  explicitly authorize and expose it.
+  from default array/JSON serialization; the API's explicit owner-authorized
+  serializer exposes it only after locking and rechecking ownership.
 - Schedule amounts use **envelope-scoped data keys**, not a default or
   arbitrarily selected financial profile's keys. An envelope can span several
   profiles; changing/deleting a profile or transferring the envelope must not
@@ -96,8 +97,8 @@ the model directly to the tested recurrence resolver.
   key for an existing schedule fails closed instead of creating a replacement.
 - Saves validate recurrence fields, reminder days (null or 0–2,147,483,647),
   and amount sign, including `saveQuietly`/eventless saves. HTTP validation,
-  authorization and resource serialization remain future work, not model
-  responsibilities. Numeric day/month/reminder fields must be integers, not
+  authorization and resource serialization are implemented separately at the
+  API boundary. Numeric day/month/reminder fields must be integers, not
   floats or numeric strings, at this internal boundary.
 - Writers lock the envelope before schedules/keys, serializing first-key
   creation, direction changes, deletion, and key rotation. Active schedules
@@ -110,10 +111,72 @@ the model directly to the tested recurrence resolver.
   that generated rows in closed ledgers retain their schedule provenance.
   **No generated transactions or provenance columns exist yet.**
 
+## Definition API (implemented; no automatic posting yet)
+
+All endpoints live in the session-authenticated, verified-email **web**
+middleware group, including CSRF protection for writes. The envelope owner
+alone may list or mutate schedule definitions. A visible envelope's profile
+co-members/referencing-profile members receive **403**, even with an envelope
+viewer/contributor grant; outsiders and stale grantees without a current
+profile relationship receive **404**. Nested bindings reject schedules of
+another envelope and exclude soft-deleted schedules.
+
+| Method | Path | Response |
+| --- | --- | --- |
+| `GET` | `/api/envelopes/{envelope}/schedules` | `200 { schedules: [...], meta: { current_page, last_page, per_page, total } }` |
+| `POST` | `/api/envelopes/{envelope}/schedules` | `201 { schedule: ... }` |
+| `PATCH` | `/api/envelopes/{envelope}/schedules/{schedule}` | `200 { schedule: ... }` |
+| `DELETE` | `/api/envelopes/{envelope}/schedules/{schedule}` | `204`, soft-deletes the definition |
+
+Writes accept JSON. Required create fields: `period`, `start_date`, `amount`.
+The **input** `amount` is a nonnegative integer minor-unit magnitude, capped
+at 99,999,999,999 (the same maximum currency value as manual transactions).
+The **output** `amount` is signed by the envelope direction and still in
+minor units. For example, POST `amount: 12345` on an expense envelope returns
+`amount: -12345`, representing a 123.45 expense. Numeric strings, booleans,
+fractional minor units, and negative magnitudes are rejected. Ownership and
+storage metadata (`id`, `envelope_id`, `profile_id`, `user_id`, `deleted_at`,
+`created_at`, `updated_at`) must not be supplied, even as null.
+
+Recurrence fields follow the canonical rules above. The API requires unique
+integer ISO weekdays in a JSON list; the model/resolver also normalize their
+order. End dates are inclusive and may not precede the start date.
+`reminder_days` may be null or an integer 0–2,147,483,647; **storing it does not
+send a reminder**. Unused weekday/day/month fields must be empty/null.
+
+PATCH accepts partial definitions and validates the merged result against
+the **fresh locked row**, not stale route-bound data. When the period changes,
+omitted fields that are no longer relevant are cleared automatically;
+explicitly supplied irrelevant fields still cause 422. For example, changing
+monthly → weekly with `weekdays: [1, 4]` clears the old `day_of_month`.
+Changing the start date explicitly re-binds the existing encrypted amount
+without changing its value. Metadata-only changes leave ciphertext unchanged.
+An empty PATCH is a no-op.
+
+Responses expose the recurrence fields, signed minor-unit amount, timestamps,
+and `next_occurrences`: at most **five** upcoming ISO dates, inclusive of
+today. Optional IANA `timezone` on GET/POST/PATCH chooses the requesting
+owner's calendar day; without it the application timezone (UTC) applies,
+matching [LocalCalendar](budget.md). Dates themselves are never shifted.
+The preview uses the canonical resolver over a bounded period-specific
+window (35/70 days, five months, or five years), starting no earlier than the
+schedule start; distant future schedules and year 9999 are supported.
+
+GET is id-ordered and paginated (`page`, default 1; `per_page`, default 50,
+maximum 100). A composite `(envelope_id, id)` index supports scoped listing
+and key maintenance. Authorization occurs before validation, is rechecked
+under the envelope row lock, and precedes amount decryption. Reads take a
+shared envelope lock; writes take an exclusive envelope lock before schedule
+rows, consistently with key rotation and envelope lifecycle operations.
+
+This API manages **definitions only**. Schedule writes do not currently
+dispatch reconciliation jobs, create ledger entries, or send mail. The
+localized owner-only drawer will use TanStack Vue Query when materialization
+is available; no schedule entry point is exposed in the UI yet.
+
 ## Remaining work (#15)
 
-- Owner-only CRUD, validation at the HTTP boundary, preview dates, and
-  generated-transaction provenance/uniqueness (`ledger_id`, `schedule_id`,
+- Generated-transaction provenance/uniqueness (`ledger_id`, `schedule_id`,
   `event_at`). Add the provenance FK and generated-row mutation guards
   together with materialization rather than exposing half-managed entries.
 - Reconciliation for open ledgers with published-budget month coverage;
@@ -135,4 +198,6 @@ The recurrence unit suite runs without a database or Laravel boot:
 ```bash
 vendor/bin/phpunit tests/Unit/Schedules
 vendor/bin/phpunit tests/Feature/EnvelopeScheduleStorageTest.php tests/Unit/Security
+vendor/bin/phpunit tests/Feature/EnvelopeScheduleApiTest.php
+TZ=UTC npm run e2e -- e2e/schedule-api.spec.ts
 ```

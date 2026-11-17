@@ -42,6 +42,7 @@
     "The provided two factor authentication code was invalid.": "Le code d'authentification à deux facteurs fourni est invalide.",
     "The provided two factor recovery code was invalid.": "Le code de récupération à deux facteurs fourni est invalide.",
     "The resource owner cannot be removed.": "Le propriétaire de la ressource ne peut pas être retiré.",
+    "The schedule date must be a valid YYYY-MM-DD calendar date.": "La date de l'opération planifiée doit être une date valide au format AAAA-MM-JJ.",
     "The subject must not exceed :max characters.": "L'objet ne doit pas dépasser :max caractères.",
     "The target user must be a member of the profile.": "L'utilisateur choisi doit être membre du profil.",
     "The target user must share a profile with the envelope owner.": "L'utilisateur choisi doit partager un profil avec le propriétaire de l'enveloppe.",
