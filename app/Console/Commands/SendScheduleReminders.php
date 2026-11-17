@@ -21,7 +21,8 @@ use Throwable;
 /**
  * The daily payment-reminder run (issue #15, docs/scheduled-transactions.md):
  * for every active schedule with a reminder, each occurrence D with
- * `today ≥ D − reminder_days` and `D ≥ today` queues one email per eligible
+ * `today ≥ D − lead` in the schedule's reminder unit (a `month` lead clamps
+ * at that month's last day) and `D ≥ today` queues one email per eligible
  * recipient. Occurrences already past (downtime) are skipped, never sent
  * late.
  *
@@ -77,9 +78,7 @@ class SendScheduleReminders extends Command
         ScheduleReminderRecipients $recipients,
     ): int {
         $envelope = $schedule->envelope;
-        // reminder_days is bounded by EnvelopeSchedule::MAX_REMINDER_DAYS.
-        $until = $today->addDays((int) $schedule->reminder_days)->min(ScheduleRule::parseDate('9999-12-31'));
-        $dates = $resolver->resolve($schedule->rule(), $today->toDateString(), $until->toDateString());
+        $dates = $this->occurrences($schedule, $today, $resolver);
 
         if ($envelope === null || $dates === []) {
             return 0;
@@ -117,5 +116,45 @@ class SendScheduleReminders extends Command
         }
 
         return $queued;
+    }
+
+    /**
+     * Upcoming occurrences whose reminder window has opened.
+     *
+     * A `day` lead opens `reminder_days` days before the occurrence (the
+     * issue-#15 rule, unchanged). A `month` lead opens on the occurrence's
+     * calendar day `reminder_days` months earlier, clamped to that month's
+     * last day (`subMonthsNoOverflow`: March 31 reminds from February 28).
+     * The resolver already drops occurrences before today; the explicit
+     * start-date filter keeps the month arithmetic exact instead of
+     * shifting the window's far edge.
+     *
+     * @return list<string> ISO dates, today included
+     */
+    private function occurrences(
+        EnvelopeSchedule $schedule,
+        CarbonImmutable $today,
+        ScheduleOccurrenceResolver $resolver,
+    ): array {
+        $days = (int) $schedule->reminder_days;
+        $never = ScheduleRule::parseDate('9999-12-31');
+
+        if ($schedule->reminder_unit === EnvelopeSchedule::REMINDER_UNIT_MONTH) {
+            // Over-resolve past the window's far edge, then keep exactly the
+            // occurrences whose clamped reminder start date has arrived.
+            $horizon = $today->addMonthsNoOverflow($days)->addDays(31)->min($never);
+            $dates = $resolver->resolve($schedule->rule(), $today->toDateString(), $horizon->toDateString());
+
+            return array_values(array_filter(
+                $dates,
+                fn (string $date): bool => ScheduleRule::parseDate($date)->subMonthsNoOverflow($days) <= $today,
+            ));
+        }
+
+        return $resolver->resolve(
+            $schedule->rule(),
+            $today->toDateString(),
+            $today->addDays($days)->min($never)->toDateString(),
+        );
     }
 }

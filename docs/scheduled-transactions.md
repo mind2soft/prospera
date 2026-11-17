@@ -72,7 +72,8 @@ $dates = (new ScheduleOccurrenceResolver)->resolve($rule, '2026-02-01', '2026-03
 ## Encrypted storage (implemented)
 
 `EnvelopeSchedule` persists the recurrence fields above using snake_case
-column names, with `envelope_id`, `amount`, nullable `reminder_days`,
+column names, with `envelope_id`, `amount`, nullable `reminder_days` with its
+`reminder_unit` (`day`, also for legacy nulls, or `month`),
 timestamps, and `deleted_at`. `weekdays` is JSON (empty for non-weekly rules).
 `start_date`/`end_date` stay ISO date strings, not timestamps. `rule()` adapts
 the model directly to the tested recurrence resolver.
@@ -96,8 +97,9 @@ the model directly to the tested recurrence resolver.
 - The first schedule save creates its envelope's key lazily in the same
   transaction; no key is created merely by creating an envelope. A missing
   key for an existing schedule fails closed instead of creating a replacement.
-- Saves validate recurrence fields, reminder days (null or 0–366,
-  `EnvelopeSchedule::MAX_REMINDER_DAYS`),
+- Saves validate recurrence fields, reminder lead times (null, or with the
+  `day` unit 0–366 `EnvelopeSchedule::MAX_REMINDER_DAYS`, with the `month`
+  unit 0–12 `EnvelopeSchedule::MAX_REMINDER_MONTHS`),
   and amount sign, including `saveQuietly`/eventless saves. HTTP validation,
   authorization and resource serialization are implemented separately at the
   API boundary. Numeric day/month/reminder fields must be integers, not
@@ -142,9 +144,10 @@ storage metadata (`id`, `envelope_id`, `profile_id`, `user_id`, `deleted_at`,
 Recurrence fields follow the canonical rules above. The API requires unique
 integer ISO weekdays in a JSON list; the model/resolver also normalize their
 order. End dates are inclusive and may not precede the start date.
-`reminder_days` may be null (no reminder) or an integer 0–366 (see
-[Payment reminders](#payment-reminders)). Unused weekday/day/month fields must
-be empty/null.
+`reminder_days` may be null (no reminder) or, with the `reminder_unit`
+(`day`, the legacy default, or `month`), 0–366 days or 0–12 months before
+the occurrence (see [Payment reminders](#payment-reminders)). Unused
+weekday/day/month fields must be empty/null.
 
 PATCH accepts partial definitions and validates the merged result against
 the **fresh locked row**, not stale route-bound data. When the period changes,
@@ -332,7 +335,8 @@ viewers never get the item; the API refuses them anyway.
   `resources/js/lib/schedule.ts` (`describeSchedule`): the rule ("Bi-weekly
   on Mon and Thu", "Monthly on day 31 (or the last day of shorter months)"),
   the bounds ("From Mar 1, 2026" / "From … to …"), the reminder ("No
-  reminder", "Remind on the day", "Remind 3 days before", pluralized) and the
+  reminder", "Remind on the day", "Remind 3 days before", "Remind 1 month
+  before", pluralized) and the
   API's next dates. Dates, weekday/month names, lists and numbers use the
   active locale's `Intl` formatters. The amount is shown with `Currency.vue`
   in the profile's latest published budget currency (minor units ÷ 100,
@@ -341,7 +345,9 @@ viewers never get the item; the API refuses them anyway.
 - **Dialog** (`ScheduleDialog.vue`) — amount, repeat period, start (or the
   one-off date), optional end date, weekday toggles (weekly/bi-weekly),
   day of month (monthly/yearly), month (yearly), and a reminder select
-  (None / Same day / Days before + a number). Only the fields of the chosen
+  (None / Same day / 1–3 days / 1 week / 2 weeks / 1 month before, plus a
+  free "Days before" input for any other lead time — also how pre-#117
+  schedules without a preset keep editing). Only the fields of the chosen
   period are shown and sent; the others are sent empty. The weekday, day of
   month and month default from the start date until the user sets them (or
   the edited schedule defines them). The typed amount is
@@ -373,20 +379,30 @@ by the **Payment reminders** toggle ([notifications](notifications.md)).
 ### When
 
 Each active (not soft-deleted) schedule with a non-null `reminder_days` `n`
-reminds every occurrence `D` with `D − n ≤ today ≤ D` — `n = 0` reminds on the
-day itself. Occurrences come from the canonical resolver over the window
-`[today, today + n]` (the application calendar day, UTC, like
-`ledgers:notify-expired`). Schedules with a null `reminder_days` and
-soft-deleted schedules get none.
+reminds every occurrence `D` with `D − lead ≤ today ≤ D`, where the lead is
+`n` days (unit `day`, the legacy default) or `n` calendar months (unit
+`month`). `n = 0` reminds on the day itself. Occurrences come from the
+canonical resolver over the window `[today, today + lead]` (the application
+calendar day, UTC, like `ledgers:notify-expired`). Schedules with a null
+`reminder_days` and soft-deleted schedules get none.
 
+- **Calendar-month leads.** The `month` unit uses calendar-month arithmetic,
+  never a fixed number of days: an occurrence `D` is reminded from
+  `D − n months`, computed with `subMonthsNoOverflow`. When that calendar day
+  does not exist, the window opens on the **last day of the shorter month** —
+  July 31 is reminded from June 30, March 31 from February 28 (or 29). The
+  run resolves occurrences past the window's far edge and keeps exactly those
+  whose clamped reminder start date has arrived.
 - **Catch-up, never late.** A run missed during downtime is caught up by the
   next run while the occurrence is still today or later. An occurrence that
   has already passed is **skipped, not sent late**: a reminder after the
   fact is noise rather than a warning.
-- **Bounded lead.** `reminder_days` is validated to at most 366
-  (`EnvelopeSchedule::MAX_REMINDER_DAYS`, mirrored by `MAX_REMINDER_DAYS` in
-  `resources/js/lib/schedule.ts`) by the API and the model, so a run's
-  window never spans more than a year.
+- **Bounded lead.** `reminder_days` is validated to at most 366 days or 12
+  months (`EnvelopeSchedule::MAX_REMINDER_DAYS` / `MAX_REMINDER_MONTHS`,
+  mirrored by `MAX_REMINDER_DAYS` in `resources/js/lib/schedule.ts`; the
+  month bound needs no frontend mirror — the month lead is a fixed one-month
+  preset and the free input is day-only) by the API and the model, so a
+  run's window never spans more than a year.
 - Reminding does not depend on materialization: an occurrence in a month
   without a published budget yet (e.g. the 1st of next month, reminded
   three days before) is still reminded.

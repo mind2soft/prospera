@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
 use InvalidArgumentException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Symfony\Component\Mime\Email;
 use Tests\TestCase;
 
@@ -143,6 +144,106 @@ final class PaymentReminderTest extends TestCase
         $this->assertSame([
             [$schedule->id, '2026-06-15', $this->owner->id],
             [$schedule->id, '2026-06-15', $this->member->id],
+        ], $this->queued());
+    }
+
+    /** @return iterable<string, array{int, string, string}> */
+    public static function dayLeads(): iterable
+    {
+        // [lead days, day before the window opens, window-open day]
+        yield '1 day' => [1, '2026-06-13', '2026-06-14'];
+        yield '2 days' => [2, '2026-06-12', '2026-06-13'];
+        yield '3 days' => [3, '2026-06-11', '2026-06-12'];
+        yield '1 week' => [7, '2026-06-07', '2026-06-08'];
+        yield '2 weeks' => [14, '2026-05-31', '2026-06-01'];
+        yield '30 days' => [30, '2026-05-15', '2026-05-16'];
+    }
+
+    #[DataProvider('dayLeads')]
+    public function test_every_day_lead_time_queues_once_when_its_window_opens(
+        int $days,
+        string $before,
+        string $on,
+    ): void {
+        // A start date without earlier occurrences keeps the runs before the
+        // window opens free of catch-up reminders.
+        $schedule = $this->schedule(['start_date' => '2026-06-15', 'reminder_days' => $days]);
+
+        $this->remindOn($before);
+        $this->assertSame([], $this->queued());
+
+        $this->remindOn($on);
+        $this->assertSame([
+            [$schedule->id, '2026-06-15', $this->owner->id],
+            [$schedule->id, '2026-06-15', $this->member->id],
+        ], $this->queued());
+    }
+
+    public function test_a_month_lead_queues_one_calendar_month_before(): void
+    {
+        $schedule = $this->schedule([
+            'start_date' => '2026-06-15', 'reminder_days' => 1, 'reminder_unit' => 'month',
+        ]);
+
+        $this->remindOn('2026-05-14');
+        $this->assertSame([], $this->queued());
+
+        $this->remindOn('2026-05-15');
+        $this->assertSame([
+            [$schedule->id, '2026-06-15', $this->owner->id],
+            [$schedule->id, '2026-06-15', $this->member->id],
+        ], $this->queued());
+
+        // Later runs never re-queue the same occurrence.
+        $this->remindOn('2026-06-14');
+        $this->assertCount(2, $this->queued());
+    }
+
+    public function test_a_month_lead_clamps_to_the_end_of_shorter_months(): void
+    {
+        // The day-31 monthly rule clamps too: February's occurrence is
+        // February 28. March 31's reminder window opens on February 28 —
+        // the last day of the shorter month — never on March 3 (overflow).
+        $schedule = $this->schedule([
+            'day_of_month' => 31, 'reminder_days' => 1, 'reminder_unit' => 'month',
+        ]);
+
+        $this->remindOn('2026-02-27');
+        $this->assertSame([
+            [$schedule->id, '2026-02-28', $this->owner->id],
+            [$schedule->id, '2026-02-28', $this->member->id],
+        ], $this->queued());
+
+        $this->remindOn('2026-02-28');
+        $this->assertSame([
+            [$schedule->id, '2026-02-28', $this->owner->id],
+            [$schedule->id, '2026-02-28', $this->member->id],
+            [$schedule->id, '2026-03-31', $this->owner->id],
+            [$schedule->id, '2026-03-31', $this->member->id],
+        ], $this->queued());
+    }
+
+    public function test_a_month_lead_is_not_a_fixed_number_of_days(): void
+    {
+        // June 31 does not exist: June's occurrence is June 30, and July 31's
+        // window opens on June 30 (one calendar month before), not July 1
+        // (30 days before).
+        $schedule = $this->schedule([
+            'day_of_month' => 31, 'reminder_days' => 1, 'reminder_unit' => 'month',
+        ]);
+
+        $this->remindOn('2026-06-29');
+        $this->assertSame([
+            [$schedule->id, '2026-06-30', $this->owner->id],
+            [$schedule->id, '2026-06-30', $this->member->id],
+        ], $this->queued());
+
+        $this->remindOn('2026-06-30');
+        $this->assertSame([
+            [$schedule->id, '2026-06-30', $this->owner->id],
+            [$schedule->id, '2026-06-30', $this->member->id],
+            [$schedule->id, '2026-07-31', $this->owner->id],
+            [$schedule->id, '2026-07-31', $this->member->id],
         ], $this->queued());
     }
 

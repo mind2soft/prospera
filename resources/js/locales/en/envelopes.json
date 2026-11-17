@@ -86,6 +86,7 @@
                 "noReminder": "No reminder",
                 "remindSameDay": "Remind on the day",
                 "remindDaysBefore": "Remind {n} day before | Remind {n} days before",
+                "remindMonthsBefore": "Remind {n} month before | Remind {n} months before",
                 "upcoming": "Next: {dates}",
                 "noUpcoming": "No upcoming dates"
             },
@@ -123,6 +124,12 @@
             "reminders": {
                 "none": "None",
                 "sameDay": "Same day",
+                "day1": "1 day before",
+                "day2": "2 days before",
+                "day3": "3 days before",
+                "week1": "1 week before",
+                "week2": "2 weeks before",
+                "month1": "1 month before",
                 "daysBefore": "Days before"
             },
             "validation": {

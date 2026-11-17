@@ -17,6 +17,7 @@ export type ScheduleInput = {
     day_of_month: number | null;
     month: number | null;
     reminder_days: number | null;
+    reminder_unit: 'day' | 'month' | null;
 };
 
 type SchedulePage = {

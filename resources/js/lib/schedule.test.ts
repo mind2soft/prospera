@@ -52,6 +52,7 @@ const schedule = (
     day_of_month: 15,
     month: null,
     reminder_days: null,
+    reminder_unit: null,
     created_at: null,
     updated_at: null,
     next_occurrences: [],
@@ -120,6 +121,15 @@ describe('describeSchedule()', () => {
         expect(summary({ reminder_days: 1000 }).reminder).toBe(
             'Remind 1,000 days before',
         );
+        expect(
+            summary({ reminder_days: 1, reminder_unit: 'month' }).reminder,
+        ).toBe('Remind 1 month before');
+        expect(
+            summary({ reminder_days: 2, reminder_unit: 'month' }).reminder,
+        ).toBe('Remind 2 months before');
+        expect(
+            summary({ reminder_days: 12, reminder_unit: 'month' }).reminder,
+        ).toBe('Remind 12 months before');
         expect(summary({}).upcoming).toBe('No upcoming dates');
         expect(
             summary({ next_occurrences: ['2026-03-15', '2026-04-15'] })
@@ -147,6 +157,14 @@ describe('describeSchedule()', () => {
         expect(summary({ reminder_days: 2 }, 'fr').reminder).toBe(
             'Rappel 2 jours avant',
         );
+        expect(
+            summary({ reminder_days: 1, reminder_unit: 'month' }, 'fr')
+                .reminder,
+        ).toBe('Rappel 1 mois avant');
+        expect(
+            summary({ reminder_days: 3, reminder_unit: 'month' }, 'fr')
+                .reminder,
+        ).toBe('Rappel 3 mois avant');
         expect(summary({ period: 'yearly', month: 3 }, 'fr').recurrence).toBe(
             'Chaque année, le 15 mars',
         );
@@ -256,6 +274,7 @@ describe('dialog drafts', () => {
             weekdays: [1, 4],
             day_of_month: null,
             reminder_days: 3,
+            reminder_unit: null,
             end_date: '2026-06-30',
         });
 
@@ -270,7 +289,44 @@ describe('dialog drafts', () => {
             day_of_month: null,
             month: null,
             reminder_days: 3,
+            reminder_unit: 'day',
         });
+    });
+
+    it('maps preset reminder leads to their stored (days, unit) pair', () => {
+        // Legacy rows (null unit) count days and still map to a preset.
+        expect(
+            draftFromSchedule(
+                schedule({ reminder_days: 3, reminder_unit: null }),
+                '2026-03-04',
+            ).reminder,
+        ).toBe('day3');
+        expect(
+            draftFromSchedule(
+                schedule({ reminder_days: 7, reminder_unit: null }),
+                '2026-03-04',
+            ).reminder,
+        ).toBe('week1');
+        // Presets with the month unit round-trip through the selector.
+        expect(
+            draftFromSchedule(
+                schedule({ reminder_days: 1, reminder_unit: 'month' }),
+                '2026-03-04',
+            ).reminder,
+        ).toBe('month1');
+        // A lead no preset matches keeps the free "days before" input.
+        expect(
+            draftFromSchedule(
+                schedule({ reminder_days: 5, reminder_unit: null }),
+                '2026-03-04',
+            ).reminder,
+        ).toBe('daysBefore');
+        expect(
+            draftFromSchedule(
+                schedule({ reminder_days: 30, reminder_unit: null }),
+                '2026-03-04',
+            ).reminder,
+        ).toBe('daysBefore');
     });
 
     it('sends only the fields the period uses', () => {
@@ -279,6 +335,7 @@ describe('dialog drafts', () => {
             day_of_month: 4,
             month: 3,
             reminder_days: null,
+            reminder_unit: null,
         });
         expect(
             toScheduleInput(
@@ -293,6 +350,15 @@ describe('dialog drafts', () => {
             day_of_month: null,
             month: null,
             reminder_days: 0,
+            reminder_unit: 'day',
+        });
+        expect(toScheduleInput(valid({ reminder: 'month1' }))).toMatchObject({
+            reminder_days: 1,
+            reminder_unit: 'month',
+        });
+        expect(toScheduleInput(valid({ reminder: 'week2' }))).toMatchObject({
+            reminder_days: 14,
+            reminder_unit: 'day',
         });
         expect(toScheduleInput(valid({ period: 'once' }))).toMatchObject({
             weekdays: [],

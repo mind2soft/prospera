@@ -81,8 +81,10 @@ export type EnvelopeSchedule = {
     weekdays: number[]; // ISO weekdays, Mon = 1 … Sun = 7
     day_of_month: number | null;
     month: number | null;
-    /** null = no reminder, 0 = same day, n = n days before. */
+    /** null = no reminder, 0 = same day, n = n units before. */
     reminder_days: number | null;
+    /** The unit of `reminder_days`; null (legacy) counts days. */
+    reminder_unit: 'day' | 'month' | null;
     created_at: string | null;
     updated_at: string | null;
     /** At most five upcoming ISO dates, today included. */

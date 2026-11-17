@@ -56,6 +56,7 @@ class EnvelopeScheduleRequest extends FormRequest
             'day_of_month' => ['sometimes', 'nullable', 'integer:strict', 'between:1,31'],
             'month' => ['sometimes', 'nullable', 'integer:strict', 'between:1,12'],
             'reminder_days' => ['sometimes', 'nullable', 'integer:strict', 'between:0,'.EnvelopeSchedule::MAX_REMINDER_DAYS],
+            'reminder_unit' => ['sometimes', 'nullable', 'string', Rule::in([EnvelopeSchedule::REMINDER_UNIT_DAY, EnvelopeSchedule::REMINDER_UNIT_MONTH])],
             'id' => ['missing'],
             'envelope_id' => ['missing'],
             'profile_id' => ['missing'],
@@ -75,7 +76,7 @@ class EnvelopeScheduleRequest extends FormRequest
     public function attributesFor(Envelope $envelope, ?EnvelopeSchedule $schedule = null): array
     {
         $input = Arr::only($this->validated(), [
-            'amount', 'period', 'start_date', 'end_date', 'weekdays', 'day_of_month', 'month', 'reminder_days',
+            'amount', 'period', 'start_date', 'end_date', 'weekdays', 'day_of_month', 'month', 'reminder_days', 'reminder_unit',
         ]);
         $definition = array_replace([
             'period' => $schedule?->period,
@@ -85,6 +86,7 @@ class EnvelopeScheduleRequest extends FormRequest
             'day_of_month' => $schedule?->day_of_month,
             'month' => $schedule?->month,
             'reminder_days' => $schedule?->reminder_days,
+            'reminder_unit' => $schedule?->reminder_unit,
         ], Arr::except($input, ['amount']));
 
         $weekly = in_array($definition['period'], ['weekly', 'biweekly'], true);
@@ -103,16 +105,30 @@ class EnvelopeScheduleRequest extends FormRequest
             }
         }
 
+        // A reminder without days has no unit; never leave a dangling one.
+        if ($definition['reminder_days'] === null) {
+            $definition['reminder_unit'] = null;
+        }
+
+        // A month unit counts calendar months and is bounded tighter than days.
+        $unit = $definition['reminder_unit'] ?? EnvelopeSchedule::REMINDER_UNIT_DAY;
         Validator::make($definition, [
             'end_date' => ['nullable', 'after_or_equal:start_date'],
             'weekdays' => $weekly ? ['required', 'array', 'min:1'] : ['array', 'size:0'],
             'day_of_month' => $monthly ? ['required'] : ['prohibited'],
             'month' => $definition['period'] === 'yearly' ? ['required'] : ['prohibited'],
+            'reminder_days' => $unit === EnvelopeSchedule::REMINDER_UNIT_MONTH
+                ? ['nullable', 'integer', 'between:0,'.EnvelopeSchedule::MAX_REMINDER_MONTHS]
+                : [],
         ])->validate();
 
         $attributes = Arr::only($definition, array_keys(Arr::except($input, ['amount'])));
         if ($schedule === null || $definition['period'] !== $schedule->period) {
             $attributes = $definition;
+        }
+        if ($definition['reminder_days'] === null && array_key_exists('reminder_days', $input)) {
+            // Clearing the reminder clears its unit, even when the client omits it.
+            $attributes['reminder_unit'] = null;
         }
         if (array_key_exists('amount', $input)) {
             $magnitude = $this->integer('amount');
