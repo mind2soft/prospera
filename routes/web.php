@@ -1,9 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EnvelopeController;
+use App\Http\Controllers\EnvelopeScheduleController;
 use App\Http\Controllers\FinancialProfileController;
 use App\Http\Controllers\FinancialProfileInviteController;
 use App\Http\Controllers\LedgerController;
@@ -155,6 +158,12 @@ Route::middleware(['auth', 'verified', EnsureAccountHasProfile::class])->group(f
 
         Route::prefix('envelopes')->name('envelopes.')->group(function () {
             Route::get('/', [EnvelopeController::class, 'apiIndex'])->name('index');
+            Route::scopeBindings()->prefix('{envelope}/schedules')->name('schedules.')->group(function () {
+                Route::get('/', [EnvelopeScheduleController::class, 'index'])->name('index');
+                Route::post('/', [EnvelopeScheduleController::class, 'store'])->name('store');
+                Route::patch('{schedule}', [EnvelopeScheduleController::class, 'update'])->name('update')->whereNumber('schedule');
+                Route::delete('{schedule}', [EnvelopeScheduleController::class, 'destroy'])->name('destroy')->whereNumber('schedule');
+            });
             Route::get('{envelope}/shares', [EnvelopeController::class, 'permissionsIndex'])->name('shares.index');
             Route::post('{envelope}/shares', [EnvelopeController::class, 'addPermission'])->name('shares.store');
             Route::patch('{envelope}/shares/{userId}', [EnvelopeController::class, 'updatePermission'])->name('shares.update');

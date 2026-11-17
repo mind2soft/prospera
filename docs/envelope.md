@@ -57,9 +57,10 @@ existing **profile members** of the owner (see
 - **Encryption at rest** — the amounts recorded against envelopes are
   encrypted in the database; envelope totals are computed by the server from
   the decrypted amounts (see [Encryption at rest](encryption.md)).
-- **Scheduled transactions (internal storage only)** — encrypted schedules
-  belong to envelopes and use envelope-scoped keys. The API/drawer and
-  automatic transactions are not available yet; see
+- **Scheduled transactions (definition API only)** — encrypted schedules
+  belong to envelopes and use envelope-scoped keys. Owner-only CRUD and
+  previews are available through the definition API; the drawer and automatic
+  transactions are not available yet. See
   [scheduled transactions](scheduled-transactions.md) for schema, recurrence,
   encryption, ownership, and implementation status.
 

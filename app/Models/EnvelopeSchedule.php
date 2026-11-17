@@ -22,7 +22,7 @@ use InvalidArgumentException;
 use LogicException;
 
 /**
- * Internal storage only: no HTTP endpoints or automatic materialization yet.
+ * Schedule definitions; automatic ledger materialization is not enabled yet.
  *
  * @property int $id
  * @property int $envelope_id
@@ -50,7 +50,7 @@ class EnvelopeSchedule extends Model implements HasEncryptedAmounts, HasImmutabl
 
     protected $attributes = ['weekdays' => '[]'];
 
-    // Future owner-only API resources must opt into exposing this money data.
+    // Only the owner-authorized API serializer opts into exposing this money data.
     protected $hidden = ['amount'];
 
     protected $casts = ['weekdays' => 'array'];

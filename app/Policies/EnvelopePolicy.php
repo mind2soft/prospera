@@ -11,7 +11,8 @@ use App\Services\ResourcePermissions;
 use Illuminate\Auth\Access\Response;
 
 /**
- * Envelope management is owner-only; anything else is invisible (404).
+ * Envelope management is owner-only. Schedules return 403 to people who can
+ * see the envelope's metadata; outsiders and other management abilities get 404.
  */
 class EnvelopePolicy
 {
@@ -33,6 +34,19 @@ class EnvelopePolicy
     public function transferOwnership(User $user, Envelope $envelope): Response
     {
         return $this->owner($user, $envelope);
+    }
+
+    public function manageSchedules(User $user, Envelope $envelope): Response
+    {
+        if ($envelope->isOwner($user)) {
+            return Response::allow();
+        }
+
+        $owner = $envelope->user;
+        $visible = ($owner !== null && FinancialProfile::membersShareAProfile($owner, $user))
+            || FinancialProfile::envelopeReferencedByProfilesOf($envelope->id, $user->id);
+
+        return $visible ? Response::deny() : Response::denyAsNotFound();
     }
 
     /**
