@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\DB;
  * Owner-only schedule definitions. Writes queue reconciliation of the
  * affected open ledgers after commit; deletion removes the schedule's
  * open-ledger rows synchronously (docs/scheduled-transactions.md).
- * Reminders are not sent yet.
+ * Reminders are sent by the daily `schedules:remind` run.
  */
 class EnvelopeScheduleController extends Controller
 {

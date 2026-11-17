@@ -2,13 +2,12 @@
 
 ## Implementation status
 
-[Issue #15](https://github.com/mind2soft/prospera/issues/15) is being delivered
+[Issue #15](https://github.com/mind2soft/prospera/issues/15) was delivered
 incrementally. **The recurrence resolver, encrypted storage, owner-only
 definition API, transaction provenance and materialization into open ledgers
-(with the daily `schedules:sync` catch-up) and the owner-only schedules
-drawer on the Envelopes page are implemented.** No reminders are sent: the
-reminder setting is stored only, the payment-reminder toggle stays disabled
-and there is no `schedules:remind` command yet.
+(with the daily `schedules:sync` catch-up), the owner-only schedules drawer
+on the Envelopes page and the daily payment reminders (`schedules:remind`)
+are implemented.**
 
 ## Calendar rules (implemented)
 
@@ -97,7 +96,8 @@ the model directly to the tested recurrence resolver.
 - The first schedule save creates its envelope's key lazily in the same
   transaction; no key is created merely by creating an envelope. A missing
   key for an existing schedule fails closed instead of creating a replacement.
-- Saves validate recurrence fields, reminder days (null or 0–2,147,483,647),
+- Saves validate recurrence fields, reminder days (null or 0–366,
+  `EnvelopeSchedule::MAX_REMINDER_DAYS`),
   and amount sign, including `saveQuietly`/eventless saves. HTTP validation,
   authorization and resource serialization are implemented separately at the
   API boundary. Numeric day/month/reminder fields must be integers, not
@@ -142,8 +142,9 @@ storage metadata (`id`, `envelope_id`, `profile_id`, `user_id`, `deleted_at`,
 Recurrence fields follow the canonical rules above. The API requires unique
 integer ISO weekdays in a JSON list; the model/resolver also normalize their
 order. End dates are inclusive and may not precede the start date.
-`reminder_days` may be null or an integer 0–2,147,483,647; **storing it does not
-send a reminder**. Unused weekday/day/month fields must be empty/null.
+`reminder_days` may be null (no reminder) or an integer 0–366 (see
+[Payment reminders](#payment-reminders)). Unused weekday/day/month fields must
+be empty/null.
 
 PATCH accepts partial definitions and validates the merged result against
 the **fresh locked row**, not stale route-bound data. When the period changes,
@@ -179,8 +180,9 @@ rows, consistently with key rotation and envelope lifecycle operations.
 Create and update queue reconciliation of the affected open ledgers after
 commit; DELETE removes the schedule's generated rows from open ledgers in the
 same database transaction (see [Materialization](#materialization-implemented)).
-No reminder mail is sent. The Envelopes page drawer below is the UI entry
-point.
+Reminders follow the stored `reminder_days` on the next daily
+[reminder run](#payment-reminders). The Envelopes page drawer below is the UI
+entry point.
 
 ## Materialization (implemented)
 
@@ -361,14 +363,85 @@ viewers never get the item; the API refuses them anyway.
   Scheduled rows following. The e2e queue is `database` with no worker, so
   the spec drains it (`drainQueue()` in `e2e/support.ts`) after each write.
 
-## Remaining work (#15)
+## Payment reminders
 
-- Daily `schedules:remind`: durable per-occurrence and per-recipient reminder
-  deduplication, send-time recipient/permission/settings checks, masked
-  amounts, and English/French mail content. See
-  [notification requirements](notifications.md) and the issue's reminder
-  acceptance criteria. Never put decrypted amounts in queued payloads.
-  Re-enable payment reminders only once sending is implemented and tested.
+`php artisan schedules:remind` (`App\Console\Commands\SendScheduleReminders`)
+runs daily (`->daily()->withoutOverlapping()->onOneServer()`) and queues
+[`App\Mail\PaymentReminder`](../app/Mail/PaymentReminder.php) emails, gated
+by the **Payment reminders** toggle ([notifications](notifications.md)).
+
+### When
+
+Each active (not soft-deleted) schedule with a non-null `reminder_days` `n`
+reminds every occurrence `D` with `D − n ≤ today ≤ D` — `n = 0` reminds on the
+day itself. Occurrences come from the canonical resolver over the window
+`[today, today + n]` (the application calendar day, UTC, like
+`ledgers:notify-expired`). Schedules with a null `reminder_days` and
+soft-deleted schedules get none.
+
+- **Catch-up, never late.** A run missed during downtime is caught up by the
+  next run while the occurrence is still today or later. An occurrence that
+  has already passed is **skipped, not sent late**: a reminder after the
+  fact is noise rather than a warning.
+- **Bounded lead.** `reminder_days` is validated to at most 366
+  (`EnvelopeSchedule::MAX_REMINDER_DAYS`, mirrored by `MAX_REMINDER_DAYS` in
+  `resources/js/lib/schedule.ts`) by the API and the model, so a run's
+  window never spans more than a year.
+- Reminding does not depend on materialization: an occurrence in a month
+  without a published budget yet (e.g. the 1st of next month, reminded
+  three days before) is still reminded.
+
+### Once per occurrence and recipient
+
+`schedule_reminders` holds one row per (schedule, occurrence date,
+recipient), with a unique index that **is** the atomic claim. The row is
+inserted (`insertOrIgnore`) and the mail queued in the same transaction —
+the `database` queue commits them together — so re-runs, overlapping runs,
+job retries and catch-up never double-send. Users filtered out at dispatch
+(unverified, toggle off) are not claimed: re-enabling reminders before the
+occurrence still reminds them.
+
+The claim is keyed on the date. An edit that moves an occurrence re-arms the
+reminder for the **new date only**; a reminder already queued for the old
+date no longer matches the schedule and is suppressed at send time. Rows
+cascade with their schedule (hard deletion only — soft-deleted schedules
+keep them) and with the recipient's account. Each run first prunes the
+claims of occurrences before today: those dates are never reminded again,
+so the table only holds claims that still prevent a double send.
+
+### Recipients
+
+The envelope **owner** plus every member of the **profiles referencing the
+envelope** — the profiles with a published budget assigning it
+(`Budget::publishedAssigning`), i.e. the profiles whose open ledgers the
+schedule materializes into. Draft-only assignments do not count.
+Recipients are deduplicated (one email per user per occurrence, however many
+profiles they share), **verified only**, and **re-resolved at send time**: a
+member who left the profile, or a profile whose budgets no longer assign the
+envelope, gets nothing.
+
+### Send time
+
+The mailable carries IDs only (schedule id, occurrence date, recipient id) —
+no name, address or amount rides in the (encrypted) queue payload. At send
+time it re-checks that the schedule still exists, is not soft-deleted, still
+has a reminder and still occurs on that date, that the date has not passed,
+that the recipient is still eligible (above) and verified, and the
+`User::wantsNotification(NotificationSettings::PAYMENT_REMINDERS)` gate
+(master and per-type).
+
+- **Amount masking.** The recipient's envelope permission is resolved at
+  send time. Below `viewer` (`none`, metadata-only profile members) the email
+  shows the envelope name and the date only — no amount line at all.
+- **Amount.** Decrypted in PHP from `EnvelopeSchedule::amount` (exact minor
+  units) only once masking passed, shown positive and formatted with the
+  currency of the latest published budget assigning the envelope in one of
+  the recipient's profiles — the occurrence month's budget first — else of
+  any referencing profile, else USD. No SQL touches the encrypted column.
+- **Localization.** Subject and plain-text body follow `users.locale`
+  (fallback `en`), from `lang/{en,fr}/mail.php` (`payment_reminder`). The
+  text view prints with `{!! !!}` (no `&amp;`) and ends with the "Manage your
+  notifications" link to Settings → Notifications.
 
 The recurrence unit suite runs without a database or Laravel boot:
 
@@ -376,7 +449,8 @@ The recurrence unit suite runs without a database or Laravel boot:
 vendor/bin/phpunit tests/Unit/Schedules
 vendor/bin/phpunit tests/Feature/EnvelopeScheduleStorageTest.php tests/Unit/Security
 vendor/bin/phpunit tests/Feature/EnvelopeScheduleApiTest.php
+php artisan test tests/Feature/PaymentReminderTest.php
 php artisan test --filter='ScheduleMaterializationTest|ScheduleLimitNotificationTest|PostgresScheduleDeletionTest|EnvelopeLimitCheckerTest'
 npx vitest run resources/js/lib/schedule.test.ts
-TZ=UTC npm run e2e -- e2e/schedule-api.spec.ts e2e/schedules.spec.ts e2e/ledger.spec.ts
+TZ=UTC npm run e2e -- e2e/schedule-api.spec.ts e2e/schedules.spec.ts e2e/ledger.spec.ts e2e/notifications.spec.ts
 ```

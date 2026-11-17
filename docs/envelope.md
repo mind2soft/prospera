@@ -101,8 +101,10 @@ existing **profile members** of the owner (see
   would aggregate entries across every profile using the envelope.
 - **Notification emails follow the same masking rule**: an envelope's
   owner and contributors are emailed when a ledger recording crosses its
-  monthly allocation, and holders of less than `viewer` permission receive
-  no amounts at all ([notifications.md](notifications.md)).
+  monthly allocation, payment reminders reach the members of the profiles
+  referencing the envelope, and holders of less than `viewer` permission
+  receive no amounts at all ([notifications.md](notifications.md),
+  [scheduled transactions](scheduled-transactions.md#payment-reminders)).
 
 ## API
 

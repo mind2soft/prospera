@@ -101,34 +101,54 @@ test('a single toggle persists without touching the others', async ({
     ).toBeChecked();
 });
 
-test('notifications that are not implemented yet are disabled, marked "Coming soon"', async ({
+test('every notification toggle is enabled — none is marked "Coming soon"', async ({
     page,
 }) => {
     await login(page);
     await visitNotifications(page);
 
-    const toggle = page.getByRole('switch', { name: 'Payment reminders' });
-    await expect(toggle).toBeDisabled();
-    await expect(toggle).not.toBeChecked();
-    await expect(toggle).toHaveAccessibleDescription('Coming soon');
+    await expect(page.getByText('Coming soon')).toHaveCount(0);
 
-    await expect(
-        page.locator('[data-test="notifications-coming-soon"]'),
-    ).toHaveCount(1);
+    for (const name of [
+        'Payment reminders',
+        'Profile invitations',
+        'Ledger expired',
+        'Contributor transactions',
+        'Envelope limit exceeded',
+    ]) {
+        await expect(page.getByRole('switch', { name })).toBeEnabled();
+    }
+});
 
-    // The implemented ones stay interactive.
+test('the Payment reminders toggle autosaves and persists across reloads', async ({
+    page,
+}) => {
+    await login(page);
+    await visitNotifications(page);
+
+    const reminders = page.getByRole('switch', { name: 'Payment reminders' });
+    await expect(reminders).toBeEnabled();
+    await expect(reminders).toBeChecked();
+
+    // Autosave on toggle — no save button; the choice must survive a reload.
+    await reminders.click();
+    await expect(reminders).not.toBeChecked();
     await expect(
-        page.getByRole('switch', { name: 'Profile invitations' }),
-    ).toBeEnabled();
+        page.locator('[data-test="notifications-toggle-payment_reminders"]'),
+    ).not.toHaveClass(/opacity-60/);
+
+    await visitNotifications(page);
+    const reloaded = page.getByRole('switch', { name: 'Payment reminders' });
+    await expect(reloaded).not.toBeChecked();
+    await expect(reloaded).toBeEnabled();
+
+    // Restore the default so other specs start from a clean state.
+    await reloaded.click();
+    await expect(reloaded).toBeChecked();
+    await visitNotifications(page);
     await expect(
-        page.getByRole('switch', { name: 'Ledger expired' }),
-    ).toBeEnabled();
-    await expect(
-        page.getByRole('switch', { name: 'Contributor transactions' }),
-    ).toBeEnabled();
-    await expect(
-        page.getByRole('switch', { name: 'Envelope limit exceeded' }),
-    ).toBeEnabled();
+        page.getByRole('switch', { name: 'Payment reminders' }),
+    ).toBeChecked();
 });
 
 test('the Ledger expired toggle autosaves and persists across reloads', async ({

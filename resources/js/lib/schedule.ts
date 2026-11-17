@@ -23,8 +23,8 @@ export const ISO_WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 /** Same maximum as manual transactions: 999,999,999.99 currency units. */
 export const MAX_AMOUNT_MINOR_UNITS = 99_999_999_999;
 
-/** The server's bound for `reminder_days`. */
-export const MAX_REMINDER_DAYS = 2_147_483_647;
+/** The server's bound for `reminder_days` (EnvelopeSchedule::MAX_REMINDER_DAYS). */
+export const MAX_REMINDER_DAYS = 366;
 
 /** A vue-i18n `t` with named arguments and an optional plural choice. */
 export type Translate = (

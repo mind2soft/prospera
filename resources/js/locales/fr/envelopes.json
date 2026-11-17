@@ -109,7 +109,6 @@
                 "month": "Mois",
                 "reminder": "Rappel",
                 "reminderDays": "Jours avant",
-                "remindersNote": "Les rappels par courriel ne sont pas encore envoyés.",
                 "save": "Enregistrer l’échéancier",
                 "create": "Ajouter l’échéancier",
                 "saving": "Enregistrement…"
@@ -134,7 +133,7 @@
                 "weekdays": "Choisissez au moins un jour de la semaine.",
                 "dayOfMonth": "Saisissez un jour entre 1 et 31.",
                 "month": "Choisissez un mois.",
-                "reminderDays": "Saisissez un nombre entier de jours, 1 ou plus."
+                "reminderDays": "Saisissez un nombre entier de jours, de 1 à {max}."
             },
             "delete": {
                 "title": "Supprimer l’échéancier ?",

@@ -226,7 +226,7 @@ final class EnvelopeScheduleApiTest extends TestCase
         yield 'weekly numeric strings' => [['period' => 'weekly', 'day_of_month' => null, 'weekdays' => ['1']], 'weekdays.0'];
         yield 'weekday object, not list' => [['weekdays' => ['monday' => 1]], 'weekdays'];
         yield 'negative reminder' => [['reminder_days' => -1], 'reminder_days'];
-        yield 'oversized reminder' => [['reminder_days' => 2147483648], 'reminder_days'];
+        yield 'oversized reminder' => [['reminder_days' => 367], 'reminder_days'];
         foreach (['id', 'envelope_id', 'profile_id', 'user_id', 'deleted_at', 'created_at', 'updated_at'] as $field) {
             yield "reserved $field" => [[$field => null], $field];
         }

@@ -55,7 +55,7 @@ class EnvelopeScheduleRequest extends FormRequest
             'weekdays.*' => ['integer:strict', 'between:1,7', 'distinct'],
             'day_of_month' => ['sometimes', 'nullable', 'integer:strict', 'between:1,31'],
             'month' => ['sometimes', 'nullable', 'integer:strict', 'between:1,12'],
-            'reminder_days' => ['sometimes', 'nullable', 'integer:strict', 'between:0,2147483647'],
+            'reminder_days' => ['sometimes', 'nullable', 'integer:strict', 'between:0,'.EnvelopeSchedule::MAX_REMINDER_DAYS],
             'id' => ['missing'],
             'envelope_id' => ['missing'],
             'profile_id' => ['missing'],

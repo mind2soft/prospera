@@ -332,6 +332,16 @@ describe('dialog drafts', () => {
         expect(
             validateDraft(valid({ reminder: 'daysBefore', reminderDays: '7' })),
         ).toEqual({});
+        expect(
+            validateDraft(
+                valid({ reminder: 'daysBefore', reminderDays: '366' }),
+            ),
+        ).toEqual({});
+        expect(
+            validateDraft(
+                valid({ reminder: 'daysBefore', reminderDays: '367' }),
+            ),
+        ).toHaveProperty('reminder_days');
     });
 
     it('accepts only real calendar dates', () => {

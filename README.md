@@ -19,11 +19,11 @@ the filing cabinet.
 - **Ledger** — a running log of expenses and revenues, one line at a time
 - **Envelopes** — category envelopes (housing, groceries, fun…) with a name,
   a direction (expense/revenue) and a color. Fully CRUD-able.
-- **Scheduled transactions** — recurring envelope schedules (owner-only API)
-  materialized as read-only, badged entries in open ledgers for months
-  covered by a published budget
-  ([docs/scheduled-transactions.md](docs/scheduled-transactions.md));
-  the schedule drawer and reminders are still planned.
+- **Scheduled transactions** — recurring envelope schedules, managed by the
+  envelope owner from a drawer on the Envelopes page, materialized as
+  read-only, badged entries in open ledgers for months covered by a
+  published budget, with optional email reminders before each occurrence
+  ([docs/scheduled-transactions.md](docs/scheduled-transactions.md)).
 - **Getting started** — a first-login guide, live setup progress, and concise
   help for envelopes, ledgers, transactions and budgets
   ([docs/onboarding.md](docs/onboarding.md))
@@ -38,10 +38,9 @@ the filing cabinet.
   (sanitized markdown per locale, with English fallback), linked from the
   landing footer, the sign-up/login pages and the user menu.
 - **Notification settings** — a master switch plus per-type toggles that
-  gate every system email at send time. Profile-invitation, ledger-expired,
-  contributor-transaction and envelope-limit emails exist today; payment
-  reminders are TODO (not yet implemented — the toggle is shown disabled,
-  "Coming soon").
+  gate every system email at send time: payment reminders, ledger expired,
+  contributor transactions, envelope limit exceeded and profile invitations
+  ([docs/notifications.md](docs/notifications.md)).
 
 Design docs live in [`docs/`](docs/): [getting started](docs/onboarding.md),
 [dashboard](docs/dashboard.md),
@@ -198,17 +197,20 @@ ledger is reported to its owner and the profile members once, when the
 daily run first detects it (`php artisan ledgers:notify-expired` — see
 [docs/notifications.md](docs/notifications.md)), and scheduled transactions
 are reconciled daily in every open ledger as an idempotent catch-up for lost
-jobs or downtime (`php artisan schedules:sync` — see
+jobs or downtime (`php artisan schedules:sync`), and payment reminders are
+queued daily, once per schedule occurrence and recipient, skipping
+occurrences already past (`php artisan schedules:remind` — see
 [docs/scheduled-transactions.md](docs/scheduled-transactions.md)).
 Schedule, budget and ledger changes also queue reconciliation jobs, which the
 same queue worker runs.
 
-Emails (profile invitations, contact messages) are queued on the `database`
-queue. In production there is no long-lived worker (shared hosting): the
-scheduler runs `php artisan queue:work --stop-when-empty --max-time=50` every
-minute, in the background and without overlapping, and failed jobs are pruned
-after 30 days (`queue:prune-failed --hours=720`). Mails retry 5 times with a
-backoff, then land in `failed_jobs` and the log (`php artisan queue:failed`,
+Emails (notifications, profile invitations, contact messages) are queued on
+the `database` queue. In production there is no long-lived worker (shared
+hosting): the scheduler runs
+`php artisan queue:work --stop-when-empty --max-time=50` every minute, in the
+background and without overlapping, and failed jobs are pruned after 30 days
+(`queue:prune-failed --hours=720`). Mails retry 5 times with a backoff, then
+land in `failed_jobs` and the log (`php artisan queue:failed`,
 `php artisan queue:retry all`).
 
 **In production, the scheduler is mandatory** — without it no email is ever
