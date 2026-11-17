@@ -9,5 +9,6 @@ parameters:
         - config/
         - database/
         - routes/
+        - scripts/ci/assert-test-runtime.php
 
     level: 8

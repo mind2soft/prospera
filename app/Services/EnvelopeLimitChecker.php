@@ -137,13 +137,24 @@ final class EnvelopeLimitChecker
         // ever — the unique index is the atomic claim. A concurrent crossing
         // or a job retry lands here and stops; a newly published budget
         // revision (a new budget_id) re-arms the check.
+        //
+        // The claim insert runs in its own nested transaction: the expected
+        // unique violation must roll back that savepoint instead of aborting
+        // the enclosing recording transaction (PostgreSQL refuses every
+        // further statement after a failed one; SQLite only tolerates it).
+        // The catch lives outside the transaction so the violation is the
+        // exception that triggers the savepoint rollback.
+        $claimed = true;
+
         try {
-            DB::table('envelope_limit_notifications')->insert([
-                'budget_id' => $budget->id,
-                'envelope_id' => $envelope->id,
-                'ledger_id' => $ledger->id,
-                'notified_at' => now(),
-            ]);
+            DB::transaction(function () use ($budget, $envelope, $ledger): void {
+                DB::table('envelope_limit_notifications')->insert([
+                    'budget_id' => $budget->id,
+                    'envelope_id' => $envelope->id,
+                    'ledger_id' => $ledger->id,
+                    'notified_at' => now(),
+                ]);
+            });
         } catch (QueryException $exception) {
             // Only a unique-constraint violation means "already claimed" —
             // every other database error surfaces instead of being masked
@@ -153,7 +164,11 @@ final class EnvelopeLimitChecker
                 throw $exception;
             }
 
-            return; // already claimed — never double-send
+            $claimed = false; // already claimed — never double-send
+        }
+
+        if (! $claimed) {
+            return;
         }
 
         $this->dispatchMails($budget, $envelope, $ledger, $transaction);

@@ -40,6 +40,90 @@ jobs:
       - name: Run CI Checks
         run: composer ci:check
 
+  # The release-gating database checks (issue #84): the full backend suite
+  # runs on the production stack — PostgreSQL 10.23 (the production major)
+  # and PHP 8.4 (the production runtime). SQLite cannot exercise PostgreSQL
+  # row/shared locks, varchar length enforcement or identical DDL and
+  # transaction behavior, and the two-connection barrier tests (issues #55,
+  # #80, #81) only run when PostgreSQL is reachable. The default SQLite
+  # checks above stay for fast feedback.
+  postgres:
+    runs-on: ubuntu-latest
+
+    services:
+      # The production major (10.23, confirmed by the maintainer — an EOL
+      # upstream release). Only the variant tags remain on Docker Hub.
+      postgres:
+        image: postgres:10.23-bullseye
+        env:
+          POSTGRES_USER: prospera
+          POSTGRES_PASSWORD: prospera
+          POSTGRES_DB: prospera_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U prospera -d prospera_ci"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      # Explicit connection overrides: the phpunit.xml defaults (in-memory
+      # SQLite) only apply when the real environment leaves these unset.
+      # DB_URL is cleared so a stray URL can never redirect the connection.
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_DATABASE: prospera_ci
+      DB_USERNAME: prospera
+      DB_PASSWORD: prospera
+      DB_URL: ''
+      # The two-connection barrier tests own a separate, disposable database
+      # on the same server (their PGDATABASE default is never the app's).
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: prospera
+      PGPASSWORD: prospera
+      PGDATABASE: prospera_barrier_testing
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql
+          tools: composer:v2
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      # Installs the dependencies, creates .env with an APP_KEY, migrates —
+      # against PostgreSQL through the environment above — and builds the
+      # assets the feature tests render.
+      - name: Setup Application
+        run: composer setup
+
+      # Fail fast and visibly when the suite would silently run on the
+      # wrong stack: the expected driver, server major and PHP minor are
+      # asserted before any test runs (no credentials are printed).
+      - name: Assert the PostgreSQL/PHP 8.4 test runtime
+        run: php scripts/ci/assert-test-runtime.php
+        env:
+          EXPECTED_DB_DRIVER: pgsql
+          EXPECTED_DB_SERVER: '10.'
+          EXPECTED_PHP: '8.4'
+
+      - name: Run tests on PostgreSQL
+        run: php artisan test
+
   # Known vulnerabilities in the locked dependencies: Composer's (all
   # shipped), npm's runtime ones at high severity or above (build-only
   # devDependencies never reach browsers or the server).

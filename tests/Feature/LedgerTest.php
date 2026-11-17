@@ -15,6 +15,7 @@ use App\Models\User;
 use App\Services\ResourcePermissions;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use LogicException;
 use Tests\Concerns\CountsQueries;
@@ -1301,6 +1302,18 @@ class LedgerTest extends TestCase
             ->delete('/__mis-bound/{ledger}/shares/{userId}', [BudgetController::class, 'removePermission']);
 
         $ledger = $this->createLedger($this->user);
+
+        // The mis-binding only bites when the two resources share an id:
+        // SQLite's shared rowid counter gives that naturally, PostgreSQL
+        // sequences are per table, so pin the budgets sequence to the
+        // ledger's id (issue #84's PostgreSQL release checks).
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement(
+                "SELECT setval(pg_get_serial_sequence('budgets', 'id'), ?, false)",
+                [$ledger->id],
+            );
+        }
+
         $budget = $this->createPublishedBudget($this->user);
         $budget->permissions()->create(['user_id' => $this->member->id, 'permission' => BudgetPermission::PERMISSION_VIEWER]);
         $this->assertSame($ledger->id, $budget->id);
