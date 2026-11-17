@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Policies;
 
 use App\Models\Transaction;
@@ -15,7 +17,15 @@ class TransactionPolicy
      */
     public function delete(User $user, Transaction $transaction): Response
     {
-        $permission = $transaction->ledger->permissionFor($user);
+        $ledger = $transaction->ledger;
+
+        // The ledger_id FK cascades: a persisted transaction always has its
+        // ledger; a null one means the row is orphaned — invisible.
+        if ($ledger === null) {
+            return Response::denyAsNotFound();
+        }
+
+        $permission = $ledger->permissionFor($user);
 
         if ($permission === ResourcePermissions::NONE) {
             return Response::denyAsNotFound();

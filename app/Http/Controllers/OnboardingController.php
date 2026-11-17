@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Services\OnboardingProgress;
@@ -16,7 +18,9 @@ class OnboardingController extends Controller
     /** Send a first-time user through the short getting-started guide. */
     public function dashboard(Request $request): Response|RedirectResponse
     {
-        if ($request->user()->onboarding_seen_at === null) {
+        $user = $this->currentUser($request);
+
+        if ($user->onboarding_seen_at === null) {
             return to_route('onboarding');
         }
 
@@ -25,8 +29,10 @@ class OnboardingController extends Controller
 
     public function show(Request $request): Response
     {
-        if ($request->user()->onboarding_seen_at === null) {
-            $request->user()->forceFill(['onboarding_seen_at' => now()])->save();
+        $user = $this->currentUser($request);
+
+        if ($user->onboarding_seen_at === null) {
+            $user->forceFill(['onboarding_seen_at' => now()])->save();
         }
 
         return Inertia::render('Onboarding');

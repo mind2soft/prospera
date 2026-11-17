@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Models\Concerns\MatchesEmail;
@@ -10,6 +12,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * @property int $id
@@ -185,9 +188,18 @@ class FinancialProfileInvite extends Model
      */
     public function context(): array
     {
+        $profile = $this->profile;
+        $invitedBy = $this->invitedBy;
+
+        // The profile_id and invited_by FKs cascade: while the invite
+        // exists, its profile and issuer do too.
+        if ($profile === null || $invitedBy === null) {
+            throw new LogicException('The invite has no profile or issuer.');
+        }
+
         return [
-            'profile' => $this->profile->name,
-            'inviter' => $this->invitedBy->name,
+            'profile' => $profile->name,
+            'inviter' => $invitedBy->name,
             'email' => $this->email,
             'role' => $this->role,
         ];
@@ -248,27 +260,30 @@ class FinancialProfileInvite extends Model
                 return;
             }
 
-            // An expired reservation no longer grants anything: the owner's
-            // pending list stops showing (and offering to revoke) invites
-            // once they expire, so a grant past expiry would be invisible
-            // to them.
+            $profile = $invite->profile;
+
+            // The profile_id FK cascades: while the invite exists, its
+            // profile does too.
+            if ($profile === null) {
+                throw new LogicException('The reserved invite has no profile.');
+            }
+
             if (! $invite->isExpired()
                 && self::sameEmail($invite->email, $user->email)
-                && ! $invite->profile->isMember($user)) {
-                $invite->profile->members()->attach($user->id, $invite->membershipPivotAttributes());
-
-                // The account registered through the invite: the shared
-                // profile becomes their default (their only membership —
-                // issue #41, completing #39's intent).
-                FinancialProfile::ensureDefaultFor($user);
-            } else {
-                FinancialProfile::ensureDefaultFor($user);
+                && ! $profile->isMember($user)) {
+                $profile->members()->attach($user->id, $invite->membershipPivotAttributes());
             }
+
+            // The account registered through the invite: the shared
+            // profile becomes their default (their only membership —
+            // issue #41, completing #39's intent); every other case seeds
+            // a personal default profile to keep the account usable.
+            FinancialProfile::ensureDefaultFor($user);
 
             $invite->consume();
 
-            if ($invite->profile->isMember($user)) {
-                self::deleteRedundantFor($invite->profile, $user);
+            if ($profile->isMember($user)) {
+                self::deleteRedundantFor($profile, $user);
             }
         });
     }

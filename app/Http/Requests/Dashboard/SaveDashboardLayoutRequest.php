@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests\Dashboard;
 
+use App\Http\Requests\Concerns\ResolvesUser;
 use App\Services\Dashboard\DashboardLayoutValidator;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
@@ -14,6 +17,8 @@ use Illuminate\Support\Facades\Gate;
  */
 class SaveDashboardLayoutRequest extends FormRequest
 {
+    use ResolvesUser;
+
     public function authorize(): Response
     {
         return Gate::inspect('view', $this->route('profile'));
@@ -38,10 +43,10 @@ class SaveDashboardLayoutRequest extends FormRequest
     /**
      * The normalized widget configurations, in payload (display) order.
      *
-     * @return list<array{id?: int, type: string, title: string|null, view_type: string, column_width: int, period: array{type: string, range: int}, selection: list<array<string, mixed>>}>
+     * @return list<array{id: int|null, type: string, title: string|null, view_type: string, column_width: int, period: array{type: string, range: int}, selection: list<array<string, mixed>>}>
      */
     public function widgets(DashboardLayoutValidator $validator): array
     {
-        return $validator->validate((array) $this->validated('widgets'), $this->user());
+        return $validator->validate((array) $this->validated('widgets'), $this->currentUser());
     }
 }

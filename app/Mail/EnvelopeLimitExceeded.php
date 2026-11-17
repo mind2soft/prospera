@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Mail;
 
 use App\Mail\Concerns\RetriesDelivery;
@@ -151,11 +153,13 @@ class EnvelopeLimitExceeded extends Mailable implements ShouldBeEncrypted, Shoul
         // The recipient and the locale are resolved **here**, at send time
         // (`to()` appends, so any queued hint address is cleared first).
         // `Mailable::send()` renders inside this locale.
+        $locale = $recipient->locale;
+
         $this->to = [];
         $this->to($recipient->email);
         $this->locale(
-            array_key_exists($recipient->locale, config('app.available_locales'))
-                ? $recipient->locale
+            $locale !== null && array_key_exists($locale, config('app.available_locales'))
+                ? $locale
                 : 'en',
         );
 
@@ -207,14 +211,22 @@ class EnvelopeLimitExceeded extends Mailable implements ShouldBeEncrypted, Shoul
             return null;
         }
 
+        $monthStart = CarbonImmutable::create($budget->effective_year, $budget->effective_month, 1);
+
+        if ($monthStart === null) {
+            // An unresolvable month window renders the notification stale:
+            // no amounts rather than a wrong one.
+            return null;
+        }
+
         $allocatedMinor = Money::toMinorUnits($allocation->amount);
         $spentMinor = Transaction::query()
             ->select(['id', 'ledger_id', 'envelope_id', 'event_at', 'amount'])
             ->where('ledger_id', $this->ledgerId)
             ->where('envelope_id', $this->envelopeId)
             ->whereBetween('event_at', [
-                CarbonImmutable::create($budget->effective_year, $budget->effective_month, 1)->startOfDay(),
-                CarbonImmutable::create($budget->effective_year, $budget->effective_month, 1)->endOfMonth()->endOfDay(),
+                $monthStart->startOfDay(),
+                $monthStart->endOfMonth()->endOfDay(),
             ])
             ->get()
             ->sum(fn (Transaction $transaction): int => Money::toMinorUnits($transaction->amount));
@@ -252,7 +264,13 @@ class EnvelopeLimitExceeded extends Mailable implements ShouldBeEncrypted, Shoul
             return '';
         }
 
-        return CarbonImmutable::create($budget->effective_year, $budget->effective_month, 1)
+        $monthStart = CarbonImmutable::create($budget->effective_year, $budget->effective_month, 1);
+
+        if ($monthStart === null) {
+            return '';
+        }
+
+        return $monthStart
             ->settings(['locale' => app()->getLocale()])
             ->isoFormat('MMMM Y');
     }

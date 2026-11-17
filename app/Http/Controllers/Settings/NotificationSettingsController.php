@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
@@ -16,8 +18,10 @@ class NotificationSettingsController extends Controller
      */
     public function edit(Request $request): Response
     {
+        $user = $this->currentUser($request);
+
         return Inertia::render('settings/Notifications', [
-            'settings' => $request->user()->notification_settings->toArray(),
+            'settings' => $user->notification_settings->toArray(),
         ]);
     }
 
@@ -29,11 +33,12 @@ class NotificationSettingsController extends Controller
     public function update(NotificationSettingsUpdateRequest $request): JsonResponse
     {
         $validated = $request->validated();
+        $user = $this->currentUser($request);
 
-        $settings = $request->user()->notification_settings->with($validated);
+        $settings = $user->notification_settings->with($validated);
 
-        $request->user()->notification_settings = $settings;
-        $request->user()->save();
+        $user->notification_settings = $settings;
+        $user->save();
 
         return response()->json(['settings' => $settings->toArray()]);
     }

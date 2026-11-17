@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Profile\StoreInviteRequest;
@@ -18,6 +20,7 @@ use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use LogicException;
 
 class FinancialProfileInviteController extends Controller
 {
@@ -74,6 +77,7 @@ class FinancialProfileInviteController extends Controller
     public function store(StoreInviteRequest $request, FinancialProfile $profile): JsonResponse
     {
         $validated = $request->validated();
+        $user = $this->currentUser($request);
 
         $alreadyMember = $profile->members()->forEmail($validated['email'], 'users.email')->exists();
 
@@ -85,7 +89,7 @@ class FinancialProfileInviteController extends Controller
 
         $rawKey = FinancialProfileInvite::generateKey();
 
-        $invite = DB::transaction(function () use ($profile, $validated, $rawKey, $request): FinancialProfileInvite {
+        $invite = DB::transaction(function () use ($user, $profile, $validated, $rawKey): FinancialProfileInvite {
             // The profile's invites for the email, locked: a registration
             // reserving one of them (CreateNewUser locks the invite too)
             // cannot slip in between the check and the replacement.
@@ -113,7 +117,7 @@ class FinancialProfileInviteController extends Controller
                 'invite_key' => FinancialProfileInvite::keyHash($rawKey),
                 'email' => $validated['email'],
                 'role' => $validated['role'] ?? FinancialProfileInvite::ROLE_COLLABORATOR,
-                'invited_by' => $request->user()->id,
+                'invited_by' => $user->id,
                 'expires_at' => now()->addHours(48),
             ]);
         });
@@ -167,7 +171,7 @@ class FinancialProfileInviteController extends Controller
     {
         abort_if(FinancialProfileInvite::findByKey($inviteKey) === null, 404);
 
-        $profile = $this->grantMembership($inviteKey, $request->user());
+        $profile = $this->grantMembership($inviteKey, $this->currentUser($request));
 
         return response()->json([
             'profile' => [
@@ -186,8 +190,9 @@ class FinancialProfileInviteController extends Controller
      */
     public function decline(Request $request, string $inviteKey): JsonResponse
     {
-        DB::transaction(function () use ($request, $inviteKey): void {
-            /** @var FinancialProfileInvite|null $invite */
+        $user = $this->currentUser($request);
+
+        DB::transaction(function () use ($user, $inviteKey): void {
             $invite = FinancialProfileInvite::query()
                 ->where('invite_key', FinancialProfileInvite::keyHash($inviteKey))
                 ->lockForUpdate()
@@ -195,7 +200,7 @@ class FinancialProfileInviteController extends Controller
 
             abort_if($invite === null || $invite->isReserved(), 404);
 
-            if (! FinancialProfileInvite::sameEmail($invite->email, $request->user()->email)) {
+            if (! FinancialProfileInvite::sameEmail($invite->email, $user->email)) {
                 throw ValidationException::withMessages([
                     'invite_key' => __('This invite was issued to another email address.'),
                 ]);
@@ -225,10 +230,13 @@ class FinancialProfileInviteController extends Controller
         $invite = FinancialProfileInvite::findByKey($inviteKey);
 
         if ($invite !== null && ! $invite->isReserved() && ! $invite->isExpired()) {
-            $user = $request->user();
+            $user = $this->currentUser($request);
 
+            // A missing profile relation is impossible while the invite
+            // exists (profile FK cascade) — a null one simply has no
+            // membership to report.
             $error = $invite->usageError($user->email)
-                ?? ($invite->profile->isMember($user) ? 'You are already a member of this profile.' : null);
+                ?? ($invite->profile?->isMember($user) ? 'You are already a member of this profile.' : null);
 
             if ($error !== null) {
                 Inertia::flash('toast', ['type' => 'error', 'message' => __($error)]);
@@ -248,7 +256,6 @@ class FinancialProfileInviteController extends Controller
     {
         try {
             return DB::transaction(function () use ($inviteKey, $user): FinancialProfile {
-                /** @var FinancialProfileInvite|null $invite */
                 $invite = FinancialProfileInvite::query()
                     ->where('invite_key', FinancialProfileInvite::keyHash($inviteKey))
                     ->lockForUpdate()
@@ -263,6 +270,10 @@ class FinancialProfileInviteController extends Controller
                 }
 
                 $profile = $invite->profile;
+
+                // The profile_id FK cascades: while the invite exists, its
+                // profile does too.
+                abort_if($profile === null, 404);
 
                 if ($profile->isMember($user)) {
                     throw ValidationException::withMessages([
@@ -285,8 +296,10 @@ class FinancialProfileInviteController extends Controller
 
     /**
      * The stored invite_key (a hash) is deliberately not exposed.
+     * toISOString() reports null for an invalid date — the framework's
+     * own JSON encoding of an invalid Carbon does the same.
      *
-     * @return array<string, string|int|bool>
+     * @return array<string, bool|int|string|null>
      */
     private function serialize(FinancialProfileInvite $invite): array
     {
@@ -318,10 +331,19 @@ class FinancialProfileInviteController extends Controller
             return;
         }
 
+        // The invited_by and profile_id FKs cascade: while the invite
+        // exists, its issuer and profile do too.
+        $invitedBy = $invite->invitedBy;
+        $profile = $invite->profile;
+
+        if ($invitedBy === null || $profile === null) {
+            throw new LogicException('The invite has no issuer or profile.');
+        }
+
         Mail::to($invite->email)->queue(new ProfileInvite(
-            inviterName: $invite->invitedBy->name,
-            inviterEmail: $invite->invitedBy->email,
-            profileName: $invite->profile->name,
+            inviterName: $invitedBy->name,
+            inviterEmail: $invitedBy->email,
+            profileName: $profile->name,
             role: $invite->role,
             inviteUrl: route('invites.landing', ['inviteKey' => $rawKey]),
             acceptUrl: $recipient === null

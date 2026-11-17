@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Settings;
 
 use App\Actions\DeleteAccount;
@@ -35,7 +37,7 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $user = $request->user();
+        $user = $this->currentUser($request);
         $previousEmail = $user->email;
 
         $user->fill($request->validated());
@@ -72,7 +74,7 @@ class ProfileController extends Controller
     {
         // Log out only once the deletion has committed: a failed deletion
         // must not leave the user signed out with their account intact.
-        $deleteAccount->handle($request->user());
+        $deleteAccount->handle($this->currentUser($request));
 
         // logoutCurrentDevice() (unlike logout()) does not cycle the remember
         // token, which would save — i.e. re-insert — the deleted user.

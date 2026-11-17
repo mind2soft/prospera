@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ManagesShares;
@@ -41,15 +43,15 @@ class BudgetController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $user = $this->currentUser($request);
+
         if ($request->filled('profile_id')) {
             $this->authorizeProfileId((int) $request->query('profile_id'));
 
             $query = Budget::query()->where('profile_id', (int) $request->query('profile_id'));
         } else {
-            $query = Budget::query()->visibleTo($request->user());
+            $query = Budget::query()->visibleTo($user);
         }
-
-        $user = $request->user();
 
         $budgets = $query
             // Only the caller's share row resolves their permission.
@@ -73,8 +75,9 @@ class BudgetController extends Controller
     {
         $validated = $request->validated();
         $profile = $request->profile();
+        $user = $this->currentUser($request);
 
-        $budget = DB::transaction(function () use ($request, $profile, $validated): Budget {
+        $budget = DB::transaction(function () use ($user, $profile, $validated): Budget {
             FinancialProfile::query()->whereKey($profile->id)->lockForUpdate()->firstOrFail();
 
             $this->abortIfDraftExists($profile->id);
@@ -97,7 +100,7 @@ class BudgetController extends Controller
             ]);
 
             $budget->permissions()->create([
-                'user_id' => $request->user()->id,
+                'user_id' => $user->id,
                 'permission' => ResourcePermissions::OWNER,
             ]);
 
@@ -116,7 +119,7 @@ class BudgetController extends Controller
         });
 
         return response()->json([
-            'budget' => $this->serializeDetail($budget, $request->user()),
+            'budget' => $this->serializeDetail($budget, $user),
         ], 201);
     }
 
@@ -128,7 +131,7 @@ class BudgetController extends Controller
         $this->authorize('view', $budget);
 
         return response()->json([
-            'budget' => $this->serializeDetail($budget, $request->user()),
+            'budget' => $this->serializeDetail($budget, $this->currentUser($request)),
         ]);
     }
 
@@ -148,6 +151,7 @@ class BudgetController extends Controller
         $today = $request->calendar()->today();
 
         $validated = $request->validated();
+        $user = $this->currentUser($request);
 
         // The client may state the month it means to publish for: a
         // mismatch (e.g. a dialog left open across midnight) is refused
@@ -190,7 +194,7 @@ class BudgetController extends Controller
         });
 
         return response()->json([
-            'budget' => $this->serializeDetail($budget->refresh(), $request->user()),
+            'budget' => $this->serializeDetail($budget->refresh(), $user),
         ]);
     }
 
@@ -201,8 +205,9 @@ class BudgetController extends Controller
     public function clone(CloneBudgetRequest $request, Budget $budget): JsonResponse
     {
         $validated = $request->validated();
+        $user = $this->currentUser($request);
 
-        $draft = DB::transaction(function () use ($request, $budget, $validated): Budget {
+        $draft = DB::transaction(function () use ($user, $budget, $validated): Budget {
             FinancialProfile::query()->whereKey($budget->profile_id)->lockForUpdate()->firstOrFail();
 
             $this->abortIfDraftExists($budget->profile_id);
@@ -215,7 +220,7 @@ class BudgetController extends Controller
             ]);
 
             $draft->permissions()->create([
-                'user_id' => $request->user()->id,
+                'user_id' => $user->id,
                 'permission' => ResourcePermissions::OWNER,
             ]);
 
@@ -235,7 +240,7 @@ class BudgetController extends Controller
         });
 
         return response()->json([
-            'budget' => $this->serializeDetail($draft, $request->user()),
+            'budget' => $this->serializeDetail($draft, $user),
         ], 201);
     }
 
@@ -259,11 +264,11 @@ class BudgetController extends Controller
     public function addEnvelope(StoreBudgetEnvelopeRequest $request, Budget $budget): JsonResponse
     {
         $validated = $request->validated();
+        $user = $this->currentUser($request);
 
-        /** @var Envelope|null $envelope */
-        $envelope = Envelope::query()->find($validated['envelope_id']);
+        $envelope = Envelope::query()->find((int) $validated['envelope_id']);
 
-        if ($envelope === null || $request->user()->cannot('use', $envelope)) {
+        if ($envelope === null || $user->cannot('use', $envelope)) {
             throw ValidationException::withMessages([
                 'envelope_id' => __('This envelope is not available.'),
             ]);
@@ -328,17 +333,30 @@ class BudgetController extends Controller
                 ], 409));
             }
 
+            // Sign from the owner envelope's direction; the assignment's
+            // envelope_id FK restricts deletes, so a persisted assignment
+            // always has its envelope — a missing one is an invariant
+            // breach (the same convention as sharedResource()).
+            $envelope = $assignment->envelope;
+
+            if ($envelope === null) {
+                throw new LogicException('The envelope assignment has no envelope.');
+            }
+
             $assignment->update([
-                'amount' => $assignment->envelope->signedAmount($validated['amount']),
+                'amount' => $envelope->signedAmount($validated['amount']),
                 'type' => $validated['type'] ?? $assignment->type,
             ]);
             $assignment->increment('revision');
 
-            return $assignment;
+            // Re-read with the envelope relation (fresh display data); the
+            // row itself was just written above, so fall back to it if a
+            // concurrent delete somehow intervened.
+            return $assignment->fresh('envelope') ?? $assignment;
         });
 
         return response()->json([
-            'envelope' => $this->serializeEnvelope($assignment->fresh('envelope')),
+            'envelope' => $this->serializeEnvelope($assignment),
         ]);
     }
 
@@ -496,7 +514,7 @@ class BudgetController extends Controller
             'effective_year' => $budget->effective_year,
             'effective_month' => $budget->effective_month,
             'published_at' => $budget->published_at?->toISOString(),
-            'created_at' => $budget->created_at->toISOString(),
+            'created_at' => $budget->created_at?->toISOString(),
             'permission' => $budget->permissionFor($user, $isMember),
         ];
     }
@@ -506,11 +524,19 @@ class BudgetController extends Controller
      */
     private function serializeEnvelope(BudgetEnvelope $assignment): array
     {
+        $envelope = $assignment->envelope;
+
+        // The envelope_id FK restricts deletes: a persisted assignment
+        // always has its envelope.
+        if ($envelope === null) {
+            throw new LogicException('The envelope assignment has no envelope.');
+        }
+
         return [
             'envelope_id' => $assignment->envelope_id,
-            'name' => $assignment->envelope->name,
-            'color' => $assignment->envelope->color,
-            'direction' => $assignment->envelope->type,
+            'name' => $envelope->name,
+            'color' => $envelope->color,
+            'direction' => $envelope->type,
             'amount' => $assignment->amount,
             'type' => $assignment->type,
             'revision' => $assignment->revision,

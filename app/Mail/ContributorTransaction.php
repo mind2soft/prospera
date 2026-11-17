@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Mail;
 
 use App\Mail\Concerns\RetriesDelivery;
@@ -173,11 +175,13 @@ class ContributorTransaction extends Mailable implements ShouldBeEncrypted, Shou
         // a queued mail follows the current ledger owner, not the one it
         // was queued for (`to()` appends, so any queued hint address is
         // cleared first). `Mailable::send()` renders inside this locale.
+        $locale = $recipient->locale;
+
         $this->to = [];
         $this->to($recipient->email);
         $this->locale(
-            array_key_exists($recipient->locale, config('app.available_locales'))
-                ? $recipient->locale
+            $locale !== null && array_key_exists($locale, config('app.available_locales'))
+                ? $locale
                 : 'en',
         );
 

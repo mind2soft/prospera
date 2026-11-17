@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Dashboard\DeleteDashboardWidgetRequest;
@@ -17,6 +19,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use LogicException;
 
 /**
  * The dashboard API (docs/dashboard.md): per-user widget configuration for
@@ -39,16 +42,17 @@ class DashboardController extends Controller
     public function index(Request $request, FinancialProfile $profile): JsonResponse
     {
         $this->authorize('view', $profile);
+        $user = $this->currentUser($request);
 
         // The revision is read BEFORE the widgets: a save committing
         // between the two reads can only pair the revision with widgets
         // newer than it — the next save would be refused and reconcile —
         // never the other way around, where a stale revision would
         // legitimize overwriting newer state (issue #55).
-        $revision = $this->currentRevision((int) $request->user()->id, $profile->id);
+        $revision = $this->currentRevision($user->id, $profile->id);
 
         $widgets = DashboardWidget::forUserAndProfile(
-            (int) $request->user()->id,
+            $user->id,
             $profile->id,
         )->get();
 
@@ -64,10 +68,20 @@ class DashboardController extends Controller
 
         return response()->json([
             'widgets' => $widgets
-                ->map(fn (DashboardWidget $widget) => $this->serializeWidget(
-                    $widget,
-                    $selections->get($widget->id)->pruned($existing),
-                ))
+                ->map(function (DashboardWidget $widget) use ($selections, $existing) {
+                    // The selections map was built from these same widgets,
+                    // so the lookup always resolves.
+                    $selection = $selections->get($widget->id);
+
+                    if ($selection === null) {
+                        throw new LogicException('The widget selection map must cover every widget.');
+                    }
+
+                    return $this->serializeWidget(
+                        $widget,
+                        $selection->pruned($existing),
+                    );
+                })
                 ->values(),
             // Every write carries this back (issue #55): saves and removals
             // must edit against the layout they read.
@@ -92,14 +106,15 @@ class DashboardController extends Controller
     {
         $widgets = $request->widgets($this->layoutValidator);
         $expectedRevision = (int) $request->validated('expected_revision');
+        $user = $this->currentUser($request);
 
-        DB::transaction(function () use ($request, $profile, $widgets, $expectedRevision): DashboardLayout {
-            $layout = $this->lockLayout((int) $request->user()->id, $profile->id);
+        DB::transaction(function () use ($user, $profile, $widgets, $expectedRevision): DashboardLayout {
+            $layout = $this->lockLayout($user->id, $profile->id);
 
             $this->ensureRevision($layout, $expectedRevision);
 
             $existing = DashboardWidget::query()
-                ->where('user_id', $request->user()->id)
+                ->where('user_id', $user->id)
                 ->where('financial_profile_id', $profile->id)
                 ->get()
                 ->keyBy('id');
@@ -139,7 +154,7 @@ class DashboardController extends Controller
                 }
 
                 DashboardWidget::create($attributes + [
-                    'user_id' => $request->user()->id,
+                    'user_id' => $user->id,
                     'financial_profile_id' => $profile->id,
                 ]);
             }
@@ -161,10 +176,13 @@ class DashboardController extends Controller
      */
     public function destroy(DeleteDashboardWidgetRequest $request, FinancialProfile $profile, DashboardWidget $widget): JsonResponse
     {
-        $revision = DB::transaction(function () use ($request, $profile, $widget): int {
-            $layout = $this->lockLayout((int) $request->user()->id, $profile->id);
+        $user = $this->currentUser($request);
+        $expectedRevision = (int) $request->validated('expected_revision');
 
-            $this->ensureRevision($layout, (int) $request->validated('expected_revision'));
+        $revision = DB::transaction(function () use ($user, $profile, $widget, $expectedRevision): int {
+            $layout = $this->lockLayout($user->id, $profile->id);
+
+            $this->ensureRevision($layout, $expectedRevision);
 
             $widget->delete();
 
@@ -188,7 +206,7 @@ class DashboardController extends Controller
             $this->aggregator->data(
                 $widget,
                 $profile,
-                $request->user(),
+                $this->currentUser($request),
                 $request->calendar()->today(),
             ),
         );
