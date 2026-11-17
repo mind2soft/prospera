@@ -61,6 +61,36 @@ export type Envelope = {
     permission: EnvelopePermission;
 };
 
+// ---- Schedules (docs/scheduled-transactions.md) ----------------------------
+
+export type SchedulePeriod =
+    | 'once'
+    | 'weekly'
+    | 'biweekly'
+    | 'monthly'
+    | 'yearly';
+
+export type EnvelopeSchedule = {
+    id: number;
+    envelope_id: number;
+    /** Signed by the envelope direction, in integer minor units (-12345 = 123.45 expense). */
+    amount: number;
+    period: SchedulePeriod;
+    start_date: string; // ISO date
+    end_date: string | null; // inclusive ISO date
+    weekdays: number[]; // ISO weekdays, Mon = 1 … Sun = 7
+    day_of_month: number | null;
+    month: number | null;
+    /** null = no reminder, 0 = same day, n = n days before. */
+    reminder_days: number | null;
+    created_at: string | null;
+    updated_at: string | null;
+    /** At most five upcoming ISO dates, today included. */
+    next_occurrences: string[];
+    /** Generated ledger entries in open ledgers that an edit or deletion rewrites. */
+    open_ledger_entries: number;
+};
+
 // ---- Budget (docs/budget.md) -----------------------------------------------
 
 export type BudgetEnvelopeType = 'fixed' | 'variable';

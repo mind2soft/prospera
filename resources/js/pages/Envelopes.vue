@@ -19,6 +19,7 @@ import MilestoneDialog from '@/components/onboarding/MilestoneDialog.vue';
 import SetupJourneyBar from '@/components/onboarding/SetupJourneyBar.vue';
 import StarterEnvelopeChips from '@/components/onboarding/StarterEnvelopeChips.vue';
 import TeachingEmptyState from '@/components/onboarding/TeachingEmptyState.vue';
+import ScheduleDrawer from '@/components/schedules/ScheduleDrawer.vue';
 import ShareDrawer from '@/components/share/ShareDrawer.vue';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -141,6 +142,7 @@ const deleteDialogOpen = ref(false);
 const toDelete = ref<Envelope | null>(null);
 const editing = ref<Envelope | null>(null);
 const shareTargetId = ref<number | null>(null);
+const scheduleTargetId = ref<number | null>(null);
 
 const expenseEnvelopes = computed(() =>
     props.envelopes.filter((c) => c.direction === 'expense'),
@@ -267,6 +269,14 @@ const remove = () => {
 
 const shareTarget = computed(
     () => props.envelopes.find((c) => c.id === shareTargetId.value) ?? null,
+);
+
+// Schedules are managed by the envelope owner only (the API agrees).
+const scheduleTarget = computed(
+    () =>
+        props.envelopes.find(
+            (c) => c.id === scheduleTargetId.value && c.permission === 'owner',
+        ) ?? null,
 );
 
 // --- share drawer (mutations live here — the drawer is presentational) -----
@@ -539,6 +549,17 @@ const roleLabel: Record<string, string> = {
                                         {{ $t('envelopes.menu.share') }}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem
+                                        class="gap-2"
+                                        @select="scheduleTargetId = envelope.id"
+                                    >
+                                        <Icon
+                                            name="event-repeat"
+                                            class="size-4"
+                                            aria-hidden="true"
+                                        />
+                                        {{ $t('envelopes.menu.schedules') }}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
                                         variant="destructive"
                                         class="gap-2"
                                         @select="confirmDelete(envelope)"
@@ -585,6 +606,12 @@ const roleLabel: Record<string, string> = {
             @grant="onGrantShare"
             @revoke="onRevokeShare"
             @transfer="onTransferOwnership"
+        />
+
+        <!-- Schedules drawer (owner only) -->
+        <ScheduleDrawer
+            :envelope="scheduleTarget"
+            @close="scheduleTargetId = null"
         />
 
         <!-- Create / Edit dialog -->

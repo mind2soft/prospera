@@ -24,7 +24,8 @@
         "optionsFor": "Options de l'enveloppe {name}",
         "menu": {
             "share": "Partager",
-            "delete": "Supprimer l’enveloppe"
+            "delete": "Supprimer l’enveloppe",
+            "schedules": "Échéanciers"
         },
         "dialog": {
             "newTitle": "Nouvelle enveloppe",
@@ -59,6 +60,94 @@
             "description": "« {name} » sera retirée de vos enveloppes. Les transactions existantes ne sont pas supprimées.",
             "failed": "Impossible de supprimer l'enveloppe.",
             "confirm": "Supprimer l’enveloppe"
+        },
+        "schedules": {
+            "drawer": {
+                "title": "Échéanciers",
+                "description": "Opérations récurrentes de « {name} », inscrites automatiquement dans les registres ouverts pour les mois couverts par un budget publié.",
+                "loadError": "Impossible de charger les échéanciers.",
+                "empty": "Aucun échéancier pour le moment. Ajoutez-en un pour une paie, un loyer ou tout montant qui revient à dates connues.",
+                "add": "Ajouter un échéancier",
+                "done": "Terminé",
+                "list": "Échéanciers de {name}",
+                "edit": "Modifier l’échéancier : {summary}",
+                "delete": "Supprimer l’échéancier : {summary}"
+            },
+            "summary": {
+                "once": "Une fois, le {date}",
+                "weekly": "Chaque semaine : {days}",
+                "biweekly": "Toutes les deux semaines : {days}",
+                "monthly": "Chaque mois, le {day}",
+                "monthlyClamped": "Chaque mois, le {day} (ou le dernier jour des mois plus courts)",
+                "yearly": "Chaque année, le {day} {month}",
+                "yearlyClamped": "Chaque année, le {day} {month} (ou le dernier jour du mois)",
+                "from": "À partir du {start}",
+                "between": "Du {start} au {end}",
+                "noReminder": "Aucun rappel",
+                "remindSameDay": "Rappel le jour même",
+                "remindDaysBefore": "Rappel {n} jour avant | Rappel {n} jours avant",
+                "upcoming": "Prochaines dates : {dates}",
+                "noUpcoming": "Aucune date à venir"
+            },
+            "affected": "Touche environ {n} écriture dans les registres ouverts. | Touche environ {n} écritures dans les registres ouverts.",
+            "dialog": {
+                "newTitle": "Nouvel échéancier",
+                "editTitle": "Modifier l’échéancier",
+                "description": "Les opérations sont inscrites à ces dates dans les registres ouverts, pour chaque mois où un budget publié attribue cette enveloppe.",
+                "amount": "Montant",
+                "inCurrency": "({currency})",
+                "expenseHint": "Inscrit comme dépense de cette enveloppe.",
+                "revenueHint": "Inscrit comme revenu de cette enveloppe.",
+                "period": "Répétition",
+                "startDate": "Date de début",
+                "onceDate": "Date",
+                "endDate": "Date de fin",
+                "endDateHint": "Facultative. Dernière date possible, incluse.",
+                "weekdays": "Jours",
+                "dayOfMonth": "Jour du mois",
+                "dayOfMonthHint": "Les jours 29 à 31 tombent le dernier jour des mois plus courts.",
+                "month": "Mois",
+                "reminder": "Rappel",
+                "reminderDays": "Jours avant",
+                "remindersNote": "Les rappels par courriel ne sont pas encore envoyés.",
+                "save": "Enregistrer l’échéancier",
+                "create": "Ajouter l’échéancier",
+                "saving": "Enregistrement…"
+            },
+            "periods": {
+                "once": "Une fois",
+                "weekly": "Chaque semaine",
+                "biweekly": "Toutes les deux semaines",
+                "monthly": "Chaque mois",
+                "yearly": "Chaque année"
+            },
+            "reminders": {
+                "none": "Aucun",
+                "sameDay": "Le jour même",
+                "daysBefore": "Jours avant"
+            },
+            "validation": {
+                "amount": "Saisissez un montant de 0 ou plus, avec au plus deux décimales.",
+                "startDate": "Choisissez une date de début valide.",
+                "endDate": "Choisissez une date de fin valide, ou laissez-la vide.",
+                "endBeforeStart": "La date de fin ne peut pas précéder la date de début.",
+                "weekdays": "Choisissez au moins un jour de la semaine.",
+                "dayOfMonth": "Saisissez un jour entre 1 et 31.",
+                "month": "Choisissez un mois.",
+                "reminderDays": "Saisissez un nombre entier de jours, 1 ou plus."
+            },
+            "delete": {
+                "title": "Supprimer l’échéancier ?",
+                "description": "« {summary} » n’inscrira plus d’opérations. Ses écritures sont retirées des registres ouverts ; les registres fermés conservent les leurs.",
+                "confirm": "Supprimer l’échéancier"
+            },
+            "toast": {
+                "created": "Échéancier ajouté.",
+                "updated": "Échéancier modifié.",
+                "deleted": "Échéancier supprimé.",
+                "failed": "Impossible d’enregistrer l’échéancier.",
+                "deleteFailed": "Impossible de supprimer l’échéancier."
+            }
         }
     }
 }

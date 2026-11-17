@@ -11,7 +11,7 @@ import {
     type PledgeItem,
     usePledge,
 } from '@/composables/usePledge';
-import { formatCalendarDate } from '@/lib/calendar';
+import { calendarDate, formatCalendarDate } from '@/lib/calendar';
 
 /** "Make it official": a small commitment device, kept in this browser. */
 const props = defineProps<{ firstName: string }>();
@@ -43,18 +43,13 @@ const toggle = (item: PledgeItem, checked: boolean | 'indeterminate'): void => {
             : selected.value.filter((value) => value !== item);
 };
 
-const today = (): string => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
 const submit = (): void => {
     if (selected.value.length === 0) {
         return;
     }
     sign(
         PLEDGE_ITEMS.filter((item) => selected.value.includes(item)),
-        today(),
+        calendarDate(),
     );
     editing.value = false;
     justSigned.value = true;

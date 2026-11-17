@@ -10,6 +10,18 @@ export function seed(...files: string[]): void {
     }
 }
 
+/**
+ * Runs the queued jobs of the isolated e2e environment (its queue is
+ * `database` and no worker runs), e.g. the after-commit schedule
+ * reconciliation. Returns once the queue is empty.
+ */
+export function drainQueue(): void {
+    execSync(
+        "bash -ec 'source e2e/guard-e2e-env.sh; php artisan queue:work --env=e2e --stop-when-empty'",
+        { cwd: '.' },
+    );
+}
+
 export async function login(
     page: Page,
     email = 'playwright@example.com',

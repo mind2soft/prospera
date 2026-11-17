@@ -8,6 +8,8 @@ use App\Http\Requests\EnvelopeScheduleRequest;
 use App\Jobs\ReconcileScheduleLedgers;
 use App\Models\Envelope;
 use App\Models\EnvelopeSchedule;
+use App\Models\Ledger;
+use App\Models\Transaction;
 use App\Services\Schedules\ScheduleDeletion;
 use App\Services\Schedules\ScheduleOccurrencePreview;
 use Illuminate\Http\JsonResponse;
@@ -30,9 +32,10 @@ class EnvelopeScheduleController extends Controller
             $locked = $this->lockedEnvelope($envelope, readOnly: true);
             $page = $locked->schedules()->orderBy('id')->paginate($request->integer('per_page', 50), ['*'], 'page', $request->integer('page', 1));
             $today = $request->calendar()->today()->toDateString();
+            $entries = $this->openLedgerEntries($page->getCollection()->map(fn (EnvelopeSchedule $schedule): int => $schedule->id)->all());
 
             return response()->json([
-                'schedules' => $page->getCollection()->map(fn (EnvelopeSchedule $schedule): array => $this->serialize($schedule, $today))->all(),
+                'schedules' => $page->getCollection()->map(fn (EnvelopeSchedule $schedule): array => $this->serialize($schedule, $today, $entries[$schedule->id] ?? 0))->all(),
                 'meta' => [
                     'current_page' => $page->currentPage(), 'last_page' => $page->lastPage(),
                     'per_page' => $page->perPage(), 'total' => $page->total(),
@@ -48,7 +51,8 @@ class EnvelopeScheduleController extends Controller
             $schedule = $locked->schedules()->create($request->attributesFor($locked));
             dispatch(ReconcileScheduleLedgers::forEnvelope($locked->id));
 
-            return response()->json(['schedule' => $this->serialize($schedule, $request->calendar()->today()->toDateString())], 201);
+            // Reconciliation runs after commit: nothing is generated yet.
+            return response()->json(['schedule' => $this->serialize($schedule, $request->calendar()->today()->toDateString(), 0)], 201);
         });
     }
 
@@ -63,7 +67,9 @@ class EnvelopeScheduleController extends Controller
                 dispatch(ReconcileScheduleLedgers::forEnvelope($locked->id));
             }
 
-            return response()->json(['schedule' => $this->serialize($fresh, $request->calendar()->today()->toDateString())]);
+            $entries = $this->openLedgerEntries([$fresh->id]);
+
+            return response()->json(['schedule' => $this->serialize($fresh, $request->calendar()->today()->toDateString(), $entries[$fresh->id] ?? 0)]);
         });
     }
 
@@ -84,8 +90,33 @@ class EnvelopeScheduleController extends Controller
         return $locked;
     }
 
+    /**
+     * Generated rows per schedule in open ledgers — the entries an edit or a
+     * deletion rewrites. A count of provenance ids only (no amounts), read
+     * without ledger locks, hence approximate under concurrent
+     * reconciliation; the UI presents it as "~N".
+     *
+     * @param  array<int, int>  $scheduleIds
+     * @return array<int, int>
+     */
+    private function openLedgerEntries(array $scheduleIds): array
+    {
+        if ($scheduleIds === []) {
+            return [];
+        }
+
+        return Transaction::query()
+            ->whereIn('schedule_id', $scheduleIds)
+            ->whereIn('ledger_id', Ledger::query()->whereNull('closed_at')->select('id'))
+            ->groupBy('schedule_id')
+            ->selectRaw('schedule_id, count(*) as entries')
+            ->pluck('entries', 'schedule_id')
+            ->map(fn (mixed $count): int => (int) $count)
+            ->all();
+    }
+
     /** @return array<string, mixed> */
-    private function serialize(EnvelopeSchedule $schedule, string $today): array
+    private function serialize(EnvelopeSchedule $schedule, string $today, int $openLedgerEntries): array
     {
         return [
             'id' => $schedule->id, 'envelope_id' => $schedule->envelope_id,
@@ -95,6 +126,7 @@ class EnvelopeScheduleController extends Controller
             'month' => $schedule->month, 'reminder_days' => $schedule->reminder_days,
             'created_at' => $schedule->created_at?->toISOString(), 'updated_at' => $schedule->updated_at?->toISOString(),
             'next_occurrences' => $this->preview->next($schedule->rule(), $today),
+            'open_ledger_entries' => $openLedgerEntries,
         ];
     }
 }

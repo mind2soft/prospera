@@ -58,7 +58,8 @@ import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { useOnboardingJourney } from '@/composables/useOnboardingJourney';
 import { useOnceFlag } from '@/composables/useOnceFlag';
 import { ApiError, errorMessage } from '@/lib/api';
-import { parseMonth } from '@/lib/calendar';
+import { latestPublishedCurrency } from '@/lib/budget';
+import { calendarDate, parseMonth } from '@/lib/calendar';
 import { focusAnchor, stripDeepLink } from '@/lib/focusAnchor';
 import type {
     AddTransactionInput,
@@ -77,13 +78,8 @@ defineOptions({
 const { t } = useI18n();
 
 // --- state -----------------------------------------------------------------
-const isoToday = (): string => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-
-const isoDate = (date: Date): string =>
-    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+const isoToday = (): string => calendarDate();
+const isoDate = calendarDate;
 
 const viewMonth = ref(`${isoToday().slice(0, 8)}01`); // first day of current month
 const selectedDate = ref(isoToday());
@@ -104,9 +100,7 @@ const monthRange = computed(() => {
     const [year, month] = parseMonth(viewMonth.value);
     const first = new Date(year, month - 1, 1);
     const last = new Date(year, month, 0);
-    const iso = (d: Date) =>
-        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    return { from: iso(first), to: iso(last) };
+    return { from: calendarDate(first), to: calendarDate(last) };
 });
 
 const onSelectDate = (date: string) => {
@@ -245,16 +239,9 @@ const pickerEnvelopes = computed<PickerEnvelope[]>(() =>
 );
 
 /** The latest published budget's currency — budgets are for reporting only. */
-const currency = computed(() => {
-    const published = (budgetsQuery.data.value ?? [])
-        .filter((b) => b.published_at !== null)
-        .sort(
-            (a, b) =>
-                new Date(b.published_at ?? '').getTime() -
-                new Date(a.published_at ?? '').getTime(),
-        );
-    return published[0]?.currency ?? '';
-});
+const currency = computed(() =>
+    latestPublishedCurrency(budgetsQuery.data.value ?? []),
+);
 
 const meId = computed(() => usePage().props.auth.user.id);
 
