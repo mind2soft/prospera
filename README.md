@@ -89,6 +89,17 @@ composer dev
 
 Then visit **http://localhost:8000**.
 
+To log in with a realistic dataset, seed a test household for
+`test@domain.com` (password `testtest123`, email pre-verified) — the user and
+their default profile are created if missing, and the seeder is idempotent
+(rerunning wipes that user's envelopes and the profile's budgets and ledgers
+before reseeding a 2026 dual-income household: 23 envelopes, 12 published
+monthly budgets, one ledger and 348 transactions):
+
+```bash
+php artisan db:seed --class=TestHouseholdSeeder
+```
+
 > **Emails (verification, password reset):** no mail server is required in
 > development — `MAIL_MAILER=log` writes emails to `storage/logs/laravel.log`.
 > For a real inbox experience, run [Mailpit](https://mailpit.axllent.org/) on

@@ -8,14 +8,17 @@ use App\Models\Budget;
 use App\Models\BudgetEnvelope;
 use App\Models\Envelope;
 use App\Models\FinancialProfile;
+use App\Models\FinancialProfileKey;
 use App\Models\Ledger;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Security\Amounts\AmountKeyRing;
 use App\Services\ResourcePermissions;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use LogicException;
 
 /**
@@ -25,8 +28,9 @@ use LogicException;
  * spanning the whole year with realistic transactions.
  *
  * Envelope names are in Canadian French; amounts are whole CAD dollars.
- * Assumes the user and their financial profile already exist. Existing data
- * for that user's envelopes and the profile's budgets/ledgers is wiped first.
+ * The user is created (verified, password "testtest123") with a default
+ * financial profile if it does not exist yet. Existing data for that user's
+ * envelopes and the profile's budgets/ledgers is wiped first.
  */
 class TestHouseholdSeeder extends Seeder
 {
@@ -96,12 +100,28 @@ class TestHouseholdSeeder extends Seeder
 
     public function run(): void
     {
-        $user = User::query()->where('email', self::EMAIL)->firstOrFail();
+        $user = User::query()->where('email', self::EMAIL)->first();
+
+        if ($user === null) {
+            $user = User::factory()->withDefaultProfile()->create([
+                'name' => 'Test User',
+                'email' => self::EMAIL,
+                'password' => Hash::make('testtest123'),
+                'email_verified_at' => now(),
+            ]);
+        }
 
         $profile = $user->profiles()->wherePivot('is_owner', true)->first()
             ?? $user->profiles()->first();
         if ($profile === null) {
             throw new \RuntimeException('No financial profile found for '.self::EMAIL.'.');
+        }
+
+        // WithoutModelEvents suppresses the FinancialProfile::created hook
+        // that provisions the profile's amount data key, so create it here
+        // when it is missing (docs/encryption.md).
+        if (! FinancialProfileKey::query()->where('profile_id', $profile->id)->exists()) {
+            app(AmountKeyRing::class)->createKey($profile->id);
         }
 
         // Deterministic pseudo-randomness: re-running the seeder reproduces
