@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models\Concerns;
 
 use App\Models\Builders\GuardedBuilder;
@@ -52,37 +54,18 @@ trait EncryptsAmounts
      *
      * @param  array<string, mixed>  $attributes
      */
-    abstract public static function amountContextFor(string $column, array $attributes, int $profileId): AmountContext;
+    abstract public static function amountContextFor(string $column, array $attributes, int $ownerId): AmountContext;
 
     /**
-     * The financial profile owning the amounts, from raw attribute values.
+     * The key owner id (in the context's scope), from raw attribute values.
      *
      * @param  array<string, mixed>  $attributes
      */
-    abstract protected function amountProfileId(array $attributes): int;
+    abstract protected function amountKeyOwnerId(array $attributes): int;
 
-    /**
-     * Accessor/mutator for an encrypted column.
-     *
-     * @return Attribute<int|float, mixed>
-     */
-    protected function encryptedAmount(string $column): Attribute
-    {
-        return Attribute::make(
-            get: fn (mixed $value): int|float => $this->decodeAmount($column, $this->decryptStoredAmount($column, $value)),
-            set: fn (mixed $value): int => $this->encodeAmount($column, $value),
-        );
-    }
-
-    /** Accessor for encrypted columns whose public and stored units are equal. */
-    /** @return Attribute<int, mixed> */
-    protected function encryptedIntegerAmount(string $column): Attribute
-    {
-        return Attribute::make(
-            get: fn (mixed $value): int => $this->decryptStoredAmount($column, $value),
-            set: fn (mixed $value): int => self::plainAmount($column, $value),
-        );
-    }
+    // Attribute factories live in each model's actual zero-argument accessor:
+    // Eloquent invokes every Attribute-returning model method during mutator
+    // discovery, so column-parameter helper methods break toArray()/JSON.
 
     /** Convert the encrypted integer representation to its public value. */
     protected function decodeAmount(string $column, int $amount): int|float
@@ -268,7 +251,7 @@ trait EncryptsAmounts
     {
         $attributes = $this->getAttributes();
 
-        return static::amountContextFor($column, $attributes, $this->amountProfileId($attributes));
+        return static::amountContextFor($column, $attributes, $this->amountKeyOwnerId($attributes));
     }
 
     private function originalAmountContext(string $column): AmountContext
@@ -276,7 +259,7 @@ trait EncryptsAmounts
         /** @var array<string, mixed> $attributes */
         $attributes = $this->getRawOriginal();
 
-        return static::amountContextFor($column, $attributes, $this->amountProfileId($attributes));
+        return static::amountContextFor($column, $attributes, $this->amountKeyOwnerId($attributes));
     }
 
     /**

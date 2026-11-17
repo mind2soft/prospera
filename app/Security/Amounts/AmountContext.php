@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Security\Amounts;
 
 use InvalidArgumentException;
@@ -17,15 +19,16 @@ final class AmountContext
     public function __construct(
         public readonly string $table,
         public readonly string $column,
-        public readonly int $profileId,
+        public readonly int $ownerId,
         public readonly array $bindings = [],
+        public readonly AmountKeyScope $scope = AmountKeyScope::Profile,
     ) {
         if (! preg_match('/^[a-z_]+$/D', $table) || ! preg_match('/^[a-z_]+$/D', $column)) {
             throw new InvalidArgumentException('Amount context table and column must match [a-z_]+.');
         }
 
-        if ($profileId < 1) {
-            throw new InvalidArgumentException('Amount context profile id must be positive.');
+        if ($ownerId < 1) {
+            throw new InvalidArgumentException('Amount context owner id must be positive.');
         }
 
         foreach ($bindings as $key => $value) {
@@ -49,7 +52,7 @@ final class AmountContext
             'prospera/amount/'.AmountCipher::FORMAT,
             'v='.$keyVersion,
             't='.$this->table.'.'.$this->column,
-            'p='.$this->profileId,
+            $this->scope->binding().'='.$this->ownerId,
         ];
 
         foreach ($this->bindings as $key => $value) {
@@ -80,7 +83,7 @@ final class AmountContext
             return $raw;
         }
 
-        if (is_string($raw) && preg_match('/^[1-9]\d*$/D', $raw)) {
+        if (is_string($raw) && preg_match('/^[1-9]\d*$/D', $raw) && filter_var($raw, FILTER_VALIDATE_INT) !== false) {
             return (int) $raw;
         }
 

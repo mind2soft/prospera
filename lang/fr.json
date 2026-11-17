@@ -57,6 +57,8 @@
     "This budget is already shared with this user.": "Ce budget est déjà partagé avec cet utilisateur.",
     "This email address is invalid.": "Cette adresse courriel est invalide.",
 
+    "This envelope has schedules and cannot be deleted.": "Cette enveloppe a des opérations planifiées et ne peut pas être supprimée.",
+    "This envelope has schedules: its direction cannot be changed.": "Cette enveloppe a des opérations planifiées : son sens ne peut plus être modifié.",
     "This envelope has transactions and cannot be deleted.": "Cette enveloppe a des transactions et ne peut pas être supprimée.",
     "This envelope is already assigned to the budget.": "Cette enveloppe est déjà assignée au budget.",
     "This envelope is already shared with this user.": "Cette enveloppe est déjà partagée avec cet utilisateur.",

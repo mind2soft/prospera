@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Models\Concerns\EncryptsAmounts;
@@ -49,7 +51,10 @@ class Transaction extends Model implements HasEncryptedAmounts
      */
     protected function amount(): Attribute
     {
-        return $this->encryptedAmount('amount');
+        return Attribute::make(
+            get: fn (mixed $value): int|float => $this->decodeAmount('amount', $this->decryptStoredAmount('amount', $value)),
+            set: fn (mixed $value): int => $this->encodeAmount('amount', $value),
+        );
     }
 
     protected function decodeAmount(string $column, int $amount): int|float
@@ -151,7 +156,7 @@ class Transaction extends Model implements HasEncryptedAmounts
         ]);
     }
 
-    protected function amountProfileId(array $attributes): int
+    protected function amountKeyOwnerId(array $attributes): int
     {
         return app(AmountKeyRing::class)->profileIdForLedger(
             AmountContext::id($attributes['ledger_id'] ?? null, 'ledger_id'),

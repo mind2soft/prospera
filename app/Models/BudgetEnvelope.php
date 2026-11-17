@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Models\Concerns\EncryptsAmounts;
@@ -41,7 +43,10 @@ class BudgetEnvelope extends Model implements HasEncryptedAmounts
      */
     protected function amount(): Attribute
     {
-        return $this->encryptedIntegerAmount('amount');
+        return Attribute::make(
+            get: fn (mixed $value): int => $this->decryptStoredAmount('amount', $value),
+            set: fn (mixed $value): int => $this->encodeAmount('amount', $value),
+        );
     }
 
     public static function encryptedAmountColumns(): array
@@ -62,7 +67,7 @@ class BudgetEnvelope extends Model implements HasEncryptedAmounts
         ]);
     }
 
-    protected function amountProfileId(array $attributes): int
+    protected function amountKeyOwnerId(array $attributes): int
     {
         return app(AmountKeyRing::class)->profileIdForBudget(
             AmountContext::id($attributes['budget_id'] ?? null, 'budget_id'),

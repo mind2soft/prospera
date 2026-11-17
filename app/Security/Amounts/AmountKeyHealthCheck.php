@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Security\Amounts;
 
+use App\Models\EnvelopeAmountKey;
 use App\Models\FinancialProfileKey;
 use Illuminate\Database\QueryException;
 use PDOException;
@@ -31,11 +34,18 @@ final class AmountKeyHealthCheck
      */
     public function assertAppKeyCanUnwrap(): void
     {
+        $scope = AmountKeyScope::Profile;
         try {
             $row = FinancialProfileKey::query()
                 ->whereNull('retired_at')
                 ->orderByDesc('id')
                 ->first(['profile_id', 'version', 'wrapped_key']);
+
+            if ($row === null) {
+                $scope = AmountKeyScope::Envelope;
+                $row = EnvelopeAmountKey::query()->whereNull('retired_at')->orderByDesc('id')
+                    ->first(['envelope_id', 'version', 'wrapped_key']);
+            }
         } catch (QueryException|PDOException) {
             return;
         }
@@ -45,7 +55,7 @@ final class AmountKeyHealthCheck
         }
 
         try {
-            AmountKeyRing::unwrap($row->profile_id, $row->version, $row->wrapped_key);
+            AmountKeyRing::unwrap(AmountContext::id($row->getAttribute($scope->column()), $scope->column()), $row->version, $row->wrapped_key, $scope);
         } catch (AmountDecryptionException $exception) {
             throw new RuntimeException(self::MESSAGE, previous: $exception);
         }

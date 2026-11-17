@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Security\Amounts;
 
 use LogicException;
@@ -118,8 +120,8 @@ final class AmountCipher
 
     private function assertKeyMatchesContext(DataKey $key, AmountContext $context): void
     {
-        if ($key->profileId !== $context->profileId) {
-            throw new LogicException('Amount key does not belong to the context profile.');
+        if ($key->ownerId !== $context->ownerId || $key->scope !== $context->scope) {
+            throw new LogicException('Amount key does not belong to the context owner and scope.');
         }
     }
 
@@ -127,7 +129,7 @@ final class AmountCipher
     {
         $where = $context === null
             ? ''
-            : " ({$context->table}.{$context->column}, profile {$context->profileId})";
+            : " ({$context->table}.{$context->column}, {$context->scope->value} {$context->ownerId})";
 
         return new AmountDecryptionException("Unable to decrypt amount{$where}: {$reason}.");
     }
