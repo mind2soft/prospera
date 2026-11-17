@@ -16,15 +16,40 @@ use Tests\TestCase;
 /**
  * The encryption-at-rest migration converts existing plaintext amounts and
  * is fully reversible (production rollbacks run migrate:rollback).
+ *
+ * The class deliberately does not use RefreshDatabase: the SQLite down()
+ * refuses to run inside a transaction, and RefreshDatabase would hold one
+ * open across the rollback loop. On an in-memory SQLite database every test
+ * therefore starts from an empty, discarded database. On a persistent test
+ * database (PostgreSQL, the release-gating environment of #84) the same
+ * steps commit, so setUp resets the schema to a pristine full state and
+ * tearDown restores it — the suite must never inherit this class's
+ * partially rolled-back schema.
  */
 class EncryptAmountsMigrationTest extends TestCase
 {
     /** @var array<string, array<int, int>> "table.column" => [id => amount] */
     private array $plaintext = [];
 
+    /**
+     * Whether the test database survives across tests. In-memory SQLite
+     * databases are discarded with each application instance; persistent
+     * databases (PostgreSQL) keep every committed change.
+     */
+    private static function persistent(): bool
+    {
+        return config('database.connections.'.config('database.default').'.database') !== ':memory:';
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
+
+        if (self::persistent()) {
+            // A pristine schema regardless of what previous tests (or this
+            // class's own tearDown) left behind.
+            Artisan::call('migrate:fresh', ['--force' => true]);
+        }
 
         Artisan::call('migrate', ['--force' => true]);
 
@@ -36,6 +61,17 @@ class EncryptAmountsMigrationTest extends TestCase
         $this->rollbackUntilKeysAreGone();
 
         $this->seedPlaintext();
+    }
+
+    protected function tearDown(): void
+    {
+        if (self::persistent()) {
+            // Undo the partial rollback: the tests that run after this class
+            // expect the full committed schema.
+            Artisan::call('migrate:fresh', ['--force' => true]);
+        }
+
+        parent::tearDown();
     }
 
     private function rollbackUntilKeysAreGone(): void
@@ -141,27 +177,79 @@ class EncryptAmountsMigrationTest extends TestCase
         ));
         foreach (array_keys($this->plaintext) as $target) {
             [$table, $column] = explode('.', $target);
-            $this->assertSame('integer', Schema::getColumnType($table, $column), $target);
+            // The restored column type is the platform's name for the
+            // original `integer` columns: "integer" on SQLite, "int4" on
+            // PostgreSQL.
+            $this->assertSame(
+                DB::getDriverName() === 'pgsql' ? 'int4' : 'integer',
+                Schema::getColumnType($table, $column),
+                $target,
+            );
         }
     }
 
-    public function test_it_refuses_to_run_inside_a_transaction_on_sqlite(): void
+    /**
+     * SQLite rebuilds the amount tables (a table rebuild would cascade-delete
+     * child rows), so the migration refuses to run inside a transaction
+     * there. PostgreSQL executes every direction atomically in one
+     * transaction instead: the same scenario asserts that running the
+     * migration inside a transaction succeeds and is fully undoable.
+     */
+    public function test_the_transaction_boundary_matches_the_driver(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            DB::beginTransaction();
+
+            try {
+                Artisan::call('migrate', ['--force' => true]);
+                $this->fail('The migration ran inside a transaction.');
+            } catch (RuntimeException $e) {
+                $this->assertStringContainsString('must not run inside a transaction', $e->getMessage());
+            } finally {
+                DB::rollBack();
+            }
+
+            $this->assertFalse(Schema::hasTable('financial_profile_keys'));
+            $this->assertSame($this->plaintext['transactions.amount'], array_map(
+                fn ($value): int => (int) $value,
+                DB::table('transactions')->orderBy('id')->pluck('amount', 'id')->all(),
+            ));
+
+            return;
+        }
+
+        // On PostgreSQL the migration is atomic: inside a transaction it
+        // encrypts everything, and rolling that transaction back restores
+        // the exact plaintext state — nothing leaks out half-applied.
         DB::beginTransaction();
 
         try {
-            Artisan::call('migrate', ['--force' => true]);
-            $this->fail('The migration ran inside a transaction.');
-        } catch (RuntimeException $e) {
-            $this->assertStringContainsString('must not run inside a transaction', $e->getMessage());
+            $this->assertSame(0, Artisan::call('migrate', ['--force' => true]));
+
+            $this->assertTrue(Schema::hasTable('financial_profile_keys'));
+            foreach (array_keys($this->rawValues()) as $target) {
+                [$table, $column] = explode('.', $target);
+
+                foreach (DB::table($table)->orderBy('id')->pluck($column, 'id')->all() as $raw) {
+                    $this->assertTrue(AmountCipher::looksEncrypted($raw), "{$target} was not encrypted.");
+                }
+            }
         } finally {
             DB::rollBack();
         }
 
-        $this->assertFalse(Schema::hasTable('financial_profile_keys'));
+        $this->assertFalse(Schema::hasTable('financial_profile_keys'), 'The rolled-back migration left its keys behind.');
         $this->assertSame($this->plaintext['transactions.amount'], array_map(
             fn ($value): int => (int) $value,
             DB::table('transactions')->orderBy('id')->pluck('amount', 'id')->all(),
+        ));
+        $this->assertSame($this->plaintext['budget_envelopes.amount'], array_map(
+            fn ($value): int => (int) $value,
+            DB::table('budget_envelopes')->orderBy('id')->pluck('amount', 'id')->all(),
+        ));
+        $this->assertSame($this->plaintext['ledgers.starting_balance'], array_map(
+            fn ($value): int => (int) $value,
+            DB::table('ledgers')->orderBy('id')->pluck('starting_balance', 'id')->all(),
         ));
     }
 }

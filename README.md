@@ -52,7 +52,7 @@ Design docs live in [`docs/`](docs/): [getting started](docs/onboarding.md),
 
 | Layer    | Technology                                                      |
 | -------- | --------------------------------------------------------------- |
-| Backend  | Laravel 13 (PHP 8.3+, CI on 8.5), SQLite for local development  |
+| Backend  | Laravel 13 (PHP 8.3+; CI on 8.5, release checks on 8.4), SQLite for local development, PostgreSQL 10.23 in production |
 | Frontend | Vue 3 + Inertia, Tailwind CSS v4                                |
 | UI       | shadcn-vue (reka-nova style)                                    |
 | Icons    | Iconify with Material Symbols (bundled offline, no CDN calls)   |
@@ -63,7 +63,9 @@ Design docs live in [`docs/`](docs/): [getting started](docs/onboarding.md),
 ## Getting started
 
 Requirements: PHP 8.3+ (CI runs 8.5) with `pdo_sqlite`, `gd`, `intl` (see `php -m`),
-Composer, Node.js.
+Composer, Node.js. The release checks additionally run the backend suite on
+PostgreSQL 10.23 (the production major) with PHP 8.4 — see
+[Testing against PostgreSQL](#testing-against-postgresql).
 
 ```bash
 composer setup   # installs dependencies, creates .env, migrates, builds assets
@@ -99,6 +101,40 @@ npm run test             # JS unit tests (Vitest) — no browser or dev server
 npm run e2e              # Playwright end-to-end tests
 npm run build            # production build
 ```
+
+### Testing against PostgreSQL
+
+The default suite runs on in-memory SQLite (fast, no setup). The CI's
+release-gating `postgres` job additionally runs the backend suite on
+**PostgreSQL 10.23 — the production major — with PHP 8.4**: SQLite cannot
+exercise PostgreSQL row/shared locks, varchar length enforcement or identical
+DDL and transaction behavior, and the two-connection barrier tests
+(`Postgres*Test.php`, issues #55, #80 and #81) only run when PostgreSQL is
+reachable.
+
+Locally, point the suite at an explicitly named **disposable** database on any
+PostgreSQL 10.x instance — never at development or production data (the
+environment overrides `phpunit.xml`'s SQLite defaults):
+
+```bash
+DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 \
+DB_DATABASE=prospera_test DB_USERNAME=prospera DB_PASSWORD=secret DB_URL= \
+php artisan test
+```
+
+The barrier tests create their own database (default
+`prospera_barrier_testing`) on the same server through the standard `PG*`
+variables, and skip cleanly when PostgreSQL is unavailable:
+
+```bash
+PGHOST=127.0.0.1 PGPORT=5432 PGUSER=prospera PGPASSWORD=secret \
+PGDATABASE=prospera_barrier_testing php artisan test
+```
+
+`scripts/ci/assert-test-runtime.php` asserts the driver, server major and PHP
+minor the way the CI job does (`EXPECTED_DB_DRIVER`, `EXPECTED_DB_SERVER`,
+`EXPECTED_PHP`) and prints them without credentials, so a green run can never
+silently be the wrong stack.
 
 ### Fixing formatting issues
 
@@ -210,8 +246,9 @@ git tag -a v1.2.3 -m "Release v1.2.3"
 git push origin v1.2.3
 ```
 
-Pushing a tag runs the `deploy` workflow: the full test suite (including the
-Playwright e2e suite) runs first, then the app is packaged and deployed as
+Pushing a tag runs the `deploy` workflow: the full test suite — including the
+PostgreSQL 10.23 / PHP 8.4 release checks and the Playwright e2e suite — runs
+first, then the app is packaged and deployed as
 release `v1.2.3` to [prospera.mind2soft.com](https://prospera.mind2soft.com).
 Failing tests abort the release.
 
