@@ -95,6 +95,7 @@ composer lint            # fix PHP formatting (Pint)
 npm run check            # check frontend formatting + lint (Biome)
 npm run check:fix        # fix frontend formatting + lint issues
 npm run types:check      # vue-tsc
+npm run test             # JS unit tests (Vitest) — no browser or dev server
 npm run e2e              # Playwright end-to-end tests
 npm run build            # production build
 ```
