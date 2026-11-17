@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ManagesShares;
@@ -32,7 +34,7 @@ class EnvelopeController extends Controller
     public function index(Request $request): Response
     {
         return Inertia::render('Envelopes', [
-            'envelopes' => $this->visibleEnvelopes($request->user()),
+            'envelopes' => $this->visibleEnvelopes($this->currentUser($request)),
         ]);
     }
 
@@ -43,12 +45,12 @@ class EnvelopeController extends Controller
      */
     public function apiIndex(Request $request): JsonResponse
     {
-        return response()->json(['envelopes' => $this->visibleEnvelopes($request->user())]);
+        return response()->json(['envelopes' => $this->visibleEnvelopes($this->currentUser($request))]);
     }
 
     public function store(EnvelopeRequest $request): RedirectResponse
     {
-        $request->user()->envelopes()->create($request->validated());
+        $this->currentUser($request)->envelopes()->create($request->validated());
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Envelope created.')]);
 
@@ -171,7 +173,9 @@ class EnvelopeController extends Controller
      */
     protected function shareTarget(Model $resource, int $userId): User
     {
-        return $this->permissionService->ownerCoMember($resource->user, $userId);
+        $owner = $this->envelopeOwner($this->sharedResource($resource));
+
+        return $this->permissionService->ownerCoMember($owner, $userId);
     }
 
     protected function alreadySharedMessage(): string
@@ -188,15 +192,34 @@ class EnvelopeController extends Controller
      */
     protected function transferOwnershipOf(Model $resource, User $caller, int $userId): array
     {
+        $owner = $this->envelopeOwner($this->sharedResource($resource));
+
         $target = $this->permissionService->ensureNotOwner(
-            $this->permissionService->ownerCoMember($resource->user, $userId),
-            $resource->user,
+            $this->permissionService->ownerCoMember($owner, $userId),
+            $owner,
             __('This user already owns this envelope.'),
         );
 
         $resource->transferOwnershipTo($target);
 
         return ['envelope' => $this->serializeEnvelope($resource->refresh(), $caller)];
+    }
+
+    /**
+     * The envelope's owner: the user_id FK cascades (the envelope is
+     * deleted with its owner), so a persisted envelope always has one —
+     * a missing one is an invariant breach (same convention as
+     * sharedResource()).
+     */
+    private function envelopeOwner(Envelope $envelope): User
+    {
+        $owner = $envelope->user;
+
+        if (! $owner instanceof User) {
+            throw new LogicException('The share routes of this controller require an owned envelope.');
+        }
+
+        return $owner;
     }
 
     /**

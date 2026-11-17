@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Database\Seeders;
 
 use App\Models\Budget;
@@ -14,6 +16,7 @@ use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use LogicException;
 
 /**
  * Seeds a typical Canadian household for test@domain.com: dual income
@@ -212,7 +215,13 @@ class TestHouseholdSeeder extends Seeder
      */
     private function seedMonthTransactions(Ledger $ledger, User $user, array $envelopes, int $month): void
     {
-        $daysInMonth = Carbon::create(2026, $month, 1)->daysInMonth;
+        $firstOfMonth = Carbon::create(2026, $month, 1);
+
+        if ($firstOfMonth === null) {
+            throw new LogicException("Unresolvable seeding month: $month.");
+        }
+
+        $daysInMonth = $firstOfMonth->daysInMonth;
 
         foreach ($this->envelopes as $plan) {
             $envelope = $envelopes[$plan['name']];

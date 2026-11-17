@@ -17,6 +17,7 @@ use App\Models\User;
 use App\Settings\NotificationSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -440,7 +441,26 @@ class EnvelopeLimitNotificationTest extends TestCase
         $job->beforeCommit();
         dispatch($job);
 
-        $payloads = DB::table('jobs')->pluck('payload')->implode("\n");
+        $payloads = DB::table('jobs')->pluck('payload')
+            // The mailable commands are encrypted in the queue
+            // (`ShouldBeEncrypted`) and every payload carries a random
+            // uuid: judge what actually rides the queue — the decrypted
+            // commands — not the random ciphertext and uuid noise a bare
+            // substring over the raw payload would flake on.
+            ->map(function (string $payload): string {
+                $decoded = json_decode($payload, true);
+                $command = (string) ($decoded['data']['command'] ?? '');
+
+                // Encrypted commands are the base64 of the {iv, value, mac}
+                // envelope; plain ones start with the PHP-serialization tag.
+                $envelope = json_decode((string) base64_decode($command, true), true);
+
+                return is_array($envelope) && isset($envelope['iv'], $envelope['value'], $envelope['mac'])
+                    ? Crypt::decryptString($command)
+                    : $command;
+            })
+            ->implode("\n");
+
         // The job carries the transaction's ID only: no amounts, no names,
         // no emails ride the queue.
         $this->assertStringNotContainsString('250', $payloads);

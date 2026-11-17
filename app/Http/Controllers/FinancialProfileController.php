@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Http\Requests\Profile\StoreFinancialProfileRequest;
@@ -28,8 +30,10 @@ class FinancialProfileController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $user = $this->currentUser($request);
+
         $memberships = DB::table('financial_profile_user')
-            ->where('user_id', $request->user()->id)
+            ->where('user_id', $user->id)
             ->get(['profile_id', 'is_owner', 'is_default'])
             ->mapWithKeys(fn (object $row): array => [
                 (int) $row->profile_id => (array) $row,
@@ -55,11 +59,12 @@ class FinancialProfileController extends Controller
     public function store(StoreFinancialProfileRequest $request): JsonResponse
     {
         $validated = $request->validated();
+        $user = $this->currentUser($request);
 
-        $profile = FinancialProfile::createOwnedBy($request->user(), $validated['name']);
+        $profile = FinancialProfile::createOwnedBy($user, $validated['name']);
 
         return response()->json([
-            'profile' => $this->serialize($profile, true, $profile->isDefaultFor($request->user())),
+            'profile' => $this->serialize($profile, true, $profile->isDefaultFor($user)),
         ], 201);
     }
 
@@ -69,12 +74,13 @@ class FinancialProfileController extends Controller
     public function show(Request $request, FinancialProfile $profile): JsonResponse
     {
         $this->authorize('view', $profile);
+        $user = $this->currentUser($request);
 
         return response()->json([
             'profile' => $this->serialize(
                 $profile,
-                $profile->isOwner($request->user()),
-                $profile->isDefaultFor($request->user()),
+                $profile->isOwner($user),
+                $profile->isDefaultFor($user),
             ),
         ]);
     }
@@ -85,12 +91,13 @@ class FinancialProfileController extends Controller
     public function update(UpdateFinancialProfileRequest $request, FinancialProfile $profile): JsonResponse
     {
         $profile->update($request->validated());
+        $user = $this->currentUser($request);
 
         return response()->json([
             'profile' => $this->serialize(
                 $profile,
-                $profile->isOwner($request->user()),
-                $profile->isDefaultFor($request->user()),
+                $profile->isOwner($user),
+                $profile->isDefaultFor($user),
             ),
         ]);
     }
@@ -103,14 +110,15 @@ class FinancialProfileController extends Controller
     public function setDefault(Request $request, FinancialProfile $profile): JsonResponse
     {
         $this->authorize('view', $profile);
+        $user = $this->currentUser($request);
 
-        $profile->markDefaultFor($request->user());
+        $profile->markDefaultFor($user);
 
         return response()->json([
             'profile' => $this->serialize(
                 $profile,
-                $profile->isOwner($request->user()),
-                $profile->isDefaultFor($request->user()),
+                $profile->isOwner($user),
+                $profile->isDefaultFor($user),
             ),
         ]);
     }
@@ -193,7 +201,7 @@ class FinancialProfileController extends Controller
      */
     public function removeMember(Request $request, FinancialProfile $profile, User $user): JsonResponse
     {
-        $current = $request->user();
+        $current = $this->currentUser($request);
 
         $this->authorize('view', $profile);
         abort_unless($profile->isMember($user), 404);
@@ -225,9 +233,11 @@ class FinancialProfileController extends Controller
      */
     public function transferOwnership(TransferOwnershipRequest $request, FinancialProfile $profile): JsonResponse
     {
+        $user = $this->currentUser($request);
+
         $target = $this->permissionService->ensureNotOwner(
             $this->permissionService->profileMember($profile, $request->targetId()),
-            $request->user(),
+            $user,
             __('You already own this profile.'),
         );
 
@@ -236,8 +246,8 @@ class FinancialProfileController extends Controller
         return response()->json([
             'profile' => $this->serialize(
                 $profile,
-                $profile->isOwner($request->user()),
-                $profile->isDefaultFor($request->user()),
+                $profile->isOwner($user),
+                $profile->isDefaultFor($user),
             ),
         ]);
     }

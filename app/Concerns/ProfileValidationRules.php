@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Concerns;
 
 use App\Models\User;
@@ -12,7 +14,7 @@ trait ProfileValidationRules
     /**
      * Get the validation rules used to validate user profiles.
      *
-     * @return array<string, array<int, ValidationRule|array<mixed>|string>>
+     * @return array<string, array<int, ValidationRule|\Stringable|array<mixed>|string>>
      */
     protected function profileRules(?int $userId = null): array
     {
@@ -27,7 +29,7 @@ trait ProfileValidationRules
      * Get the validation rules used to validate the user's preferred
      * locale. A null locale means "follow the browser".
      *
-     * @return array<int, ValidationRule|array<mixed>|string>
+     * @return array<int, ValidationRule|\Stringable|array<mixed>|string>
      */
     protected function localeRules(): array
     {
@@ -55,7 +57,7 @@ trait ProfileValidationRules
      * otherwise a blacklisted address could be claimed by simply updating
      * an existing account.
      *
-     * @return array<int, ValidationRule|array<mixed>|string>
+     * @return array<int, ValidationRule|\Stringable|array<mixed>|string>
      */
     protected function emailRules(?int $userId = null): array
     {

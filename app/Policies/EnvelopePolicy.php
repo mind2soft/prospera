@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Policies;
 
 use App\Models\Envelope;
@@ -50,7 +52,9 @@ class EnvelopePolicy
      */
     public function viewShares(User $user, Envelope $envelope): Response
     {
-        return $envelope->isOwner($user) || FinancialProfile::membersShareAProfile($envelope->user, $user)
+        $owner = $envelope->user;
+
+        return $envelope->isOwner($user) || ($owner !== null && FinancialProfile::membersShareAProfile($owner, $user))
             ? Response::allow()
             : Response::denyAsNotFound();
     }

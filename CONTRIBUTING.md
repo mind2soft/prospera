@@ -32,6 +32,17 @@ A pre-commit hook formats staged PHP and frontend files automatically (Pint +
 Biome, see the README). It is installed by `composer setup`; in an existing
 clone, run `npx vp hooks enable` once.
 
+Static analysis runs at **PHPStan level 8** (`composer types:check`) — new
+code must stay clean at that level. Fix the underlying cause of a finding
+(the documented lock and FK invariants are a good source of truth for what
+can actually be null); do not suppress diagnostics, and never weaken tests
+to make analysis pass.
+
+`declare(strict_types=1)` is adopted incrementally: every new PHP file must
+declare it, and files touched by a change adopt it when the change is
+type-safe (the test suite catches coercion that is not). Do not mass-convert
+unrelated files in an otherwise focused PR — that is its own refactor.
+
 In addition:
 
 - **New features and bug fixes need tests.** Backend changes need PHPUnit

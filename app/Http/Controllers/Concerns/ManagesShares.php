@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers\Concerns;
 
 use App\Http\Requests\Sharing\StoreShareRequest;
@@ -88,7 +90,7 @@ trait ManagesShares
 
         $this->authorize($this->viewSharesAbility(), $resource);
 
-        return response()->json(['shares' => $this->shareList($resource, $request->user())]);
+        return response()->json(['shares' => $this->shareList($resource, $this->currentUser($request))]);
     }
 
     /**
@@ -117,7 +119,7 @@ trait ManagesShares
 
         $this->permissionService->updatePermission($table, $column, (int) $resource->getKey(), $userId, $request->permission());
 
-        return response()->json(['shares' => $this->shareList($resource, $request->user())]);
+        return response()->json(['shares' => $this->shareList($resource, $this->currentUser($request))]);
     }
 
     /**
@@ -141,6 +143,6 @@ trait ManagesShares
      */
     public function transferOwnership(TransferOwnershipRequest $request, Model $resource): JsonResponse
     {
-        return response()->json($this->transferOwnershipOf($this->sharedResource($resource), $request->user(), $request->targetId()));
+        return response()->json($this->transferOwnershipOf($this->sharedResource($resource), $this->currentUser($request), $request->targetId()));
     }
 }

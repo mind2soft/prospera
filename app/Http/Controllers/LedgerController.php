@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ManagesShares;
@@ -47,15 +49,15 @@ class LedgerController extends Controller
      */
     public function apiIndex(Request $request): JsonResponse
     {
+        $user = $this->currentUser($request);
+
         if ($request->filled('profile_id')) {
             $this->authorizeProfileId((int) $request->query('profile_id'));
 
             $query = Ledger::query()->where('profile_id', (int) $request->query('profile_id'));
         } else {
-            $query = Ledger::query()->visibleTo($request->user());
+            $query = Ledger::query()->visibleTo($user);
         }
-
-        $user = $request->user();
 
         // Only the caller's share row resolves their permission.
         $ledgers = $query
@@ -81,6 +83,7 @@ class LedgerController extends Controller
     {
         $validated = $request->validated();
         $profile = $request->profile();
+        $user = $this->currentUser($request);
 
         if (! app(OnboardingProgress::class)->forProfile($profile)['can_create_ledger']) {
             throw ValidationException::withMessages([
@@ -88,7 +91,7 @@ class LedgerController extends Controller
             ]);
         }
 
-        $ledger = DB::transaction(function () use ($request, $profile, $validated): Ledger {
+        $ledger = DB::transaction(function () use ($user, $profile, $validated): Ledger {
             $ledger = Ledger::create([
                 'profile_id' => $profile->id,
                 'name' => $validated['name'],
@@ -100,7 +103,7 @@ class LedgerController extends Controller
             ]);
 
             $ledger->permissions()->create([
-                'user_id' => $request->user()->id,
+                'user_id' => $user->id,
                 'permission' => ResourcePermissions::OWNER,
             ]);
 
@@ -108,7 +111,7 @@ class LedgerController extends Controller
         });
 
         return response()->json([
-            'ledger' => $this->serializeLedger($ledger, $request->user()),
+            'ledger' => $this->serializeLedger($ledger, $user),
         ], 201);
     }
 
@@ -138,6 +141,7 @@ class LedgerController extends Controller
     public function close(Request $request, Ledger $ledger): JsonResponse
     {
         $this->authorize('update', $ledger);
+        $user = $this->currentUser($request);
 
         $locked = DB::transaction(function () use ($ledger): Ledger {
             $locked = $this->lockLedger($ledger->id);
@@ -148,7 +152,7 @@ class LedgerController extends Controller
         });
 
         return response()->json([
-            'ledger' => $this->serializeLedger($locked, $request->user()),
+            'ledger' => $this->serializeLedger($locked, $user),
         ]);
     }
 
@@ -159,6 +163,7 @@ class LedgerController extends Controller
     public function reopen(Request $request, Ledger $ledger): JsonResponse
     {
         $this->authorize('update', $ledger);
+        $user = $this->currentUser($request);
 
         $locked = DB::transaction(function () use ($ledger): Ledger {
             $locked = $this->lockLedger($ledger->id);
@@ -169,7 +174,7 @@ class LedgerController extends Controller
         });
 
         return response()->json([
-            'ledger' => $this->serializeLedger($locked, $request->user()),
+            'ledger' => $this->serializeLedger($locked, $user),
         ]);
     }
 
@@ -185,7 +190,7 @@ class LedgerController extends Controller
         $from = Carbon::parse($validated['from_date'])->startOfDay();
         $to = Carbon::parse($validated['to_date'])->endOfDay();
 
-        $user = $request->user();
+        $user = $this->currentUser($request);
 
         // The ledger's profile is known: no lookup query when decrypting.
         app(AmountKeyRing::class)->rememberLedgerProfiles([$ledger->id], $ledger->profile_id);
@@ -230,11 +235,23 @@ class LedgerController extends Controller
 
         return response()->json([
             'transactions' => $transactions
-                ->map(fn (Transaction $transaction) => $this->serializeTransaction(
-                    $transaction,
-                    $transaction->envelope->permissionFor($user, $coMemberIds),
-                    $this->remainingAllocated($transaction, $allocations, $monthlyTotals),
-                ))
+                ->map(function (Transaction $transaction) use ($user, $coMemberIds, $allocations, $monthlyTotals) {
+                    // The envelope_id FK restricts deletes: a persisted
+                    // transaction always has its envelope — a missing one
+                    // is an invariant breach (same convention as
+                    // serializeTransaction below).
+                    $envelope = $transaction->envelope;
+
+                    if ($envelope === null) {
+                        throw new LogicException('The transaction has no envelope.');
+                    }
+
+                    return $this->serializeTransaction(
+                        $transaction,
+                        $envelope->permissionFor($user, $coMemberIds),
+                        $this->remainingAllocated($transaction, $allocations, $monthlyTotals),
+                    );
+                })
                 ->values(),
         ]);
     }
@@ -397,6 +414,7 @@ class LedgerController extends Controller
     public function addTransaction(StoreTransactionRequest $request, Ledger $ledger): JsonResponse
     {
         $validated = $request->validated();
+        $user = $this->currentUser($request);
 
         if ($ledger->isClosed()) {
             throw ValidationException::withMessages([
@@ -404,10 +422,9 @@ class LedgerController extends Controller
             ]);
         }
 
-        /** @var Envelope|null $envelope */
-        $envelope = Envelope::query()->find($validated['envelope_id']);
+        $envelope = Envelope::query()->find((int) $validated['envelope_id']);
 
-        if ($envelope === null || $request->user()->cannot('use', $envelope)) {
+        if ($envelope === null || $user->cannot('use', $envelope)) {
             throw ValidationException::withMessages([
                 'envelope_id' => __('You need contributor access to this envelope to record transactions.'),
             ]);
@@ -424,7 +441,7 @@ class LedgerController extends Controller
             ]);
         }
 
-        $transaction = DB::transaction(function () use ($request, $ledger, $envelope, $validated, $eventAt): Transaction {
+        $transaction = DB::transaction(function () use ($user, $ledger, $envelope, $validated, $eventAt): Transaction {
             // The ledger's read-only state is re-read under the ledger's
             // serialization lock: the route-bound model is only an
             // authorization entry point, and a close committed in the
@@ -440,7 +457,7 @@ class LedgerController extends Controller
             $direction = Envelope::query()->whereKey($envelope->id)->sharedLock()->firstOrFail();
 
             return $lockedLedger->transactions()->create([
-                'user_id' => $request->user()->id,
+                'user_id' => $user->id,
                 'envelope_id' => $envelope->id,
                 'amount' => $direction->signedAmount((float) $validated['amount']),
                 'event_at' => $eventAt,
@@ -523,8 +540,9 @@ class LedgerController extends Controller
     public function restoreTransaction(Request $request, Transaction $transaction): JsonResponse
     {
         $this->authorizeTransactionChange($transaction, 'restore');
+        $user = $this->currentUser($request);
 
-        DB::transaction(function () use ($request, $transaction): void {
+        DB::transaction(function () use ($user, $transaction): void {
             // The ledger's read-only state is re-read under the ledger's
             // serialization lock before the restore proceeds
             // (docs/ledger.md).
@@ -553,8 +571,8 @@ class LedgerController extends Controller
                 ]);
             }
 
-            if ($pending->user_id === $request->user()->id
-                && ($envelope === null || $request->user()->cannot('use', $envelope))) {
+            if ($pending->user_id === $user->id
+                && ($envelope === null || $user->cannot('use', $envelope))) {
                 throw ValidationException::withMessages([
                     'envelope_id' => __('You need contributor access to this envelope to record transactions.'),
                 ]);
@@ -576,6 +594,10 @@ class LedgerController extends Controller
     private function authorizeTransactionChange(Transaction $transaction, string $ability): void
     {
         $ledger = $transaction->ledger;
+
+        // The ledger_id FK cascades: a persisted transaction always has its
+        // ledger; a null one means the row is orphaned — invisible.
+        abort_if($ledger === null, 404);
 
         $this->authorize('view', $ledger);
 
@@ -699,7 +721,7 @@ class LedgerController extends Controller
             'starting_balance' => $ledger->starting_balance,
             'closed_at' => $ledger->closed_at?->toISOString(),
             'status' => $ledger->isClosed() ? 'closed' : 'open',
-            'created_at' => $ledger->created_at->toISOString(),
+            'created_at' => $ledger->created_at?->toISOString(),
             'permission' => $ledger->permissionFor($user, $isMember),
         ];
     }
@@ -719,24 +741,32 @@ class LedgerController extends Controller
     ): array {
         $transaction->loadMissing(['envelope', 'user']);
 
+        // The envelope_id FK restricts deletes: a persisted transaction
+        // always has its envelope.
+        $envelope = $transaction->envelope;
+
+        if ($envelope === null) {
+            throw new LogicException('The transaction has no envelope.');
+        }
+
         $masked = $permission === ResourcePermissions::NONE;
 
         $payload = [
             'id' => $transaction->id,
             'ledger_id' => $transaction->ledger_id,
             'envelope_id' => $transaction->envelope_id,
-            'name' => $transaction->envelope->name,
-            'color' => $transaction->envelope->color,
-            'direction' => $transaction->envelope->type,
+            'name' => $envelope->name,
+            'color' => $envelope->color,
+            'direction' => $envelope->type,
             'amount' => $masked ? null : $transaction->amount,
             'masked' => $masked,
             'event_at' => $transaction->event_at->toDateString(),
-            'created_at' => $transaction->created_at->toISOString(),
+            'created_at' => $transaction->created_at?->toISOString(),
             'user' => [
                 'id' => $transaction->user_id,
-                'name' => $transaction->user_id === null
-                    ? __('Former member')
-                    : $transaction->user->name,
+                // user_id is nulled when the account is deleted
+                // (nullOnDelete): "Former member" covers a null relation.
+                'name' => $transaction->user->name ?? __('Former member'),
             ],
         ];
 

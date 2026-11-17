@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Dashboard;
 
 use App\Models\DashboardWidget;
@@ -38,7 +40,7 @@ final class DashboardLayoutValidator
      * validated by SaveDashboardLayoutRequest.
      *
      * @param  array<mixed>  $widgets
-     * @return list<array{id?: int, type: string, title: string|null, view_type: string, column_width: int, period: array{type: string, range: int}, selection: list<array<string, mixed>>}>
+     * @return list<array{id: int|null, type: string, title: string|null, view_type: string, column_width: int, period: array{type: string, range: int}, selection: list<array<string, mixed>>}>
      */
     public function validate(array $widgets, User $user): array
     {
@@ -128,7 +130,7 @@ final class DashboardLayoutValidator
      *
      * @param  array<string, mixed>|null  $widget  raw widget payload
      * @param  array<int, int>  $visibleIds
-     * @return array{id?: int|null, type: string, title: string|null, view_type: string, column_width: int, period: array{type: string, range: int}, selection: list<array<string, mixed>>}
+     * @return array{id: int|null, type: string, title: string|null, view_type: string, column_width: int, period: array{type: string, range: int}, selection: list<array<string, mixed>>}
      */
     private function validateWidget(int $index, mixed $widget, array $visibleIds): array
     {

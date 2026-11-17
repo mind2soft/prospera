@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Actions;
 
 use App\Models\DeletedAccountEmail;
@@ -141,8 +143,14 @@ class DeleteAccount
 
             $candidate = $candidates->first(fn (object $row): bool => $profileIds->contains($row->profile_id));
 
-            if ($candidate !== null && $heirs->has($candidate->user_id)) {
-                $envelope->transferTo($heirs->get($candidate->user_id));
+            if ($candidate === null) {
+                continue;
+            }
+
+            $heir = $heirs->get($candidate->user_id);
+
+            if ($heir instanceof User) {
+                $envelope->transferTo($heir);
             }
         }
     }

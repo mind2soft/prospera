@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Requests;
 
+use App\Http\Requests\Concerns\ResolvesUser;
 use App\Models\Envelope;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Foundation\Http\FormRequest;
@@ -14,6 +17,8 @@ use Illuminate\Validation\Rule;
  */
 class EnvelopeRequest extends FormRequest
 {
+    use ResolvesUser;
+
     public function authorize(): Response
     {
         $envelope = $this->route('envelope');
@@ -34,7 +39,7 @@ class EnvelopeRequest extends FormRequest
                 'string',
                 'max:60',
                 Rule::unique('envelopes')
-                    ->where('user_id', $this->user()->id)
+                    ->where('user_id', $this->currentUser()->id)
                     ->ignore($this->route('envelope')),
             ],
             // The envelope's direction (exposed as `direction` in API payloads).

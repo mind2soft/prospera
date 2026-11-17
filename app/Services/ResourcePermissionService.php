@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
 use App\Models\FinancialProfile;
@@ -64,11 +66,22 @@ final class ResourcePermissionService
      */
     public function explicitPermissions(string $shareTable, string $resourceColumn, int $resourceId, ?User $owner = null, ?Collection $visibleUserIds = null): array
     {
-        $shares = DB::table($shareTable)
+        $query = DB::table($shareTable)
             ->join('users', 'users.id', '=', $shareTable.'.user_id')
-            ->where($shareTable.'.'.$resourceColumn, $resourceId)
-            ->when($owner !== null, fn ($query) => $query->where('users.id', '!=', $owner->id))
-            ->when($visibleUserIds !== null, fn ($query) => $query->whereIn('users.id', $visibleUserIds->all()))
+            ->where($shareTable.'.'.$resourceColumn, $resourceId);
+
+        // Owner and grant-restriction filters are applied as plain ifs: the
+        // narrowed owner/ids are used inside the query, not captured by a
+        // closure.
+        if ($owner !== null) {
+            $query->where('users.id', '!=', $owner->id);
+        }
+
+        if ($visibleUserIds !== null) {
+            $query->whereIn('users.id', $visibleUserIds->all());
+        }
+
+        $shares = $query
             ->orderBy($shareTable.'.created_at')
             ->get(['users.id', 'users.name', 'users.email', $shareTable.'.permission'])
             ->map(fn ($member) => [
