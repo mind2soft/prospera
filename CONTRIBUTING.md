@@ -37,6 +37,13 @@ In addition:
 - **New features and bug fixes need tests.** Backend changes need PHPUnit
   feature tests; frontend behaviour changes need Playwright e2e coverage when
   the change is user-visible.
+- **Run the unit tests** for frontend logic changes (save queues,
+  composables — anything testable without a browser):
+
+    ```bash
+    npm run test    # Vitest, non-watch; runs as part of `composer ci:check`
+    ```
+
 - **Run the e2e suite** for UI or flow changes:
 
     ```bash

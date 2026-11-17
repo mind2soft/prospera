@@ -51,6 +51,7 @@
         "@tailwindcss/vite": "^4.1.11",
         "@types/node": "^26.6.6",
         "@vitejs/plugin-vue": "^6.0.0",
+        "happy-dom": "^21.0.4",
         "typescript": "^7.0.2",
         "typescript-classic": "npm:@typescript/typescript6@^6.0.2",
         "vite": "npm:@voidzero-dev/vite-plus-core@1.6.0",
