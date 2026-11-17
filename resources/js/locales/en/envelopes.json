@@ -109,7 +109,6 @@
                 "month": "Month",
                 "reminder": "Reminder",
                 "reminderDays": "Days before",
-                "remindersNote": "Reminder emails are not sent yet.",
                 "save": "Save schedule",
                 "create": "Add schedule",
                 "saving": "Saving…"
@@ -134,7 +133,7 @@
                 "weekdays": "Choose at least one day of the week.",
                 "dayOfMonth": "Enter a day between 1 and 31.",
                 "month": "Choose a month.",
-                "reminderDays": "Enter a whole number of days, 1 or more."
+                "reminderDays": "Enter a whole number of days, from 1 to {max}."
             },
             "delete": {
                 "title": "Delete schedule?",

@@ -44,6 +44,9 @@ class EnvelopeSchedule extends Model implements HasEncryptedAmounts, HasImmutabl
     use EncryptsAmounts;
     use SoftDeletes;
 
+    /** Reminders are sent at most this many days before an occurrence. */
+    public const MAX_REMINDER_DAYS = 366;
+
     protected $fillable = [
         'envelope_id', 'amount', 'start_date', 'end_date', 'period',
         'weekdays', 'day_of_month', 'month', 'reminder_days',
@@ -85,9 +88,9 @@ class EnvelopeSchedule extends Model implements HasEncryptedAmounts, HasImmutabl
             throw new LogicException('A schedule cannot move to another envelope.');
         }
 
-        foreach (['day_of_month', 'month', 'reminder_days'] as $column) {
+        foreach (['day_of_month' => 2147483647, 'month' => 2147483647, 'reminder_days' => self::MAX_REMINDER_DAYS] as $column => $max) {
             $value = $this->getAttribute($column);
-            if ($value !== null && (! is_int($value) || $value < 0 || $value > 2147483647)) {
+            if ($value !== null && (! is_int($value) || $value < 0 || $value > $max)) {
                 throw new InvalidArgumentException('Schedule numeric fields must be non-negative integers within the supported range.');
             }
         }

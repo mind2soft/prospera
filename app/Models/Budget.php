@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Models;
 
 use App\Models\Builders\GuardedBuilder;
@@ -90,6 +92,21 @@ class Budget extends Model implements HasImmutableColumns
     public function envelopes(): HasMany
     {
         return $this->hasMany(BudgetEnvelope::class);
+    }
+
+    /**
+     * Published budgets assigning the envelope. Their profiles are the
+     * profiles "referencing" the envelope for scheduled transactions: the
+     * ones its schedules materialize into, and whose members receive its
+     * payment reminders (docs/scheduled-transactions.md).
+     *
+     * @return GuardedBuilder<self>
+     */
+    public static function publishedAssigning(int $envelopeId): GuardedBuilder
+    {
+        return self::query()
+            ->whereNotNull('published_at')
+            ->whereHas('envelopes', fn ($assignments) => $assignments->where('envelope_id', $envelopeId));
     }
 
     /**

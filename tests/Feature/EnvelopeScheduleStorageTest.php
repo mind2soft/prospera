@@ -144,7 +144,7 @@ final class EnvelopeScheduleStorageTest extends TestCase
         yield 'fractional day' => [['day_of_month' => 1.5]];
         yield 'negative reminder' => [['reminder_days' => -1]];
         yield 'fractional reminder' => [['reminder_days' => 1.5]];
-        yield 'oversized reminder' => [['reminder_days' => 2147483648]];
+        yield 'oversized reminder' => [['reminder_days' => 367]];
         yield 'expense with positive amount' => [['amount' => 12345]];
         yield 'fractional amount' => [['amount' => -12.34]];
         yield 'plaintext disguised as ciphertext' => [['amount' => 'pa1.1.fake']];
@@ -502,10 +502,13 @@ final class EnvelopeScheduleStorageTest extends TestCase
     public function test_new_migration_is_reversible_without_touching_existing_profile_data(): void
     {
         $key = FinancialProfileKey::query()->sole()->wrapped_key;
-        // Reverse order, like migrate:rollback: the later provenance FK on
-        // transactions depends on envelope_schedules (PostgreSQL enforces it).
+        // Reverse order, like migrate:rollback: the later provenance and
+        // reminder FKs depend on envelope_schedules (PostgreSQL enforces it).
+        $reminders = require database_path('migrations/2026_11_17_000004_create_schedule_reminders_table.php');
         $provenance = require database_path('migrations/2026_11_17_000003_add_schedule_provenance_to_transactions.php');
         $migration = require database_path('migrations/2026_11_17_000001_create_envelope_schedules_table.php');
+        $reminders->down();
+        $this->assertFalse(Schema::hasTable('schedule_reminders'));
         $provenance->down();
         $this->assertFalse(Schema::hasColumn('transactions', 'schedule_id'));
         $migration->down();
@@ -514,7 +517,9 @@ final class EnvelopeScheduleStorageTest extends TestCase
         $this->assertSame($key, FinancialProfileKey::query()->sole()->wrapped_key);
         $migration->up();
         $provenance->up();
+        $reminders->up();
         $this->assertTrue(Schema::hasColumn('transactions', 'schedule_id'));
+        $this->assertTrue(Schema::hasTable('schedule_reminders'));
         $this->assertSame(-12345, $this->schedule()->fresh()?->amount);
     }
 }

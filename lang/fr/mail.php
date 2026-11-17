@@ -73,4 +73,16 @@ return [
         'manage_notifications' => 'Gérer vos notifications :',
     ],
 
+    // Rappels de paiement (issue #15) : une opération planifiée arrive à
+    // échéance — envoyé une fois par échéancier, occurrence et destinataire,
+    // reminder_days avant l'occurrence.
+    'payment_reminder' => [
+        'subject' => '[Prospera] Rappel : opération planifiée « :envelope » le :date',
+        'subject_generic' => '[Prospera] Rappel : une opération planifiée est prévue le :date',
+        'intro' => 'Rappel : une opération planifiée sur l\'enveloppe « :envelope » est prévue le :date.',
+        'amount' => 'Montant : :amount',
+        'next_steps' => 'Elle est enregistrée automatiquement dans les grands livres ouverts dont le mois est couvert par un budget publié qui assigne l\'enveloppe.',
+        'manage_notifications' => 'Gérer vos notifications :',
+    ],
+
 ];

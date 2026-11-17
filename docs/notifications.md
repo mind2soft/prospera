@@ -2,15 +2,11 @@
 
 Email notification settings — the single place where any system notification
 is gated. This feature ships the **settings** (UI, persistence, gate helper);
-the notifications themselves are shipped by their own issues (payment
-reminders first, with scheduled transactions — issue #15).
+the notifications themselves are shipped by their own issues.
 
-> **Status:** **profile invitations**, **ledger expired**,
-> **contributor transactions** and **envelope limit exceeded** are sent
-> today. Payment reminders are **TODO — not yet implemented**: no mailable
-> or trigger exists. Its toggle is shown **disabled** on the settings page
-> with a "Coming soon" hint (the stored value is kept and will apply once
-> the notification ships).
+> **Status:** every toggle has an email behind it — **payment reminders**,
+> **ledger expired**, **contributor transactions**, **envelope limit
+> exceeded** and **profile invitations** are all sent today.
 
 ## Catalog & semantics
 
@@ -20,7 +16,7 @@ regardless of the individual switches.**
 
 | Toggle | Default | Status | Meaning |
 | ------ | ------- | ------ | ------- |
-| **Payment reminders** | on | TODO — not yet implemented ([#15](https://github.com/mind2soft/prospera/issues/15)) | Upcoming scheduled-transaction reminders (sent when a schedule has a `reminder_days` option set). |
+| **Payment reminders** | on | Implemented ([#15](https://github.com/mind2soft/prospera/issues/15), [scheduled-transactions.md](scheduled-transactions.md#payment-reminders)) | An upcoming occurrence of a [scheduled transaction](scheduled-transactions.md) whose schedule has a `reminder_days` option set — sent once per occurrence, `reminder_days` days before it (0 = on the day), to the envelope owner and the members of the profiles referencing the envelope. |
 | **Ledger expired** | on | Implemented ([#50](https://github.com/mind2soft/prospera/issues/50)) | An open ledger you own (or are a member of) whose **end date has passed** — sent once, when the daily run first detects it. |
 | **Contributor transactions** | on | Implemented ([#51](https://github.com/mind2soft/prospera/issues/51)) | Another user records a transaction in a ledger you are the owner of — one email per transaction (the recipient list stays narrow to ledger owners to avoid noisy group mails; broader audiences can be added later). |
 | **Envelope limit exceeded** | on | Implemented ([#52](https://github.com/mind2soft/prospera/issues/52)) | Recorded spending for an envelope within a month **exceeds its allocation on that month's published budget** — checked when the exceeding transaction is recorded; recipients are the envelope owner + envelope contributors. Amounts are masked for recipients holding less than `viewer` permission on the envelope. |
@@ -28,6 +24,19 @@ regardless of the individual switches.**
 
 Timing notes: notifications are queued per-event emails (no digests — a
 digest mode can be added later as a new option without a schema break).
+
+**Payment reminders** ([#15](https://github.com/mind2soft/prospera/issues/15)):
+the daily `php artisan schedules:remind` run queues one
+[`App\Mail\PaymentReminder`](../app/Mail/PaymentReminder.php) per
+(schedule, occurrence, recipient) once `today ≥ occurrence − reminder_days`,
+claimed in `schedule_reminders` (unique index) so re-runs, overlap,
+retries and catch-up never double-send. Occurrences that passed during
+downtime are skipped, never reminded late; an edit moving an occurrence
+re-arms only the new date. Recipients are the envelope owner plus the
+members of the profiles referencing the envelope, deduplicated, verified
+only and re-resolved at send time; the amount is omitted below envelope
+`viewer`. The full rules live in
+[scheduled-transactions.md](scheduled-transactions.md#payment-reminders).
 
 **Ledger expired** ([#50](https://github.com/mind2soft/prospera/issues/50)):
 a daily scheduled command (`php artisan ledgers:notify-expired`, see
@@ -276,6 +285,5 @@ master switch visually emphasized. Individual rows show the localized
 description under the toggle. **Autosave** (no save buttons — project
 convention); master off keeps the individual rows interactive but
 semantically ignored — grayed, with an "all notifications are off" hint.
-Toggles of notifications that are not implemented yet are disabled, shown
-off, and carry a localized "Coming soon" badge (also their accessible
-description).
+Every toggle controls an implemented email; a toggle added before its
+notification ships must not be offered as a control that does nothing.

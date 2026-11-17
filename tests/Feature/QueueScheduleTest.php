@@ -60,4 +60,14 @@ class QueueScheduleTest extends TestCase
         $this->assertTrue($run->withoutOverlapping);
         $this->assertTrue($run->onOneServer);
     }
+
+    public function test_payment_reminders_run_daily_without_overlapping(): void
+    {
+        $run = $this->scheduled('schedules:remind');
+
+        $this->assertNotNull($run, 'schedules:remind is not scheduled');
+        $this->assertSame('0 0 * * *', $run->expression);
+        $this->assertTrue($run->withoutOverlapping);
+        $this->assertTrue($run->onOneServer);
+    }
 }

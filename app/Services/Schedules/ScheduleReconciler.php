@@ -55,10 +55,7 @@ final class ScheduleReconciler
     public function ledgerIdsForEnvelope(int $envelopeId): array
     {
         return $this->openLedgerIds(fn ($query) => $query
-            ->whereIn('profile_id', Budget::query()
-                ->whereNotNull('published_at')
-                ->whereHas('envelopes', fn ($assignments) => $assignments->where('envelope_id', $envelopeId))
-                ->select('profile_id'))
+            ->whereIn('profile_id', Budget::publishedAssigning($envelopeId)->select('profile_id'))
             ->orWhereIn('id', Transaction::withTrashed()
                 ->where('envelope_id', $envelopeId)
                 ->whereNotNull('schedule_id')

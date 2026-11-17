@@ -70,4 +70,16 @@ return [
         'manage_notifications' => 'Manage your notifications:',
     ],
 
+    // Payment reminders (issue #15): a scheduled transaction comes due —
+    // sent once per schedule, occurrence and recipient, reminder_days
+    // before the occurrence.
+    'payment_reminder' => [
+        'subject' => '[Prospera] Reminder: ":envelope" is scheduled for :date',
+        'subject_generic' => '[Prospera] Reminder: a scheduled transaction is due on :date',
+        'intro' => 'Reminder: a scheduled transaction on the envelope ":envelope" is due on :date.',
+        'amount' => 'Amount: :amount',
+        'next_steps' => 'It is recorded automatically in the open ledgers whose month is covered by a published budget assigning the envelope.',
+        'manage_notifications' => 'Manage your notifications:',
+    ],
+
 ];

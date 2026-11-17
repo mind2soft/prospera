@@ -35,6 +35,7 @@ import {
     draftFromSchedule,
     fieldErrorsFromApi,
     ISO_WEEKDAYS,
+    MAX_REMINDER_DAYS,
     monthName,
     type ReminderMode,
     SCHEDULE_PERIODS,
@@ -96,7 +97,10 @@ watch(draft, () => (serverErrors.value = {}), { deep: true });
 const errors = computed((): Partial<Record<ScheduleField, string>> => {
     const client = submitted.value ? validateDraft(draft.value) : {};
     const translated = Object.fromEntries(
-        Object.entries(client).map(([field, key]) => [field, t(key)]),
+        Object.entries(client).map(([field, key]) => [
+            field,
+            t(key, { max: MAX_REMINDER_DAYS }),
+        ]),
     );
 
     return { ...serverErrors.value, ...translated };
@@ -430,7 +434,6 @@ const submit = () => {
                             <SelectTrigger
                                 id="schedule-reminder"
                                 class="w-full"
-                                aria-describedby="schedule-reminder-note"
                             >
                                 <SelectValue />
                             </SelectTrigger>
@@ -448,12 +451,6 @@ const submit = () => {
                                 </SelectItem>
                             </SelectContent>
                         </Select>
-                        <p
-                            id="schedule-reminder-note"
-                            class="text-xs text-muted-foreground"
-                        >
-                            {{ $t('envelopes.schedules.dialog.remindersNote') }}
-                        </p>
                     </div>
 
                     <div
@@ -469,6 +466,7 @@ const submit = () => {
                             type="number"
                             inputmode="numeric"
                             min="1"
+                            :max="MAX_REMINDER_DAYS"
                             step="1"
                             class="tabular-nums"
                         />

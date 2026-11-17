@@ -29,6 +29,12 @@ Schedule::command('ledgers:notify-expired')->daily()->withoutOverlapping()->onOn
 // jobs or downtime; there is no last-run watermark to drift.
 Schedule::command('schedules:sync')->daily()->withoutOverlapping()->onOneServer();
 
+// Payment reminders (issue #15, docs/scheduled-transactions.md): one email
+// per (schedule, occurrence, recipient), claimed in schedule_reminders, so
+// re-runs and catch-ups never double-send; occurrences already past are
+// skipped, never reminded late.
+Schedule::command('schedules:remind')->daily()->withoutOverlapping()->onOneServer();
+
 // Undoable transaction deletion (issue #48, docs/undoable-deletion.md):
 // deleted transactions stay restorable for Transaction::UNDO_WINDOW_SECONDS
 // (3 minutes), then this sweep removes them for good. The overlap lock expires
