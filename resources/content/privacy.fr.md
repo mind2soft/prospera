@@ -1,5 +1,5 @@
 ---
-last-updated: 2026-11-15
+last-updated: 2026-11-17
 ---
 
 > **Document en évolution.** Cette politique est un document évolutif : elle
@@ -99,7 +99,8 @@ s'engage :
 - un **grand livre**, avec les budgets et les transactions liés à sa période
   couverte, est conservé jusqu'à **7 ans après sa date de fin**, puis
   supprimé (par exemple, un grand livre se terminant le 31 décembre 2026 est
-  supprimé au début de 2034) ;
+  supprimé au début de 2034 ; chaque budget lié suit sa propre règle
+  ci-dessous, qui peut le retirer plus tôt) ;
 - un **budget publié** est conservé jusqu'à **7 ans après son mois effectif**,
   et l'ébauche d'un budget **7 ans après sa création** ;
 - la suppression s'effectue au niveau applicatif — les montants ne peuvent

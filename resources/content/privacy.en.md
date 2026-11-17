@@ -1,5 +1,5 @@
 ---
-last-updated: 2026-11-15
+last-updated: 2026-11-17
 ---
 
 > **Work in progress.** This policy is a living document: it will evolve as
@@ -92,7 +92,8 @@ retention policy the service commits to:
 - a **ledger**, with the budgets and transactions tied to its covered period,
   is kept until **7 years after the ledger's end date**, after which it is
   deleted (for example, a ledger ending December 31, 2026 is deleted at the
-  start of 2034);
+  start of 2034; each tied budget follows its own rule below, which can
+  remove it sooner);
 - a **published budget** is kept until **7 years past its effective month**,
   and a budget draft **7 years after its creation**;
 - removal is performed at the application level — the amounts can only be

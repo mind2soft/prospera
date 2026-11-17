@@ -40,4 +40,18 @@ return [
 
     'unverified_account_retention_days' => (int) env('UNVERIFIED_ACCOUNT_RETENTION_DAYS', 30),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Financial Data Retention
+    |--------------------------------------------------------------------------
+    |
+    | Years a ledger is kept past its end date, a published budget past its
+    | effective month, and a budget draft past its creation, before
+    | `retention:prune` (scheduled daily) deletes them, exactly as the
+    | privacy policy promises (issue #61, docs/retention.md).
+    |
+    */
+
+    'financial_retention_years' => (int) env('FINANCIAL_RETENTION_YEARS', 7),
+
 ];

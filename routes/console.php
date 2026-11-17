@@ -49,6 +49,13 @@ Schedule::command('amounts:rotate-keys --all')->monthly()->withoutOverlapping()-
 Schedule::command('amounts:prune-keys')->daily()->withoutOverlapping()->onOneServer();
 Schedule::command('amounts:verify')->daily()->withoutOverlapping()->onOneServer();
 
+// Financial data retention (issue #61, docs/retention.md): ledgers are
+// deleted 7 years after their end date, published budgets 7 years past
+// their effective month and drafts 7 years after their creation — exactly
+// as the privacy policy promises. The run is date-based and idempotent:
+// there is no last-run watermark, so re-runs and catch-ups converge.
+Schedule::command('retention:prune')->daily()->withoutOverlapping()->onOneServer();
+
 // Queued emails (docs/notifications.md). The production host is shared
 // hosting with no long-lived worker: the scheduler drains the queue every
 // minute instead. Each run stops once the queue is empty or after 50s (the

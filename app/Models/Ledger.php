@@ -111,18 +111,25 @@ class Ledger extends Model implements HasEncryptedAmounts, HasImmutableColumns
     /**
      * Delete the ledger and all its transactions in bulk, pending deletions
      * included: a deleted ledger has nothing left to undo.
+     *
+     * The optional $confirm callback runs on the freshly locked ledger before
+     * any deletion; returning false aborts the operation without writing —
+     * the retention prune re-checks eligibility under the lock (issue #61,
+     * docs/retention.md).
      */
-    public function deleteWithTransactions(): void
+    public function deleteWithTransactions(?callable $confirm = null): bool
     {
-        DB::transaction(function (): void {
+        return (bool) DB::transaction(function () use ($confirm): bool {
             // Direct lifecycle callers must obey the same ledger-first
             // serialization as HTTP writers; not all come via the controller.
             $locked = self::query()->whereKey($this->id)->lockForUpdate()->first();
-            if ($locked === null) {
-                return;
+            if ($locked === null || ($confirm !== null && ! $confirm($locked))) {
+                return false;
             }
             $this->transactions()->withTrashed()->forceDelete();
-            $this->delete();
+            $locked->delete();
+
+            return true;
         });
     }
 

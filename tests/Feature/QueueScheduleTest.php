@@ -70,4 +70,14 @@ class QueueScheduleTest extends TestCase
         $this->assertTrue($run->withoutOverlapping);
         $this->assertTrue($run->onOneServer);
     }
+
+    public function test_the_retention_prune_runs_daily_without_overlapping(): void
+    {
+        $run = $this->scheduled('retention:prune');
+
+        $this->assertNotNull($run, 'retention:prune is not scheduled');
+        $this->assertSame('0 0 * * *', $run->expression);
+        $this->assertTrue($run->withoutOverlapping);
+        $this->assertTrue($run->onOneServer);
+    }
 }

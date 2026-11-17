@@ -200,7 +200,11 @@ are reconciled daily in every open ledger as an idempotent catch-up for lost
 jobs or downtime (`php artisan schedules:sync`), and payment reminders are
 queued daily, once per schedule occurrence and recipient, skipping
 occurrences already past (`php artisan schedules:remind` — see
-[docs/scheduled-transactions.md](docs/scheduled-transactions.md)).
+[docs/scheduled-transactions.md](docs/scheduled-transactions.md)), and the
+financial retention prune deletes ledgers 7 years after their end date,
+published budgets 7 years past their effective month and budget drafts
+7 years after their creation, exactly as the privacy policy promises
+(`php artisan retention:prune` — see [docs/retention.md](docs/retention.md)).
 Schedule, budget and ledger changes also queue reconciliation jobs, which the
 same queue worker runs.
 
@@ -277,6 +281,12 @@ Required production environment variables:
   to the canonical repo; self-hosted deployments can point it elsewhere).
 - `CONTACT_LOG_RETENTION_DAYS` — retention of the contact-submission log
   (default 90 days).
+- `UNVERIFIED_ACCOUNT_RETENTION_DAYS` — retention of never-verified accounts
+  that hold no data (default 30 days).
+- `FINANCIAL_RETENTION_YEARS` — financial data retention: ledgers, published
+  budgets and budget drafts are deleted by the daily `retention:prune` after
+  this many years past their end date, effective month or creation
+  (default 7 — the published privacy-policy promise).
 
 - **Merges to `main`** run the full test suite (unit, static analysis and e2e)
   to catch regressions early — but never touch production.

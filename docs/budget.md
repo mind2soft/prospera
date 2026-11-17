@@ -139,6 +139,11 @@ is not silently overwritten.
   open ledgers after commit: occurrences of schedules on the assigned
   envelopes appear for the whole month, and rows whose coverage disappeared
   are removed ([scheduled transactions](scheduled-transactions.md)).
+- **Retention prune** — a published budget is kept 7 years past the end of
+  its effective month, and a draft 7 years after its creation; the daily
+  run (`php artisan retention:prune`, issue #61) deletes them with their
+  shares and assignments. Boundaries and exceptions:
+  [data retention](retention.md).
 - **Concurrency** — publishing and every assignment edit (add, update,
   remove) lock the budget row and re-check the draft state inside their
   transaction, so an edit racing a publish never modifies a published
