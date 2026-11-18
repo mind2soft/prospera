@@ -153,6 +153,8 @@ export type Transaction = {
     /** null + masked: true when the envelope is metadata-only for the user. */
     amount: number | null; // signed currency units, up to two decimal places
     masked: boolean;
+    /** Optional user-authored context; null when absent or masked. */
+    note: string | null;
     event_at: string; // ISO date "2026-10-15" (stored at 00:00:00)
     created_at: string;
     /** Allocated amount minus transactions for the month (null when masked or unallocated). */

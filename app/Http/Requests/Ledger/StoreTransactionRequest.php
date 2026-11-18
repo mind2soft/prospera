@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Requests\Ledger;
 
+use App\Models\Transaction;
 use Illuminate\Auth\Access\Response;
 use Illuminate\Support\Facades\Gate;
 
@@ -31,6 +32,7 @@ class StoreTransactionRequest extends LedgerRequest
             'envelope_id' => ['required', 'integer'],
             'amount' => ['required', 'numeric', 'regex:/^(?:0|[1-9]\d{0,8})(?:\.\d{1,2})?$/D', 'gt:0', 'max:999999999.99'],
             'event_at' => ['required', 'date'],
+            'note' => ['nullable', 'string', 'max:'.Transaction::NOTE_MAX_LENGTH],
             'schedule_id' => ['missing'],
         ];
     }

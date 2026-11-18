@@ -5,6 +5,9 @@ namespace Tests\Feature;
 use App\Mail\ContactMessage;
 use App\Mail\ProfileInvite;
 use App\Models\ContactSubmission;
+use App\Models\FinancialProfile;
+use App\Models\Ledger;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Security\Amounts\AmountKeyRing;
 use Illuminate\Encryption\Encrypter;
@@ -86,6 +89,52 @@ class AppKeyRotationTest extends TestCase
         }
 
         $this->assertNotSame($before['message'], $after['message']);
+    }
+
+    public function test_transaction_notes_are_reencrypted_and_checked_during_app_key_rotation(): void
+    {
+        $old = (string) config('app.key');
+        $new = $this->newAppKey();
+        $user = User::factory()->create();
+        $profile = FinancialProfile::createOwnedBy($user, 'Notes');
+        $ledger = Ledger::create([
+            'profile_id' => $profile->id,
+            'name' => '2026',
+            'start_date' => '2026-01-01',
+            'end_date' => '2026-12-31',
+            'starting_balance' => 0,
+        ]);
+        $ledger->permissions()->create(['user_id' => $user->id, 'permission' => 'owner']);
+        $envelope = $user->envelopes()->create([
+            'name' => 'Food',
+            'type' => 'expense',
+            'color' => '#f43f5e',
+        ]);
+        $transaction = $ledger->transactions()->create([
+            'user_id' => $user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -10,
+            'event_at' => '2026-06-15',
+            'note' => 'A confidential note',
+        ]);
+        $before = (string) DB::table('transactions')->where('id', $transaction->id)->value('note');
+        $transaction->delete();
+
+        $this->useAppKey($new, [$old]);
+        $this->artisan('encryption:verify')
+            ->expectsOutputToContain("transactions #{$transaction->id}")
+            ->assertFailed();
+
+        $this->artisan('contact:reencrypt')
+            ->expectsOutputToContain('1 transaction note(s) re-encrypted')
+            ->assertSuccessful();
+        $after = (string) DB::table('transactions')->where('id', $transaction->id)->value('note');
+        $this->assertNotSame($before, $after);
+        $this->assertTrue($this->decryptsWith($new, $after));
+
+        $this->useAppKey($new, []);
+        $this->assertSame('A confidential note', Transaction::withTrashed()->findOrFail($transaction->id)->note);
+        $this->artisan('encryption:verify')->assertSuccessful();
     }
 
     public function test_reencrypting_is_idempotent(): void

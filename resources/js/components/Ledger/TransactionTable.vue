@@ -1,18 +1,29 @@
 <!-- biome-ignore-all lint/a11y/noNoninteractiveTabindex: the table scroll region must be keyboard-focusable to scroll (WCAG 2.1.1) -->
 <script setup lang="ts">
-import { computed, useTemplateRef } from 'vue';
+import { computed, ref, useTemplateRef } from 'vue';
 import Currency from '@/components/Currency.vue';
 import EnvelopeChip from '@/components/EnvelopeChip.vue';
 import Icon from '@/components/Icon.vue';
+import TransactionNote from '@/components/Ledger/TransactionNote.vue';
+import TransactionNoteInput from '@/components/Ledger/TransactionNoteInput.vue';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useTransactionNoteSuggestions } from '@/composables/ledgerQueries';
 import { getInitials } from '@/composables/useInitials';
 import { useLocale } from '@/composables/useLocale';
 import { formatCalendarDate } from '@/lib/calendar';
@@ -34,6 +45,7 @@ const props = defineProps<{
     /** True while the ledger is open (deletion is impossible when closed). */
     open?: boolean;
     pendingId?: number | null;
+    notePending?: boolean;
     /** The month's transactions are still loading (no data yet). */
     loading?: boolean;
     /** The month's transactions failed to load — never shown as "no transactions". */
@@ -44,8 +56,33 @@ const props = defineProps<{
 
 const emit = defineEmits<{
     remove: [transactionId: number];
+    'update-note': [transactionId: number, note: string | null];
     retry: [];
 }>();
+
+const editingTransaction = ref<Transaction | null>(null);
+const noteDraft = ref('');
+
+/** The edited row's envelope suggests its recent notes too. */
+const editSuggestions = useTransactionNoteSuggestions(
+    () => editingTransaction.value?.ledger_id ?? null,
+    () => editingTransaction.value?.envelope_id ?? null,
+);
+
+const editNote = (transaction: Transaction) => {
+    editingTransaction.value = transaction;
+    noteDraft.value = transaction.note ?? '';
+};
+
+const saveNote = () => {
+    if (editingTransaction.value === null || props.notePending) return;
+    emit(
+        'update-note',
+        editingTransaction.value.id,
+        noteDraft.value.trim() || null,
+    );
+    editingTransaction.value = null;
+};
 
 const canDelete = computed(
     () => (props.open ?? true) && props.permission !== null,
@@ -131,7 +168,7 @@ defineExpose({
                     <th class="px-4 py-2.5 font-medium">
                         {{ $t('ledger.table.user') }}
                     </th>
-                    <th v-if="canDelete" class="w-12 px-4 py-2.5">
+                    <th v-if="canDelete" class="w-24 px-4 py-2.5">
                         <span class="sr-only">{{
                             $t('ledger.table.actions')
                         }}</span>
@@ -169,17 +206,34 @@ defineExpose({
                     <td class="px-4 py-2.5 text-right">
                         <span
                             v-if="transaction.masked"
-                            class="text-muted-foreground"
+                            class="px-1 text-muted-foreground"
                             ><span aria-hidden="true">—</span
                             ><span class="sr-only">{{
                                 $t('ledger.table.amountHidden')
                             }}</span></span
                         >
-                        <Currency
+                        <TransactionNote
+                            v-else-if="transaction.note"
+                            :note="transaction.note"
+                        >
+                            <Currency
+                                :amount="transaction.amount ?? 0"
+                                :currency="currency"
+                            />
+                        </TransactionNote>
+                        <!-- Same box as the note trigger (padding + icon
+                             slot), so every amount shares one right edge. -->
+                        <span
                             v-else
-                            :amount="transaction.amount ?? 0"
-                            :currency="currency"
-                        />
+                            class="inline-flex min-h-7 items-center gap-1 px-1"
+                            data-testid="transaction-amount"
+                        >
+                            <span class="size-4 shrink-0" aria-hidden="true" />
+                            <Currency
+                                :amount="transaction.amount ?? 0"
+                                :currency="currency"
+                            />
+                        </span>
                     </td>
                     <td class="px-4 py-2.5 text-right">
                         <span
@@ -243,27 +297,58 @@ defineExpose({
                             >
                         </TooltipProvider>
                     </td>
-                    <td v-if="canDelete" class="px-4 py-2.5 text-right">
-                        <Button
-                            v-if="mayDelete(transaction)"
-                            variant="ghost"
-                            size="icon-sm"
-                            class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                            :aria-label="
-                                $t('ledger.table.deleteTransactionFor', {
-                                    envelope: transaction.name,
-                                    date: dayLabel(transaction.event_at),
-                                })
-                            "
-                            :disabled="pendingId === transaction.id"
-                            @click="emit('remove', transaction.id)"
-                        >
-                            <Icon
-                                name="delete"
-                                class="size-4"
-                                aria-hidden="true"
-                            />
-                        </Button>
+                    <td v-if="canDelete" class="px-4 py-2.5">
+                        <div class="flex items-center justify-end gap-1">
+                            <Button
+                                v-if="
+                                    mayDelete(transaction) &&
+                                    !transaction.masked
+                                "
+                                variant="ghost"
+                                size="icon-sm"
+                                :aria-label="
+                                    $t(
+                                        transaction.note
+                                            ? 'ledger.table.editNoteFor'
+                                            : 'ledger.table.writeNoteFor',
+                                        {
+                                            envelope: transaction.name,
+                                            date: dayLabel(
+                                                transaction.event_at,
+                                            ),
+                                        },
+                                    )
+                                "
+                                :disabled="notePending"
+                                @click="editNote(transaction)"
+                            >
+                                <Icon
+                                    name="edit-note"
+                                    class="size-4"
+                                    aria-hidden="true"
+                                />
+                            </Button>
+                            <Button
+                                v-if="mayDelete(transaction)"
+                                variant="ghost"
+                                size="icon-sm"
+                                class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                :aria-label="
+                                    $t('ledger.table.deleteTransactionFor', {
+                                        envelope: transaction.name,
+                                        date: dayLabel(transaction.event_at),
+                                    })
+                                "
+                                :disabled="pendingId === transaction.id"
+                                @click="emit('remove', transaction.id)"
+                            >
+                                <Icon
+                                    name="delete"
+                                    class="size-4"
+                                    aria-hidden="true"
+                                />
+                            </Button>
+                        </div>
                     </td>
                 </tr>
                 <tr v-if="error">
@@ -311,4 +396,36 @@ defineExpose({
             </tbody>
         </table>
     </section>
+
+    <Dialog
+        :open="editingTransaction !== null"
+        @update:open="(open) => !open && (editingTransaction = null)"
+    >
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>{{ $t('ledger.noteDialog.title') }}</DialogTitle>
+                <DialogDescription>{{
+                    $t('ledger.noteDialog.description')
+                }}</DialogDescription>
+            </DialogHeader>
+            <TransactionNoteInput
+                id="transaction-note-edit"
+                v-model="noteDraft"
+                :rows="3"
+                :suggestions="editSuggestions.data.value ?? []"
+            />
+            <DialogFooter>
+                <Button
+                    variant="outline"
+                    :disabled="notePending || !noteDraft"
+                    @click="noteDraft = ''"
+                >
+                    {{ $t('ledger.noteDialog.clear') }}
+                </Button>
+                <Button :disabled="notePending" @click="saveNote">
+                    {{ $t('common.actions.save') }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 </template>

@@ -13,6 +13,7 @@
             "transactionAdded": "Transaction added.",
             "transactionDeleted": "Transaction deleted.",
             "transactionRestored": "Transaction restored.",
+            "noteSaved": "Transaction note saved.",
             "undo": "Undo"
         },
         "error": {
@@ -77,6 +78,12 @@
             "envelopePlaceholder": "Choose an envelope",
             "amount": "Amount",
             "amountPlaceholder": "e.g. 42",
+            "note": "Note",
+            "optional": "(optional)",
+            "notePlaceholder": "What was this transaction for?",
+            "noteCounter": "{count}/{max}",
+            "noteSuggestions": "Recent notes",
+            "noteSuggestionsHint": "{count} recent note available. Press the down arrow to choose it. | {count} recent notes available. Press the down arrow to choose one.",
             "eventDate": "Event date",
             "add": "Add",
             "inCurrency": "({currency})",
@@ -122,7 +129,15 @@
             "amountHidden": "Amount hidden",
             "scheduled": "Scheduled",
             "scheduleManaged": "Scheduled transaction. Edit its schedule to change this entry.",
-            "system": "System"
+            "system": "System",
+            "hasNote": "Has a note",
+            "editNoteFor": "Edit note: {envelope}, {date}",
+            "writeNoteFor": "Write note: {envelope}, {date}"
+        },
+        "noteDialog": {
+            "title": "Transaction note",
+            "description": "Add context to this transaction, or clear the note.",
+            "clear": "Clear note"
         }
     }
 }

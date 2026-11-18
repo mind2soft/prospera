@@ -21,6 +21,9 @@ Not every writer needs every root. Manual transaction writers serialize on
 their ledger before the envelope and transaction; draft assignment writers
 serialize on the budget before the envelope and assignment. A writer must
 not acquire a previously missing ledger beneath an envelope/transaction lock.
+Envelope permission changes and ownership transfers lock the envelope before
+mutating permission rows, serializing them with transaction-note visibility
+checks and preserving the envelope-before-child order.
 
 Profile key rotation and pruning lock the profile, **all its ledger roots,
 then all its budget roots**, before changing key inventory or locking money

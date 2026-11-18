@@ -12,6 +12,14 @@ use Illuminate\Auth\Access\Response;
 class TransactionPolicy
 {
     /**
+     * Ledger owners may update any entry, contributors their own entries only.
+     */
+    public function update(User $user, Transaction $transaction): Response
+    {
+        return $this->delete($user, $transaction);
+    }
+
+    /**
      * Ledger owners delete any entry, contributors their own entries only,
      * viewers none; the ledger is invisible (404) without any permission.
      */

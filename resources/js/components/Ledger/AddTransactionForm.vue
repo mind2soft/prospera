@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import Icon from '@/components/Icon.vue';
+import TransactionNoteInput from '@/components/Ledger/TransactionNoteInput.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +13,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { useTransactionNoteSuggestions } from '@/composables/ledgerQueries';
 import { useLocale } from '@/composables/useLocale';
 import { formatCalendarDate } from '@/lib/calendar';
 import type { AddTransactionInput, PickerEnvelope } from '@/lib/ledgerApi';
@@ -19,6 +21,8 @@ import type { AddTransactionInput, PickerEnvelope } from '@/lib/ledgerApi';
 const { locale } = useLocale();
 
 const props = defineProps<{
+    /** The ledger recorded into: note suggestions are scoped to its profile. */
+    ledgerId: number | null;
     envelopes: PickerEnvelope[];
     currency: string;
     selectedDate: string; // "YYYY-MM-DD"
@@ -31,10 +35,17 @@ const emit = defineEmits<(e: 'confirm', input: AddTransactionInput) => void>();
 
 const envelopeId = ref<number | null>(null);
 const amount = ref('');
+const note = ref('');
 
 const selected = computed(
     () =>
         props.envelopes.find((e) => e.envelope_id === envelopeId.value) ?? null,
+);
+
+/** Selecting an envelope loads its recent notes for autocomplete. */
+const noteSuggestions = useTransactionNoteSuggestions(
+    () => props.ledgerId,
+    () => selected.value?.envelope_id ?? null,
 );
 
 const dateLabel = computed(() =>
@@ -66,12 +77,14 @@ const confirm = () => {
         envelope_id: selected.value.envelope_id,
         amount: Number(amount.value),
         event_at: props.selectedDate,
+        note: note.value.trim() || null,
     });
 };
 
 /** Clears the amount once the parent confirms the transaction was saved. */
 const reset = () => {
     amount.value = '';
+    note.value = '';
 };
 
 defineExpose({ reset });
@@ -135,6 +148,14 @@ defineExpose({ reset });
                 class="w-28 tabular-nums"
             />
         </div>
+
+        <TransactionNoteInput
+            id="transaction-note"
+            v-model="note"
+            class="min-w-56 flex-1"
+            :suggestions="noteSuggestions.data.value ?? []"
+            :disabled="disabled"
+        />
 
         <div class="grid gap-1.5">
             <Label id="transaction-date-label" as="span">{{

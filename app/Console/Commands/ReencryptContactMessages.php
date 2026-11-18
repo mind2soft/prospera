@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\ContactSubmission;
+use App\Models\Transaction;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Encryption\Encrypter;
@@ -11,11 +12,9 @@ use Illuminate\Support\Str;
 use Throwable;
 
 /**
- * Re-encrypt the retained contact-form submissions with the current APP_KEY
- * (issue #83). `ContactSubmission::message` is cast `encrypted`, so it is
- * encrypted with APP_KEY directly — unlike the amounts, it is not covered by
- * `amounts:rewrap-keys` or `amounts:verify`, and the APP_KEY rotation runbook
- * must migrate it before the previous key leaves APP_PREVIOUS_KEYS.
+ * Re-encrypt the retained contact-form submissions and transaction notes with
+ * the current APP_KEY (issue #83). Both use Laravel's encrypted cast and are
+ * outside the amount-key rotation commands.
  *
  * Idempotent and resumable: rows that already decrypt with the current key
  * alone are skipped, so rerunning after an interruption (or entirely) only
@@ -42,10 +41,12 @@ class ReencryptContactMessages extends Command
         $current = self::currentKeyEncrypter();
         $reencrypted = 0;
         $skipped = 0;
-        /** @var list<array{id: int, error: string}> $failures */
+        $notesReencrypted = 0;
+        $notesSkipped = 0;
+        /** @var list<array{table: string, id: int, error: string}> $failures */
         $failures = [];
 
-        DB::transaction(function () use (&$reencrypted, &$skipped, &$failures, $current): void {
+        DB::transaction(function () use (&$reencrypted, &$skipped, &$notesReencrypted, &$notesSkipped, &$failures, $current): void {
             ContactSubmission::query()->orderBy('id')->lockForUpdate()->chunkById(self::CHUNK, function (Collection $rows) use (&$reencrypted, &$skipped, &$failures, $current): void {
                 foreach ($rows as $row) {
                     $raw = (string) $row->getRawOriginal('message');
@@ -69,23 +70,44 @@ class ReencryptContactMessages extends Command
                         $row->saveQuietly();
                         $reencrypted++;
                     } catch (Throwable $e) {
-                        $failures[] = ['id' => (int) $row->id, 'error' => $e->getMessage()];
+                        $failures[] = ['table' => 'contact_submissions', 'id' => (int) $row->id, 'error' => $e->getMessage()];
+                    }
+                }
+            });
+
+            Transaction::withTrashed()->whereNotNull('note')->orderBy('id')->lockForUpdate()->chunkById(self::CHUNK, function (Collection $rows) use (&$notesReencrypted, &$notesSkipped, &$failures, $current): void {
+                foreach ($rows as $row) {
+                    $raw = (string) $row->getRawOriginal('note');
+
+                    if ($raw === '' || $this->decrypts($raw, $current)) {
+                        $notesSkipped++;
+
+                        continue;
+                    }
+
+                    try {
+                        $row->setAttribute('note', $row->getAttribute('note'));
+                        $row->saveQuietly();
+                        $notesReencrypted++;
+                    } catch (Throwable $e) {
+                        $failures[] = ['table' => 'transactions (note)', 'id' => (int) $row->id, 'error' => $e->getMessage()];
                     }
                 }
             });
         });
 
         foreach ($failures as $failure) {
-            $this->error("contact_submissions #{$failure['id']}: {$failure['error']}");
+            $this->error("{$failure['table']} #{$failure['id']}: {$failure['error']}");
         }
 
         if ($failures !== []) {
-            $this->error(count($failures).' contact message(s) could not be re-encrypted — do not remove the previous APP_KEY (docs/encryption.md).');
+            $this->error(count($failures).' encrypted record(s) could not be re-encrypted — do not remove the previous APP_KEY (docs/encryption.md).');
 
             return self::FAILURE;
         }
 
         $this->info("{$reencrypted} contact message(s) re-encrypted with the current application key ({$skipped} already on it).");
+        $this->info("{$notesReencrypted} transaction note(s) re-encrypted with the current application key ({$notesSkipped} already on it).");
 
         return self::SUCCESS;
     }

@@ -52,6 +52,7 @@ import {
     useRestoreTransaction,
     useSetLedgerShare,
     useTransferLedgerOwnership,
+    useUpdateTransactionNote,
 } from '@/composables/ledgerQueries';
 import { useOnboardingProgress } from '@/composables/onboardingQueries';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
@@ -349,6 +350,7 @@ const restoreTransaction = useRestoreTransaction({
             ? toast.error(t('ledger.error.restoreExpired'))
             : fail(e),
 });
+const updateTransactionNote = useUpdateTransactionNote();
 const setLedgerShare = useSetLedgerShare();
 const removeLedgerShare = useRemoveLedgerShare();
 const transferLedgerOwnership = useTransferLedgerOwnership();
@@ -601,6 +603,21 @@ const onRemoveTransaction = (transactionId: number) => {
         },
     );
 };
+
+const onUpdateTransactionNote = (
+    transactionId: number,
+    note: string | null,
+) => {
+    const tx = transactions.value.find((row) => row.id === transactionId);
+    if (tx === undefined) return;
+    updateTransactionNote.mutate(
+        { transactionId, ledgerId: tx.ledger_id, note },
+        {
+            onSuccess: () => toast.success(t('ledger.toast.noteSaved')),
+            onError: fail,
+        },
+    );
+};
 </script>
 
 <template>
@@ -824,6 +841,7 @@ const onRemoveTransaction = (transactionId: number) => {
                                 id="add-transaction"
                                 ref="addTransactionForm"
                                 class="scroll-mt-24"
+                                :ledger-id="ledgerId"
                                 :envelopes="pickerEnvelopes"
                                 :pending="addTransaction.isPending.value"
                                 :currency="currency"
@@ -841,6 +859,7 @@ const onRemoveTransaction = (transactionId: number) => {
                         :permission="ledgerPermission"
                         :open="!isClosed"
                         :pending-id="pendingTransactionId"
+                        :note-pending="updateTransactionNote.isPending.value"
                         :loading="transactionsQuery.isPending.value"
                         :error="
                             transactionsQuery.isError.value &&
@@ -848,6 +867,7 @@ const onRemoveTransaction = (transactionId: number) => {
                         "
                         :empty-hint="firstTransactionHint"
                         @remove="onRemoveTransaction"
+                        @update-note="onUpdateTransactionNote"
                         @retry="transactionsQuery.refetch()"
                     />
                 </div>

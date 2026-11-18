@@ -157,24 +157,28 @@ final class ResourcePermissionService
      */
     public function createPermission(string $shareTable, string $resourceColumn, int $resourceId, int $userId, string $permission, string $duplicateMessage): void
     {
-        $exists = DB::table($shareTable)
-            ->where($resourceColumn, $resourceId)
-            ->where('user_id', $userId)
-            ->exists();
+        DB::transaction(function () use ($shareTable, $resourceColumn, $resourceId, $userId, $permission, $duplicateMessage): void {
+            $this->lockEnvelopeForPermissionMutation($shareTable, $resourceId);
 
-        if ($exists) {
-            throw ValidationException::withMessages([
-                'user_id' => $duplicateMessage,
+            $exists = DB::table($shareTable)
+                ->where($resourceColumn, $resourceId)
+                ->where('user_id', $userId)
+                ->exists();
+
+            if ($exists) {
+                throw ValidationException::withMessages([
+                    'user_id' => $duplicateMessage,
+                ]);
+            }
+
+            DB::table($shareTable)->insert([
+                $resourceColumn => $resourceId,
+                'user_id' => $userId,
+                'permission' => $permission,
+                'created_at' => now(),
+                'updated_at' => now(),
             ]);
-        }
-
-        DB::table($shareTable)->insert([
-            $resourceColumn => $resourceId,
-            'user_id' => $userId,
-            'permission' => $permission,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        });
     }
 
     /**
@@ -183,25 +187,29 @@ final class ResourcePermissionService
      */
     public function updatePermission(string $shareTable, string $resourceColumn, int $resourceId, int $userId, string $permission): void
     {
-        $current = DB::table($shareTable)
-            ->where($resourceColumn, $resourceId)
-            ->where('user_id', $userId)
-            ->value('permission');
+        DB::transaction(function () use ($shareTable, $resourceColumn, $resourceId, $userId, $permission): void {
+            $this->lockEnvelopeForPermissionMutation($shareTable, $resourceId);
 
-        if ($current === null) {
-            abort(404);
-        }
+            $current = DB::table($shareTable)
+                ->where($resourceColumn, $resourceId)
+                ->where('user_id', $userId)
+                ->value('permission');
 
-        if ($current === ResourcePermissions::OWNER) {
-            throw ValidationException::withMessages([
-                'share' => __('Use transfer-ownership to change the resource owner.'),
-            ]);
-        }
+            if ($current === null) {
+                abort(404);
+            }
 
-        DB::table($shareTable)
-            ->where($resourceColumn, $resourceId)
-            ->where('user_id', $userId)
-            ->update(['permission' => $permission, 'updated_at' => now()]);
+            if ($current === ResourcePermissions::OWNER) {
+                throw ValidationException::withMessages([
+                    'share' => __('Use transfer-ownership to change the resource owner.'),
+                ]);
+            }
+
+            DB::table($shareTable)
+                ->where($resourceColumn, $resourceId)
+                ->where('user_id', $userId)
+                ->update(['permission' => $permission, 'updated_at' => now()]);
+        });
     }
 
     /**
@@ -209,25 +217,44 @@ final class ResourcePermissionService
      */
     public function deletePermission(string $shareTable, string $resourceColumn, int $resourceId, int $userId): void
     {
-        $permission = DB::table($shareTable)
-            ->where($resourceColumn, $resourceId)
-            ->where('user_id', $userId)
-            ->value('permission');
+        DB::transaction(function () use ($shareTable, $resourceColumn, $resourceId, $userId): void {
+            $this->lockEnvelopeForPermissionMutation($shareTable, $resourceId);
 
-        if ($permission === null) {
-            abort(404);
+            $permission = DB::table($shareTable)
+                ->where($resourceColumn, $resourceId)
+                ->where('user_id', $userId)
+                ->value('permission');
+
+            if ($permission === null) {
+                abort(404);
+            }
+
+            if ($permission === ResourcePermissions::OWNER) {
+                throw ValidationException::withMessages([
+                    'share' => __('The resource owner cannot be removed.'),
+                ]);
+            }
+
+            DB::table($shareTable)
+                ->where($resourceColumn, $resourceId)
+                ->where('user_id', $userId)
+                ->delete();
+        });
+    }
+
+    /**
+     * Envelope note writes hold this same row lock while checking visibility,
+     * so grant changes cannot race the check and disclose or overwrite a note.
+     */
+    private function lockEnvelopeForPermissionMutation(string $shareTable, int $resourceId): void
+    {
+        if ($shareTable !== 'envelope_permissions') {
+            return;
         }
 
-        if ($permission === ResourcePermissions::OWNER) {
-            throw ValidationException::withMessages([
-                'share' => __('The resource owner cannot be removed.'),
-            ]);
-        }
+        $envelope = DB::table('envelopes')->where('id', $resourceId)->lockForUpdate()->first();
 
-        DB::table($shareTable)
-            ->where($resourceColumn, $resourceId)
-            ->where('user_id', $userId)
-            ->delete();
+        abort_if($envelope === null, 404);
     }
 
     /**
