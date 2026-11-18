@@ -80,6 +80,35 @@ export function useLedgerTransactions(
     });
 }
 
+/**
+ * Note suggestions for the selected envelope. Keyed under the ledger's
+ * transactions so recording or editing a note refreshes them.
+ */
+export function useTransactionNoteSuggestions(
+    ledgerId: MaybeRefOrGetter<number | null>,
+    envelopeId: MaybeRefOrGetter<number | null>,
+) {
+    return useQuery({
+        queryKey: computed(() => [
+            ...ledgerKeys.transactions(toValue(ledgerId) ?? 0),
+            'notes',
+            toValue(envelopeId) ?? 0,
+        ]),
+        queryFn: () =>
+            ledgerApi.noteSuggestions(
+                toValue(ledgerId) ?? 0,
+                toValue(envelopeId) ?? 0,
+            ),
+        enabled: computed(
+            () => toValue(ledgerId) !== null && toValue(envelopeId) !== null,
+        ),
+        // Suggestions are optional: a refusal (e.g. no contributor access
+        // to the envelope) leaves a plain field instead of retrying.
+        retry: false,
+        select: (data) => data.notes,
+    });
+}
+
 export function useLedgerShares(
     ledgerId: MaybeRefOrGetter<number | null>,
     enabled?: MaybeRefOrGetter<boolean>,
@@ -173,6 +202,26 @@ export function useAddTransaction(ledgerId: MaybeRefOrGetter<number | null>) {
                 queryKey: ['onboarding', 'progress'],
             });
             invalidateDashboardData(queryClient);
+        },
+    });
+}
+
+export function useUpdateTransactionNote() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: ({
+            transactionId,
+            note,
+        }: {
+            transactionId: number;
+            ledgerId: number;
+            note: string | null;
+        }) => ledgerApi.updateTransactionNote(transactionId, note),
+        onSuccess: (_data, { ledgerId }) => {
+            void queryClient.invalidateQueries({
+                queryKey: ledgerKeys.transactions(ledgerId),
+            });
         },
     });
 }

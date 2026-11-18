@@ -268,25 +268,71 @@ class FinancialProfile extends Model
      */
     public static function pruneEnvelopeGrantsBetween(User $user, iterable $formerCoMembers): void
     {
-        $stillShared = self::coMemberIdsOf($user->id);
+        $others = [];
+        $ownerIds = [$user->id];
 
         foreach ($formerCoMembers as $other) {
-            if ($other->id === $user->id || $stillShared->contains($other->id)) {
+            if ($other->id === $user->id) {
                 continue;
             }
 
-            self::deleteEnvelopeGrants(grantee: $user, envelopeOwner: $other);
-            self::deleteEnvelopeGrants(grantee: $other, envelopeOwner: $user);
+            $others[$other->id] = $other;
+            $ownerIds[] = $other->id;
         }
+
+        if ($others === []) {
+            return;
+        }
+
+        DB::transaction(function () use ($user, $others, $ownerIds): void {
+            // Lock the complete envelope set once in global id order before
+            // deleting any child share row. Separate owner batches could
+            // otherwise deadlock when two profile cleanups overlap.
+            $envelopeIds = Envelope::query()
+                ->whereIn('user_id', array_values(array_unique($ownerIds)))
+                ->orderBy('id')
+                ->pluck('id');
+
+            if ($envelopeIds->isNotEmpty()) {
+                DB::table('envelopes')
+                    ->whereIn('id', $envelopeIds)
+                    ->orderBy('id')
+                    ->lockForUpdate()
+                    ->get(['id']);
+            }
+
+            foreach ($others as $other) {
+                // Membership and references may have changed while waiting
+                // for the envelope roots. Recompute them under those locks.
+                if (self::coMemberIdsOf($user->id)->contains($other->id)) {
+                    continue;
+                }
+
+                self::deleteEnvelopeGrants(grantee: $user, envelopeOwner: $other, lockedEnvelopeIds: $envelopeIds);
+                self::deleteEnvelopeGrants(grantee: $other, envelopeOwner: $user, lockedEnvelopeIds: $envelopeIds);
+            }
+        });
     }
 
     /**
      * Delete the grantee's share rows on the envelope owner's envelopes,
      * except on envelopes still referenced by a profile the grantee
      * belongs to.
+     *
+     * @param  Collection<int, int>  $lockedEnvelopeIds
      */
-    private static function deleteEnvelopeGrants(User $grantee, User $envelopeOwner): void
+    private static function deleteEnvelopeGrants(User $grantee, User $envelopeOwner, Collection $lockedEnvelopeIds): void
     {
+        $ownedEnvelopeIds = DB::table('envelopes')
+            ->whereIn('id', $lockedEnvelopeIds)
+            ->where('user_id', $envelopeOwner->id)
+            ->orderBy('id')
+            ->pluck('id');
+
+        if ($ownedEnvelopeIds->isEmpty()) {
+            return;
+        }
+
         $granteeProfileIds = DB::table('financial_profile_user')
             ->where('user_id', $grantee->id)
             ->pluck('profile_id')
@@ -295,13 +341,16 @@ class FinancialProfile extends Model
 
         $keptEnvelopeIds = $granteeProfileIds === []
             ? []
-            : self::referencingEnvelopes(Envelope::query()->where('user_id', $envelopeOwner->id), $granteeProfileIds)
+            : self::referencingEnvelopes(
+                Envelope::query()->whereIn('id', $ownedEnvelopeIds)->where('user_id', $envelopeOwner->id),
+                $granteeProfileIds,
+            )
                 ->pluck('id')
                 ->all();
 
         DB::table('envelope_permissions')
             ->where('user_id', $grantee->id)
-            ->whereIn('envelope_id', Envelope::query()->where('user_id', $envelopeOwner->id)->select('id'))
+            ->whereIn('envelope_id', $ownedEnvelopeIds)
             ->whereNotIn('envelope_id', $keptEnvelopeIds)
             ->delete();
     }
@@ -398,6 +447,18 @@ class FinancialProfile extends Model
             }
             $owner = $locked->ownerUser();
             $remainingMembers = $locked->members()->whereKeyNot($member->id)->get();
+
+            // The later grant cleanup locks envelopes owned by the departing
+            // member and every former co-member as one globally ordered set.
+            // Acquire that same complete root set before the pending-deletion
+            // purge below can take any envelope lock of its own.
+            $envelopeOwners = $remainingMembers->modelKeys();
+            $envelopeOwners[] = $member->id;
+            Envelope::query()
+                ->whereIn('user_id', array_values(array_unique($envelopeOwners)))
+                ->orderBy('id')
+                ->lockForUpdate()
+                ->get(['id']);
 
             // Before the envelope hand-over below, which only sees live
             // references (docs/undoable-deletion.md).
@@ -550,6 +611,7 @@ class FinancialProfile extends Model
             : collect();
 
         self::referencingEnvelopes(Envelope::query()->where('user_id', $member->id), [$this->id])
+            ->orderBy('id')
             ->get()
             ->each(function (Envelope $envelope) use ($target, $otherProfileIds): void {
                 $usedElsewhere = $otherProfileIds->isNotEmpty() && self::referencingEnvelopes(
@@ -563,7 +625,8 @@ class FinancialProfile extends Model
                     return;
                 }
 
-                $envelope->permissions()->updateOrCreate(
+                $locked = Envelope::query()->whereKey($envelope->id)->lockForUpdate()->firstOrFail();
+                $locked->permissions()->updateOrCreate(
                     ['user_id' => $target->id],
                     ['permission' => ResourcePermissions::CONTRIBUTOR],
                 );

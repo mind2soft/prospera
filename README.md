@@ -251,7 +251,7 @@ the database: without it, no amount can be read.** Rotate it with
 `key:generate`; `php artisan amounts:verify` checks that every amount
 decrypts. Contact messages, the queued mail payloads and the 2FA secrets are
 encrypted with `APP_KEY` directly: `php artisan contact:reencrypt` migrates
-the retained contact messages during a rotation, and `php artisan
+the retained contact messages and transaction notes during a rotation, and `php artisan
 encryption:verify` gates the removal of `APP_PREVIOUS_KEYS` over all of them.
 
 Beware: `php artisan key:generate` replaces the key in place — run it against

@@ -13,6 +13,7 @@
             "transactionAdded": "Transaction ajoutée.",
             "transactionDeleted": "Transaction supprimée.",
             "transactionRestored": "Transaction restaurée.",
+            "noteSaved": "Note de la transaction enregistrée.",
             "undo": "Annuler"
         },
         "error": {
@@ -77,6 +78,12 @@
             "envelopePlaceholder": "Choisir une enveloppe",
             "amount": "Montant",
             "amountPlaceholder": "p. ex. 42",
+            "note": "Note",
+            "optional": "(facultatif)",
+            "notePlaceholder": "À quoi correspond cette transaction ?",
+            "noteCounter": "{count}/{max}",
+            "noteSuggestions": "Notes récentes",
+            "noteSuggestionsHint": "{count} note récente disponible. Appuyez sur la flèche vers le bas pour la choisir. | {count} notes récentes disponibles. Appuyez sur la flèche vers le bas pour en choisir une.",
             "eventDate": "Date de l'opération",
             "add": "Ajouter",
             "inCurrency": "({currency})",
@@ -122,7 +129,15 @@
             "amountHidden": "Montant masqué",
             "scheduled": "Planifiée",
             "scheduleManaged": "Opération planifiée. Modifiez son échéancier pour changer cette écriture.",
-            "system": "Système"
+            "system": "Système",
+            "hasNote": "Comporte une note",
+            "editNoteFor": "Modifier la note : {envelope}, {date}",
+            "writeNoteFor": "Rédiger une note : {envelope}, {date}"
+        },
+        "noteDialog": {
+            "title": "Note de la transaction",
+            "description": "Ajoutez du contexte à cette transaction ou effacez la note.",
+            "clear": "Effacer la note"
         }
     }
 }

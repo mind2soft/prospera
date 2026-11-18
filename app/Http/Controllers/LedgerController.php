@@ -8,6 +8,7 @@ use App\Http\Controllers\Concerns\ManagesShares;
 use App\Http\Requests\Ledger\LedgerTransactionsRequest;
 use App\Http\Requests\Ledger\StoreLedgerRequest;
 use App\Http\Requests\Ledger\StoreTransactionRequest;
+use App\Http\Requests\Ledger\TransactionNoteSuggestionsRequest;
 use App\Jobs\CheckEnvelopeLimit;
 use App\Jobs\ReconcileLedgerSchedules;
 use App\Mail\ContributorTransaction;
@@ -444,6 +445,8 @@ class LedgerController extends Controller
         }
 
         $eventAt = Carbon::parse($validated['event_at'])->startOfDay();
+        $note = isset($validated['note']) ? trim((string) $validated['note']) : null;
+        $note = $note === '' ? null : $note;
 
         if (! $ledger->acceptsEventDate($eventAt)) {
             throw ValidationException::withMessages([
@@ -454,7 +457,7 @@ class LedgerController extends Controller
             ]);
         }
 
-        $transaction = DB::transaction(function () use ($user, $ledger, $envelope, $validated, $eventAt): Transaction {
+        $transaction = DB::transaction(function () use ($user, $ledger, $envelope, $validated, $eventAt, $note): Transaction {
             // The ledger's read-only state is re-read under the ledger's
             // serialization lock: the route-bound model is only an
             // authorization entry point, and a close committed in the
@@ -474,6 +477,7 @@ class LedgerController extends Controller
                 'envelope_id' => $envelope->id,
                 'amount' => $direction->signedAmount((float) $validated['amount']),
                 'event_at' => $eventAt,
+                'note' => $note,
             ])->setRelation('envelope', $direction);
         });
 
@@ -596,6 +600,94 @@ class LedgerController extends Controller
         return response()->json(status: 204);
     }
 
+    /** Update or clear the optional note on a manually recorded transaction. */
+    public function updateTransactionNote(Request $request, Transaction $transaction): JsonResponse
+    {
+        $this->authorizeTransactionChange($transaction, 'update');
+        $user = $this->currentUser($request);
+        $this->authorizeTransactionNoteVisibility($transaction, $user);
+
+        $validated = $request->validate([
+            'note' => ['present', 'nullable', 'string', 'max:'.Transaction::NOTE_MAX_LENGTH],
+        ]);
+        $note = is_string($validated['note']) ? trim($validated['note']) : null;
+        $note = $note === '' ? null : $note;
+        $updated = DB::transaction(function () use ($transaction, $note, $user): Transaction {
+            $ledger = $this->lockLedger($transaction->ledger_id);
+            $this->ensureOpen($ledger);
+
+            // Lock in the documented ledger → envelope → transaction order,
+            // and recheck note visibility against the current envelope grant.
+            $envelope = Envelope::query()
+                ->whereKey($transaction->envelope_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+            $this->ensureCanViewTransactionNote($envelope, $user);
+
+            $locked = Transaction::query()->whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            if ($locked->isGenerated()) {
+                throw ValidationException::withMessages([
+                    'transaction' => __('Scheduled transactions are managed by their schedule.'),
+                ]);
+            }
+
+            $this->authorize('update', $locked);
+            $locked->note = $note;
+            $locked->save();
+
+            return $locked;
+        });
+
+        $updated->loadMissing('envelope');
+        $envelope = $updated->envelope;
+        if ($envelope === null) {
+            throw new LogicException('The transaction has no envelope.');
+        }
+        $permission = $envelope->permissionFor($user, FinancialProfile::coMemberIdsOf($user->id));
+
+        return response()->json([
+            'transaction' => $this->serializeTransaction($updated, $permission, null, withRemaining: false),
+        ]);
+    }
+
+    /**
+     * The most recent distinct notes recorded on an envelope across the
+     * ledger's profile, offered as autocomplete while recording. The caller
+     * must be able to record on the ledger and on the envelope; profile
+     * members already see every ledger of the profile, and the note of a row
+     * is visible to anyone who may use its envelope, so nothing is disclosed
+     * beyond what the ledger view shows. Notes are encrypted at rest, so the
+     * newest noted rows are decrypted (bounded) and deduplicated in PHP.
+     */
+    public function transactionNoteSuggestions(TransactionNoteSuggestionsRequest $request, Ledger $ledger): JsonResponse
+    {
+        $user = $this->currentUser($request);
+        $envelope = Envelope::query()->find((int) $request->validated('envelope_id'));
+
+        if ($envelope === null || $user->cannot('use', $envelope)) {
+            throw ValidationException::withMessages([
+                'envelope_id' => __('You need contributor access to this envelope to record transactions.'),
+            ]);
+        }
+
+        $notes = Transaction::query()
+            ->whereIn('ledger_id', Ledger::query()->where('profile_id', $ledger->profile_id)->select('id'))
+            ->where('envelope_id', $envelope->id)
+            ->whereNull('schedule_id')
+            ->whereNotNull('note')
+            ->orderByDesc('event_at')
+            ->orderByDesc('id')
+            ->limit(Transaction::NOTE_SUGGESTION_SCAN)
+            ->get(['id', 'note'])
+            ->map(fn (Transaction $transaction): string => trim((string) $transaction->note))
+            ->filter(fn (string $note): bool => $note !== '')
+            ->unique()
+            ->take(Transaction::NOTE_SUGGESTIONS)
+            ->values();
+
+        return response()->json(['notes' => $notes]);
+    }
+
     /**
      * Deleting and restoring entries: the ledger must be visible (404
      * otherwise) and open, then the transaction policy decides. The state
@@ -623,6 +715,25 @@ class LedgerController extends Controller
         }
 
         $this->authorize($ability, $transaction);
+    }
+
+    private function authorizeTransactionNoteVisibility(Transaction $transaction, User $user): void
+    {
+        $envelope = $transaction->envelope;
+
+        if ($envelope === null) {
+            abort(404);
+        }
+
+        $this->ensureCanViewTransactionNote($envelope, $user);
+    }
+
+    private function ensureCanViewTransactionNote(Envelope $envelope, User $user): void
+    {
+        abort_if(
+            $envelope->permissionFor($user, FinancialProfile::coMemberIdsOf($user->id)) === ResourcePermissions::NONE,
+            403,
+        );
     }
 
     /**
@@ -782,6 +893,7 @@ class LedgerController extends Controller
             'direction' => $envelope->type,
             'amount' => $masked ? null : $transaction->amount,
             'masked' => $masked,
+            'note' => $masked ? null : $transaction->note,
             'event_at' => $transaction->event_at->toDateString(),
             'created_at' => $transaction->created_at?->toISOString(),
             'user' => [

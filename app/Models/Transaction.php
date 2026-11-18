@@ -42,13 +42,23 @@ class Transaction extends Model implements HasEncryptedAmounts, HasImmutableColu
      */
     public const UNDO_WINDOW_SECONDS = 180;
 
+    /** The longest optional note, in characters (issue #121). */
+    public const NOTE_MAX_LENGTH = 200;
+
+    /** How many distinct recent notes are suggested while recording. */
+    public const NOTE_SUGGESTIONS = 10;
+
+    /** How many recent noted rows are decrypted to find those suggestions. */
+    public const NOTE_SUGGESTION_SCAN = 100;
+
     // schedule_id is assigned only by the system reconciler, never mass-assigned.
-    protected $fillable = ['ledger_id', 'user_id', 'envelope_id', 'amount', 'event_at'];
+    protected $fillable = ['ledger_id', 'user_id', 'envelope_id', 'amount', 'event_at', 'note'];
 
     protected $casts = [
         'user_id' => 'integer',
         'schedule_id' => 'integer',
         'event_at' => 'datetime',
+        'note' => 'encrypted',
     ];
 
     /**

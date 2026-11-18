@@ -294,13 +294,14 @@ key that is no longer listed:
 | Amount data keys (`financial_profile_keys.wrapped_key`)        | By `amounts:rewrap-keys`.                                                                          | **Every amount is lost**, permanently.                        |
 | 2FA secrets and recovery codes (`users.two_factor_*`, Fortify) | Only when a user enables 2FA (secret) or uses or regenerates recovery codes; else by step 5 below. | Users with 2FA cannot log in until an admin resets their 2FA. |
 | Contact messages (`contact_submissions.message`, issue #17)    | By `contact:reencrypt` (step 5).                                                                   | Retained support messages are unreadable.                     |
+| Transaction notes (`transactions.note`, issue #121)            | By `contact:reencrypt` (step 5).                                                                   | Retained transaction notes are unreadable.                     |
 | Queued mail payloads (`jobs`, `failed_jobs` — `ContactMessage`, `ProfileInvite`, issue #17/#39) | Never re-encrypted in place: the queue is drained and failed jobs resolved in step 5. | Pending and failed mail cannot be delivered or retried.       |
 | Cookies (session, remember me, CSRF)                           | On the next response.                                                                              | Users are signed out.                                         |
 | Signed URLs (email verification links, valid 60 minutes)       | Never; new links use the new key.                                                                  | Pending links stop working.                                   |
 
 The direct-`APP_KEY` data is verified with `encryption:verify`. Its default
 check is the old-key-removal gate for step 7, next to `amounts:verify` for
-the amounts: it decrypts contact messages, queued and failed mail payloads
+the amounts: it decrypts contact messages, transaction notes, queued and failed mail payloads
 and the 2FA secrets with the **current** key alone (a fresh encrypter, never
 the previous keys) and fails while anything retained still needs an old key.
 `encryption:verify --allow-previous-keys` is the deploy's pre-switch check
@@ -355,17 +356,18 @@ loses that data (table above).
 
     Users who enable 2FA after this point already use the new key.
 
-    Contact messages are encrypted with `APP_KEY` directly (they are not
-    amounts and are not covered by the commands above). Re-encrypt them:
+    Contact messages and transaction notes are encrypted with `APP_KEY`
+    directly (they are not amounts and are not covered by the commands above).
+    Re-encrypt them:
 
     ```sh
     php artisan contact:reencrypt
     ```
 
     `contact:reencrypt` is idempotent and resumable: it re-encrypts only the
-    rows still on a previous key (each row locked and read through the
-    configured keys, written back under the current one), reports the rows it
-    cannot read by id, and fails without touching them — rerun it after
+    contact messages and transaction notes still on a previous key (each row
+    locked and read through the configured keys, written back under the
+    current one), reports the rows it cannot read by id, and fails without touching them — rerun it after
     fixing the cause.
 
     The queued mailables are encrypted in the queue (`ShouldBeEncrypted`) and
@@ -393,7 +395,7 @@ loses that data (table above).
    longer; their users have to log in again.
 7. **Remove the old key**: only once nothing retained still depends on it —
    `amounts:verify` must pass and `encryption:verify` must report that every
-   contact message, queued and failed mail payload and 2FA secret decrypts
+    contact message, transaction note, queued and failed mail payload and 2FA secret decrypts
    with the current key alone. While `encryption:verify` still fails, keep
    `APP_PREVIOUS_KEYS` and continue draining (a delayed job or an unresolved
    failed job still holds the old key). Then `gh secret delete

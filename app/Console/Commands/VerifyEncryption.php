@@ -12,7 +12,8 @@ use Throwable;
 
 /**
  * The APP_KEY rotation gate (issue #83): check that every persistent payload
- * encrypted directly with APP_KEY decrypts — contact messages, queued and
+ * encrypted directly with APP_KEY decrypts — contact messages, transaction
+ * notes, queued and
  * failed mail payloads (`jobs`, `failed_jobs`: the mailables are encrypted in
  * the queue via ShouldBeEncrypted) and 2FA secrets. The amount checks
  * (`amounts:verify`) do not see them.
@@ -57,6 +58,7 @@ class VerifyEncryption extends Command
         /** @var list<array{table: string, id: int, label: string, error: string}> $failures */
         $failures = [
             ...$this->checkContactMessages($current, $allowPrevious),
+            ...$this->checkTransactionNotes($current, $allowPrevious),
             ...$this->checkUsers($current, $allowPrevious),
             ...$this->checkJobs('jobs', $current, $allowPrevious),
             ...$this->checkJobs('failed_jobs', $current, $allowPrevious),
@@ -119,6 +121,34 @@ class VerifyEncryption extends Command
                 }
 
                 $failures[] = ['table' => 'contact_submissions', 'id' => (int) $row->id, 'label' => '', 'error' => $error];
+            }
+        });
+
+        return $failures;
+    }
+
+    /**
+     * Transaction notes use Laravel's encrypted cast and follow the same
+     * APP_KEY rotation window as retained contact messages.
+     *
+     * @return list<array{table: string, id: int, label: string, error: string}>
+     */
+    private function checkTransactionNotes(Encrypter $current, bool $allowPrevious): array
+    {
+        $failures = [];
+        $error = $this->failure(
+            $allowPrevious,
+            'still on a previous key — run contact:reencrypt (docs/encryption.md)',
+            'cannot be decrypted with the configured APP_KEY set — restore the removed APP_PREVIOUS_KEYS',
+        );
+
+        DB::table('transactions')->whereNotNull('note')->chunkById(self::CHUNK, function (Collection $rows) use (&$failures, $current, $error): void {
+            foreach ($rows as $row) {
+                if ($this->decryptsString((string) $row->note, $current)) {
+                    continue;
+                }
+
+                $failures[] = ['table' => 'transactions', 'id' => (int) $row->id, 'label' => 'note', 'error' => $error];
             }
         });
 

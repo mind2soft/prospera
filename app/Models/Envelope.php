@@ -208,19 +208,27 @@ class Envelope extends Model
      */
     public function transferOwnershipTo(User $target): void
     {
-        $previousOwnerId = $this->user_id;
+        DB::transaction(function () use ($target): void {
+            // Envelope lock precedes every share-row mutation. This is also
+            // the lock used by transaction-note visibility checks and direct
+            // permission changes (docs/financial-locking.md).
+            $locked = self::query()->whereKey($this->id)->lockForUpdate()->firstOrFail();
+            $previousOwnerId = $locked->user_id;
 
-        if ($previousOwnerId === $target->id) {
-            return;
-        }
+            if ($previousOwnerId === $target->id) {
+                $this->setRawAttributes($locked->getAttributes(), true);
 
-        DB::transaction(function () use ($target, $previousOwnerId): void {
-            $this->transferTo($target);
+                return;
+            }
 
-            $this->permissions()->updateOrCreate(
+            $locked->transferTo($target);
+
+            $locked->permissions()->updateOrCreate(
                 ['user_id' => $previousOwnerId],
                 ['permission' => ResourcePermissions::CONTRIBUTOR],
             );
+
+            $this->setRawAttributes($locked->getAttributes(), true);
         });
     }
 
@@ -241,18 +249,29 @@ class Envelope extends Model
         // resolution instead of failing the enclosing operation (member
         // removal, account deletion).
         //
-        // Resolve from the name captured here on every attempt: a failed
-        // save leaves the mutated candidate on the in-memory model.
-        $base = $this->name;
+        retry(3, function () use ($target): void {
+            DB::transaction(function () use ($target): void {
+                // Lock the envelope before touching permission child rows so
+                // transfer, grant, update, revoke, and note writes share one
+                // consistent envelope → permission/transaction lock order.
+                $locked = self::query()->whereKey($this->id)->lockForUpdate()->firstOrFail();
 
-        retry(3, function () use ($target, $base): void {
-            DB::transaction(function () use ($target, $base): void {
-                $this->permissions()->where('user_id', $target->id)->delete();
+                if ($locked->user_id === $target->id) {
+                    $this->setRawAttributes($locked->getAttributes(), true);
 
-                $this->forceFill([
+                    return;
+                }
+
+                $base = $locked->name;
+                $locked->permissions()->where('user_id', $target->id)->delete();
+
+                $locked->forceFill([
                     'user_id' => $target->id,
                     'name' => self::transferredNameFor($base, $target->id),
                 ])->save();
+
+                // Keep the invoking model fresh for callers that serialize it.
+                $this->setRawAttributes($locked->getAttributes(), true);
             });
         }, 50, fn (Throwable $exception) => self::isUniqueViolation($exception));
     }

@@ -1,8 +1,10 @@
 import { api, setResourceShare } from '@/lib/api';
 import * as ledgers from '@/routes/api/ledgers';
 import * as ledgerShares from '@/routes/api/ledgers/shares';
+import * as ledgerTransactionNotes from '@/routes/api/ledgers/transaction-notes';
 import * as ledgerTransactions from '@/routes/api/ledgers/transactions';
 import * as transactions from '@/routes/api/transactions';
+import transactionNoteRoutes from '@/routes/api/transactions/note';
 import type { Ledger, ResourceMember, Transaction } from '@/types';
 
 export type CreateLedgerInput = {
@@ -14,10 +16,14 @@ export type CreateLedgerInput = {
     starting_balance_type: 'cash' | 'debt';
 };
 
+/** Mirrors Transaction::NOTE_MAX_LENGTH on the server. */
+export const NOTE_MAX_LENGTH = 200;
+
 export type AddTransactionInput = {
     envelope_id: number;
     amount: number; // positive currency units, up to two decimal places
     event_at: string; // ISO date ("2026-10-30")
+    note?: string | null;
 };
 
 /** An envelope offered by the transaction picker (contributor+; no budget required). */
@@ -65,6 +71,23 @@ export const ledgerApi = {
     /** Undo a deletion, within the server's undo window. */
     restoreTransaction: (transactionId: number): Promise<void> =>
         api(transactions.restore(transactionId)),
+
+    /** The envelope's latest distinct notes across the ledger's profile. */
+    noteSuggestions: (
+        id: number,
+        envelopeId: number,
+    ): Promise<{ notes: string[] }> =>
+        api(
+            ledgerTransactionNotes.index(id, {
+                query: { envelope_id: envelopeId },
+            }),
+        ),
+
+    updateTransactionNote: (
+        transactionId: number,
+        note: string | null,
+    ): Promise<{ transaction: Transaction }> =>
+        api(transactionNoteRoutes.update(transactionId), { body: { note } }),
 
     shares: (id: number): Promise<{ shares: ResourceMember[] }> =>
         api(ledgerShares.index(id)),

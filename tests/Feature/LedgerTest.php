@@ -390,6 +390,251 @@ class LedgerTest extends TestCase
         ], 'amount', -42); // expense envelope
     }
 
+    public function test_transaction_notes_can_be_added_and_are_persisted_encrypted(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->createEnvelope();
+
+        $response = $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
+            'envelope_id' => $envelope->id,
+            'amount' => 42,
+            'event_at' => '2026-06-15',
+            'note' => 'Reimbursable work lunch',
+        ])->assertCreated()
+            ->assertJsonPath('transaction.note', 'Reimbursable work lunch');
+
+        $transaction = Transaction::query()->findOrFail($response->json('transaction.id'));
+        $this->assertSame('Reimbursable work lunch', $transaction->note);
+        $stored = DB::table('transactions')->where('id', $transaction->id)->value('note');
+        $this->assertIsString($stored);
+        $this->assertNotSame('Reimbursable work lunch', $stored);
+
+        $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30")
+            ->assertOk()
+            ->assertJsonPath('transactions.0.note', 'Reimbursable work lunch');
+    }
+
+    public function test_transaction_notes_can_be_updated_and_cleared(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->createEnvelope();
+        $transaction = $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -10,
+            'event_at' => '2026-06-15 00:00:00',
+            'note' => 'Original note',
+        ]);
+
+        $this->actingAs($this->user)->patchJson("/api/transactions/{$transaction->id}/note", [
+            'note' => 'Updated note',
+        ])->assertOk()->assertJsonPath('transaction.note', 'Updated note');
+
+        $this->assertSame('Updated note', $transaction->fresh()->note);
+
+        $this->actingAs($this->user)->patchJson("/api/transactions/{$transaction->id}/note", [
+            'note' => null,
+        ])->assertOk()->assertJsonPath('transaction.note', null);
+
+        $this->assertNull($transaction->fresh()->note);
+    }
+
+    public function test_transaction_notes_follow_edit_permissions_and_masking(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $ledger->permissions()->create([
+            'user_id' => $this->member->id,
+            'permission' => ResourcePermissions::CONTRIBUTOR,
+        ]);
+        $envelope = $this->createEnvelope();
+        $transaction = $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -10,
+            'event_at' => '2026-06-15 00:00:00',
+            'note' => 'Private context',
+        ]);
+
+        $this->actingAs($this->member)->patchJson("/api/transactions/{$transaction->id}/note", [
+            'note' => 'Not allowed',
+        ])->assertForbidden();
+
+        $memberTransaction = $ledger->transactions()->create([
+            'user_id' => $this->member->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -12,
+            'event_at' => '2026-06-16 00:00:00',
+            'note' => 'Hidden from this member',
+        ]);
+        $this->actingAs($this->member)->patchJson("/api/transactions/{$memberTransaction->id}/note", [
+            'note' => 'Cannot edit a masked note',
+        ])->assertForbidden();
+
+        // The member can see ledger metadata but has no envelope viewer grant;
+        // neither amount nor note crosses that privacy boundary.
+        $this->actingAs($this->member)
+            ->getJson("/api/ledgers/{$ledger->id}/transactions?from_date=2026-06-01&to_date=2026-06-30")
+            ->assertOk()
+            ->assertJsonPath('transactions.0.masked', true)
+            ->assertJsonPath('transactions.0.note', null);
+    }
+
+    public function test_transaction_notes_are_optional_and_limited_to_two_hundred_characters(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->createEnvelope();
+
+        $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
+            'envelope_id' => $envelope->id,
+            'amount' => 42,
+            'event_at' => '2026-06-15',
+        ])->assertCreated()->assertJsonPath('transaction.note', null);
+
+        $this->actingAs($this->user)->postJson("/api/ledgers/{$ledger->id}/transactions", [
+            'envelope_id' => $envelope->id,
+            'amount' => 42,
+            'event_at' => '2026-06-15',
+            'note' => str_repeat('x', 201),
+        ])->assertUnprocessable()->assertJsonValidationErrors('note');
+
+        $transaction = Transaction::query()->firstOrFail();
+        $this->actingAs($this->user)->patchJson("/api/transactions/{$transaction->id}/note", [
+            'note' => str_repeat('x', 201),
+        ])->assertUnprocessable()->assertJsonValidationErrors('note');
+
+        $this->actingAs($this->user)->patchJson("/api/transactions/{$transaction->id}/note", [
+            'note' => str_repeat('é', 200),
+        ])->assertOk();
+    }
+
+    public function test_note_suggestions_list_the_ten_latest_distinct_notes_of_the_envelope(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $previous = $this->createLedger($this->user, [
+            'name' => '2025',
+            'start_date' => '2025-01-01 00:00:00',
+            'end_date' => '2025-12-31 00:00:00',
+        ]);
+        $envelope = $this->createEnvelope('Groceries');
+        $other = $this->createEnvelope('Fuel');
+        $record = fn (Ledger $in, Envelope $on, string $date, ?string $note) => $in->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $on->id,
+            'amount' => -5,
+            'event_at' => $date.' 00:00:00',
+            'note' => $note,
+        ]);
+
+        // Older ledgers of the profile count: a new year starts with history.
+        $record($previous, $envelope, '2025-12-30', 'Last year market');
+        foreach (range(1, 11) as $day) {
+            $record($ledger, $envelope, sprintf('2026-03-%02d', $day), "Market {$day}");
+        }
+        $record($ledger, $envelope, '2026-03-20', 'Market 11'); // duplicate, newest
+        $record($ledger, $envelope, '2026-03-21', null);
+        $record($ledger, $other, '2026-03-22', 'Other envelope');
+        $record($ledger, $envelope, '2026-03-23', 'Pending deletion')->delete();
+
+        $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transaction-notes?envelope_id={$envelope->id}")
+            ->assertOk()
+            ->assertExactJson(['notes' => [
+                'Market 11', 'Market 10', 'Market 9', 'Market 8', 'Market 7',
+                'Market 6', 'Market 5', 'Market 4', 'Market 3', 'Market 2',
+            ]]);
+
+        $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$previous->id}/transaction-notes?envelope_id={$other->id}")
+            ->assertOk()
+            ->assertExactJson(['notes' => ['Other envelope']]);
+    }
+
+    public function test_note_suggestions_exclude_other_profiles_and_scheduled_rows(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->createEnvelope();
+        $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -5,
+            'event_at' => '2026-03-01 00:00:00',
+            'note' => 'Family profile',
+        ]);
+
+        // The same envelope used in another profile's ledger.
+        $other = FinancialProfile::createOwnedBy($this->user, 'Side business');
+        $otherLedger = Ledger::create([
+            'profile_id' => $other->id,
+            'name' => 'Side 2026',
+            'start_date' => '2026-01-01 00:00:00',
+            'end_date' => '2026-12-31 00:00:00',
+            'starting_balance' => 0,
+        ]);
+        $otherLedger->permissions()->create(['user_id' => $this->user->id, 'permission' => 'owner']);
+        $otherLedger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -5,
+            'event_at' => '2026-03-02 00:00:00',
+            'note' => 'Side business profile',
+        ]);
+
+        // A generated row (system-written; never carries user context).
+        $schedule = $envelope->schedules()->create([
+            'period' => 'once', 'start_date' => '2026-03-03', 'amount' => -500,
+        ]);
+        (new Transaction)->forceFill([
+            'ledger_id' => $ledger->id,
+            'envelope_id' => $envelope->id,
+            'schedule_id' => $schedule->id,
+            'amount' => -5,
+            'event_at' => '2026-03-03 00:00:00',
+            'note' => 'Generated',
+        ])->save();
+
+        $this->actingAs($this->user)
+            ->getJson("/api/ledgers/{$ledger->id}/transaction-notes?envelope_id={$envelope->id}")
+            ->assertOk()
+            ->assertExactJson(['notes' => ['Family profile']]);
+    }
+
+    public function test_note_suggestions_require_recording_rights_on_the_ledger_and_envelope(): void
+    {
+        $ledger = $this->createLedger($this->user);
+        $envelope = $this->createEnvelope();
+        $ledger->transactions()->create([
+            'user_id' => $this->user->id,
+            'envelope_id' => $envelope->id,
+            'amount' => -5,
+            'event_at' => '2026-03-01 00:00:00',
+            'note' => 'Owner context',
+        ]);
+        $url = "/api/ledgers/{$ledger->id}/transaction-notes?envelope_id={$envelope->id}";
+
+        // Implicit viewer of the ledger: cannot record, so no suggestions.
+        $this->actingAs($this->member)->getJson($url)->assertForbidden();
+        $this->actingAs($this->stranger)->getJson($url)->assertNotFound();
+
+        // Ledger contributor without envelope contributor access.
+        $ledger->permissions()->create([
+            'user_id' => $this->member->id,
+            'permission' => ResourcePermissions::CONTRIBUTOR,
+        ]);
+        $this->actingAs($this->member)->getJson($url)
+            ->assertUnprocessable()->assertJsonValidationErrors('envelope_id');
+
+        $envelope->permissions()->create([
+            'user_id' => $this->member->id,
+            'permission' => EnvelopePermission::PERMISSION_CONTRIBUTOR,
+        ]);
+        $this->actingAs($this->member)->getJson($url)
+            ->assertOk()->assertExactJson(['notes' => ['Owner context']]);
+
+        $this->actingAs($this->member)->getJson("/api/ledgers/{$ledger->id}/transaction-notes")
+            ->assertUnprocessable()->assertJsonValidationErrors('envelope_id');
+    }
+
     public function test_adding_a_transaction_preserves_two_decimal_places(): void
     {
         $ledger = $this->createLedger($this->user);
