@@ -104,7 +104,7 @@ test('an owner creates, edits and deletes a schedule; the open ledger follows', 
         t(`${S}.from`, { start: mediumDate(new Date(year, month, 1)) }),
     );
     await expect(row).toContainText(t(`${S}.noReminder`));
-    await expect(row).toContainText('($45.5)');
+    await expect(row).toContainText('($45.50)');
 
     drainQueue();
     await page.goto('/ledger');
@@ -113,7 +113,7 @@ test('an owner creates, edits and deletes a schedule; the open ledger follows', 
     await expect(scheduledRows(page)).toContainText(
         shortDate(new Date(year, month, 1)),
     );
-    await expect(scheduledRows(page)).toContainText('($45.5)');
+    await expect(scheduledRows(page)).toContainText('($45.50)');
 
     // --- edit -----------------------------------------------------------
     drawer = await openSchedules(page);
@@ -153,7 +153,7 @@ test('an owner creates, edits and deletes a schedule; the open ledger follows', 
     ).toBeVisible();
     await expect(row).toContainText(monthly(15));
     await expect(row).toContainText(t(`${S}.remindSameDay`));
-    await expect(row).toContainText('($60)');
+    await expect(row).toContainText('($60.00)');
 
     drainQueue();
     await page.goto('/ledger');
@@ -161,8 +161,8 @@ test('an owner creates, edits and deletes a schedule; the open ledger follows', 
     await expect(scheduledRows(page)).toContainText(
         shortDate(new Date(year, month, 15)),
     );
-    await expect(scheduledRows(page)).toContainText('($60)');
-    await expect(scheduledRows(page)).not.toContainText('45.5');
+    await expect(scheduledRows(page)).toContainText('($60.00)');
+    await expect(scheduledRows(page)).not.toContainText('($45.50)');
 
     // --- delete ---------------------------------------------------------
     drawer = await openSchedules(page);

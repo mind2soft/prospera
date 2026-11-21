@@ -174,5 +174,7 @@ test('the radial legend lists each amount next to its share', async ({
 
     await expect(
         card.getByRole('listitem').filter({ hasText: 'Food' }),
-    ).toHaveText(/Food\s*\$[\d,]+\s*·\s*[\d.]+%/, { timeout: 15_000 });
+    ).toHaveText(/Food\s*\$[\d,]+\.\d{2}\s*·\s*[\d.]+%/, {
+        timeout: 15_000,
+    });
 });

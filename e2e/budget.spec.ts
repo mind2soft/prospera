@@ -110,7 +110,7 @@ test('budget page audit', async ({ page }) => {
     // --- change an amount in draft mode (live, before any blur) -------------
     await amountInput.fill('');
     await amountInput.pressSequentially('4000', { delay: 60 });
-    await expect(footer).toContainText('$2,570', { timeout: 10_000 });
+    await expect(footer).toContainText('$2,570.00', { timeout: 10_000 });
     const footerText = (await footer.textContent())
         ?.replace(/\s+/g, ' ')
         .trim();
@@ -120,10 +120,10 @@ test('budget page audit', async ({ page }) => {
 
     // overspend -> accounting format + destructive color
     await amountInput.fill('100');
-    await expect(footer).toContainText('($1,330)', { timeout: 10_000 });
+    await expect(footer).toContainText('($1,330.00)', { timeout: 10_000 });
     console.log(
         'ROW LEFT-TO-SPEND (overspend):',
-        await page.getByText('($200)').isVisible(),
+        await page.getByText('($200.00)').isVisible(),
     );
     console.log(
         'FOOTER DESTRUCTIVE:',
@@ -133,7 +133,7 @@ test('budget page audit', async ({ page }) => {
 
     // restore for the publish flow
     await amountInput.fill('4000');
-    await expect(footer).toContainText('$2,570', { timeout: 10_000 });
+    await expect(footer).toContainText('$2,570.00', { timeout: 10_000 });
 
     // --- publish flow -------------------------------------------------------
     await openActionMenu(page);

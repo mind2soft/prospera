@@ -88,16 +88,16 @@ const features = [
         <!-- Ambient background -->
         <div aria-hidden="true" class="pointer-events-none absolute inset-0">
             <div
-                class="absolute -top-40 left-1/2 h-[42rem] w-[72rem] -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,oklch(0.85_0.12_165/0.45),transparent)] blur-2xl dark:bg-[radial-gradient(closest-side,oklch(0.45_0.12_165/0.35),transparent)]"
+                class="absolute -top-40 left-1/2 h-168 w-6xl -translate-x-1/2 rounded-full bg-[radial-gradient(closest-side,oklch(0.85_0.12_165/0.45),transparent)] blur-2xl dark:bg-[radial-gradient(closest-side,oklch(0.45_0.12_165/0.35),transparent)]"
             />
             <div
-                class="absolute inset-0 [background-image:linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] [mask-image:radial-gradient(ellipse_at_top,black_20%,transparent_70%)] [background-size:56px_56px] opacity-50"
+                class="absolute inset-0 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] mask-[radial-gradient(ellipse_at_top,black_20%,transparent_70%)] bg-size-[56px_56px] opacity-50"
             />
         </div>
 
         <!-- Navigation -->
         <header
-            class="sticky top-0 z-20 border-b border-transparent backdrop-blur-md supports-[backdrop-filter]:bg-background/60"
+            class="sticky top-0 z-20 border-b border-transparent backdrop-blur-md supports-backdrop-filter:bg-background/60"
         >
             <nav
                 class="mx-auto flex h-16 max-w-6xl items-center justify-between px-6"
@@ -211,10 +211,10 @@ const features = [
                     aria-hidden="true"
                 >
                     <div
-                        class="absolute -inset-6 -z-10 rounded-[2rem] bg-linear-to-br from-brand/25 via-transparent to-sky-400/20 blur-2xl"
+                        class="absolute -inset-6 -z-10 rounded-4xl bg-linear-to-br from-brand/25 via-transparent to-sky-400/20 blur-2xl"
                     />
                     <div
-                        class="rounded-2xl border bg-card/90 p-6 shadow-2xl ring-1 shadow-black/5 ring-black/[0.02] backdrop-blur"
+                        class="rounded-2xl border bg-card/90 p-6 shadow-2xl ring-1 shadow-black/5 ring-black/2 backdrop-blur"
                     >
                         <div class="flex items-baseline justify-between">
                             <span class="text-sm text-muted-foreground">{{

@@ -137,7 +137,7 @@ test('ledger page audit', async ({ page }) => {
     console.log('AFTER ADD ROWS:', await newRows.count());
 
     // --- delete the added transaction ----------------------------------------
-    const addedRow = page.locator('tbody tr', { hasText: '($35)' }).first();
+    const addedRow = page.locator('tbody tr', { hasText: '($35.00)' }).first();
     await addedRow
         .getByRole('button', { name: /^Delete transaction: Food, Oct 22$/ })
         .click();
@@ -161,7 +161,7 @@ test('ledger page audit', async ({ page }) => {
     // Delete it again: the undo toast outlasts the default toast duration
     // (4 s) — it stays at least 30 s.
     await page
-        .locator('tbody tr', { hasText: '($35)' })
+        .locator('tbody tr', { hasText: '($35.00)' })
         .first()
         .getByRole('button', { name: /^Delete transaction: Food, Oct 22$/ })
         .click();
@@ -453,7 +453,7 @@ test('schedule-generated rows carry a badge and no delete action', async ({
     await expect(scheduled).toContainText('Scheduled');
     await expect(scheduled).toContainText('System');
     // 45.50 from 4550 minor units; remaining Mortgage 1300 - 1250 - 45.50.
-    await expect(scheduled).toContainText('($45.5)$4.5');
+    await expect(scheduled).toContainText('($45.50)$4.50');
     await expect(scheduled.getByRole('button')).toHaveCount(0);
 
     // Manual entries keep their usual delete action.

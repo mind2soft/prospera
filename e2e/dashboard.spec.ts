@@ -113,11 +113,11 @@ test('dashboard audit', async ({ page }) => {
 
     // Autosave lands (debounced) — wait for the aggregate, not the skeleton.
     const spendingCard = page.locator('[data-widget-card]').first();
-    await expect(spendingCard.getByText('$570', { exact: true })).toBeVisible({
-        timeout: 15_000,
-    });
-    await expect(spendingCard.getByText('/ $800')).toBeVisible(); // Food's allocation
-    await expect(spendingCard.getByText('/ $1,300')).toBeVisible(); // Mortgage's allocation
+    await expect(
+        spendingCard.getByText('$570.00', { exact: true }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(spendingCard.getByText('/ $800.00')).toBeVisible(); // Food's allocation
+    await expect(spendingCard.getByText('/ $1,300.00')).toBeVisible(); // Mortgage's allocation
 
     // The entertainment envelope has no covering allocation → no bar, but
     // its spent total still shows. Add it to check the empty progress.

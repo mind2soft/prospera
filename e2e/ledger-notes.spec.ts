@@ -71,7 +71,7 @@ test('rows with a note show a cue on the amount, rows without do not', async ({
     await showSeededMonth(page);
 
     const food = row(page, 'Food').getByTestId('transaction-note-trigger');
-    await expect(food).toHaveText(/\(\$120\)/);
+    await expect(food).toHaveText(/\(\$120\.00\)/);
     // The cue is not color alone: an icon and a dotted underline.
     await expect(food.locator('svg')).toBeVisible();
     await expect(food).toHaveCSS('text-decoration-style', 'dotted');
@@ -79,11 +79,11 @@ test('rows with a note show a cue on the amount, rows without do not', async ({
     await expect(food).toHaveAccessibleDescription(
         'Weekly groceries at the market',
     );
-    await expect(food).toHaveAccessibleName(/\(\$120\).*Has a note/);
+    await expect(food).toHaveAccessibleName(/\(\$120\.00\).*Has a note/);
     await expect(
         row(page, 'Paychecks').getByTestId('transaction-note-trigger'),
     ).toHaveCount(0);
-    await expect(row(page, 'Paychecks')).toContainText('$1,800');
+    await expect(row(page, 'Paychecks')).toContainText('$1,800.00');
 
     // Amounts line up whether or not the row has a note: every amount ends
     // on the same right edge, and plain rows reserve the note icon's slot
@@ -322,7 +322,7 @@ test('the form suggests the envelope recent notes and records the chosen one', a
     await page.getByRole('button', { name: 'Add', exact: true }).click();
     await expect(page.locator('tbody tr')).toHaveCount(4);
 
-    const added = page.locator('tbody tr', { hasText: '($18.5)' });
+    const added = page.locator('tbody tr', { hasText: '($18.50)' });
     await expect(
         added.getByTestId('transaction-note-trigger'),
     ).toHaveAccessibleDescription('Farmers market');
