@@ -52,7 +52,7 @@ export function formatMoney(
                 style: 'currency',
                 currency,
                 currencyDisplay: 'narrowSymbol',
-                minimumFractionDigits: 0,
+                minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
             });
         } catch {
