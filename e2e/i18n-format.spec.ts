@@ -47,8 +47,8 @@ test('budget labels and money use the app locale', async ({ browser }) => {
     );
 
     // ...and amounts use French grouping with a trailing currency symbol
-    // ("1 700 $"), not the browser's or Node's default locale.
-    await expect(page.getByText(/^1\s700\s\$$/).first()).toBeVisible();
+    // ("1 700,00 $"), not the browser's or Node's default locale.
+    await expect(page.getByText(/^1\s700,00\s\$$/).first()).toBeVisible();
 
     await context.close();
 });

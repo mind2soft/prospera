@@ -72,6 +72,6 @@ test('permitted transactions still show their amounts', async ({ page }) => {
     // visible with its amount and computed remaining.
     const row = page.locator('tbody tr').filter({ hasText: 'Food' });
     await expect(row).toHaveCount(1);
-    await expect(row.locator('td').nth(2)).toHaveText('($250)');
-    await expect(row.locator('td').nth(3)).toHaveText('$550');
+    await expect(row.locator('td').nth(2)).toHaveText('($250.00)');
+    await expect(row.locator('td').nth(3)).toHaveText('$550.00');
 });
