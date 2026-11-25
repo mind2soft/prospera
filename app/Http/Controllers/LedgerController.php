@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ManagesShares;
+use App\Http\Requests\Ledger\BatchUpdateTransactionsRequest;
 use App\Http\Requests\Ledger\LedgerTransactionsRequest;
 use App\Http\Requests\Ledger\StoreLedgerRequest;
 use App\Http\Requests\Ledger\StoreTransactionRequest;
@@ -25,6 +26,7 @@ use App\Services\OnboardingProgress;
 use App\Services\ResourcePermissions;
 use App\Services\ResourcePermissionService;
 use App\Support\Money;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -523,6 +525,352 @@ class LedgerController extends Controller
                 withRemaining: false,
             ),
         ], 201);
+    }
+
+    /**
+     * Batch sparse update of manual transactions (issue #123,
+     * docs/ledger.md). One request carries a non-empty list of transaction
+     * ids and zero or more shared fields (`envelope_id`, positive `amount`,
+     * `event_at`, `note`, `clear_note`); omitted fields mean "unchanged".
+     *
+     * Shared-field problems (malformed amount, unusable replacement
+     * envelope, date outside the ledger period, closed ledger) are rejected
+     * as one validation error before any row changes. Row-specific problems
+     * (unknown or pending-deletion id, another ledger's row, a
+     * schedule-generated row, a masked row the caller cannot see, per-row
+     * authorization) leave that row unchanged and are reported as a stable
+     * failure code per id, in request order — without disclosing rows the
+     * caller cannot see.
+     */
+    public function batchUpdateTransactions(BatchUpdateTransactionsRequest $request, Ledger $ledger): JsonResponse
+    {
+        $validated = $request->validated();
+        $user = $this->currentUser($request);
+
+        /** @var list<int> $ids */
+        $ids = array_map(intval(...), (array) $validated['transaction_ids']);
+
+        // --- shared fields: one request-level error, no row changed ------
+        $replacement = null;
+        if (array_key_exists('envelope_id', $validated)) {
+            $replacement = Envelope::query()->find((int) $validated['envelope_id']);
+
+            if ($replacement === null || $user->cannot('use', $replacement)) {
+                throw ValidationException::withMessages([
+                    'envelope_id' => __('You need contributor access to this envelope to record transactions.'),
+                ]);
+            }
+        }
+
+        $eventAt = array_key_exists('event_at', $validated)
+            ? Carbon::parse($validated['event_at'])->startOfDay()->toImmutable()
+            : null;
+
+        if ($eventAt !== null && ! $ledger->acceptsEventDate($eventAt)) {
+            throw ValidationException::withMessages([
+                'event_at' => __('Transactions can only be recorded between :start and :end.', [
+                    'start' => $ledger->start_date->toDateString(),
+                    'end' => $ledger->end_date->toDateString(),
+                ]),
+            ]);
+        }
+
+        $hasAmount = array_key_exists('amount', $validated);
+        $amount = $hasAmount ? (float) $validated['amount'] : 0.0;
+        $replacementId = $replacement !== null ? $replacement->id : null;
+
+        // A present-but-blank note is "no change" — clearing requires the
+        // explicit `clear_note` flag (docs/ledger.md).
+        $note = null;
+        $hasNote = false;
+        if (array_key_exists('note', $validated) && is_string($validated['note'])) {
+            $trimmed = trim($validated['note']);
+
+            if ($trimmed !== '') {
+                $note = $trimmed;
+                $hasNote = true;
+            }
+        }
+        $clearNote = (bool) ($validated['clear_note'] ?? false);
+
+        // Resolved once for every row's permission checks (stale grants).
+        $coMemberIds = FinancialProfile::coMemberIdsOf($user->id);
+
+        /**
+         * @var list<array{id: int, status: string, code?: string}> $outcomes
+         * @var Collection<int, Transaction> $updated
+         */
+        [$outcomes, $updated] = DB::transaction(
+            function () use ($user, $ledger, $ids, $replacementId, $eventAt, $hasAmount, $amount, $note, $hasNote, $clearNote, $coMemberIds): array {
+                // The ledger's serialization lock first, then envelopes,
+                // then transaction rows — the documented lock order
+                // (docs/ledger.md). Holding it also makes the snapshot
+                // below stable: close/delete/purge serialize behind this
+                // transaction.
+                $lockedLedger = $this->lockLedger($ledger->id);
+                $this->ensureOpen($lockedLedger);
+
+                if ($eventAt !== null && ! $lockedLedger->acceptsEventDate($eventAt)) {
+                    throw ValidationException::withMessages([
+                        'event_at' => __('Transactions can only be recorded between :start and :end.', [
+                            'start' => $lockedLedger->start_date->toDateString(),
+                            'end' => $lockedLedger->end_date->toDateString(),
+                        ]),
+                    ]);
+                }
+
+                $targets = Transaction::query()
+                    ->withTrashed()
+                    ->with([
+                        // Per-row eligibility resolves the envelope's
+                        // visibility and the update policy; the caller's
+                        // share rows are preloaded once (docs/ledger.md).
+                        'envelope.permissions' => fn ($query) => $query->where('user_id', $user->id),
+                        'ledger.permissions' => fn ($query) => $query->where('user_id', $user->id),
+                        'ledger.profile',
+                    ])
+                    ->whereIn('id', $ids)
+                    ->get()
+                    ->keyBy(fn (Transaction $transaction): int => $transaction->id);
+
+                // The replacement and every target's current envelope: read
+                // and shared-locked in deterministic numeric id order, after
+                // the ledger lock — a concurrent direction change (blocked
+                // once an envelope is referenced) cannot slip in between
+                // (docs/envelope.md).
+                $envelopeIds = $targets
+                    ->map(fn (Transaction $transaction): int => $transaction->envelope_id);
+
+                if ($replacementId !== null) {
+                    $envelopeIds->push($replacementId);
+                }
+
+                /** @var Collection<int, Envelope> $envelopes */
+                $envelopes = Envelope::query()
+                    ->whereIn('id', $envelopeIds->unique()->sort()->values())
+                    ->with(['permissions' => fn ($query) => $query->where('user_id', $user->id)])
+                    ->sharedLock()
+                    ->get()
+                    ->keyBy(fn (Envelope $envelope): int => $envelope->id);
+
+                $replacementEnvelope = null;
+                if ($replacementId !== null) {
+                    $replacementEnvelope = $envelopes->get($replacementId);
+
+                    if ($replacementEnvelope === null) {
+                        // Deleted in the small window since the request-level
+                        // check: the same envelope_id error, nothing written
+                        // (the transaction rolls back).
+                        throw ValidationException::withMessages([
+                            'envelope_id' => __('You need contributor access to this envelope to record transactions.'),
+                        ]);
+                    }
+                }
+
+                $outcomesById = [];
+                $updated = collect();
+
+                // Row locks follow the envelope locks, in ascending id order
+                // — the documented deterministic child-row order
+                // (docs/financial-locking.md) — regardless of the request's
+                // id order; outcomes are re-ordered below.
+                $sortedIds = $ids;
+                sort($sortedIds);
+
+                foreach ($sortedIds as $id) {
+                    $target = $targets->get($id);
+                    $code = $this->batchRowFailureCode(
+                        $target,
+                        // The row's current envelope as freshly shared-locked
+                        // above — a permission revocation that committed in
+                        // the meantime is honored on this copy, not on the
+                        // older targets snapshot.
+                        $target !== null ? $envelopes->get($target->envelope_id) : null,
+                        $lockedLedger,
+                        $user,
+                        $coMemberIds,
+                    );
+
+                    if ($code !== null) {
+                        $outcomesById[$id] = ['id' => $id, 'status' => 'failed', 'code' => $code];
+
+                        continue;
+                    }
+
+                    $locked = Transaction::query()
+                        ->withTrashed()
+                        ->whereKey($id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($locked === null) {
+                        $outcomesById[$id] = ['id' => $id, 'status' => 'failed', 'code' => self::ROW_NOT_FOUND];
+
+                        continue;
+                    }
+
+                    // The effective direction: the replacement envelope when
+                    // supplied, otherwise the row's current envelope — both
+                    // freshly read under a shared lock above.
+                    $direction = $replacementEnvelope ?? $envelopes->get($locked->envelope_id);
+
+                    if ($direction === null) {
+                        throw new LogicException('The transaction envelope is not locked.');
+                    }
+
+                    $locked->setRelation('envelope', $direction);
+
+                    if ($replacementId !== null) {
+                        $locked->envelope_id = $replacementId;
+                    }
+
+                    if ($hasAmount) {
+                        // The sign is recomputed from the effective
+                        // direction; the amount is encrypted through the
+                        // Eloquent attribute (docs/encryption.md).
+                        $locked->amount = $direction->signedAmount($amount);
+                    } elseif ($replacementId !== null) {
+                        // Envelope-only change: keep each row's positive
+                        // magnitude and recompute the stored sign from the
+                        // new direction — exact minor units, no
+                        // currency-unit float roundtrip (docs/encryption.md).
+                        $magnitude = abs($locked->amountMinorUnits());
+                        $locked->setAmountMinorUnits(
+                            $direction->type === Envelope::DIRECTION_EXPENSE ? -$magnitude : $magnitude,
+                        );
+                    } elseif ($eventAt !== null) {
+                        // Date-only change: the amount's encryption context
+                        // re-binds on event_at, so the exact minor units are
+                        // re-assigned and re-encrypted in the same save
+                        // (docs/encryption.md).
+                        $locked->setAmountMinorUnits($locked->amountMinorUnits());
+                    }
+
+                    if ($eventAt !== null) {
+                        $locked->event_at = $eventAt;
+                    }
+
+                    if ($clearNote) {
+                        $locked->note = null;
+                    } elseif ($hasNote) {
+                        $locked->note = $note;
+                    }
+
+                    $locked->save();
+                    $updated->push($locked);
+
+                    $outcomesById[$id] = ['id' => $id, 'status' => 'updated'];
+                }
+
+                // Report the outcomes in the request's id order.
+                $outcomes = array_map(
+                    fn (int $id): array => $outcomesById[$id],
+                    $ids,
+                );
+
+                return [$outcomes, $updated];
+            },
+        );
+
+        // Per-row payloads after the commit, masked like the listing is:
+        // rows on envelopes the caller lacks envelope-viewer+ permission on
+        // serialize with a null amount (docs/ledger.md — amount masking).
+        // The authors are loaded once for every updated row — the serializer
+        // shows the entering user ("Former member" for deleted accounts).
+        $updatedRows = new EloquentCollection($updated->all());
+        $updatedRows->load('user');
+        $updatedById = $updatedRows->keyBy(fn (Transaction $transaction): int => $transaction->id);
+
+        $results = array_map(
+            function (array $outcome) use ($updatedById, $user, $coMemberIds): array {
+                if ($outcome['status'] !== 'updated') {
+                    return [
+                        'id' => $outcome['id'],
+                        'status' => 'failed',
+                        'code' => (string) ($outcome['code'] ?? self::ROW_NOT_FOUND),
+                    ];
+                }
+
+                $transaction = $updatedById->get($outcome['id']);
+                $envelope = $transaction?->envelope;
+
+                if ($transaction === null || $envelope === null) {
+                    throw new LogicException('The updated transaction has no envelope.');
+                }
+
+                return [
+                    'id' => $outcome['id'],
+                    'status' => 'updated',
+                    'transaction' => $this->serializeTransaction(
+                        $transaction,
+                        $envelope->permissionFor($user, $coMemberIds),
+                        null,
+                        withRemaining: false,
+                    ),
+                ];
+            },
+            $outcomes,
+        );
+
+        return response()->json(['results' => $results]);
+    }
+
+    /**
+     * Stable per-row failure codes for the batch update (docs/ledger.md).
+     * They let the client report per-row outcomes without exposing
+     * inaccessible transaction data.
+     */
+    public const ROW_NOT_FOUND = 'not_found';
+
+    public const ROW_SCHEDULED = 'scheduled';
+
+    public const ROW_FORBIDDEN = 'forbidden';
+
+    /**
+     * Why a requested id cannot be batch-updated: null when it is an
+     * eligible manual row of this ledger the caller may update.
+     *
+     * @param  Collection<int, int>  $coMemberIds
+     */
+    private function batchRowFailureCode(
+        ?Transaction $transaction,
+        ?Envelope $envelope,
+        Ledger $ledger,
+        User $user,
+        Collection $coMemberIds,
+    ): ?string {
+        // Unknown id, a row pending deletion (soft-deleted), or a row of
+        // another ledger: the same "not found" code — never disclose rows
+        // the caller cannot see (docs/ledger.md).
+        if ($transaction === null
+            || $transaction->trashed()
+            || $transaction->ledger_id !== $ledger->id
+        ) {
+            return self::ROW_NOT_FOUND;
+        }
+
+        // Generated rows are system-managed: edit the schedule instead.
+        if ($transaction->isGenerated()) {
+            return self::ROW_SCHEDULED;
+        }
+
+        // Masked rows are not editable (docs/ledger.md): the caller must
+        // hold envelope-viewer+ permission on the row's current envelope —
+        // the same rule that masks the row in the listing. Updating or
+        // re-assigning a row the caller cannot see would disclose its
+        // hidden amount (its magnitude would come back on the response and
+        // in the listing under the new envelope).
+        if ($envelope === null) {
+            throw new LogicException('The transaction has no envelope.');
+        }
+
+        if ($envelope->permissionFor($user, $coMemberIds) === ResourcePermissions::NONE) {
+            return self::ROW_FORBIDDEN;
+        }
+
+        // Ledger owner: any entry; ledger contributor: own entries only;
+        // viewers: none (docs/ledger.md — permissions).
+        return $user->can('update', $transaction) ? null : self::ROW_FORBIDDEN;
     }
 
     /**

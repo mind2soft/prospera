@@ -208,6 +208,27 @@ account is deleted, the ledger auto-transfers to the profile owner (see
   (`422` validation error on `transaction`). A deletion can be **undone** for 3 minutes, under
   the same rules: the transaction is soft-deleted, then purged (see
   [Undoable deletion](undoable-deletion.md)).
+- **Transaction update** (open ledgers only, batch): the ledger owner can
+  update any transaction; a ledger contributor can update only their own
+  entries; viewers cannot. Schedule-generated rows cannot be updated by
+  anyone — edit the schedule instead (see
+  [Scheduled transactions](scheduled-transactions.md)). **Masked rows are not
+  editable either**: a row on an envelope the caller lacks envelope-`viewer+`
+  permission on fails with `forbidden` — updating or re-assigning it would
+  disclose its hidden amount. Updates are **sparse** and **batched**:
+  `PATCH /api/ledgers/{ledger}/transactions/batch` applies only the supplied
+  shared fields to every requested row (at most 100 per request). A positive
+  entered `amount` is stored signed by the effective envelope direction;
+  changing the envelope alone preserves each row's positive amount magnitude
+  and recomputes the stored sign from the new direction. A blank `note` never
+  clears a note — clearing requires the explicit `clear_note` flag.
+  Row-specific failures (unknown id, a row of another ledger, a
+  pending-deletion row, a generated row, a masked row, insufficient
+  permission) are reported per id with a stable code (`not_found`,
+  `scheduled`, `forbidden`) and never disclose rows the caller cannot see;
+  shared-field failures (malformed amount, unusable envelope, date outside
+  the ledger period, closed ledger) reject the whole request without
+  changing any row.
 - **Amount masking** — transaction rows on envelopes the user lacks
   envelope-`viewer`+ permission on show the envelope's metadata with masked
   amounts (`—`) and masked "remaining allocated"; the server masks them
@@ -230,6 +251,7 @@ data fetching.
 | `POST`   | `/api/ledgers/{ledger}/reopen`             | Re-open a closed ledger (owner only)                                                                                                                                                                                                           |
 | `GET`    | `/api/ledgers/{ledger}/transactions`       | Transactions filtered by `from_date` and `to_date` (query params; at most 366 days, `422` on `to_date` otherwise). Rows on envelopes the requester lacks envelope-`viewer`+ permission on are **masked server-side**: `amount: null` + `masked: true` (metadata only — name, color, direction) |
 | `POST`   | `/api/ledgers/{ledger}/transactions`       | Add a transaction (`envelope_id`, `amount`, `event_at`, optional `note` of at most 200 characters, encrypted at rest) — ledger owner or contributor, who must also be contributor+ on the target envelope                                      |
+| `PATCH`  | `/api/ledgers/{ledger}/transactions/batch` | Batch sparse update of manual transactions: a non-empty, unique `transaction_ids` list (at most 100) plus zero or more of `envelope_id`, positive `amount`, `event_at`, `note` (at most 200 characters) and `clear_note` (mutually exclusive with `note`); omitted fields mean unchanged. Returns one result per requested id in request order — `{ id, status: "updated", transaction }` or `{ id, status: "failed", code }` with a stable code (`not_found`, `scheduled`, `forbidden`). Shared-field failures return the standard validation response and change no rows. Same per-row update rules as the deletion (ledger owner: any entry; contributor: own entries); rows on envelopes the caller cannot view, scheduled, pending-deletion and foreign-ledger rows fail per row without disclosure |
 | `GET`    | `/api/ledgers/{ledger}/transaction-notes`  | Note autocomplete: the 10 latest distinct notes on `envelope_id` (query param) across the ledger's profile, newest first; scheduled and pending-deletion rows excluded. Same rights as recording (`403` for viewers, `422` without contributor+ on the envelope) |
 | `PATCH`  | `/api/transactions/{transaction}/note`     | Set or clear (`note: null`) a manual transaction's note (open ledgers only; same rules as the deletion; the envelope must be visible to the caller)                                                                                            |
 | `DELETE` | `/api/transactions/{transaction}`          | Delete a transaction (open ledgers only; ledger owner: any transaction; ledger contributor: own entries only; viewer: none). Soft delete: restorable for 3 minutes, then purged ([Undoable deletion](undoable-deletion.md))                    |
