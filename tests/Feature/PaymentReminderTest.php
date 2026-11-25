@@ -102,7 +102,14 @@ final class PaymentReminderTest extends TestCase
         $mail->send($this->mailer);
         $messages = $transport->messages();
 
-        return count($messages) === $before ? null : quoted_printable_decode($messages->last()->toString());
+        if (count($messages) === $before) {
+            return null;
+        }
+
+        // The rendered text body only: the raw message carries a random
+        // Message-ID whose hex digits would otherwise leak into the
+        // "amount is masked" assertions.
+        return $this->lastEmail()->getTextBody();
     }
 
     private function lastEmail(): Email
