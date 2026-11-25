@@ -146,6 +146,7 @@ Route::middleware(['auth', 'verified', EnsureAccountHasProfile::class])->group(f
             Route::post('/', [LedgerController::class, 'store'])->name('store');
             Route::get('{ledger}/transactions', [LedgerController::class, 'transactions'])->name('transactions.index');
             Route::post('{ledger}/transactions', [LedgerController::class, 'addTransaction'])->name('transactions.store');
+            Route::patch('{ledger}/transactions/batch', [LedgerController::class, 'batchUpdateTransactions'])->name('transactions.batchUpdate');
             Route::get('{ledger}/transaction-notes', [LedgerController::class, 'transactionNoteSuggestions'])->name('transaction-notes.index');
             Route::post('{ledger}/close', [LedgerController::class, 'close'])->name('close');
             Route::post('{ledger}/reopen', [LedgerController::class, 'reopen'])->name('reopen');
