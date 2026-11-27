@@ -68,7 +68,10 @@ const confirm = () => {
                     $t('budget.currency')
                 }}</Label>
                 <Select v-model="currency">
-                    <SelectTrigger id="create-budget-currency" class="w-full">
+                    <SelectTrigger
+                        id="create-budget-currency"
+                        class="w-full font-currency"
+                    >
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -76,6 +79,7 @@ const confirm = () => {
                             v-for="option in CURRENCIES"
                             :key="option.code"
                             :value="option.code"
+                            class="font-currency"
                         >
                             {{ option.code }}
                             —

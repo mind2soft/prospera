@@ -71,26 +71,43 @@ const rows = computed(() =>
                         :class="row.over && 'text-warning'"
                         aria-hidden="true"
                     />
-                    {{
-                        row.over
-                            ? $t('help.budgets.sections.plan.over', {
-                                  amount: money.format(row.difference),
-                              })
-                            : $t('help.budgets.sections.plan.leftOver', {
-                                  amount: money.format(row.difference),
-                              })
-                    }}
+                    <i18n-t
+                        :keypath="
+                            row.over
+                                ? 'help.budgets.sections.plan.over'
+                                : 'help.budgets.sections.plan.leftOver'
+                        "
+                        tag="span"
+                    >
+                        <template #amount>
+                            <span class="font-currency">{{
+                                money.format(row.difference)
+                            }}</span>
+                        </template>
+                    </i18n-t>
                     <span class="sr-only">
-                        ({{
-                            $t('help.budgets.sections.plan.planned', {
-                                amount: money.format(row.planned),
-                            })
-                        }},
-                        {{
-                            $t('help.budgets.sections.plan.spent', {
-                                amount: money.format(row.spent),
-                            })
-                        }})</span
+                        (<i18n-t
+                            keypath="help.budgets.sections.plan.planned"
+                            tag="span"
+                        >
+                            <template #amount>
+                                <span class="font-currency">{{
+                                    money.format(row.planned)
+                                }}</span>
+                            </template>
+                        </i18n-t
+                        >,
+                        <i18n-t
+                            keypath="help.budgets.sections.plan.spent"
+                            tag="span"
+                        >
+                            <template #amount>
+                                <span class="font-currency">{{
+                                    money.format(row.spent)
+                                }}</span>
+                            </template>
+                        </i18n-t
+                        >)</span
                     >
                 </span>
             </li>

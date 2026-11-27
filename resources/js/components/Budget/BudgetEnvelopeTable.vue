@@ -232,7 +232,7 @@ defineExpose({ focus: () => region.value?.focus() });
                                     type="number"
                                     min="1"
                                     step="1"
-                                    class="ml-auto h-7 w-24 text-right tabular-nums"
+                                    class="ml-auto h-7 w-24 text-right font-currency tabular-nums"
                                     @update:model-value="
                                         onAmountInput(row, String($event))
                                     "
@@ -252,9 +252,9 @@ defineExpose({ focus: () => region.value?.focus() });
                                     {{ $t('budget.table.invalidAmount') }}
                                 </p>
                             </template>
-                            <template v-else>{{
+                            <span v-else class="font-currency tabular-nums">{{
                                 formatMoney(row.amount, currency, locale)
-                            }}</template>
+                            }}</span>
                         </td>
                         <td
                             class="px-4 py-2.5 text-right text-muted-foreground"

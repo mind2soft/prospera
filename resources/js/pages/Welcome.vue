@@ -231,7 +231,7 @@ const features = [
                             {{ $t('welcome.preview.leftToSpend') }}
                         </p>
                         <p
-                            class="font-display text-5xl tracking-tight tabular-nums"
+                            class="font-currency text-5xl tracking-tight tabular-nums"
                         >
                             {{ money(4200 - 2096) }}
                         </p>
@@ -251,13 +251,16 @@ const features = [
                                     <span
                                         class="text-muted-foreground tabular-nums"
                                     >
-                                        {{
-                                            $t('welcome.preview.left', {
-                                                amount: money(
-                                                    e.planned - e.spent,
-                                                ),
-                                            })
-                                        }}
+                                        <i18n-t
+                                            keypath="welcome.preview.left"
+                                            tag="span"
+                                        >
+                                            <template #amount>
+                                                <span class="font-currency">{{
+                                                    money(e.planned - e.spent)
+                                                }}</span>
+                                            </template>
+                                        </i18n-t>
                                     </span>
                                 </div>
                                 <div
@@ -287,7 +290,9 @@ const features = [
                             <p class="font-medium">
                                 {{ $t('welcome.preview.paycheckReceived') }}
                             </p>
-                            <p class="text-muted-foreground tabular-nums">
+                            <p
+                                class="font-currency text-muted-foreground tabular-nums"
+                            >
                                 +{{ money(2100) }}
                             </p>
                         </div>

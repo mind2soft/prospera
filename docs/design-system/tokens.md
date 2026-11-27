@@ -83,16 +83,52 @@ of them fail contrast on white.
 
 ## Typography
 
-Prospera's current typefaces are **Geist** for plain/interface text and
-**Neuton** for selected display headings (`--font-sans`, `--font-display` in
-`app.css`). This is the project's M3-style plain/brand pairing. The values
-below are a Prospera-tuned scale using M3's role taxonomy, not a claim to use
-M3's unmodified default measurements. Both faces are self-hosted
+Prospera's typefaces are **Geist** for plain/interface text and **Neuton** for
+selected display headings (`--font-sans`, `--font-display` in `app.css`). This
+is the project's M3-style plain/brand pairing. The values below are a
+Prospera-tuned scale using M3's role taxonomy, not a claim to use M3's
+unmodified default measurements. Both interface faces are self-hosted
 (`@fontsource-variable/geist`, `@fontsource/neuton`, imported at the top of
-`app.css`): the CSP allows no font CDN. Neuton ships its 400 weight only — the
-only one the scale uses; import another weight file if a role needs it. Do not
-add a third family or load an external face for a single page without a clear
-need.
+`app.css`). Neuton ships its 400 weight only — the only one the scale uses;
+import another weight file if a role needs it. Do not add another family for
+ordinary interface text or load an external face for a single page.
+
+### Currency labels: the Courier Prime exception
+
+**Courier Prime** is the one third-party face and the one deliberate exception
+to the self-hosted rule. It is used **only** for currency labels — the complete
+displayed monetary value, including locale-formatted digits, sign or
+parentheses, symbol and/or currency code (for example `$1,234.56` or
+`(1 234,56 €)`). It also applies to standalone currency code/name labels and
+currency adornments, including amount inputs, currency selectors, chart axes,
+legends and HTML tooltips that render currency. It must not apply to
+surrounding prose, headings, dates, percentages, counts, masked-value markers,
+or general form and navigation typography; those stay in Geist, and display
+headings stay in Neuton.
+
+- **Token/utility:** `--font-currency` in `app.css`, exposed as the
+  `font-currency` Tailwind utility. The stack is
+  `"Courier Prime", "Courier New", Courier, ui-monospace, monospace` so
+  currency text remains legible before the font loads or if Google Fonts is
+  unavailable.
+- **Request:** `resources/views/app.blade.php` links
+  `https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&display=swap`
+  with the two required preconnects. All four requested faces are available
+  and `display=swap` keeps fallback text visible during load.
+- **CSP:** `app/Http/Middleware/SecurityHeaders.php` allows only
+  `https://fonts.googleapis.com` in `style-src` and `https://fonts.gstatic.com`
+  in `font-src`. `default-src`, `script-src` and `connect-src` stay self-only;
+  do not broaden them or allow arbitrary external origins.
+- **Attribution:** Google Fonts/Courier Prime are recorded in
+  `THIRD_PARTY_NOTICES.md`. Courier Prime is licensed under the SIL Open Font
+  License 1.1.
+
+Keep `tabular-nums`, end alignment, sign presentation and existing sizing and
+responsive behavior when applying the currency role. Check the wider Courier
+Prime glyph metrics in dense tables, chart labels, narrow viewports and long
+localized strings; never truncate or shrink an important amount to force a fit.
+Masked amounts are not currency labels: keep the dash/bullet marker in the
+normal interface font and never reveal the hidden value through typography.
 
 | M3 role | Size / line height | Face / weight | Typical utility mapping and use |
 | --- | --- | --- | --- |
@@ -110,10 +146,12 @@ need.
 Use the listed utility mapping and `Heading.vue` for these roles; avoid custom
 pixel sizes where a role fits. The 48px display role is reserved for a truly
 large focal moment; most app pages should start at Headline large or smaller.
-Keep important body copy at 14–16px or larger. Financial values use Geist with
-tabular numerals (`tabular-nums`), right/end alignment in tabular contexts, and
-enough weight to scan without making every value bold. Never shrink primary
-money values to fit; allow wrapping or responsive reflow instead.
+Keep important body copy at 14–16px or larger. Financial values use tabular
+numerals (`tabular-nums`), right/end alignment in tabular contexts, and enough
+weight to scan without making every value bold. Currency labels use the
+`font-currency` role (Courier Prime); ordinary numbers, counts and percentages
+stay in Geist. Never shrink primary money values to fit; allow wrapping or
+responsive reflow instead.
 
 ## Spacing and layout
 

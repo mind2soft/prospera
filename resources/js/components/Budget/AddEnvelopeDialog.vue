@@ -197,7 +197,7 @@ const confirm = () => {
                         :placeholder="
                             $t('budget.addEnvelope.amountPlaceholder')
                         "
-                        class="tabular-nums"
+                        class="font-currency tabular-nums"
                     />
                     <p v-if="selected" class="text-xs text-muted-foreground">
                         {{

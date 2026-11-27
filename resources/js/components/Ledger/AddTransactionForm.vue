@@ -145,7 +145,7 @@ defineExpose({ reset });
                 min="0.01"
                 step="0.01"
                 :placeholder="$t('ledger.form.amountPlaceholder')"
-                class="w-28 tabular-nums"
+                class="w-28 font-currency tabular-nums"
             />
         </div>
 

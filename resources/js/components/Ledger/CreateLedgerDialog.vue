@@ -375,6 +375,7 @@ const confirm = () => {
                             type="number"
                             min="0"
                             step="1"
+                            class="font-currency tabular-nums"
                             :placeholder="
                                 $t('ledger.createDialog.balancePlaceholder')
                             "

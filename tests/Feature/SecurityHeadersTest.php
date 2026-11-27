@@ -118,15 +118,60 @@ class SecurityHeadersTest extends TestCase
         $this->assertMatchesRegularExpression('#font-src [^;]* http:;#', $csp);
     }
 
-    public function test_no_third_party_origin_is_allowed(): void
+    public function test_only_the_google_fonts_origins_are_allowed(): void
     {
         $csp = (string) $this->get('/up')->headers->get('Content-Security-Policy');
 
-        // Fonts and icons are self-hosted / bundled.
-        $this->assertDoesNotMatchRegularExpression('#https?://#', $csp);
+        // Courier Prime (currency labels only) is the one third-party face.
+        preg_match_all('#https?://[^;\s]+#', $csp, $origins);
+
+        $this->assertSame([
+            'https://fonts.googleapis.com',
+            'https://fonts.gstatic.com',
+        ], $origins[0]);
+
+        $this->assertStringContainsString(
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;",
+            $csp,
+        );
+        $this->assertStringContainsString(
+            "font-src 'self' data: https://fonts.gstatic.com;",
+            $csp,
+        );
         $this->assertStringContainsString("connect-src 'self';", $csp);
-        $this->assertStringContainsString("font-src 'self' data:;", $csp);
-        $this->assertStringContainsString("style-src 'self' 'unsafe-inline';", $csp);
+    }
+
+    public function test_no_broad_scheme_or_wildcard_source_is_allowed(): void
+    {
+        $csp = (string) $this->get('/up')->headers->get('Content-Security-Policy');
+
+        // Only the two exact Google Fonts origins may appear; no `https:`,
+        // `http:`, `*`, or scheme-wide allowance.
+        $this->assertDoesNotMatchRegularExpression('#\shttps?:(?:\s|;|$)#', $csp);
+        $this->assertStringNotContainsString(' *', $csp);
+        $this->assertMatchesRegularExpression(
+            "#script-src 'self' 'nonce-[A-Za-z0-9]+';#",
+            $csp,
+        );
+    }
+
+    public function test_the_currency_font_is_linked_from_the_document_head(): void
+    {
+        $html = (string) $this->get('/')->getContent();
+
+        $this->assertStringContainsString(
+            '<link rel="preconnect" href="https://fonts.googleapis.com" />',
+            $html,
+        );
+        $this->assertStringContainsString(
+            '<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />',
+            $html,
+        );
+        $this->assertStringContainsString(
+            'href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&display=swap"',
+            $html,
+        );
+        $this->assertStringContainsString('rel="stylesheet"', $html);
     }
 
     public function test_the_dev_server_is_not_allowed_otherwise(): void

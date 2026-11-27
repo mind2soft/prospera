@@ -1,5 +1,7 @@
-/* Self-hosted fonts (no third-party requests): Geist for the interface,
-   Neuton 400 for display headings — the only weight in use. */
+/* Self-hosted interface fonts (no third-party requests for interface text):
+   Geist for the interface, Neuton 400 for display headings — the only weight
+   in use. Courier Prime is the one external face: currency labels only (see
+   docs/design-system/tokens.md). */
 @import "@fontsource-variable/geist";
 @import "@fontsource/neuton/400.css";
 
@@ -22,6 +24,9 @@
     --font-sans:
         "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
     --font-display: "Neuton", ui-serif, Georgia, serif;
+    /* Currency labels only — never surrounding prose, headings or counts. */
+    --font-currency:
+        "Courier Prime", "Courier New", Courier, ui-monospace, monospace;
     --color-brand: var(--brand);
     --color-brand-foreground: var(--brand-foreground);
     --color-brand-container: var(--brand-container);
@@ -277,6 +282,7 @@
 
 /* Unovis chart surfaces — token theming (see dashboard design spec) */
 .chart-surface {
+    --vis-font-family: var(--font-sans);
     --vis-axis-tick-label-color: var(--muted-foreground);
     --vis-axis-tick-label-font-size: 10.5px;
     --vis-axis-tick-label-weight: 500;
@@ -300,4 +306,11 @@
     --vis-donut-central-label-font-size: 17px;
     --vis-donut-central-label-font-weight: 600;
     --vis-donut-central-label-text-color: var(--foreground);
+    --vis-donut-central-label-font-family: var(--font-currency);
+}
+
+/* Currency-only typeface in charts: the y-axis ticks (amounts) and the
+   donut's central total. X-axis labels are dates and stay in Geist. */
+.chart-surface [axis-type="y"] {
+    --vis-axis-font-family: var(--font-currency);
 }

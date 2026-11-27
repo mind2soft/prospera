@@ -70,8 +70,10 @@ const rows = computed(() => {
                     <td
                         class="px-4 py-3 text-end font-medium whitespace-nowrap tabular-nums"
                     >
-                        {{ row.direction === 'revenue' ? '+' : '−' }}
-                        {{ money.format(row.amount) }}
+                        <span class="font-currency"
+                            >{{ row.direction === 'revenue' ? '+' : '−' }}
+                            {{ money.format(row.amount) }}</span
+                        >
                     </td>
                 </tr>
             </tbody>

@@ -75,7 +75,7 @@ const closes = computed(() => dateFormat.value.format(new Date(year, 11, 31)));
                 <dt class="text-xs text-muted-foreground">
                     {{ $t('help.ledgers.sections.example.start') }}
                 </dt>
-                <dd class="text-lg font-semibold tabular-nums">
+                <dd class="font-currency text-lg font-semibold tabular-nums">
                     {{ money.format(EXAMPLES.ledger.start) }}
                 </dd>
             </div>
@@ -83,7 +83,7 @@ const closes = computed(() => dateFormat.value.format(new Date(year, 11, 31)));
                 <dt class="text-xs text-muted-foreground">
                     {{ $t('help.ledgers.sections.example.close') }}
                 </dt>
-                <dd class="text-lg font-semibold tabular-nums">
+                <dd class="font-currency text-lg font-semibold tabular-nums">
                     {{ money.format(EXAMPLES.ledger.close) }}
                 </dd>
             </div>
@@ -93,13 +93,19 @@ const closes = computed(() => dateFormat.value.format(new Date(year, 11, 31)));
                     class="inline-flex items-center gap-1.5 text-sm font-medium text-success"
                 >
                     <Icon name="north" class="size-4" aria-hidden="true" />
-                    {{
-                        $t('help.ledgers.sections.example.ahead', {
-                            amount: money.format(
-                                EXAMPLES.ledger.close - EXAMPLES.ledger.start,
-                            ),
-                        })
-                    }}
+                    <i18n-t
+                        keypath="help.ledgers.sections.example.ahead"
+                        tag="span"
+                    >
+                        <template #amount>
+                            <span class="font-currency">{{
+                                money.format(
+                                    EXAMPLES.ledger.close -
+                                        EXAMPLES.ledger.start,
+                                )
+                            }}</span>
+                        </template>
+                    </i18n-t>
                 </dd>
             </div>
         </dl>

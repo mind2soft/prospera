@@ -115,7 +115,9 @@ const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
                 <span style="width:6px;height:6px;border-radius:9999px;background:${escapeHtml(color)};flex:none;"></span>
                 <span style="color:var(--muted-foreground);">${escapeHtml(label)}</span>
             </span>
-            <strong style="font-variant-numeric:tabular-nums;">${escapeHtml(
+            <strong style="font-variant-numeric:tabular-nums;${
+                amount === null ? '' : 'font-family:var(--font-currency);'
+            }">${escapeHtml(
                 amount === null
                     ? '•••'
                     : formatMoney(amount, props.currency, locale.value),
@@ -251,10 +253,24 @@ const tooltipTemplate = (datum?: DashboardHistoryBucket): string => {
                             <th scope="row" class="py-1 text-start font-normal">
                                 {{ labels[index] }}
                             </th>
-                            <td class="py-1 text-end">
+                            <td
+                                class="py-1 text-end"
+                                :class="
+                                    bucket.revenue === null
+                                        ? ''
+                                        : 'font-currency'
+                                "
+                            >
                                 {{ amountText(bucket.revenue) }}
                             </td>
-                            <td class="py-1 text-end">
+                            <td
+                                class="py-1 text-end"
+                                :class="
+                                    bucket.expenses === null
+                                        ? ''
+                                        : 'font-currency'
+                                "
+                            >
                                 {{ amountText(bucket.expenses) }}
                             </td>
                         </tr>
