@@ -48,9 +48,13 @@ const fmt = (amount: number) =>
             <h2 class="text-sm font-medium text-muted-foreground">
                 {{ title }}
             </h2>
-            <span class="text-sm font-medium tabular-nums">{{
-                fmt(total)
-            }}</span>
+            <span
+                class="text-sm font-medium tabular-nums"
+                :class="currency ? 'font-currency' : ''"
+                >{{
+                    fmt(total)
+                }}</span
+            >
         </div>
 
         <div
@@ -89,7 +93,13 @@ const fmt = (amount: number) =>
                     aria-hidden="true"
                 />
                 <span class="max-w-40 truncate">{{ segment.name }}</span>
-                <span class="tabular-nums">{{ fmt(segment.amount) }}</span>
+                <span
+                    class="tabular-nums"
+                    :class="currency ? 'font-currency' : ''"
+                    >{{
+                        fmt(segment.amount)
+                    }}</span
+                >
             </li>
         </ul>
     </section>

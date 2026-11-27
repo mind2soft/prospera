@@ -96,11 +96,13 @@ const tooltipTemplate = (arc?: SegmentArc): string => {
 
     return `<div style="font-size:12px">
         <strong>${escapeHtml(datum.name)}</strong><br/>
-        <span style="font-variant-numeric:tabular-nums">${escapeHtml(
+        <span style="font-variant-numeric:tabular-nums"><span style="${
+            datum.value === null ? '' : 'font-family:var(--font-currency);'
+        }">${escapeHtml(
             datum.value === null
                 ? '•••'
                 : formatMoney(datum.value, props.currency, locale.value),
-        )}${escapeHtml(share)}</span>
+        )}</span>${escapeHtml(share)}</span>
     </div>`;
 };
 
@@ -196,7 +198,7 @@ function legendShare(row: DashboardRadialRow): string | null {
                     <span class="font-medium">{{ row.name }}</span>
                     <span
                         v-if="!row.masked && row.value !== null"
-                        class="text-foreground tabular-nums"
+                        class="font-currency text-foreground tabular-nums"
                     >
                         {{ formatMoney(row.value, currency, locale) }}
                     </span>

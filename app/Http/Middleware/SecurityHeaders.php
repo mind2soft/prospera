@@ -15,8 +15,10 @@ use Symfony\Component\HttpFoundation\Response;
  * carrying the per-request nonce only: Vite adds it to the tags it renders
  * (Vite::useCspNonce), and app.blade.php to its inline appearance script.
  * Styles keep 'unsafe-inline' — the UI libraries set inline styles, and a
- * nonce would disable it. Fonts and icons are bundled (self-hosted), so no
- * third-party origin is allowed at all. Framing is denied (clickjacking).
+ * nonce would disable it. Geist and Neuton are bundled (self-hosted); the
+ * only third-party allowance is the Google Fonts stylesheet (Courier Prime,
+ * currency labels only) and its font files. No other origin is allowed, and
+ * script/connect sources stay self-only. Framing is denied (clickjacking).
  * While the Vite dev server runs (public/hot), it is allowed for HMR.
  */
 class SecurityHeaders
@@ -54,8 +56,8 @@ class SecurityHeaders
     private function contentSecurityPolicy(string $nonce): string
     {
         $scripts = ["'self'", "'nonce-{$nonce}'"];
-        $styles = ["'self'", "'unsafe-inline'"];
-        $fonts = ["'self'", 'data:'];
+        $styles = ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'];
+        $fonts = ["'self'", 'data:', 'https://fonts.gstatic.com'];
         $images = ["'self'", 'data:', 'blob:'];
         // Icons are a bundled subset (resources/js/lib/materialSymbols.ts):
         // the Iconify API is never needed, so a typo can't make it phone home.

@@ -63,7 +63,7 @@ Design docs live in [`docs/`](docs/): [getting started](docs/onboarding.md),
 | Frontend | Vue 3 + Inertia, Tailwind CSS v4                                |
 | UI       | shadcn-vue (reka-nova style)                                    |
 | Icons    | Iconify with Material Symbols (bundled offline, no CDN calls)   |
-| Fonts    | Geist and Neuton, self-hosted via Fontsource (no CDN calls)     |
+| Fonts    | Geist and Neuton self-hosted via Fontsource; Courier Prime from Google Fonts for currency labels only |
 | Routing  | Laravel Wayfinder (Laravel routes → typed TypeScript functions) |
 | Auth     | Laravel Fortify (email verification, 2FA, passkeys)             |
 

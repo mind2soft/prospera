@@ -31,6 +31,22 @@ project's own license.
 - **License:** Apache License 2.0. The upstream license is included as
   `.opencode/skills/frontend-design/LICENSE.txt`.
 
+## Google Fonts — Courier Prime
+
+- **Source:** [Google Fonts — Courier Prime](https://fonts.google.com/specimen/Courier+Prime),
+  upstream project [quoteunquoteapps/CourierPrime](https://github.com/quoteunquoteapps/CourierPrime).
+  The font is requested at runtime from
+  `https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&display=swap`
+  in `resources/views/app.blade.php`.
+- **Use in Prospera:** currency labels only (`--font-currency` /
+  `font-currency`). Geist and Neuton remain the interface and display families;
+  see `docs/design-system/tokens.md`.
+- **CSP:** only `https://fonts.googleapis.com` (`style-src`) and
+  `https://fonts.gstatic.com` (`font-src`) are allowed for this feature. No
+  other third-party origin is permitted.
+- **License:** SIL Open Font License 1.1. The license text is retained at
+  `licenses/third-party/courier-prime-OFL.txt`.
+
 ## Material Design 3 / Material Web
 
 - **Design reference:** Google's [Material Design 3](https://m3.material.io/)

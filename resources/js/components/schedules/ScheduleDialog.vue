@@ -234,7 +234,7 @@ const submit = () => {
                             inputmode="decimal"
                             min="0"
                             step="0.01"
-                            class="tabular-nums"
+                            class="font-currency tabular-nums"
                             aria-describedby="schedule-amount-hint"
                         />
                         <p

@@ -132,13 +132,14 @@ function barColors(row: DashboardSpendingRow): {
                     <span class="shrink-0 text-sm leading-5 tabular-nums">
                         <span
                             class="font-semibold"
-                            :class="
+                            :class="[
                                 row.masked
                                     ? 'text-muted-foreground'
                                     : isOverBudget(row)
                                       ? 'text-destructive'
-                                      : 'text-foreground'
-                            "
+                                      : 'text-foreground',
+                                row.masked ? '' : 'font-currency',
+                            ]"
                         >
                             <span :aria-hidden="row.masked || undefined">{{
                                 spentLabel(row)
@@ -149,7 +150,9 @@ function barColors(row: DashboardSpendingRow): {
                         </span>
                         <template v-if="allocatedLabel(row) !== null">
                             <span class="text-muted-foreground/50"> / </span>
-                            <span class="font-medium text-muted-foreground">
+                            <span
+                                class="font-currency font-medium text-muted-foreground"
+                            >
                                 {{ allocatedLabel(row) }}
                             </span>
                         </template>

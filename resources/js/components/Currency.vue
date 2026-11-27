@@ -20,7 +20,11 @@ const display = computed(() =>
 </script>
 
 <template>
-    <span :class="isNegative ? 'text-destructive' : ''" class="tabular-nums">{{
-        display
-    }}</span>
+    <span
+        :class="isNegative ? 'text-destructive' : ''"
+        class="font-currency tabular-nums"
+        >{{
+            display
+        }}</span
+    >
 </template>

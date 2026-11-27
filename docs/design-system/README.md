@@ -18,6 +18,19 @@ priority, use color to express semantic meaning, and keep charts and financial
 tables quieter than the data they explain. Prefer a distinctive, restrained
 detail over lots of decorative effects.
 
+## Typefaces
+
+Geist remains the interface family and Neuton remains the display-heading
+family. They are self-hosted with `@fontsource`. **Courier Prime** is the single
+documented exception: it is loaded from Google Fonts and used only for currency
+labels (formatted amounts, currency codes/names, amount inputs, currency
+selectors and currency chart labels/tooltips). It never applies to prose,
+headings, dates, percentages, counts or masked-value markers, and it keeps
+`tabular-nums` and existing alignment/sizing. The `--font-currency` /
+`font-currency` role has a monospace fallback, and the CSP allows only the two
+Google Fonts origins needed for it. See [Tokens](tokens.md#currency-labels-the-courier-prime-exception)
+for the exact request, fallback and accessibility rules.
+
 ## Material 3 relationship
 
 Prospera follows **Material Design 3 (M3) design-system principles**: semantic
