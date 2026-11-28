@@ -2,12 +2,23 @@ import { useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { invalidateDashboardData } from '@/composables/dashboardQueries';
 import { invalidateLedgerTransactions } from '@/composables/ledgerQueries';
-import { type QueryKey, useMutation, useQuery } from '@/composables/query';
+import {
+    type QueryKey,
+    useMutation,
+    useOptimisticMutation,
+    useQuery,
+} from '@/composables/query';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import { type AddEnvelopeInput, budgetApi } from '@/lib/budgetApi';
 import { budgetSaveQueue } from '@/lib/budgetSaveQueue';
+import type { Budget, BudgetDetail } from '@/types';
+
+/** The two raw cache shapes under the `['budgets']` family. */
+type BudgetListCache = { budgets: Budget[] };
+type BudgetDetailCache = { budget: BudgetDetail };
 
 export const budgetKeys = {
+    root: ['budgets'] as const,
     all: (profileId: number) => ['budgets', profileId] as const,
     detail: (id: number) => ['budgets', 'detail', id] as const,
 };
@@ -93,11 +104,38 @@ export function useCloneBudget() {
 export function useDeleteBudget() {
     const queryClient = useQueryClient();
 
-    return useMutation({
+    return useOptimisticMutation({
         mutationFn: (id: number) => budgetApi.destroy(id),
+        optimistic: {
+            // A budget's removal from the list is fully known from its id;
+            // detail entries are removed by the existing onSuccess below.
+            targets: (id) => [
+                {
+                    queryKey: budgetKeys.root,
+                    exact: false,
+                    update: (
+                        previous:
+                            | BudgetListCache
+                            | BudgetDetailCache
+                            | undefined,
+                    ) =>
+                        previous === undefined || !('budgets' in previous)
+                            ? undefined
+                            : {
+                                  ...previous,
+                                  budgets: previous.budgets.filter(
+                                      (budget) => budget.id !== id,
+                                  ),
+                              },
+                },
+            ],
+            // onSuccess already invalidates the whole family (and removes the
+            // detail entry), so the helper must not refetch it twice.
+            invalidateOnSuccess: false,
+        },
         onSuccess: (_data, id) => {
             queryClient.removeQueries({ queryKey: budgetKeys.detail(id) });
-            void queryClient.invalidateQueries({ queryKey: ['budgets'] });
+            void queryClient.invalidateQueries({ queryKey: budgetKeys.root });
             void queryClient.invalidateQueries({
                 queryKey: ['onboarding', 'progress'],
             });
@@ -179,7 +217,7 @@ export function useUpdateEnvelope() {
 export function useRemoveEnvelope() {
     const queryClient = useQueryClient();
 
-    return useMutation({
+    return useOptimisticMutation({
         mutationFn: ({
             budgetId,
             envelopeId,
@@ -187,10 +225,31 @@ export function useRemoveEnvelope() {
             budgetId: number;
             envelopeId: number;
         }) => budgetApi.removeEnvelope(budgetId, envelopeId),
-        onSuccess: (_data, { budgetId }) => {
-            void queryClient.invalidateQueries({
-                queryKey: budgetKeys.detail(budgetId),
-            });
+        optimistic: {
+            targets: ({ budgetId, envelopeId }) => [
+                {
+                    queryKey: budgetKeys.detail(budgetId),
+                    update: (previous: BudgetDetailCache | undefined) =>
+                        previous === undefined
+                            ? undefined
+                            : {
+                                  ...previous,
+                                  budget: {
+                                      ...previous.budget,
+                                      envelopes:
+                                          previous.budget.envelopes.filter(
+                                              (envelope) =>
+                                                  envelope.envelope_id !==
+                                                  envelopeId,
+                                          ),
+                                  },
+                              },
+                },
+            ],
+        },
+        onSuccess: () => {
+            // The helper refetches the detail; the dashboard aggregates are
+            // not part of that cache and still need their invalidation.
             invalidateDashboardData(queryClient);
         },
     });

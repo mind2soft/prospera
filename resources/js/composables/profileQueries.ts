@@ -1,9 +1,13 @@
 import { usePage } from '@inertiajs/vue3';
 import { useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
-import { useMutation, useQuery } from '@/composables/query';
+import {
+    useMutation,
+    useOptimisticMutation,
+    useQuery,
+} from '@/composables/query';
 import { profileApi } from '@/lib/profileApi';
-import type { FinancialProfile, ProfileMember } from '@/types';
+import type { FinancialProfile, ProfileInvite, ProfileMember } from '@/types';
 
 export const profileKeys = {
     all: ['profiles'] as const,
@@ -104,9 +108,7 @@ export function useCreateProfile() {
 }
 
 export function useRenameProfile() {
-    const queryClient = useQueryClient();
-
-    return useMutation({
+    return useOptimisticMutation({
         mutationFn: ({
             profileId,
             name,
@@ -114,8 +116,48 @@ export function useRenameProfile() {
             profileId: number;
             name: string;
         }) => profileApi.rename(profileId, name),
-        onSuccess: () => {
-            void queryClient.invalidateQueries({ queryKey: profileKeys.all });
+        optimistic: {
+            // The name is user input: show it immediately and adopt the
+            // canonical profile from the response.
+            targets: [
+                {
+                    queryKey: profileKeys.all,
+                    update: (
+                        previous: { profiles: FinancialProfile[] } | undefined,
+                        { profileId, name },
+                    ) =>
+                        previous === undefined
+                            ? undefined
+                            : {
+                                  ...previous,
+                                  profiles: previous.profiles.map((profile) =>
+                                      profile.id === profileId
+                                          ? { ...profile, name }
+                                          : profile,
+                                  ),
+                              },
+                },
+            ],
+            reconcile: () => [
+                {
+                    queryKey: profileKeys.all,
+                    update: (
+                        previous: { profiles: FinancialProfile[] } | undefined,
+                        _variables,
+                        response,
+                    ) =>
+                        previous === undefined || response === undefined
+                            ? undefined
+                            : {
+                                  ...previous,
+                                  profiles: previous.profiles.map((profile) =>
+                                      profile.id === response.profile.id
+                                          ? response.profile
+                                          : profile,
+                                  ),
+                              },
+                },
+            ],
         },
     });
 }
@@ -130,11 +172,61 @@ export function useDeleteProfile() {
 }
 
 export function useSetDefaultProfile() {
-    const invalidateAll = useInvalidateAll();
+    const queryClient = useQueryClient();
 
-    return useMutation({
+    return useOptimisticMutation({
         mutationFn: (profileId: number) => profileApi.setDefault(profileId),
-        onSuccess: () => invalidateAll(),
+        optimistic: {
+            targets: [
+                {
+                    queryKey: profileKeys.all,
+                    update: (
+                        previous: { profiles: FinancialProfile[] } | undefined,
+                        profileId,
+                    ) =>
+                        previous === undefined
+                            ? undefined
+                            : {
+                                  ...previous,
+                                  profiles: previous.profiles.map(
+                                      (profile) => ({
+                                          ...profile,
+                                          is_default: profile.id === profileId,
+                                      }),
+                                  ),
+                              },
+                },
+            ],
+            reconcile: () => [
+                {
+                    queryKey: profileKeys.all,
+                    update: (
+                        previous: { profiles: FinancialProfile[] } | undefined,
+                        _profileId,
+                        response,
+                    ) =>
+                        previous === undefined || response === undefined
+                            ? undefined
+                            : {
+                                  ...previous,
+                                  profiles: previous.profiles.map(
+                                      (profile) => ({
+                                          ...profile,
+                                          is_default:
+                                              profile.id ===
+                                              response.profile.id,
+                                      }),
+                                  ),
+                              },
+                },
+            ],
+            // The mutation's existing broad invalidation refreshes active
+            // profile-scoped queries (not just the profile list).
+            invalidateOnSuccess: false,
+        },
+        onSuccess: () => {
+            void queryClient.invalidateQueries();
+        },
     });
 }
 
@@ -188,9 +280,7 @@ export function useCreateInvite() {
 }
 
 export function useRevokeInvite() {
-    const queryClient = useQueryClient();
-
-    return useMutation({
+    return useOptimisticMutation({
         mutationFn: ({
             profileId,
             inviteId,
@@ -198,10 +288,24 @@ export function useRevokeInvite() {
             profileId: number;
             inviteId: number;
         }) => profileApi.revokeInvite(profileId, inviteId),
-        onSuccess: (_data, { profileId }) => {
-            void queryClient.invalidateQueries({
-                queryKey: profileKeys.invites(profileId),
-            });
+        optimistic: {
+            targets: ({ profileId }) => [
+                {
+                    queryKey: profileKeys.invites(profileId),
+                    update: (
+                        previous: { invites: ProfileInvite[] } | undefined,
+                        { inviteId },
+                    ) =>
+                        previous === undefined
+                            ? undefined
+                            : {
+                                  ...previous,
+                                  invites: previous.invites.filter(
+                                      (invite) => invite.id !== inviteId,
+                                  ),
+                              },
+                },
+            ],
         },
     });
 }
