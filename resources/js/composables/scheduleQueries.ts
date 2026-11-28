@@ -3,8 +3,13 @@ import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { invalidateDashboardData } from '@/composables/dashboardQueries';
 import { envelopeKeys } from '@/composables/envelopeQueries';
 import { invalidateLedgerTransactions } from '@/composables/ledgerQueries';
-import { useMutation, useQuery } from '@/composables/query';
+import {
+    useMutation,
+    useOptimisticMutation,
+    useQuery,
+} from '@/composables/query';
 import { type ScheduleInput, scheduleApi } from '@/lib/scheduleApi';
+import type { EnvelopeSchedule } from '@/types';
 
 export const scheduleKeys = {
     list: (envelopeId: number) =>
@@ -62,7 +67,7 @@ export function useSaveSchedule() {
 export function useDeleteSchedule() {
     const invalidate = useInvalidateSchedules();
 
-    return useMutation({
+    return useOptimisticMutation({
         mutationFn: ({
             envelopeId,
             scheduleId,
@@ -70,6 +75,22 @@ export function useDeleteSchedule() {
             envelopeId: number;
             scheduleId: number;
         }) => scheduleApi.destroy(envelopeId, scheduleId),
+        optimistic: {
+            targets: ({ envelopeId, scheduleId }) => [
+                {
+                    queryKey: scheduleKeys.list(envelopeId),
+                    update: (previous: EnvelopeSchedule[] | undefined) =>
+                        previous === undefined
+                            ? undefined
+                            : previous.filter(
+                                  (schedule) => schedule.id !== scheduleId,
+                              ),
+                },
+            ],
+            // The existing invalidation covers the list plus the generated
+            // ledger rows and dashboard aggregates; do not refetch twice.
+            invalidateOnSuccess: false,
+        },
         onSuccess: (_data, { envelopeId }) => invalidate(envelopeId),
     });
 }

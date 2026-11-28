@@ -1,14 +1,19 @@
 import { useQueryClient } from '@tanstack/vue-query';
 import { computed, type MaybeRefOrGetter, toValue } from 'vue';
 import { invalidateDashboardData } from '@/composables/dashboardQueries';
-import { type QueryKey, useMutation, useQuery } from '@/composables/query';
+import {
+    type QueryKey,
+    useMutation,
+    useOptimisticMutation,
+    useQuery,
+} from '@/composables/query';
 import { useCurrentProfile } from '@/composables/useCurrentProfile';
 import {
     type AddTransactionInput,
     type CreateLedgerInput,
     ledgerApi,
 } from '@/lib/ledgerApi';
-import type { Ledger } from '@/types';
+import type { Ledger, Transaction } from '@/types';
 
 export const ledgerKeys = {
     root: ['ledgers'] as const,
@@ -142,9 +147,29 @@ export function useCreateLedger() {
 
 export function useDeleteLedger() {
     const queryClient = useQueryClient();
+    const { profileId } = useCurrentProfile();
 
-    return useMutation({
+    return useOptimisticMutation({
         mutationFn: (id: number) => ledgerApi.destroy(id),
+        optimistic: {
+            targets: (id) => [
+                {
+                    queryKey: ledgerKeys.all(toValue(profileId) ?? 0),
+                    update: (previous: { ledgers: Ledger[] } | undefined) =>
+                        previous === undefined
+                            ? undefined
+                            : {
+                                  ...previous,
+                                  ledgers: previous.ledgers.filter(
+                                      (ledger) => ledger.id !== id,
+                                  ),
+                              },
+                },
+            ],
+            // onSuccess invalidates the whole ledger root (and removes the
+            // ledger's detail caches), so no second refetch here.
+            invalidateOnSuccess: false,
+        },
         onSuccess: (_data, id) => {
             queryClient.removeQueries({ queryKey: ledgerKey(id) });
             queryClient.removeQueries({
@@ -206,10 +231,12 @@ export function useAddTransaction(ledgerId: MaybeRefOrGetter<number | null>) {
     });
 }
 
-export function useUpdateTransactionNote() {
-    const queryClient = useQueryClient();
+/** The two raw cache shapes under a ledger's transaction-key family. */
+type TransactionReportCache = { transactions: Transaction[] };
+type NoteSuggestionsCache = { notes: string[] };
 
-    return useMutation({
+export function useUpdateTransactionNote() {
+    return useOptimisticMutation({
         mutationFn: ({
             transactionId,
             note,
@@ -218,10 +245,34 @@ export function useUpdateTransactionNote() {
             ledgerId: number;
             note: string | null;
         }) => ledgerApi.updateTransactionNote(transactionId, note),
-        onSuccess: (_data, { ledgerId }) => {
-            void queryClient.invalidateQueries({
-                queryKey: ledgerKeys.transactions(ledgerId),
-            });
+        optimistic: {
+            targets: ({ ledgerId }) => [
+                {
+                    // Every cached date-range report of this ledger shows the
+                    // note; note-suggestion entries share the prefix but have
+                    // no `transactions` array, so they are left untouched.
+                    queryKey: ledgerKeys.transactions(ledgerId),
+                    exact: false,
+                    update: (
+                        previous:
+                            | TransactionReportCache
+                            | NoteSuggestionsCache
+                            | undefined,
+                        { transactionId, note },
+                    ) =>
+                        previous === undefined || !('transactions' in previous)
+                            ? undefined
+                            : {
+                                  ...previous,
+                                  transactions: previous.transactions.map(
+                                      (transaction) =>
+                                          transaction.id === transactionId
+                                              ? { ...transaction, note }
+                                              : transaction,
+                                  ),
+                              },
+                },
+            ],
         },
     });
 }
